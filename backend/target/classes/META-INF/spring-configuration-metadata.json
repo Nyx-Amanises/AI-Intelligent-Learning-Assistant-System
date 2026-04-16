@@ -1,0 +1,67 @@
+{
+  "groups": [
+    {
+      "name": "app.ai",
+      "type": "com.aiassistant.learning.config.AiProperties",
+      "sourceType": "com.aiassistant.learning.config.AiProperties"
+    },
+    {
+      "name": "app.file",
+      "type": "com.aiassistant.learning.config.FileStorageProperties",
+      "sourceType": "com.aiassistant.learning.config.FileStorageProperties"
+    },
+    {
+      "name": "app.jwt",
+      "type": "com.aiassistant.learning.config.JwtProperties",
+      "sourceType": "com.aiassistant.learning.config.JwtProperties"
+    }
+  ],
+  "properties": [
+    {
+      "name": "app.ai.api-key",
+      "type": "java.lang.String",
+      "sourceType": "com.aiassistant.learning.config.AiProperties"
+    },
+    {
+      "name": "app.ai.base-url",
+      "type": "java.lang.String",
+      "sourceType": "com.aiassistant.learning.config.AiProperties"
+    },
+    {
+      "name": "app.ai.chat-path",
+      "type": "java.lang.String",
+      "sourceType": "com.aiassistant.learning.config.AiProperties"
+    },
+    {
+      "name": "app.ai.default-model",
+      "type": "java.lang.String",
+      "sourceType": "com.aiassistant.learning.config.AiProperties"
+    },
+    {
+      "name": "app.ai.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.aiassistant.learning.config.AiProperties"
+    },
+    {
+      "name": "app.ai.mock-mode",
+      "type": "java.lang.Boolean",
+      "sourceType": "com.aiassistant.learning.config.AiProperties"
+    },
+    {
+      "name": "app.file.upload-dir",
+      "type": "java.lang.String",
+      "sourceType": "com.aiassistant.learning.config.FileStorageProperties"
+    },
+    {
+      "name": "app.jwt.expire-hours",
+      "type": "java.lang.Long",
+      "sourceType": "com.aiassistant.learning.config.JwtProperties"
+    },
+    {
+      "name": "app.jwt.secret",
+      "type": "java.lang.String",
+      "sourceType": "com.aiassistant.learning.config.JwtProperties"
+    }
+  ],
+  "hints": []
+}

@@ -1,0 +1,249 @@
+package com.aiassistant.learning.service.impl;
+
+import com.aiassistant.learning.common.exception.BusinessException;
+import com.aiassistant.learning.config.AiProperties;
+import com.aiassistant.learning.dto.ai.SummaryGenerateRequest;
+import com.aiassistant.learning.entity.AiGenerationRecord;
+import com.aiassistant.learning.entity.MaterialSegment;
+import com.aiassistant.learning.entity.StudyMaterial;
+import com.aiassistant.learning.entity.StudyNote;
+import com.aiassistant.learning.mapper.AiGenerationRecordMapper;
+import com.aiassistant.learning.mapper.MaterialSegmentMapper;
+import com.aiassistant.learning.mapper.StudyNoteMapper;
+import com.aiassistant.learning.service.AiSummaryService;
+import com.aiassistant.learning.service.StudyMaterialService;
+import com.aiassistant.learning.vo.ai.SummaryResultVO;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
+import org.springframework.web.client.RestClient;
+
+@Service
+public class AiSummaryServiceImpl implements AiSummaryService {
+
+    private final StudyMaterialService studyMaterialService;
+    private final MaterialSegmentMapper materialSegmentMapper;
+    private final AiGenerationRecordMapper aiGenerationRecordMapper;
+    private final StudyNoteMapper studyNoteMapper;
+    private final AiProperties aiProperties;
+    private final RestClient restClient;
+
+    public AiSummaryServiceImpl(
+            StudyMaterialService studyMaterialService,
+            MaterialSegmentMapper materialSegmentMapper,
+            AiGenerationRecordMapper aiGenerationRecordMapper,
+            StudyNoteMapper studyNoteMapper,
+            AiProperties aiProperties
+    ) {
+        this.studyMaterialService = studyMaterialService;
+        this.materialSegmentMapper = materialSegmentMapper;
+        this.aiGenerationRecordMapper = aiGenerationRecordMapper;
+        this.studyNoteMapper = studyNoteMapper;
+        this.aiProperties = aiProperties;
+        this.restClient = RestClient.builder()
+                .baseUrl(aiProperties.getBaseUrl())
+                .build();
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public SummaryResultVO generateMaterialSummary(Long userId, Long materialId, SummaryGenerateRequest request) {
+        StudyMaterial material = studyMaterialService.getOne(new LambdaQueryWrapper<StudyMaterial>()
+                .eq(StudyMaterial::getId, materialId)
+                .eq(StudyMaterial::getUserId, userId)
+                .last("limit 1"));
+        if (material == null) {
+            throw new BusinessException(404, "资料不存在");
+        }
+
+        List<MaterialSegment> segments = materialSegmentMapper.selectList(new LambdaQueryWrapper<MaterialSegment>()
+                .eq(MaterialSegment::getMaterialId, materialId)
+                .orderByAsc(MaterialSegment::getSegmentNo));
+        if (segments.isEmpty()) {
+            throw new BusinessException("请先解析资料，再生成 AI 总结");
+        }
+
+        String summaryType = StringUtils.hasText(request.getSummaryType()) ? request.getSummaryType() : "STANDARD";
+        String modelName = StringUtils.hasText(request.getModelName()) ? request.getModelName() : aiProperties.getDefaultModel();
+        String inputText = buildInputText(material, segments);
+        String promptText = buildPrompt(summaryType);
+
+        LocalDateTime start = LocalDateTime.now();
+        String summaryText;
+        String status = "SUCCESS";
+        String errorMessage = null;
+
+        try {
+            summaryText = callAiOrMock(promptText, inputText, modelName, request.getTemperature());
+        } catch (Exception exception) {
+            status = "FAILED";
+            errorMessage = exception.getMessage();
+            summaryText = null;
+        }
+
+        AiGenerationRecord record = new AiGenerationRecord();
+        record.setUserId(userId);
+        record.setMaterialId(materialId);
+        record.setTaskType("SUMMARY");
+        record.setModelName(modelName);
+        record.setPromptText(promptText);
+        record.setInputText(inputText);
+        record.setOutputText(summaryText);
+        record.setStatus(status);
+        record.setErrorMessage(errorMessage);
+        record.setTokenUsed(estimateTokens(inputText, summaryText));
+        record.setResponseTimeMs((int) Duration.between(start, LocalDateTime.now()).toMillis());
+        aiGenerationRecordMapper.insert(record);
+
+        if (!"SUCCESS".equals(status) || !StringUtils.hasText(summaryText)) {
+            throw new BusinessException(500, "AI 总结生成失败: " + errorMessage);
+        }
+
+        Long noteId = null;
+        if (Boolean.TRUE.equals(request.getSaveAsNote())) {
+            StudyNote note = new StudyNote();
+            note.setUserId(userId);
+            note.setMaterialId(materialId);
+            note.setTitle(material.getTitle() + " - AI总结");
+            note.setNoteType("AI_SUMMARY");
+            note.setContentText(summaryText);
+            note.setSourceSegmentIds(joinSegmentIds(segments));
+            note.setIsFavorite(0);
+            note.setDeleted(0);
+            studyNoteMapper.insert(note);
+            noteId = note.getId();
+            record.setNoteId(noteId);
+            aiGenerationRecordMapper.updateById(record);
+        }
+
+        material.setSummaryStatus("SUCCESS");
+        studyMaterialService.updateById(material);
+
+        return SummaryResultVO.builder()
+                .materialId(materialId)
+                .recordId(record.getId())
+                .noteId(noteId)
+                .modelName(modelName)
+                .summaryType(summaryType)
+                .summaryText(summaryText)
+                .build();
+    }
+
+    private String callAiOrMock(String promptText, String inputText, String modelName, Double temperature) {
+        if (!Boolean.TRUE.equals(aiProperties.getEnabled())) {
+            throw new BusinessException("AI 功能未启用");
+        }
+        if (Boolean.TRUE.equals(aiProperties.getMockMode())) {
+            return buildMockSummary(inputText);
+        }
+
+        Map<String, Object> response = restClient.post()
+                .uri(aiProperties.getChatPath())
+                .contentType(MediaType.APPLICATION_JSON)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + aiProperties.getApiKey())
+                .body(Map.of(
+                        "model", modelName,
+                        "temperature", temperature == null ? 0.7 : temperature,
+                        "messages", List.of(
+                                Map.of("role", "system", "content", promptText),
+                                Map.of("role", "user", "content", inputText)
+                        )
+                ))
+                .retrieve()
+                .body(Map.class);
+
+        Object choicesObj = response == null ? null : response.get("choices");
+        if (!(choicesObj instanceof List<?> choices) || choices.isEmpty()) {
+            throw new BusinessException("AI 返回结果为空");
+        }
+        Object firstChoice = choices.get(0);
+        if (!(firstChoice instanceof Map<?, ?> firstChoiceMap)) {
+            throw new BusinessException("AI 返回结构异常");
+        }
+        Object messageObj = firstChoiceMap.get("message");
+        if (!(messageObj instanceof Map<?, ?> messageMap)) {
+            throw new BusinessException("AI 返回消息为空");
+        }
+        Object contentObj = messageMap.get("content");
+        if (!(contentObj instanceof String content) || !StringUtils.hasText(content)) {
+            throw new BusinessException("AI 返回内容为空");
+        }
+        return content.trim();
+    }
+
+    private String buildPrompt(String summaryType) {
+        return switch (summaryType.toUpperCase()) {
+            case "EXAM" -> "你是一名学习辅导助手。请从用户提供的学习资料中提炼考试高频知识点、重点概念、易错点和简短复习建议，使用中文输出，结构清晰。";
+            case "OUTLINE" -> "你是一名学习辅导助手。请将用户提供的学习资料整理成分层大纲，突出主题、关键概念和章节关系，使用中文输出。";
+            default -> "你是一名学习辅导助手。请对用户提供的学习资料进行总结，输出核心知识点、重点概念、建议复习方向，使用中文，表达简洁清晰。";
+        };
+    }
+
+    private String buildInputText(StudyMaterial material, List<MaterialSegment> segments) {
+        StringBuilder builder = new StringBuilder();
+        builder.append("资料标题：").append(material.getTitle()).append(System.lineSeparator());
+        builder.append("资料类型：").append(material.getMaterialType()).append(System.lineSeparator());
+        builder.append("资料内容：").append(System.lineSeparator());
+        for (MaterialSegment segment : segments) {
+            builder.append("[").append(segment.getSegmentNo()).append("] ");
+            builder.append(segment.getContentText()).append(System.lineSeparator());
+        }
+        return builder.toString();
+    }
+
+    private String buildMockSummary(String inputText) {
+        List<String> paragraphs = inputText.lines()
+                .map(String::trim)
+                .filter(StringUtils::hasText)
+                .toList();
+        List<String> corePoints = new ArrayList<>();
+        for (String paragraph : paragraphs) {
+            if (paragraph.startsWith("[")) {
+                corePoints.add(paragraph.length() > 60 ? paragraph.substring(0, 60) + "..." : paragraph);
+            }
+            if (corePoints.size() >= 3) {
+                break;
+            }
+        }
+        if (corePoints.isEmpty()) {
+            corePoints = paragraphs.stream().limit(3).toList();
+        }
+
+        StringBuilder builder = new StringBuilder();
+        builder.append("一、核心知识点").append(System.lineSeparator());
+        for (int i = 0; i < corePoints.size(); i++) {
+            builder.append(i + 1).append(". ").append(corePoints.get(i)).append(System.lineSeparator());
+        }
+        builder.append(System.lineSeparator());
+        builder.append("二、学习建议").append(System.lineSeparator());
+        builder.append("1. 先梳理资料中的核心概念和定义。").append(System.lineSeparator());
+        builder.append("2. 结合题目训练巩固重点内容和易错点。").append(System.lineSeparator());
+        builder.append("3. 按章节回顾，形成自己的知识框架。").append(System.lineSeparator());
+        builder.append(System.lineSeparator());
+        builder.append("三、复习方向").append(System.lineSeparator());
+        builder.append("建议优先复习资料中重复出现的概念、公式、流程和结论。");
+        return builder.toString();
+    }
+
+    private Integer estimateTokens(String inputText, String outputText) {
+        int input = inputText == null ? 0 : inputText.length() / 4;
+        int output = outputText == null ? 0 : outputText.length() / 4;
+        return Math.max(1, input + output);
+    }
+
+    private String joinSegmentIds(List<MaterialSegment> segments) {
+        return segments.stream()
+                .map(MaterialSegment::getId)
+                .map(String::valueOf)
+                .reduce((left, right) -> left + "," + right)
+                .orElse(null);
+    }
+}
