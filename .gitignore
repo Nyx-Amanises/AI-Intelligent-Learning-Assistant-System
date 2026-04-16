@@ -1,0 +1,5 @@
+.idea/
+backend/target/
+backend/uploads/
+*.log
+Thumbs.db
