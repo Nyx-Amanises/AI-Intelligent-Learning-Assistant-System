@@ -64,40 +64,50 @@ const form = reactive({
 })
 
 const submit = async () => {
-  if (!form.username || !form.password) {
-    ElMessage.warning('请先填写用户名和密码')
-    return
-  }
-
-  if (isRegister.value) {
-    if (!form.nickname) {
-      ElMessage.warning('注册时请填写昵称')
+  try {
+    if (!form.username || !form.password) {
+      ElMessage.warning('请先填写用户名和密码')
       return
     }
-    await registerApi({
-      username: form.username,
-      password: form.password,
-      nickname: form.nickname,
-      email: form.email
-    })
-    ElMessage.success('注册成功，请继续登录')
-    isRegister.value = false
-    return
-  }
 
-  const loginRes = await loginApi({
-    username: form.username,
-    password: form.password
-  })
-  const loginData = loginRes.data.data
-  userStore.setLogin(loginData.token, {
-    id: loginData.userId,
-    username: loginData.username,
-    nickname: loginData.nickname
-  })
-  const profileRes = await getProfileApi()
-  userStore.setLogin(loginData.token, profileRes.data.data)
-  ElMessage.success('登录成功')
-  router.push('/dashboard')
+    if (isRegister.value) {
+      if (!form.nickname) {
+        ElMessage.warning('注册时请填写昵称')
+        return
+      }
+      await registerApi({
+        username: form.username,
+        password: form.password,
+        nickname: form.nickname,
+        email: form.email
+      })
+      ElMessage.success('注册成功，请继续登录')
+      isRegister.value = false
+      return
+    }
+
+    const loginRes = await loginApi({
+      username: form.username,
+      password: form.password
+    })
+    const loginData = loginRes.data?.data
+    if (!loginData?.token) {
+      throw new Error('登录返回数据不完整')
+    }
+
+    userStore.setLogin(loginData.token, {
+      id: loginData.userId,
+      username: loginData.username,
+      nickname: loginData.nickname
+    })
+
+    const profileRes = await getProfileApi()
+    userStore.setLogin(loginData.token, profileRes.data.data)
+    ElMessage.success('登录成功')
+    router.push('/dashboard')
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '操作失败，请稍后重试'
+    ElMessage.error(message)
+  }
 }
 </script>

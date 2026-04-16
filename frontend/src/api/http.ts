@@ -14,4 +14,21 @@ http.interceptors.request.use((config) => {
   return config
 })
 
+http.interceptors.response.use(
+  (response) => {
+    const result = response.data
+    if (result && typeof result.code === 'number' && result.code !== 200) {
+      return Promise.reject(new Error(result.message || '请求失败'))
+    }
+    return response
+  },
+  (error) => {
+    const message =
+      error?.response?.data?.message ||
+      error?.message ||
+      '网络异常，请稍后重试'
+    return Promise.reject(new Error(message))
+  }
+)
+
 export default http
