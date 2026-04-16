@@ -20,4 +20,6 @@ public class AiProperties {
     private String apiKey;
 
     private String defaultModel;
+
+    private String configFile;
 }

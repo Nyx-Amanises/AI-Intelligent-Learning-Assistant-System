@@ -1,7 +1,8 @@
 package com.aiassistant.learning.service.impl;
 
 import com.aiassistant.learning.common.exception.BusinessException;
-import com.aiassistant.learning.config.AiProperties;
+import com.aiassistant.learning.service.AiChatService;
+import com.aiassistant.learning.service.AiConfigService;
 import com.aiassistant.learning.dto.ai.SummaryGenerateRequest;
 import com.aiassistant.learning.entity.AiGenerationRecord;
 import com.aiassistant.learning.entity.MaterialSegment;
@@ -18,13 +19,9 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
-import org.springframework.web.client.RestClient;
 
 @Service
 public class AiSummaryServiceImpl implements AiSummaryService {
@@ -33,24 +30,23 @@ public class AiSummaryServiceImpl implements AiSummaryService {
     private final MaterialSegmentMapper materialSegmentMapper;
     private final AiGenerationRecordMapper aiGenerationRecordMapper;
     private final StudyNoteMapper studyNoteMapper;
-    private final AiProperties aiProperties;
-    private final RestClient restClient;
+    private final AiConfigService aiConfigService;
+    private final AiChatService aiChatService;
 
     public AiSummaryServiceImpl(
             StudyMaterialService studyMaterialService,
             MaterialSegmentMapper materialSegmentMapper,
             AiGenerationRecordMapper aiGenerationRecordMapper,
             StudyNoteMapper studyNoteMapper,
-            AiProperties aiProperties
+            AiConfigService aiConfigService,
+            AiChatService aiChatService
     ) {
         this.studyMaterialService = studyMaterialService;
         this.materialSegmentMapper = materialSegmentMapper;
         this.aiGenerationRecordMapper = aiGenerationRecordMapper;
         this.studyNoteMapper = studyNoteMapper;
-        this.aiProperties = aiProperties;
-        this.restClient = RestClient.builder()
-                .baseUrl(aiProperties.getBaseUrl())
-                .build();
+        this.aiConfigService = aiConfigService;
+        this.aiChatService = aiChatService;
     }
 
     @Override
@@ -72,7 +68,8 @@ public class AiSummaryServiceImpl implements AiSummaryService {
         }
 
         String summaryType = StringUtils.hasText(request.getSummaryType()) ? request.getSummaryType() : "STANDARD";
-        String modelName = StringUtils.hasText(request.getModelName()) ? request.getModelName() : aiProperties.getDefaultModel();
+        String defaultModel = aiConfigService.getResolvedConfig().defaultModel();
+        String modelName = StringUtils.hasText(request.getModelName()) ? request.getModelName() : defaultModel;
         String inputText = buildInputText(material, segments);
         String promptText = buildPrompt(summaryType);
 
@@ -138,45 +135,14 @@ public class AiSummaryServiceImpl implements AiSummaryService {
     }
 
     private String callAiOrMock(String promptText, String inputText, String modelName, Double temperature) {
-        if (!Boolean.TRUE.equals(aiProperties.getEnabled())) {
+        AiConfigService.ResolvedAiConfig config = aiConfigService.getResolvedConfig();
+        if (!Boolean.TRUE.equals(config.enabled())) {
             throw new BusinessException("AI 功能未启用");
         }
-        if (Boolean.TRUE.equals(aiProperties.getMockMode())) {
+        if (Boolean.TRUE.equals(config.mockMode())) {
             return buildMockSummary(inputText);
         }
-
-        Map<String, Object> response = restClient.post()
-                .uri(aiProperties.getChatPath())
-                .contentType(MediaType.APPLICATION_JSON)
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + aiProperties.getApiKey())
-                .body(Map.of(
-                        "model", modelName,
-                        "temperature", temperature == null ? 0.7 : temperature,
-                        "messages", List.of(
-                                Map.of("role", "system", "content", promptText),
-                                Map.of("role", "user", "content", inputText)
-                        )
-                ))
-                .retrieve()
-                .body(Map.class);
-
-        Object choicesObj = response == null ? null : response.get("choices");
-        if (!(choicesObj instanceof List<?> choices) || choices.isEmpty()) {
-            throw new BusinessException("AI 返回结果为空");
-        }
-        Object firstChoice = choices.get(0);
-        if (!(firstChoice instanceof Map<?, ?> firstChoiceMap)) {
-            throw new BusinessException("AI 返回结构异常");
-        }
-        Object messageObj = firstChoiceMap.get("message");
-        if (!(messageObj instanceof Map<?, ?> messageMap)) {
-            throw new BusinessException("AI 返回消息为空");
-        }
-        Object contentObj = messageMap.get("content");
-        if (!(contentObj instanceof String content) || !StringUtils.hasText(content)) {
-            throw new BusinessException("AI 返回内容为空");
-        }
-        return content.trim();
+        return aiChatService.chat(promptText, inputText, modelName, temperature);
     }
 
     private String buildPrompt(String summaryType) {

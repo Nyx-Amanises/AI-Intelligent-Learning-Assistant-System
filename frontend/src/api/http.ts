@@ -3,7 +3,7 @@ import { useUserStore } from '@/stores/user'
 
 const http = axios.create({
   baseURL: '/api',
-  timeout: 10000
+  timeout: 160000
 })
 
 http.interceptors.request.use((config) => {

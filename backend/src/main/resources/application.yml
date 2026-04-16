@@ -38,6 +38,7 @@ app:
     chat-path: /v1/chat/completions
     api-key: replace-with-your-api-key
     default-model: gpt-4o-mini
+    config-file: ./runtime/ai-config.json
   file:
     upload-dir: C:/Users/雪/Desktop/AI-Intelligent-Learning-Assistant-System/backend/uploads
   jwt:

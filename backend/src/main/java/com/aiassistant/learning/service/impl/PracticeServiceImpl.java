@@ -223,7 +223,12 @@ public class PracticeServiceImpl implements PracticeService {
                     PracticeAnswer answer = answerMap.get(question.getId());
                     return PracticeAnswerVO.builder()
                             .questionId(question.getId())
+                            .questionType(question.getQuestionType())
                             .stemText(question.getStemText())
+                            .optionA(question.getOptionA())
+                            .optionB(question.getOptionB())
+                            .optionC(question.getOptionC())
+                            .optionD(question.getOptionD())
                             .correctAnswer(question.getCorrectAnswer())
                             .userAnswer(answer == null ? null : answer.getUserAnswer())
                             .isCorrect(answer == null ? null : answer.getIsCorrect())

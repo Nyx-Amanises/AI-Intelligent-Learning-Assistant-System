@@ -1,7 +1,6 @@
 package com.aiassistant.learning.service.impl;
 
 import com.aiassistant.learning.common.exception.BusinessException;
-import com.aiassistant.learning.config.AiProperties;
 import com.aiassistant.learning.dto.ai.QuestionGenerateRequest;
 import com.aiassistant.learning.entity.AiGenerationRecord;
 import com.aiassistant.learning.entity.MaterialSegment;
@@ -12,11 +11,14 @@ import com.aiassistant.learning.mapper.AiGenerationRecordMapper;
 import com.aiassistant.learning.mapper.MaterialSegmentMapper;
 import com.aiassistant.learning.mapper.QuestionItemMapper;
 import com.aiassistant.learning.mapper.QuestionSetMapper;
+import com.aiassistant.learning.service.AiChatService;
+import com.aiassistant.learning.service.AiConfigService;
 import com.aiassistant.learning.service.AiQuestionService;
 import com.aiassistant.learning.service.QuestionSetService;
 import com.aiassistant.learning.service.StudyMaterialService;
 import com.aiassistant.learning.vo.question.QuestionSetDetailVO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -34,7 +36,9 @@ public class AiQuestionServiceImpl implements AiQuestionService {
     private final QuestionItemMapper questionItemMapper;
     private final AiGenerationRecordMapper aiGenerationRecordMapper;
     private final QuestionSetService questionSetService;
-    private final AiProperties aiProperties;
+    private final AiConfigService aiConfigService;
+    private final AiChatService aiChatService;
+    private final ObjectMapper objectMapper;
 
     public AiQuestionServiceImpl(
             StudyMaterialService studyMaterialService,
@@ -43,7 +47,9 @@ public class AiQuestionServiceImpl implements AiQuestionService {
             QuestionItemMapper questionItemMapper,
             AiGenerationRecordMapper aiGenerationRecordMapper,
             QuestionSetService questionSetService,
-            AiProperties aiProperties
+            AiConfigService aiConfigService,
+            AiChatService aiChatService,
+            ObjectMapper objectMapper
     ) {
         this.studyMaterialService = studyMaterialService;
         this.materialSegmentMapper = materialSegmentMapper;
@@ -51,7 +57,9 @@ public class AiQuestionServiceImpl implements AiQuestionService {
         this.questionItemMapper = questionItemMapper;
         this.aiGenerationRecordMapper = aiGenerationRecordMapper;
         this.questionSetService = questionSetService;
-        this.aiProperties = aiProperties;
+        this.aiConfigService = aiConfigService;
+        this.aiChatService = aiChatService;
+        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -74,12 +82,19 @@ public class AiQuestionServiceImpl implements AiQuestionService {
 
         int questionCount = request.getQuestionCount() == null ? 5 : request.getQuestionCount();
         int difficultyLevel = request.getDifficultyLevel() == null ? 3 : request.getDifficultyLevel();
-        String modelName = StringUtils.hasText(request.getModelName()) ? request.getModelName() : aiProperties.getDefaultModel();
-        String promptText = "你是一名学习辅导助手。请根据学习资料生成练习题，覆盖核心知识点，并给出标准答案和解析。";
-        String inputText = buildInputText(material, segments);
+        String defaultModel = aiConfigService.getResolvedConfig().defaultModel();
+        String modelName = StringUtils.hasText(request.getModelName()) ? request.getModelName() : defaultModel;
+        String promptText = buildQuestionSystemPrompt();
+        String inputText = buildQuestionUserPrompt(material, segments, questionCount, difficultyLevel);
 
         LocalDateTime start = LocalDateTime.now();
-        List<GeneratedQuestion> generatedQuestions = buildMockQuestions(material, segments, questionCount, difficultyLevel);
+        List<GeneratedQuestion> generatedQuestions = callAiOrMock(
+                material,
+                segments,
+                questionCount,
+                difficultyLevel,
+                modelName
+        );
 
         QuestionSet questionSet = new QuestionSet();
         questionSet.setUserId(userId);
@@ -128,13 +143,133 @@ public class AiQuestionServiceImpl implements AiQuestionService {
         return questionSetService.getQuestionSetDetail(userId, questionSet.getId());
     }
 
-    private String buildInputText(StudyMaterial material, List<MaterialSegment> segments) {
+    private List<GeneratedQuestion> callAiOrMock(
+            StudyMaterial material,
+            List<MaterialSegment> segments,
+            int questionCount,
+            int difficultyLevel,
+            String modelName
+    ) {
+        AiConfigService.ResolvedAiConfig config = aiConfigService.getResolvedConfig();
+        if (!Boolean.TRUE.equals(config.enabled())) {
+            throw new BusinessException("AI 功能未启用");
+        }
+        if (Boolean.TRUE.equals(config.mockMode())) {
+            return buildMockQuestions(material, segments, questionCount, difficultyLevel);
+        }
+
+        String userPrompt = buildQuestionUserPrompt(material, segments, questionCount, difficultyLevel);
+        String content = aiChatService.chat(buildQuestionSystemPrompt(), userPrompt, modelName, 0.4);
+        return parseGeneratedQuestions(content, questionCount);
+    }
+
+    private String buildQuestionSystemPrompt() {
+        return """
+                你是一个中文学习出题助手。
+                请基于用户提供的学习资料生成练习题，并严格只返回 JSON，不要输出 Markdown，不要输出解释。
+                返回格式必须是：
+                {
+                  "title": "题集标题",
+                  "questions": [
+                    {
+                      "questionType": "SINGLE",
+                      "stemText": "题干",
+                      "optionA": "选项A",
+                      "optionB": "选项B",
+                      "optionC": "选项C",
+                      "optionD": "选项D",
+                      "correctAnswer": "A",
+                      "answerAnalysis": "答案解析",
+                      "knowledgePoint": "知识点",
+                      "score": 5
+                    }
+                  ]
+                }
+                questionType 只允许 SINGLE、JUDGE、SHORT_ANSWER。
+                SINGLE 必须提供 optionA 到 optionD，correctAnswer 用 A/B/C/D。
+                JUDGE 必须提供 optionA=正确、optionB=错误，correctAnswer 用 正确 或 错误。
+                SHORT_ANSWER 不要提供 optionC/optionD，可不提供 optionA/optionB。
+                score 必须是正整数。
+                """;
+    }
+
+    private String buildQuestionUserPrompt(
+            StudyMaterial material,
+            List<MaterialSegment> segments,
+            int questionCount,
+            int difficultyLevel
+    ) {
         StringBuilder builder = new StringBuilder();
-        builder.append("资料标题：").append(material.getTitle()).append(System.lineSeparator());
+        builder.append("请基于以下学习资料生成 ").append(questionCount).append(" 道题。").append(System.lineSeparator());
+        builder.append("难度等级: ").append(difficultyLevel).append(" / 5").append(System.lineSeparator());
+        builder.append("题目尽量覆盖不同知识点，题型可以混合。").append(System.lineSeparator());
+        builder.append("题集标题请与资料标题相关。").append(System.lineSeparator());
+        builder.append("资料标题: ").append(material.getTitle()).append(System.lineSeparator());
+        builder.append("资料内容: ").append(System.lineSeparator());
         for (MaterialSegment segment : segments) {
-            builder.append(segment.getContentText()).append(System.lineSeparator());
+            builder.append("[").append(segment.getSegmentNo()).append("] ")
+                    .append(segment.getContentText()).append(System.lineSeparator());
         }
         return builder.toString();
+    }
+
+    private List<GeneratedQuestion> parseGeneratedQuestions(String content, int questionCount) {
+        try {
+            String normalized = normalizeJsonContent(content);
+            GeneratedQuestionSetPayload payload = objectMapper.readValue(normalized, GeneratedQuestionSetPayload.class);
+            if (payload == null || payload.questions == null || payload.questions.isEmpty()) {
+                throw new BusinessException("AI 未返回有效题目");
+            }
+
+            List<GeneratedQuestion> questions = new ArrayList<>();
+            for (GeneratedQuestionPayload item : payload.questions) {
+                if (!StringUtils.hasText(item.questionType) || !StringUtils.hasText(item.stemText)) {
+                    continue;
+                }
+                String questionType = item.questionType.trim().toUpperCase();
+                questions.add(new GeneratedQuestion(
+                        questionType,
+                        item.stemText.trim(),
+                        trimToNull(item.optionA),
+                        trimToNull(item.optionB),
+                        trimToNull(item.optionC),
+                        trimToNull(item.optionD),
+                        trimToNull(item.correctAnswer),
+                        trimToNull(item.answerAnalysis),
+                        trimToNull(item.knowledgePoint),
+                        item.score == null || item.score <= 0 ? 5 : item.score
+                ));
+                if (questions.size() >= questionCount) {
+                    break;
+                }
+            }
+
+            if (questions.isEmpty()) {
+                throw new BusinessException("AI 返回的题目无法解析");
+            }
+            return questions;
+        } catch (BusinessException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw new BusinessException(500, "解析 AI 出题结果失败: " + exception.getMessage());
+        }
+    }
+
+    private String normalizeJsonContent(String content) {
+        String normalized = content == null ? "" : content.trim();
+        if (normalized.startsWith("```json")) {
+            normalized = normalized.substring(7).trim();
+        } else if (normalized.startsWith("```")) {
+            normalized = normalized.substring(3).trim();
+        }
+        if (normalized.endsWith("```")) {
+            normalized = normalized.substring(0, normalized.length() - 3).trim();
+        }
+        return normalized;
+    }
+
+    private String trimToNull(String value) {
+        return StringUtils.hasText(value) ? value.trim() : null;
     }
 
     private List<GeneratedQuestion> buildMockQuestions(
@@ -151,11 +286,66 @@ public class AiQuestionServiceImpl implements AiQuestionService {
         String shortText = materialText.length() > 120 ? materialText.substring(0, 120) + "..." : materialText;
 
         List<GeneratedQuestion> questions = new ArrayList<>();
-        questions.add(new GeneratedQuestion("SINGLE", "根据资料内容，下列哪一项最符合核心主题？", "事务与并发控制", "前端组件样式设计", "云服务器部署监控", "图片识别算法优化", "A", "资料内容重点围绕事务特性、并发控制与调度正确性展开。", material.getTitle(), 5));
-        questions.add(new GeneratedQuestion("JUDGE", "可串行化调度通常被视为事务并发执行正确性的重要标准。", "正确", "错误", null, null, "正确", "资料中明确提到可串行化调度是正确性的重要标准。", material.getTitle(), 5));
-        questions.add(new GeneratedQuestion("SHORT_ANSWER", "请简要写出资料中提到的一个核心知识点，并结合自己的理解说明其作用。", null, null, null, null, "开放题", "可从事务四大特性、并发控制目标、读异常等角度作答。", material.getTitle(), 10));
-        questions.add(new GeneratedQuestion("SINGLE", "以下哪项最可能属于资料中提到的并发读写问题？", "脏读", "死循环", "内存泄漏", "缓存穿透", "A", "资料中列举的典型并发异常包括脏读、不可重复读和幻读。", material.getTitle(), 5));
-        questions.add(new GeneratedQuestion("SHORT_ANSWER", "结合以下资料摘要回答：\"" + shortText + "\"，请写出你的复习建议。", null, null, null, null, "开放题", "建议从核心定义、场景分析、易错点辨析三个角度组织答案。", material.getTitle(), difficultyLevel >= 4 ? 15 : 10));
+        questions.add(new GeneratedQuestion(
+                "SINGLE",
+                "根据资料内容，下列哪一项最符合核心主题？",
+                "事务与并发控制",
+                "前端组件样式设计",
+                "云服务器监控",
+                "图像识别模型训练",
+                "A",
+                "资料内容主要围绕事务、并发控制或核心知识点展开。",
+                material.getTitle(),
+                5
+        ));
+        questions.add(new GeneratedQuestion(
+                "JUDGE",
+                "可串行化调度通常被视为并发执行正确性的重要标准。",
+                "正确",
+                "错误",
+                null,
+                null,
+                "正确",
+                "这是数据库并发控制中的经典判断点。",
+                material.getTitle(),
+                5
+        ));
+        questions.add(new GeneratedQuestion(
+                "SHORT_ANSWER",
+                "请简要写出资料中提到的一个核心知识点，并说明其作用。",
+                null,
+                null,
+                null,
+                null,
+                "可从定义、作用、适用场景等角度作答",
+                "回答时尽量覆盖定义、特点和应用场景。",
+                material.getTitle(),
+                10
+        ));
+        questions.add(new GeneratedQuestion(
+                "SINGLE",
+                "以下哪项最可能属于资料中提到的典型问题？",
+                "脏读",
+                "内存泄漏",
+                "样式冲突",
+                "图片缓存失效",
+                "A",
+                "如果资料与数据库事务相关，脏读通常是典型异常。",
+                material.getTitle(),
+                5
+        ));
+        questions.add(new GeneratedQuestion(
+                "SHORT_ANSWER",
+                "结合以下资料摘要回答：\"" + shortText + "\"，请写出你的复习建议。",
+                null,
+                null,
+                null,
+                null,
+                "建议从核心概念、易错点和应用场景三个角度组织答案",
+                "把摘要中的关键词整理成自己的复习框架。",
+                material.getTitle(),
+                difficultyLevel >= 4 ? 15 : 10
+        ));
         return questions.subList(0, Math.min(questionCount, questions.size()));
     }
 
@@ -171,5 +361,23 @@ public class AiQuestionServiceImpl implements AiQuestionService {
             String knowledgePoint,
             int score
     ) {
+    }
+
+    private static class GeneratedQuestionSetPayload {
+        public String title;
+        public List<GeneratedQuestionPayload> questions;
+    }
+
+    private static class GeneratedQuestionPayload {
+        public String questionType;
+        public String stemText;
+        public String optionA;
+        public String optionB;
+        public String optionC;
+        public String optionD;
+        public String correctAnswer;
+        public String answerAnalysis;
+        public String knowledgePoint;
+        public Integer score;
     }
 }

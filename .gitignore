@@ -4,5 +4,6 @@ backend/uploads/
 frontend/node_modules/
 frontend/dist/
 frontend/*.tsbuildinfo
+runtime/
 *.log
 Thumbs.db
