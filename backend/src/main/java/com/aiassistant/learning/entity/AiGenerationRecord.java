@@ -1,17 +1,18 @@
 package com.aiassistant.learning.entity;
 
-import com.aiassistant.learning.common.entity.BaseEntity;
+import com.baomidou.mybatisplus.annotation.FieldFill;
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import java.io.Serial;
+import java.io.Serializable;
+import java.time.LocalDateTime;
 import lombok.Data;
-import lombok.EqualsAndHashCode;
 
 @Data
-@EqualsAndHashCode(callSuper = true)
 @TableName("ai_generation_record")
-public class AiGenerationRecord extends BaseEntity {
+public class AiGenerationRecord implements Serializable {
 
     @Serial
     private static final long serialVersionUID = 1L;
@@ -42,4 +43,7 @@ public class AiGenerationRecord extends BaseEntity {
     private Integer tokenUsed;
 
     private Integer responseTimeMs;
+
+    @TableField(value = "created_at", fill = FieldFill.INSERT)
+    private LocalDateTime createdAt;
 }

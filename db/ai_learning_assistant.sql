@@ -120,6 +120,7 @@ CREATE TABLE ai_generation_record (
   token_used INT DEFAULT NULL COMMENT '消耗Token数',
   response_time_ms INT DEFAULT NULL COMMENT '响应耗时(ms)',
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   CONSTRAINT fk_ai_generation_user FOREIGN KEY (user_id) REFERENCES sys_user (id),
   CONSTRAINT fk_ai_generation_material FOREIGN KEY (material_id) REFERENCES study_material (id),
   CONSTRAINT fk_ai_generation_note FOREIGN KEY (note_id) REFERENCES study_note (id),
