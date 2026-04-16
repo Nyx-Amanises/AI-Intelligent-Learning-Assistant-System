@@ -1,5 +1,7 @@
 .idea/
 backend/target/
 backend/uploads/
+frontend/node_modules/
+frontend/dist/
 *.log
 Thumbs.db

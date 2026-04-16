@@ -1,0 +1,247 @@
+:root {
+  color-scheme: light;
+  --bg: #f4f6f0;
+  --panel: rgba(255, 255, 255, 0.9);
+  --line: #d8dfcf;
+  --text: #1e2a1f;
+  --muted: #667261;
+  --brand: #2f6c4f;
+  --brand-soft: #dcebdd;
+  --accent: #b75d3c;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+  color: var(--text);
+  background:
+    radial-gradient(circle at top left, rgba(183, 93, 60, 0.12), transparent 28%),
+    radial-gradient(circle at bottom right, rgba(47, 108, 79, 0.16), transparent 34%),
+    linear-gradient(135deg, #f7f8f2, #eef3ea 52%, #f9f3ee);
+  min-height: 100vh;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.shell-layout {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 260px 1fr;
+}
+
+.shell-side {
+  padding: 28px 20px;
+  border-right: 1px solid rgba(216, 223, 207, 0.75);
+  background: rgba(245, 248, 241, 0.82);
+  backdrop-filter: blur(12px);
+}
+
+.shell-main {
+  padding: 28px;
+}
+
+.brand-block {
+  margin-bottom: 28px;
+}
+
+.brand-title {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.brand-subtitle {
+  margin-top: 8px;
+  color: var(--muted);
+  line-height: 1.6;
+  font-size: 14px;
+}
+
+.nav-card,
+.page-card,
+.stat-card {
+  background: var(--panel);
+  border: 1px solid rgba(216, 223, 207, 0.9);
+  border-radius: 24px;
+  box-shadow: 0 10px 28px rgba(55, 73, 49, 0.08);
+}
+
+.nav-card {
+  padding: 12px;
+}
+
+.nav-link {
+  display: block;
+  padding: 12px 14px;
+  border-radius: 16px;
+  color: var(--muted);
+  margin-bottom: 8px;
+  transition: 0.2s ease;
+}
+
+.nav-link:hover,
+.nav-link.router-link-active {
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+
+.page-title {
+  margin: 0;
+  font-size: 28px;
+}
+
+.page-desc {
+  margin: 8px 0 0;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.page-card {
+  padding: 24px;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.stat-card {
+  padding: 18px;
+}
+
+.stat-label {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.stat-value {
+  margin-top: 10px;
+  font-size: 30px;
+  font-weight: 700;
+}
+
+.auth-wrap {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.auth-card {
+  width: min(960px, 100%);
+  min-height: 620px;
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(216, 223, 207, 0.95);
+  border-radius: 32px;
+  box-shadow: 0 18px 48px rgba(42, 57, 40, 0.14);
+}
+
+.auth-hero {
+  padding: 44px;
+  background:
+    linear-gradient(155deg, rgba(47, 108, 79, 0.96), rgba(79, 122, 93, 0.88)),
+    linear-gradient(0deg, #000, #000);
+  color: #f4f7f2;
+}
+
+.auth-hero h1 {
+  margin: 0;
+  font-size: 40px;
+  line-height: 1.15;
+}
+
+.auth-hero p {
+  margin-top: 20px;
+  line-height: 1.8;
+  color: rgba(244, 247, 242, 0.85);
+}
+
+.auth-points {
+  margin-top: 36px;
+  display: grid;
+  gap: 14px;
+}
+
+.auth-point {
+  padding: 14px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.auth-form {
+  padding: 44px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.toolbar {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+
+.content-grid {
+  display: grid;
+  gap: 18px;
+}
+
+.summary-block {
+  white-space: pre-wrap;
+  line-height: 1.9;
+  color: #334133;
+}
+
+@media (max-width: 960px) {
+  .shell-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .shell-side {
+    border-right: 0;
+    border-bottom: 1px solid rgba(216, 223, 207, 0.75);
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .auth-card {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .shell-main,
+  .shell-side,
+  .auth-form,
+  .auth-hero {
+    padding: 20px;
+  }
+
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+}
