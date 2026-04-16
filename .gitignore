@@ -3,5 +3,6 @@ backend/target/
 backend/uploads/
 frontend/node_modules/
 frontend/dist/
+frontend/*.tsbuildinfo
 *.log
 Thumbs.db
