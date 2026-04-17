@@ -211,7 +211,7 @@ public class AiTaskServiceImpl implements AiTaskService {
     public AiTaskDetailVO dispatchTask(Long userId, Long taskId) {
         AiTask task = getOwnedTask(userId, taskId);
         if (!STATUS_PENDING.equals(task.getStatus())) {
-            throw new BusinessException("Only pending tasks can be dispatched");
+            throw new BusinessException("只有等待中的任务才能重新派发");
         }
         scheduleExecuteAfterCommit(task.getId());
         return toDetailVO(task);
@@ -222,7 +222,7 @@ public class AiTaskServiceImpl implements AiTaskService {
     public AiTaskDetailVO retryTask(Long userId, Long taskId) {
         AiTask task = getOwnedTask(userId, taskId);
         if (!STATUS_FAILED.equals(task.getStatus())) {
-            throw new BusinessException("Only failed tasks can be retried");
+            throw new BusinessException("只有失败任务才能重试");
         }
 
         task.setStatus(STATUS_PENDING);
@@ -240,7 +240,6 @@ public class AiTaskServiceImpl implements AiTaskService {
 
     @Override
     @Async
-    @Transactional(rollbackFor = Exception.class)
     public void executeTask(Long taskId) {
         AiTask task = aiTaskMapper.selectById(taskId);
         if (task == null || !STATUS_PENDING.equals(task.getStatus())) {
@@ -256,7 +255,7 @@ public class AiTaskServiceImpl implements AiTaskService {
         try {
             AiTaskProcessor processor = findProcessor(task.getTaskType());
             if (processor == null) {
-                throw new BusinessException("No task processor registered for type: " + task.getTaskType());
+                throw new BusinessException("未找到任务类型 " + task.getTaskType() + " 对应的处理器");
             }
 
             AiTaskProcessor.TaskExecutionResult result = processor.process(task);
@@ -280,7 +279,7 @@ public class AiTaskServiceImpl implements AiTaskService {
                 .eq(AiTask::getUserId, userId)
                 .last("limit 1"));
         if (task == null) {
-            throw new BusinessException(404, "AI task not found");
+            throw new BusinessException(404, "任务不存在");
         }
         return task;
     }
@@ -363,7 +362,7 @@ public class AiTaskServiceImpl implements AiTaskService {
 
     private String truncateErrorMessage(String errorMessage) {
         if (!StringUtils.hasText(errorMessage)) {
-            return "Task execution failed";
+            return "任务执行失败";
         }
         String normalized = errorMessage.trim();
         return normalized.length() > 1000 ? normalized.substring(0, 1000) : normalized;
@@ -386,7 +385,7 @@ public class AiTaskServiceImpl implements AiTaskService {
         try {
             return objectMapper.writeValueAsString(payload);
         } catch (JsonProcessingException exception) {
-            throw new BusinessException(500, "Failed to serialize task payload: " + exception.getMessage());
+            throw new BusinessException(500, "任务请求参数序列化失败: " + exception.getMessage());
         }
     }
 

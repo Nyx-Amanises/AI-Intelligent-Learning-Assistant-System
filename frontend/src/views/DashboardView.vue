@@ -21,15 +21,15 @@
           <strong>去录入资料</strong>
           <em>上传、解析、整理学习材料</em>
         </button>
+        <button type="button" class="dashboard-shortcut" @click="router.push('/ai-tasks')">
+          <span>任务中心</span>
+          <strong>查看任务状态</strong>
+          <em>统一跟踪 AI 总结、出题、评分与 Embedding 任务</em>
+        </button>
         <button type="button" class="dashboard-shortcut" @click="router.push('/summary')">
           <span>AI 总结</span>
           <strong>查看总结列表</strong>
           <em>直接管理历史总结与生成记录</em>
-        </button>
-        <button type="button" class="dashboard-shortcut" @click="router.push('/quiz')">
-          <span>AI 出题</span>
-          <strong>生成题集</strong>
-          <em>出题后可继续进入练习记录</em>
         </button>
       </div>
     </div>

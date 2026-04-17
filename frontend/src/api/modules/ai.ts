@@ -42,6 +42,30 @@ export interface AiTaskDetail {
   updatedAt?: string
 }
 
+export interface AiTaskPageItem {
+  id: number
+  taskType: string
+  bizType?: string
+  bizId?: number
+  status: string
+  progressRate: number
+  retryCount: number
+  priority: number
+  modelName?: string
+  errorMessage?: string
+  startedAt?: string
+  finishedAt?: string
+  createdAt?: string
+}
+
+export interface AiTaskPagePayload {
+  current: number
+  size: number
+  total: number
+  pages: number
+  records: AiTaskPageItem[]
+}
+
 export interface EmbeddingTaskPayload {
   modelName?: string
   forceRegenerate?: boolean
@@ -71,12 +95,19 @@ export const submitPracticeReviewTaskApi = (sessionId: number) =>
 export const submitEmbeddingTaskApi = (materialId: number, data: EmbeddingTaskPayload = {}) =>
   http.post(`/ai/tasks/material/${materialId}/embedding`, data)
 
+export const getAiTaskPageApi = (params: Record<string, unknown>) =>
+  http.get('/ai/tasks/page', { params })
+
 export const getAiTaskDetailApi = (taskId: number) => http.get(`/ai/tasks/${taskId}`)
 
 export const waitAiTaskApi = (taskId: number, timeoutMs = 120000) =>
   http.get(`/ai/tasks/${taskId}/wait`, {
     params: { timeoutMs }
   })
+
+export const dispatchAiTaskApi = (taskId: number) => http.post(`/ai/tasks/${taskId}/dispatch`)
+
+export const retryAiTaskApi = (taskId: number) => http.post(`/ai/tasks/${taskId}/retry`)
 
 export const getAiConfigApi = () => http.get('/ai/config')
 

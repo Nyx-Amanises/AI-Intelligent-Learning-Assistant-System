@@ -12,6 +12,7 @@ const router = createRouter({
         { path: '', redirect: '/dashboard' },
         { path: '/dashboard', name: 'dashboard', component: () => import('@/views/DashboardView.vue') },
         { path: '/materials', name: 'materials', component: () => import('@/views/MaterialView.vue') },
+        { path: '/ai-tasks', name: 'ai-tasks', component: () => import('@/views/AiTaskCenterView.vue') },
         { path: '/summary', name: 'summary', component: () => import('@/views/SummaryView.vue') },
         { path: '/quiz', name: 'quiz', component: () => import('@/views/QuizView.vue') },
         { path: '/practice', name: 'practice', component: () => import('@/views/PracticeView.vue') },

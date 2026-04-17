@@ -30,6 +30,8 @@ import org.springframework.util.StringUtils;
 @Service
 public class AiSummaryServiceImpl implements AiSummaryService {
 
+    private static final int MAX_ERROR_MESSAGE_LENGTH = 500;
+
     private final StudyMaterialService studyMaterialService;
     private final MaterialSegmentMapper materialSegmentMapper;
     private final AiGenerationRecordMapper aiGenerationRecordMapper;
@@ -86,7 +88,7 @@ public class AiSummaryServiceImpl implements AiSummaryService {
             summaryText = callAiOrMock(promptText, inputText, modelName, request.getTemperature());
         } catch (Exception exception) {
             status = "FAILED";
-            errorMessage = exception.getMessage();
+            errorMessage = truncateErrorMessage(exception.getMessage());
             summaryText = null;
         }
 
@@ -314,5 +316,15 @@ public class AiSummaryServiceImpl implements AiSummaryService {
                 .map(String::valueOf)
                 .reduce((left, right) -> left + "," + right)
                 .orElse(null);
+    }
+
+    private String truncateErrorMessage(String errorMessage) {
+        if (!StringUtils.hasText(errorMessage)) {
+            return "AI 总结生成失败";
+        }
+        String normalized = errorMessage.trim();
+        return normalized.length() > MAX_ERROR_MESSAGE_LENGTH
+                ? normalized.substring(0, MAX_ERROR_MESSAGE_LENGTH)
+                : normalized;
     }
 }
