@@ -16,4 +16,9 @@ export const getPracticePageApi = (params: Record<string, unknown>) =>
 
 export const getPracticeDetailApi = (sessionId: number) => http.get(`/practice/${sessionId}`)
 
+export const waitPracticeReviewApi = (sessionId: number, timeoutMs = 60000) =>
+  http.get(`/practice/${sessionId}/review-status`, {
+    params: { timeoutMs }
+  })
+
 export const deletePracticeApi = (sessionId: number) => http.delete(`/practice/${sessionId}`)

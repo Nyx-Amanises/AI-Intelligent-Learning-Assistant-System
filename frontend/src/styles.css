@@ -1400,7 +1400,7 @@ a {
 
 .dashboard-hero__eyebrow {
   color: var(--accent);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -1441,7 +1441,7 @@ a {
 .dashboard-shortcut strong {
   display: block;
   margin-top: 10px;
-  font-size: 18px;
+  font-size: 16px;
 }
 
 .dashboard-shortcut em {
@@ -1449,7 +1449,7 @@ a {
   color: var(--muted);
   font-style: normal;
   line-height: 1.7;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .summary-overview-grid {
@@ -1476,8 +1476,85 @@ a {
 .summary-preview-header strong {
   display: block;
   margin-top: 10px;
-  font-size: 20px;
+  font-size: 18px;
   line-height: 1.5;
+}
+
+.dashboard-hero .page-title,
+.practice-paper-hero__title {
+  font-size: 26px;
+}
+
+.dashboard-hero .page-desc,
+.practice-paper-hero__meta,
+.practice-paper-result__analysis,
+.practice-paper-result__answer-row,
+.practice-paper-sidebar__group-title,
+.practice-paper-sidebar__title,
+.practice-paper-question__index,
+.practice-paper-question__stem,
+.practice-paper-section .workspace-card__header p,
+.practice-paper-section__title {
+  font-size: 14px;
+}
+
+.dashboard-hero .page-desc {
+  font-size: 14px;
+  line-height: 1.75;
+}
+
+.dashboard-shortcut,
+.summary-overview-card,
+.list-row__title,
+.list-row__meta,
+.summary-metric span,
+.summary-metric strong {
+  font-size: inherit;
+}
+
+.list-row__title {
+  font-size: 15px;
+}
+
+.list-row__meta {
+  font-size: 12px;
+}
+
+.summary-metric strong {
+  font-size: 24px;
+}
+
+.practice-paper-hero__meta {
+  font-size: 13px;
+}
+
+.practice-paper-section__title {
+  font-size: 18px;
+}
+
+.practice-paper-question__index {
+  font-size: 15px;
+}
+
+.practice-paper-question__stem {
+  font-size: 16px;
+}
+
+.practice-paper-result__answer-row,
+.practice-paper-result__analysis {
+  font-size: 13px;
+}
+
+.practice-paper-sidebar__title {
+  font-size: 16px;
+}
+
+.practice-paper-sidebar__group-title {
+  font-size: 14px;
+}
+
+.practice-paper-sidebar__item {
+  font-size: 13px;
 }
 
 .summary-overview-card em {

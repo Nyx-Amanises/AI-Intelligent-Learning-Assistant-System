@@ -7,6 +7,7 @@ import com.aiassistant.learning.dto.practice.PracticeSubmitRequest;
 import com.aiassistant.learning.service.PracticeService;
 import com.aiassistant.learning.vo.page.PageVO;
 import com.aiassistant.learning.vo.practice.PracticeDetailVO;
+import com.aiassistant.learning.vo.practice.PracticeReviewStatusVO;
 import com.aiassistant.learning.vo.practice.PracticeSessionPageVO;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -53,6 +54,15 @@ public class PracticeController {
     public ApiResponse<PracticeDetailVO> detail(@PathVariable Long sessionId) {
         Long userId = UserContext.getCurrentUserId();
         return ApiResponse.success(practiceService.getPracticeDetail(userId, sessionId));
+    }
+
+    @GetMapping("/{sessionId}/review-status")
+    public ApiResponse<PracticeReviewStatusVO> waitForReview(
+            @PathVariable Long sessionId,
+            @RequestParam(defaultValue = "60000") Long timeoutMs
+    ) {
+        Long userId = UserContext.getCurrentUserId();
+        return ApiResponse.success(practiceService.waitForAiReview(userId, sessionId, timeoutMs));
     }
 
     @DeleteMapping("/{sessionId}")

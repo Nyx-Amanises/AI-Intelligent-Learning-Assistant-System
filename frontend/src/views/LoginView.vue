@@ -90,7 +90,6 @@
               <span class="social-btn__icon">QQ</span>
               <span>使用 QQ 登录</span>
             </el-button>
-            <div class="social-login-note">当前先保留入口位，后续接入第三方登录时可直接替换为真实授权流程。</div>
           </div>
         </el-col>
       </el-row>
@@ -314,12 +313,6 @@ const submit = async () => {
   color: #1677ff;
   font-size: 12px;
   font-weight: 700;
-}
-
-.social-login-note {
-  color: #94a3b8;
-  font-size: 13px;
-  line-height: 1.7;
 }
 
 @media (max-width: 768px) {

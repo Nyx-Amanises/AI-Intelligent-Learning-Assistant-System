@@ -30,6 +30,10 @@ public class PracticeAnswer extends BaseEntity {
 
     private Integer obtainedScore;
 
+    private String reviewMode;
+
+    private String reviewComment;
+
     private LocalDateTime answerTime;
 
     private Integer markedWrong;

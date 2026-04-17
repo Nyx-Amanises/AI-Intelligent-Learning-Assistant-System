@@ -12,13 +12,18 @@ import com.aiassistant.learning.mapper.PracticeAnswerMapper;
 import com.aiassistant.learning.mapper.PracticeSessionMapper;
 import com.aiassistant.learning.mapper.QuestionItemMapper;
 import com.aiassistant.learning.mapper.QuestionSetMapper;
+import com.aiassistant.learning.service.AiChatService;
+import com.aiassistant.learning.service.AiConfigService;
 import com.aiassistant.learning.service.PracticeService;
 import com.aiassistant.learning.vo.page.PageVO;
 import com.aiassistant.learning.vo.practice.PracticeAnswerVO;
 import com.aiassistant.learning.vo.practice.PracticeDetailVO;
+import com.aiassistant.learning.vo.practice.PracticeReviewStatusVO;
 import com.aiassistant.learning.vo.practice.PracticeSessionPageVO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
@@ -29,6 +34,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -37,24 +44,40 @@ import org.springframework.util.StringUtils;
 public class PracticeServiceImpl implements PracticeService {
 
     private static final String REVIEW_MODE_RULE = "RULE";
-
     private static final String REVIEW_MODE_AI = "AI";
+    private static final String REVIEW_MODE_AI_PENDING = "AI_PENDING";
+    private static final String QUESTION_TYPE_SHORT = "SHORT";
+    private static final String QUESTION_TYPE_SHORT_ANSWER = "SHORT_ANSWER";
+    private static final String SESSION_STATUS_IN_PROGRESS = "IN_PROGRESS";
+    private static final String SESSION_STATUS_SUBMITTED = "SUBMITTED";
 
     private final PracticeSessionMapper practiceSessionMapper;
     private final PracticeAnswerMapper practiceAnswerMapper;
     private final QuestionSetMapper questionSetMapper;
     private final QuestionItemMapper questionItemMapper;
+    private final AiConfigService aiConfigService;
+    private final AiChatService aiChatService;
+    private final ObjectMapper objectMapper;
+    private final PracticeService selfPracticeService;
 
     public PracticeServiceImpl(
             PracticeSessionMapper practiceSessionMapper,
             PracticeAnswerMapper practiceAnswerMapper,
             QuestionSetMapper questionSetMapper,
-            QuestionItemMapper questionItemMapper
+            QuestionItemMapper questionItemMapper,
+            AiConfigService aiConfigService,
+            AiChatService aiChatService,
+            ObjectMapper objectMapper,
+            @Lazy PracticeService selfPracticeService
     ) {
         this.practiceSessionMapper = practiceSessionMapper;
         this.practiceAnswerMapper = practiceAnswerMapper;
         this.questionSetMapper = questionSetMapper;
         this.questionItemMapper = questionItemMapper;
+        this.aiConfigService = aiConfigService;
+        this.aiChatService = aiChatService;
+        this.objectMapper = objectMapper;
+        this.selfPracticeService = selfPracticeService;
     }
 
     @Override
@@ -77,7 +100,7 @@ public class PracticeServiceImpl implements PracticeService {
         session.setTotalScore(questions.stream().mapToInt(QuestionItem::getScore).sum());
         session.setObtainedScore(0);
         session.setAccuracyRate(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
-        session.setSessionStatus("IN_PROGRESS");
+        session.setSessionStatus(SESSION_STATUS_IN_PROGRESS);
         practiceSessionMapper.insert(session);
 
         return buildPracticeDetail(session, questions, List.of());
@@ -103,23 +126,33 @@ public class PracticeServiceImpl implements PracticeService {
 
         int correctCount = 0;
         int obtainedScore = 0;
+        boolean hasPendingAiReview = false;
         for (QuestionItem question : questions) {
             PracticeAnswerRequest answerRequest = answerMap.get(question.getId());
             String userAnswer = answerRequest == null ? null : answerRequest.getUserAnswer();
-            AnswerReview review = evaluateAnswer(question, userAnswer);
-            if (review.correct()) {
+            AnswerReview review = isShortAnswer(question.getQuestionType())
+                    ? buildPendingShortAnswerReview(question, userAnswer)
+                    : evaluateObjectiveAnswer(question, userAnswer);
+
+            if (!REVIEW_MODE_AI_PENDING.equals(review.mode()) && review.correct()) {
                 correctCount++;
             }
-            obtainedScore += review.score();
+            if (!REVIEW_MODE_AI_PENDING.equals(review.mode())) {
+                obtainedScore += review.score();
+            } else {
+                hasPendingAiReview = true;
+            }
 
             PracticeAnswer answer = new PracticeAnswer();
             answer.setSessionId(session.getId());
             answer.setQuestionId(question.getId());
             answer.setUserAnswer(userAnswer);
-            answer.setIsCorrect(review.correct() ? 1 : 0);
-            answer.setObtainedScore(review.score());
+            answer.setIsCorrect(REVIEW_MODE_AI_PENDING.equals(review.mode()) ? 0 : (review.correct() ? 1 : 0));
+            answer.setObtainedScore(REVIEW_MODE_AI_PENDING.equals(review.mode()) ? 0 : review.score());
+            answer.setReviewMode(review.mode());
+            answer.setReviewComment(review.comment());
             answer.setAnswerTime(LocalDateTime.now());
-            answer.setMarkedWrong(review.correct() ? 0 : 1);
+            answer.setMarkedWrong(REVIEW_MODE_AI_PENDING.equals(review.mode()) ? 0 : (review.correct() ? 0 : 1));
             practiceAnswerMapper.insert(answer);
         }
 
@@ -128,8 +161,12 @@ public class PracticeServiceImpl implements PracticeService {
         session.setCorrectCount(correctCount);
         session.setObtainedScore(obtainedScore);
         session.setAccuracyRate(calculateAccuracy(correctCount, questions.size()));
-        session.setSessionStatus("SUBMITTED");
+        session.setSessionStatus(SESSION_STATUS_SUBMITTED);
         practiceSessionMapper.updateById(session);
+
+        if (hasPendingAiReview) {
+            selfPracticeService.reviewPendingShortAnswers(session.getId());
+        }
 
         List<PracticeAnswer> answers = practiceAnswerMapper.selectList(new LambdaQueryWrapper<PracticeAnswer>()
                 .eq(PracticeAnswer::getSessionId, session.getId())
@@ -187,6 +224,77 @@ public class PracticeServiceImpl implements PracticeService {
     }
 
     @Override
+    public PracticeReviewStatusVO waitForAiReview(Long userId, Long sessionId, Long timeoutMs) {
+        PracticeSession session = practiceSessionMapper.selectOne(new LambdaQueryWrapper<PracticeSession>()
+                .eq(PracticeSession::getId, sessionId)
+                .eq(PracticeSession::getUserId, userId)
+                .last("limit 1"));
+        if (session == null) {
+            throw new BusinessException(404, "练习记录不存在");
+        }
+
+        long waitTimeoutMs = Math.max(1000L, Math.min(timeoutMs == null ? 60000L : timeoutMs, 120000L));
+        long deadline = System.currentTimeMillis() + waitTimeoutMs;
+        boolean pending = hasPendingAiReview(sessionId);
+        while (pending && System.currentTimeMillis() < deadline) {
+            try {
+                Thread.sleep(1500L);
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+            pending = hasPendingAiReview(sessionId);
+        }
+
+        return PracticeReviewStatusVO.builder()
+                .sessionId(sessionId)
+                .completed(!pending)
+                .pending(pending)
+                .build();
+    }
+
+    @Override
+    @Async
+    @Transactional(rollbackFor = Exception.class)
+    public void reviewPendingShortAnswers(Long sessionId) {
+        PracticeSession session = practiceSessionMapper.selectById(sessionId);
+        if (session == null) {
+            return;
+        }
+
+        List<QuestionItem> questions = listQuestionItems(session.getQuestionSetId());
+        Map<Long, QuestionItem> questionMap = questions.stream()
+                .collect(Collectors.toMap(QuestionItem::getId, Function.identity()));
+
+        List<PracticeAnswer> answers = practiceAnswerMapper.selectList(new LambdaQueryWrapper<PracticeAnswer>()
+                .eq(PracticeAnswer::getSessionId, sessionId)
+                .orderByAsc(PracticeAnswer::getId));
+
+        boolean updated = false;
+        for (PracticeAnswer answer : answers) {
+            if (!REVIEW_MODE_AI_PENDING.equalsIgnoreCase(answer.getReviewMode())) {
+                continue;
+            }
+            QuestionItem question = questionMap.get(answer.getQuestionId());
+            if (question == null || !isShortAnswer(question.getQuestionType())) {
+                continue;
+            }
+            AnswerReview review = evaluateShortAnswerWithAi(question, answer.getUserAnswer());
+            answer.setIsCorrect(review.correct() ? 1 : 0);
+            answer.setObtainedScore(review.score());
+            answer.setReviewMode(review.mode());
+            answer.setReviewComment(review.comment());
+            answer.setMarkedWrong(review.correct() ? 0 : 1);
+            practiceAnswerMapper.updateById(answer);
+            updated = true;
+        }
+
+        if (updated) {
+            refreshSessionScore(sessionId);
+        }
+    }
+
+    @Override
     @Transactional(rollbackFor = Exception.class)
     public void deletePracticeSession(Long userId, Long sessionId) {
         PracticeSession session = practiceSessionMapper.selectOne(new LambdaQueryWrapper<PracticeSession>()
@@ -200,6 +308,36 @@ public class PracticeServiceImpl implements PracticeService {
         practiceAnswerMapper.delete(new LambdaQueryWrapper<PracticeAnswer>()
                 .eq(PracticeAnswer::getSessionId, sessionId));
         practiceSessionMapper.deleteById(sessionId);
+    }
+
+    private boolean hasPendingAiReview(Long sessionId) {
+        return practiceAnswerMapper.selectCount(new LambdaQueryWrapper<PracticeAnswer>()
+                .eq(PracticeAnswer::getSessionId, sessionId)
+                .eq(PracticeAnswer::getReviewMode, REVIEW_MODE_AI_PENDING)) > 0;
+    }
+
+    private void refreshSessionScore(Long sessionId) {
+        PracticeSession session = practiceSessionMapper.selectById(sessionId);
+        if (session == null) {
+            return;
+        }
+
+        List<PracticeAnswer> answers = practiceAnswerMapper.selectList(new LambdaQueryWrapper<PracticeAnswer>()
+                .eq(PracticeAnswer::getSessionId, sessionId));
+
+        int correctCount = (int) answers.stream()
+                .filter(answer -> answer.getIsCorrect() != null && answer.getIsCorrect() == 1)
+                .count();
+        int obtainedScore = answers.stream()
+                .map(PracticeAnswer::getObtainedScore)
+                .filter(score -> score != null && score > 0)
+                .mapToInt(Integer::intValue)
+                .sum();
+
+        session.setCorrectCount(correctCount);
+        session.setObtainedScore(obtainedScore);
+        session.setAccuracyRate(calculateAccuracy(correctCount, session.getTotalQuestions() == null ? 0 : session.getTotalQuestions()));
+        practiceSessionMapper.updateById(session);
     }
 
     private QuestionSet getOwnedQuestionSet(Long userId, Long questionSetId) {
@@ -219,17 +357,34 @@ public class PracticeServiceImpl implements PracticeService {
                 .orderByAsc(QuestionItem::getSortNo));
     }
 
-    private AnswerReview evaluateAnswer(QuestionItem question, String userAnswer) {
-        if ("SHORT".equalsIgnoreCase(question.getQuestionType())) {
-            return evaluateShortAnswer(question, userAnswer);
-        }
+    private AnswerReview evaluateObjectiveAnswer(QuestionItem question, String userAnswer) {
         boolean correct = isCorrect(question, userAnswer);
         return new AnswerReview(
                 correct,
                 correct ? safeScore(question.getScore()) : 0,
                 REVIEW_MODE_RULE,
                 correct ? "规则判定：答案匹配" : "规则判定：答案不匹配",
-                correct ? "系统根据标准答案完成自动判定。" : "系统按标准答案精确匹配，当前答案未命中参考答案。"
+                correct ? "系统已根据标准答案完成判定。" : "系统已根据标准答案完成判定，当前答案未命中参考答案。"
+        );
+    }
+
+    private AnswerReview buildPendingShortAnswerReview(QuestionItem question, String userAnswer) {
+        int fullScore = safeScore(question.getScore());
+        if (!StringUtils.hasText(userAnswer)) {
+            return new AnswerReview(
+                    false,
+                    0,
+                    REVIEW_MODE_AI,
+                    "AI 判分：0/" + fullScore,
+                    "未作答，AI 无法完成评分。"
+            );
+        }
+        return new AnswerReview(
+                false,
+                0,
+                REVIEW_MODE_AI_PENDING,
+                "AI 评分中",
+                "客观题已完成判分，简答题正在由 AI 评分，请稍后刷新查看。"
         );
     }
 
@@ -240,7 +395,7 @@ public class PracticeServiceImpl implements PracticeService {
         return question.getCorrectAnswer().trim().equalsIgnoreCase(userAnswer.trim());
     }
 
-    private AnswerReview evaluateShortAnswer(QuestionItem question, String userAnswer) {
+    private AnswerReview evaluateShortAnswerWithAi(QuestionItem question, String userAnswer) {
         int fullScore = safeScore(question.getScore());
         if (!StringUtils.hasText(userAnswer)) {
             return new AnswerReview(
@@ -248,30 +403,79 @@ public class PracticeServiceImpl implements PracticeService {
                     0,
                     REVIEW_MODE_AI,
                     "AI 判分：0/" + fullScore,
-                    "未作答，AI 无法识别关键知识点。"
+                    "未作答，AI 无法识别到有效答题内容。"
             );
         }
 
-        String referenceAnswer = question.getCorrectAnswer();
+        String referenceAnswer = trimToNull(question.getCorrectAnswer());
         if (!StringUtils.hasText(referenceAnswer)) {
             return new AnswerReview(
                     false,
                     0,
-                    REVIEW_MODE_AI,
-                    "AI 判分：0/" + fullScore,
-                    "题目暂未配置参考答案，当前仅展示学生作答。"
+                    REVIEW_MODE_RULE,
+                    "规则评分：0/" + fullScore,
+                    "题目暂未配置参考答案，无法执行 AI 判分。"
             );
         }
 
+        AiConfigService.ResolvedAiConfig config = aiConfigService.getResolvedConfig();
+        if (!Boolean.TRUE.equals(config.enabled())
+                || Boolean.TRUE.equals(config.mockMode())
+                || !StringUtils.hasText(config.apiKey())) {
+            return buildRuleFallbackReview(question, userAnswer, referenceAnswer, fullScore,
+                    "AI 判分暂时不可用，已按参考答案规则暂代评分。");
+        }
+
+        try {
+            String modelName = StringUtils.hasText(config.defaultModel()) ? config.defaultModel() : "gpt-4o-mini";
+            String content = aiChatService.chat(
+                    buildShortAnswerSystemPrompt(),
+                    buildShortAnswerUserPrompt(question, userAnswer, referenceAnswer, fullScore),
+                    modelName,
+                    0.2
+            );
+            ShortAnswerAiReviewPayload payload = parseShortAnswerReview(content);
+            int score = clampScore(payload.score(), fullScore);
+            boolean correct = payload.correct() != null
+                    ? payload.correct()
+                    : score >= Math.max(1, Math.round(fullScore * 0.6f));
+            String comment = StringUtils.hasText(payload.comment())
+                    ? payload.comment().trim()
+                    : "AI 已根据参考答案完成判分。";
+            return new AnswerReview(
+                    correct,
+                    score,
+                    REVIEW_MODE_AI,
+                    "AI 判分：" + score + "/" + fullScore,
+                    comment
+            );
+        } catch (Exception exception) {
+            return buildRuleFallbackReview(
+                    question,
+                    userAnswer,
+                    referenceAnswer,
+                    fullScore,
+                    "AI 判分失败，已按参考答案规则暂代评分。"
+            );
+        }
+    }
+
+    private AnswerReview buildRuleFallbackReview(
+            QuestionItem question,
+            String userAnswer,
+            String referenceAnswer,
+            int fullScore,
+            String prefixComment
+    ) {
         String normalizedUser = normalizeText(userAnswer);
         String normalizedReference = normalizeText(referenceAnswer);
         if (!StringUtils.hasText(normalizedUser) || !StringUtils.hasText(normalizedReference)) {
             return new AnswerReview(
                     false,
                     0,
-                    REVIEW_MODE_AI,
-                    "AI 判分：0/" + fullScore,
-                    "答案文本过短或缺少有效内容，无法完成可信判分。"
+                    REVIEW_MODE_RULE,
+                    "规则评分：0/" + fullScore,
+                    prefixComment + " 答案文本过短或缺少有效内容。"
             );
         }
 
@@ -279,9 +483,9 @@ public class PracticeServiceImpl implements PracticeService {
             return new AnswerReview(
                     true,
                     fullScore,
-                    REVIEW_MODE_AI,
-                    "AI 判分：" + fullScore + "/" + fullScore,
-                    "答案与参考答案高度一致，核心知识点覆盖完整。"
+                    REVIEW_MODE_RULE,
+                    "规则评分：" + fullScore + "/" + fullScore,
+                    prefixComment + " 答案与参考答案高度一致。"
             );
         }
 
@@ -289,7 +493,6 @@ public class PracticeServiceImpl implements PracticeService {
         double lengthRatio = calculateLengthRatio(normalizedReference, normalizedUser);
         double keywordCoverage = calculateKeywordCoverage(referenceAnswer, userAnswer);
         double similarity = Math.min(1.0, coverage * 0.45 + lengthRatio * 0.2 + keywordCoverage * 0.35);
-
         if (normalizedUser.contains(normalizedReference) || normalizedReference.contains(normalizedUser)) {
             similarity = Math.max(similarity, 0.82);
         }
@@ -298,7 +501,7 @@ public class PracticeServiceImpl implements PracticeService {
         String feedback;
         if (similarity >= 0.85) {
             awardedScore = fullScore;
-            feedback = "答案覆盖了大部分核心要点，表述已接近人工参考答案。";
+            feedback = "答案覆盖了大部分核心要点，表述已经接近参考答案。";
         } else if (similarity >= 0.65) {
             awardedScore = Math.max(1, Math.round(fullScore * 0.7f));
             feedback = "答案命中了主要知识点，但仍有个别关键表述不完整。";
@@ -314,22 +517,117 @@ public class PracticeServiceImpl implements PracticeService {
         return new AnswerReview(
                 correct,
                 awardedScore,
-                REVIEW_MODE_AI,
-                "AI 判分：" + awardedScore + "/" + fullScore,
-                feedback
+                REVIEW_MODE_RULE,
+                "规则评分：" + awardedScore + "/" + fullScore,
+                prefixComment + " " + feedback
         );
+    }
+
+    private String buildShortAnswerSystemPrompt() {
+        return """
+                你是一名严谨的中文主观题阅卷助手。
+                请严格依据题目、参考答案、题目解析和学生答案给出分数。
+                评分要求：
+                1. score 必须是 0 到满分之间的整数。
+                2. 可以给部分分，但不要超过满分。
+                3. comment 使用中文，简洁说明命中的要点与不足，控制在 80 字以内。
+                4. correct 表示是否达到及格线，默认按 60% 满分判断。
+                5. 只返回 JSON，不要返回 Markdown，不要输出额外解释。
+                返回格式：
+                {
+                  "score": 6,
+                  "correct": true,
+                  "comment": "答案覆盖了……，但还缺少……"
+                }
+                """;
+    }
+
+    private String buildShortAnswerUserPrompt(
+            QuestionItem question,
+            String userAnswer,
+            String referenceAnswer,
+            int fullScore
+    ) {
+        String analysis = StringUtils.hasText(question.getAnswerAnalysis()) ? question.getAnswerAnalysis().trim() : "无";
+        return """
+                请为下面这道简答题评分。
+
+                题目：
+                %s
+
+                满分：
+                %d
+
+                参考答案：
+                %s
+
+                题目解析：
+                %s
+
+                学生答案：
+                %s
+                """.formatted(
+                question.getStemText(),
+                fullScore,
+                referenceAnswer,
+                analysis,
+                userAnswer
+        );
+    }
+
+    private ShortAnswerAiReviewPayload parseShortAnswerReview(String content) {
+        try {
+            JsonNode root = objectMapper.readTree(normalizeJsonContent(content));
+            if (root == null || root.isMissingNode()) {
+                throw new BusinessException("AI 判分结果为空");
+            }
+            Integer score = root.has("score") && root.get("score").canConvertToInt()
+                    ? root.get("score").asInt()
+                    : null;
+            Boolean correct = root.has("correct") && !root.get("correct").isNull()
+                    ? root.get("correct").asBoolean()
+                    : null;
+            String comment = trimToNull(root.path("comment").asText(null));
+            if (score == null) {
+                throw new BusinessException("AI 判分结果缺少 score");
+            }
+            return new ShortAnswerAiReviewPayload(score, correct, comment);
+        } catch (BusinessException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw new BusinessException(500, "解析 AI 判分结果失败: " + exception.getMessage());
+        }
+    }
+
+    private String normalizeJsonContent(String content) {
+        String normalized = content == null ? "" : content.trim();
+        if (normalized.startsWith("```json")) {
+            normalized = normalized.substring(7).trim();
+        } else if (normalized.startsWith("```")) {
+            normalized = normalized.substring(3).trim();
+        }
+        if (normalized.endsWith("```")) {
+            normalized = normalized.substring(0, normalized.length() - 3).trim();
+        }
+        return normalized;
+    }
+
+    private String trimToNull(String value) {
+        return StringUtils.hasText(value) ? value.trim() : null;
+    }
+
+    private int clampScore(Integer score, int fullScore) {
+        if (score == null) {
+            return 0;
+        }
+        return Math.max(0, Math.min(fullScore, score));
     }
 
     private String normalizeText(String text) {
         if (!StringUtils.hasText(text)) {
             return "";
         }
-        return text.toLowerCase()
-                .replaceAll("[\\p{Punct}\\p{IsPunctuation}\\s]+", "")
-                .replace("，", "")
-                .replace("。", "")
-                .replace("；", "")
-                .replace("：", "");
+        return text.toLowerCase().replaceAll("[\\p{Punct}\\p{IsPunctuation}\\s]+", "");
     }
 
     private double calculateCoverage(String reference, String userAnswer) {
@@ -373,7 +671,7 @@ public class PracticeServiceImpl implements PracticeService {
             return Set.of();
         }
         Set<String> keywords = new LinkedHashSet<>();
-        for (String token : text.split("[，。；：、,.;:\\s()（）]+")) {
+        for (String token : text.split("[，。；：,.;:\\s()（）]+")) {
             String item = token.trim();
             if (item.length() >= 2) {
                 keywords.add(item);
@@ -407,8 +705,7 @@ public class PracticeServiceImpl implements PracticeService {
         List<PracticeAnswerVO> answerVOS = questions.stream()
                 .map(question -> {
                     PracticeAnswer answer = answerMap.get(question.getId());
-                    String userAnswer = answer == null ? null : answer.getUserAnswer();
-                    AnswerReview review = evaluateAnswer(question, userAnswer);
+                    AnswerReview review = buildReviewForDetail(question, answer);
                     return PracticeAnswerVO.builder()
                             .questionId(question.getId())
                             .questionType(question.getQuestionType())
@@ -419,7 +716,7 @@ public class PracticeServiceImpl implements PracticeService {
                             .optionD(question.getOptionD())
                             .correctAnswer(question.getCorrectAnswer())
                             .referenceAnswer(question.getCorrectAnswer())
-                            .userAnswer(userAnswer)
+                            .userAnswer(answer == null ? null : answer.getUserAnswer())
                             .isCorrect(answer == null ? null : answer.getIsCorrect())
                             .obtainedScore(answer == null ? null : answer.getObtainedScore())
                             .aiScore(review.score())
@@ -447,11 +744,86 @@ public class PracticeServiceImpl implements PracticeService {
                 .build();
     }
 
+    private AnswerReview buildReviewForDetail(QuestionItem question, PracticeAnswer answer) {
+        if (answer == null) {
+            return buildPendingDetailReview(question);
+        }
+        if (isShortAnswer(question.getQuestionType())) {
+            return buildStoredShortAnswerReview(question, answer);
+        }
+        boolean correct = answer.getIsCorrect() != null && answer.getIsCorrect() == 1;
+        return new AnswerReview(
+                correct,
+                answer.getObtainedScore() == null ? 0 : answer.getObtainedScore(),
+                REVIEW_MODE_RULE,
+                correct ? "规则判定：答案匹配" : "规则判定：答案不匹配",
+                correct ? "系统已根据标准答案完成判定。" : "系统已根据标准答案完成判定，当前答案未命中参考答案。"
+        );
+    }
+
+    private AnswerReview buildPendingDetailReview(QuestionItem question) {
+        if (isShortAnswer(question.getQuestionType())) {
+            return new AnswerReview(
+                    false,
+                    0,
+                    REVIEW_MODE_AI,
+                    "AI 判分：待提交",
+                    "提交后将调用 AI 完成简答题判分。"
+            );
+        }
+        return new AnswerReview(
+                false,
+                0,
+                REVIEW_MODE_RULE,
+                "规则判定：待提交",
+                "提交后将根据标准答案完成判定。"
+        );
+    }
+
+    private AnswerReview buildStoredShortAnswerReview(QuestionItem question, PracticeAnswer answer) {
+        int fullScore = safeScore(question.getScore());
+        String mode = StringUtils.hasText(answer.getReviewMode()) ? answer.getReviewMode() : REVIEW_MODE_RULE;
+        if (REVIEW_MODE_AI_PENDING.equalsIgnoreCase(mode)) {
+            return new AnswerReview(
+                    false,
+                    0,
+                    REVIEW_MODE_AI_PENDING,
+                    "AI 评分中",
+                    StringUtils.hasText(answer.getReviewComment())
+                            ? answer.getReviewComment()
+                            : "客观题已完成判分，简答题正在由 AI 评分，请稍后刷新查看。"
+            );
+        }
+
+        int score = answer.getObtainedScore() == null ? 0 : answer.getObtainedScore();
+        boolean correct = answer.getIsCorrect() != null && answer.getIsCorrect() == 1;
+        String labelPrefix = REVIEW_MODE_AI.equalsIgnoreCase(mode) ? "AI 判分：" : "规则评分：";
+        String comment = StringUtils.hasText(answer.getReviewComment())
+                ? answer.getReviewComment()
+                : (REVIEW_MODE_AI.equalsIgnoreCase(mode) ? "AI 已完成本题判分。" : "已按规则完成本题评分。");
+        return new AnswerReview(correct, score, mode, labelPrefix + score + "/" + fullScore, comment);
+    }
+
+    private boolean isShortAnswer(String questionType) {
+        if (!StringUtils.hasText(questionType)) {
+            return false;
+        }
+        return QUESTION_TYPE_SHORT.equalsIgnoreCase(questionType)
+                || QUESTION_TYPE_SHORT_ANSWER.equalsIgnoreCase(questionType);
+    }
+
     private record AnswerReview(
             boolean correct,
             int score,
             String mode,
             String label,
+            String comment
+    ) {
+    }
+
+    private record ShortAnswerAiReviewPayload(
+            Integer score,
+            Boolean correct,
             String comment
     ) {
     }
