@@ -6,6 +6,8 @@ public interface VectorStoreService {
 
     void upsertMaterialSegments(List<MaterialSegmentVector> segmentVectors);
 
+    void deleteMaterialSegments(Long userId, Long materialId);
+
     List<RetrievedSegment> searchMaterialSegments(Long userId, Long materialId, List<Double> queryVector, int limit);
 
     record MaterialSegmentVector(

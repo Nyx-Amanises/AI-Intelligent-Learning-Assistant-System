@@ -83,6 +83,37 @@ public class QdrantVectorStoreServiceImpl implements VectorStoreService {
     }
 
     @Override
+    public void deleteMaterialSegments(Long userId, Long materialId) {
+        if (!Boolean.TRUE.equals(qdrantProperties.getEnabled())) {
+            return;
+        }
+        if (userId == null || materialId == null) {
+            return;
+        }
+
+        try {
+            buildRestClient().post()
+                    .uri("/collections/{collectionName}/points/delete?wait=true", resolveCollectionName())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .headers(headers -> applyApiKey(headers))
+                    .body(Map.of(
+                            "filter", Map.of(
+                                    "must", List.of(
+                                            Map.of("key", "userId", "match", Map.of("value", userId)),
+                                            Map.of("key", "materialId", "match", Map.of("value", materialId))
+                                    )
+                            )
+                    ))
+                    .retrieve()
+                    .toBodilessEntity();
+        } catch (RestClientResponseException exception) {
+            throw buildQdrantHttpException("清理资料向量失败", exception);
+        } catch (ResourceAccessException exception) {
+            throw buildQdrantAccessException("清理资料向量失败", exception);
+        }
+    }
+
+    @Override
     public List<RetrievedSegment> searchMaterialSegments(Long userId, Long materialId, List<Double> queryVector, int limit) {
         validateQdrantEnabled();
         if (userId == null || materialId == null) {

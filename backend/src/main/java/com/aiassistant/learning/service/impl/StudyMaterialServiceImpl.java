@@ -8,6 +8,7 @@ import com.aiassistant.learning.entity.MaterialSegment;
 import com.aiassistant.learning.entity.StudyMaterial;
 import com.aiassistant.learning.mapper.MaterialSegmentMapper;
 import com.aiassistant.learning.service.StudyMaterialService;
+import com.aiassistant.learning.service.VectorStoreService;
 import com.aiassistant.learning.vo.material.MaterialDetailVO;
 import com.aiassistant.learning.vo.material.MaterialPageVO;
 import com.aiassistant.learning.vo.material.MaterialSegmentVO;
@@ -22,14 +23,16 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -39,15 +42,21 @@ import org.springframework.web.multipart.MultipartFile;
 public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learning.mapper.StudyMaterialMapper, StudyMaterial>
         implements StudyMaterialService {
 
+    private static final Logger log = LoggerFactory.getLogger(StudyMaterialServiceImpl.class);
+    private static final int SEGMENT_CHAR_LIMIT = 900;
+
     private final MaterialSegmentMapper materialSegmentMapper;
     private final FileStorageProperties fileStorageProperties;
+    private final VectorStoreService vectorStoreService;
 
     public StudyMaterialServiceImpl(
             MaterialSegmentMapper materialSegmentMapper,
-            FileStorageProperties fileStorageProperties
+            FileStorageProperties fileStorageProperties,
+            VectorStoreService vectorStoreService
     ) {
         this.materialSegmentMapper = materialSegmentMapper;
         this.fileStorageProperties = fileStorageProperties;
+        this.vectorStoreService = vectorStoreService;
     }
 
     @Override
@@ -197,7 +206,8 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
 
         try {
             ParsedContent parsedContent = parseFile(material);
-            saveSegments(materialId, parsedContent.text());
+            cleanupMaterialVectors(userId, materialId);
+            saveSegments(materialId, parsedContent.segments());
             material.setParseStatus("SUCCESS");
             material.setTotalPages(parsedContent.totalPages());
             material.setTotalCharacters(parsedContent.text().length());
@@ -213,6 +223,7 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
     @Transactional(rollbackFor = Exception.class)
     public void deleteMaterial(Long userId, Long materialId) {
         StudyMaterial material = getUserOwnedMaterial(userId, materialId);
+        cleanupMaterialVectors(userId, materialId);
         materialSegmentMapper.delete(Wrappers.<MaterialSegment>lambdaQuery()
                 .eq(MaterialSegment::getMaterialId, material.getId()));
         this.removeById(material.getId());
@@ -236,7 +247,7 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
         }
 
         return switch (material.getMaterialType()) {
-            case "TXT", "TEXT" -> new ParsedContent(Files.readString(filePath, StandardCharsets.UTF_8), null);
+            case "TXT", "TEXT" -> buildParsedContent(Files.readString(filePath, StandardCharsets.UTF_8), null);
             case "PDF" -> parsePdf(filePath);
             case "DOCX" -> parseDocx(filePath);
             default -> throw new BusinessException("暂不支持解析该文件类型");
@@ -246,7 +257,22 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
     private ParsedContent parsePdf(Path filePath) throws IOException {
         try (PDDocument document = Loader.loadPDF(filePath.toFile())) {
             PDFTextStripper stripper = new PDFTextStripper();
-            return new ParsedContent(stripper.getText(document).trim(), document.getNumberOfPages());
+            StringBuilder fullText = new StringBuilder();
+            List<ParsedSegment> segments = new ArrayList<>();
+            for (int pageNo = 1; pageNo <= document.getNumberOfPages(); pageNo++) {
+                stripper.setStartPage(pageNo);
+                stripper.setEndPage(pageNo);
+                String pageText = normalizeParsedText(stripper.getText(document));
+                if (!StringUtils.hasText(pageText)) {
+                    continue;
+                }
+                if (fullText.length() > 0) {
+                    fullText.append(System.lineSeparator());
+                }
+                fullText.append(pageText);
+                segments.addAll(splitText(pageText, pageNo));
+            }
+            return new ParsedContent(fullText.toString().trim(), document.getNumberOfPages(), segments);
         }
     }
 
@@ -258,30 +284,35 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
                     .filter(StringUtils::hasText)
                     .reduce((left, right) -> left + System.lineSeparator() + right)
                     .orElse("");
-            return new ParsedContent(text, null);
+            return buildParsedContent(text, null);
         }
     }
 
-    private void saveSegments(Long materialId, String text) {
+    private ParsedContent buildParsedContent(String text, Integer totalPages) {
+        String normalized = normalizeParsedText(text);
+        return new ParsedContent(normalized, totalPages, splitText(normalized, null));
+    }
+
+    private void saveSegments(Long materialId, List<ParsedSegment> segments) {
         materialSegmentMapper.delete(Wrappers.<MaterialSegment>lambdaQuery()
                 .eq(MaterialSegment::getMaterialId, materialId));
 
-        List<String> chunks = splitText(text);
-        AtomicInteger segmentNo = new AtomicInteger(1);
-        chunks.forEach(chunk -> {
+        int segmentNo = 1;
+        for (ParsedSegment parsedSegment : segments) {
             MaterialSegment segment = new MaterialSegment();
             segment.setMaterialId(materialId);
-            segment.setSegmentNo(segmentNo.getAndIncrement());
-            segment.setSectionTitle("第" + (segmentNo.get() - 1) + "段");
-            segment.setContentText(chunk);
-            segment.setTokenEstimate(Math.max(1, chunk.length() / 4));
+            segment.setSegmentNo(segmentNo++);
+            segment.setPageNo(parsedSegment.pageNo());
+            segment.setSectionTitle(parsedSegment.sectionTitle());
+            segment.setContentText(parsedSegment.contentText());
+            segment.setTokenEstimate(Math.max(1, parsedSegment.contentText().length() / 4));
             segment.setEmbeddingStatus("PENDING");
             materialSegmentMapper.insert(segment);
-        });
+        }
     }
 
-    private List<String> splitText(String text) {
-        String normalized = text == null ? "" : text.trim();
+    private List<ParsedSegment> splitText(String text, Integer pageNo) {
+        String normalized = normalizeParsedText(text);
         if (!StringUtils.hasText(normalized)) {
             throw new BusinessException("解析结果为空，无法生成分段");
         }
@@ -292,18 +323,86 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
                 .toList();
 
         StringBuilder current = new StringBuilder();
-        java.util.ArrayList<String> segments = new java.util.ArrayList<>();
+        List<ParsedSegment> segments = new ArrayList<>();
+        int segmentIndex = 1;
         for (String paragraph : paragraphs) {
-            if (current.length() + paragraph.length() > 1000 && current.length() > 0) {
-                segments.add(current.toString().trim());
+            if (current.length() + paragraph.length() > SEGMENT_CHAR_LIMIT && current.length() > 0) {
+                segments.add(buildParsedSegment(current.toString().trim(), pageNo, segmentIndex++));
                 current.setLength(0);
             }
             current.append(paragraph).append(System.lineSeparator());
         }
         if (current.length() > 0) {
-            segments.add(current.toString().trim());
+            segments.add(buildParsedSegment(current.toString().trim(), pageNo, segmentIndex));
         }
         return segments;
+    }
+
+    private ParsedSegment buildParsedSegment(String contentText, Integer pageNo, int pageSegmentIndex) {
+        String sectionTitle = buildSectionTitle(contentText, pageNo, pageSegmentIndex);
+        return new ParsedSegment(contentText, pageNo, sectionTitle);
+    }
+
+    private String buildSectionTitle(String contentText, Integer pageNo, int pageSegmentIndex) {
+        String locationPrefix = pageNo == null
+                ? "第" + pageSegmentIndex + "段"
+                : "第" + pageNo + "页 · 第" + pageSegmentIndex + "段";
+        String heading = extractHeading(contentText);
+        if (!StringUtils.hasText(heading)) {
+            return locationPrefix;
+        }
+        return locationPrefix + " · " + heading;
+    }
+
+    private String extractHeading(String contentText) {
+        if (!StringUtils.hasText(contentText)) {
+            return null;
+        }
+        List<String> lines = contentText.lines()
+                .map(String::trim)
+                .filter(StringUtils::hasText)
+                .limit(4)
+                .toList();
+        for (String line : lines) {
+            if (looksLikeHeading(line)) {
+                return trimTitle(line);
+            }
+        }
+        return trimTitle(lines.isEmpty() ? null : lines.get(0));
+    }
+
+    private boolean looksLikeHeading(String line) {
+        if (!StringUtils.hasText(line)) {
+            return false;
+        }
+        String trimmed = line.trim();
+        if (trimmed.length() < 4 || trimmed.length() > 36) {
+            return false;
+        }
+        if (trimmed.matches("^(第[一二三四五六七八九十0-9]+[章节部分篇]|[一二三四五六七八九十]+、|\\d+(\\.\\d+)+.*).*$")) {
+            return true;
+        }
+        return !trimmed.contains("：") && !trimmed.contains(":") && trimmed.length() <= 18;
+    }
+
+    private String trimTitle(String title) {
+        if (!StringUtils.hasText(title)) {
+            return null;
+        }
+        String normalized = title.trim().replaceAll("\\s+", " ");
+        return normalized.length() > 32 ? normalized.substring(0, 32) : normalized;
+    }
+
+    private String normalizeParsedText(String text) {
+        return text == null ? "" : text.trim();
+    }
+
+    private void cleanupMaterialVectors(Long userId, Long materialId) {
+        try {
+            vectorStoreService.deleteMaterialSegments(userId, materialId);
+        } catch (Exception exception) {
+            log.warn("failed to cleanup vectors for material {}: {}", materialId, exception.getMessage());
+        }
     }
 
     private Path initUploadDir() {
@@ -338,6 +437,9 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
         return index > 0 ? fileName.substring(0, index) : fileName;
     }
 
-    private record ParsedContent(String text, Integer totalPages) {
+    private record ParsedContent(String text, Integer totalPages, List<ParsedSegment> segments) {
+    }
+
+    private record ParsedSegment(String contentText, Integer pageNo, String sectionTitle) {
     }
 }

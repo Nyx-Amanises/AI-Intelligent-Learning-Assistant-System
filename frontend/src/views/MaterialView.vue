@@ -193,6 +193,7 @@
         <div v-if="detail.segments?.length" class="list-stack" style="margin-top: 18px">
           <div v-for="segment in detail.segments" :key="segment.id" class="section-card">
             <div class="section-card__title">{{ segment.sectionTitle || '未命名片段' }}</div>
+            <div class="section-card__meta">{{ formatSegmentLocation(segment) }}</div>
             <div class="summary-block">{{ segment.contentText }}</div>
           </div>
         </div>
@@ -238,8 +239,7 @@
                 {{ segment.sectionTitle || `第 ${segment.segmentNo || '--'} 段` }}
               </div>
               <div class="section-card__meta">
-                段落 #{{ segment.segmentNo || '--' }} · 页码 {{ segment.pageNo || '--' }} · 相似度
-                {{ formatRetrievalScore(segment.score) }}
+                {{ formatSegmentLocation(segment) }} · 相似度 {{ formatRetrievalScore(segment.score) }}
               </div>
             </div>
           </div>
@@ -311,7 +311,7 @@ const retrievalForm = reactive({
   materialId: 0,
   materialTitle: '',
   queryText: '',
-  limit: 5
+  limit: 3
 })
 
 const formatDateTime = (value?: string) => {
@@ -326,6 +326,17 @@ const formatRetrievalScore = (value?: number) => {
     return '--'
   }
   return value.toFixed(4)
+}
+
+const formatSegmentLocation = (segment: { pageNo?: number; segmentNo?: number }) => {
+  const parts = []
+  if (segment.pageNo) {
+    parts.push(`第 ${segment.pageNo} 页`)
+  }
+  if (segment.segmentNo) {
+    parts.push(`段落 #${segment.segmentNo}`)
+  }
+  return parts.length ? parts.join(' · ') : '定位信息暂缺'
 }
 
 const resetForm = () => {
@@ -469,7 +480,7 @@ const openRetrievalPreview = (row: any) => {
   retrievalForm.materialId = row.id
   retrievalForm.materialTitle = row.title
   retrievalForm.queryText = ''
-  retrievalForm.limit = 5
+  retrievalForm.limit = 3
 }
 
 const runRetrievalPreview = async () => {
