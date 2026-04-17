@@ -29,6 +29,8 @@ export const getLatestSummaryApi = (id: number) => http.get(`/ai/material/${id}/
 
 export const getSummaryHistoryApi = (id: number) => http.get(`/ai/material/${id}/summary-history`)
 
+export const getAllSummaryHistoryApi = () => http.get('/ai/summary-history')
+
 export const generateQuestionSetApi = (id: number, data: QuestionGeneratePayload) =>
   http.post(`/ai/material/${id}/question-set`, data)
 

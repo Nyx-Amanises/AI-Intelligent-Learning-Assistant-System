@@ -12,4 +12,6 @@ public interface AiSummaryService {
     SummaryResultVO getLatestMaterialSummary(Long userId, Long materialId);
 
     List<SummaryHistoryVO> listMaterialSummaries(Long userId, Long materialId);
+
+    List<SummaryHistoryVO> listAllSummaries(Long userId);
 }

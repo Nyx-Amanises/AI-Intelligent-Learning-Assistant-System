@@ -12,6 +12,8 @@ public class SummaryHistoryVO {
 
     private Long materialId;
 
+    private String materialTitle;
+
     private Long noteId;
 
     private String modelName;

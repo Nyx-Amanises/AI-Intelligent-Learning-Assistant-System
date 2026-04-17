@@ -16,7 +16,7 @@
         </div>
         <div class="workspace-toolbar__meta">
           <span class="workspace-chip">{{ aiConfig.mockMode ? 'Mock 模式' : '真实接口模式' }}</span>
-          <span class="workspace-chip workspace-chip--brand">共 {{ filteredQuestionSets.length }} 套题</span>
+          <span class="workspace-chip workspace-chip--brand">共 {{ total }} 套题</span>
         </div>
       </div>
 
@@ -36,11 +36,12 @@
             <el-select v-model="filters.difficultyLevel" clearable placeholder="难度等级">
               <el-option v-for="level in 5" :key="level" :label="`难度 ${level}`" :value="level" />
             </el-select>
+            <el-button type="primary" plain @click="searchQuestionSets">查询</el-button>
             <el-button @click="resetFilters">重置条件</el-button>
           </div>
 
           <div v-if="questionSetLoading" class="state-block">正在加载题集列表...</div>
-          <div v-else-if="!filteredQuestionSets.length" class="state-block empty">
+          <div v-else-if="!questionSets.length" class="state-block empty">
             还没有符合条件的题集，先生成一套试试。
           </div>
           <div v-else class="workspace-table">
@@ -54,7 +55,7 @@
             </div>
 
             <div
-              v-for="item in filteredQuestionSets"
+              v-for="item in questionSets"
               :key="item.id"
               class="workspace-table__row workspace-table__row--quiz"
             >
@@ -80,6 +81,19 @@
                 </el-button>
               </div>
             </div>
+          </div>
+
+          <div class="workspace-pagination">
+            <div class="workspace-pagination__meta">第 {{ page.current }} / {{ Math.max(1, Math.ceil(total / page.size)) }} 页</div>
+            <el-pagination
+              v-model:current-page="page.current"
+              v-model:page-size="page.size"
+              :page-sizes="[10, 20, 50]"
+              layout="total, sizes, prev, pager, next"
+              :total="total"
+              @current-change="loadQuestionSets"
+              @size-change="loadQuestionSets"
+            />
           </div>
         </div>
       </div>
@@ -180,7 +194,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { generateQuestionSetApi, getAiConfigApi } from '@/api/modules/ai'
@@ -192,6 +206,7 @@ const route = useRoute()
 const router = useRouter()
 const materials = ref<any[]>([])
 const questionSets = ref<any[]>([])
+const total = ref(0)
 const questionSetDetail = ref<any>(null)
 const materialsLoading = ref(false)
 const questionSetLoading = ref(false)
@@ -222,15 +237,10 @@ const filters = reactive({
   status: '',
   difficultyLevel: undefined as number | undefined
 })
-
-const filteredQuestionSets = computed(() =>
-  questionSets.value.filter((item) => {
-    const matchKeyword = !filters.keyword || item.title?.toLowerCase().includes(filters.keyword.toLowerCase())
-    const matchStatus = !filters.status || item.status === filters.status
-    const matchDifficulty = !filters.difficultyLevel || item.difficultyLevel === filters.difficultyLevel
-    return matchKeyword && matchStatus && matchDifficulty
-  })
-)
+const page = reactive({
+  current: 1,
+  size: 10
+})
 
 const formatDateTime = (value?: string) => {
   if (!value) {
@@ -243,6 +253,13 @@ const resetFilters = () => {
   filters.keyword = ''
   filters.status = ''
   filters.difficultyLevel = undefined
+  page.current = 1
+  loadQuestionSets()
+}
+
+const searchQuestionSets = () => {
+  page.current = 1
+  loadQuestionSets()
 }
 
 const loadAiConfig = async () => {
@@ -272,8 +289,15 @@ const loadMaterials = async () => {
 const loadQuestionSets = async () => {
   questionSetLoading.value = true
   try {
-    const res = await getQuestionSetPageApi({ current: 1, size: 20 })
+    const res = await getQuestionSetPageApi({
+      current: page.current,
+      size: page.size,
+      keyword: filters.keyword || undefined,
+      status: filters.status || undefined,
+      difficultyLevel: filters.difficultyLevel
+    })
     questionSets.value = res.data.data.records || []
+    total.value = res.data.data.total || 0
   } catch (error: any) {
     ElMessage.error(error.message || '加载题集失败')
   } finally {
@@ -294,6 +318,7 @@ const generateQuestionSet = async () => {
       questionCount: form.questionCount,
       difficultyLevel: form.difficultyLevel
     })
+    page.current = 1
     generateDialogVisible.value = false
     ElMessage.success(aiConfig.value.mockMode ? 'Mock 题集生成成功' : 'AI 出题成功')
     await loadQuestionSets()

@@ -17,7 +17,7 @@
           <el-button :loading="tableLoading" @click="loadMaterials">刷新列表</el-button>
         </div>
         <div class="workspace-toolbar__meta">
-          <span class="workspace-chip">共 {{ filteredMaterials.length }} 条</span>
+          <span class="workspace-chip">共 {{ total }} 条</span>
         </div>
       </div>
 
@@ -40,11 +40,12 @@
               <el-option label="SUCCESS" value="SUCCESS" />
               <el-option label="FAILED" value="FAILED" />
             </el-select>
+            <el-button type="primary" plain @click="searchMaterials">查询</el-button>
             <el-button @click="resetFilters">重置条件</el-button>
           </div>
 
           <div v-if="tableLoading" class="state-block">正在加载资料列表...</div>
-          <div v-else-if="!filteredMaterials.length" class="state-block empty">
+          <div v-else-if="!materials.length" class="state-block empty">
             没有符合条件的资料，换个筛选条件试试。
           </div>
           <div v-else class="workspace-table">
@@ -58,7 +59,7 @@
             </div>
 
             <div
-              v-for="row in filteredMaterials"
+              v-for="row in materials"
               :key="row.id"
               class="workspace-table__row workspace-table__row--material"
             >
@@ -92,6 +93,19 @@
                 </el-button>
               </div>
             </div>
+          </div>
+
+          <div class="workspace-pagination">
+            <div class="workspace-pagination__meta">第 {{ page.current }} / {{ Math.max(1, Math.ceil(total / page.size)) }} 页</div>
+            <el-pagination
+              v-model:current-page="page.current"
+              v-model:page-size="page.size"
+              :page-sizes="[10, 20, 50]"
+              layout="total, sizes, prev, pager, next"
+              :total="total"
+              @current-change="loadMaterials"
+              @size-change="loadMaterials"
+            />
           </div>
         </div>
       </div>
@@ -182,7 +196,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadRequestOptions } from 'element-plus'
 import { useRouter } from 'vue-router'
@@ -197,6 +211,7 @@ import {
 
 const router = useRouter()
 const materials = ref<any[]>([])
+const total = ref(0)
 const detail = ref<any>(null)
 const drawerVisible = ref(false)
 const textDialogVisible = ref(false)
@@ -221,14 +236,10 @@ const filters = reactive({
   parseStatus: ''
 })
 
-const filteredMaterials = computed(() =>
-  materials.value.filter((item) => {
-    const matchKeyword = !filters.keyword || item.title?.toLowerCase().includes(filters.keyword.toLowerCase())
-    const matchType = !filters.materialType || item.materialType === filters.materialType
-    const matchStatus = !filters.parseStatus || item.parseStatus === filters.parseStatus
-    return matchKeyword && matchType && matchStatus
-  })
-)
+const page = reactive({
+  current: 1,
+  size: 10
+})
 
 const formatDateTime = (value?: string) => {
   if (!value) {
@@ -249,13 +260,27 @@ const resetFilters = () => {
   filters.keyword = ''
   filters.materialType = ''
   filters.parseStatus = ''
+  page.current = 1
+  loadMaterials()
+}
+
+const searchMaterials = () => {
+  page.current = 1
+  loadMaterials()
 }
 
 const loadMaterials = async () => {
   tableLoading.value = true
   try {
-    const res = await getMaterialPageApi({ current: 1, size: 50 })
+    const res = await getMaterialPageApi({
+      current: page.current,
+      size: page.size,
+      keyword: filters.keyword || undefined,
+      materialType: filters.materialType || undefined,
+      parseStatus: filters.parseStatus || undefined
+    })
     materials.value = res.data.data.records || []
+    total.value = res.data.data.total || 0
   } catch (error: any) {
     ElMessage.error(error.message || '加载资料失败')
   } finally {
@@ -280,6 +305,7 @@ const createMaterial = async () => {
     ElMessage.success('资料保存成功')
     resetForm()
     textDialogVisible.value = false
+    page.current = 1
     await loadMaterials()
   } catch (error: any) {
     ElMessage.error(error.message || '新增资料失败')

@@ -71,6 +71,12 @@ public class AiController {
         return ApiResponse.success(aiSummaryService.listMaterialSummaries(userId, id));
     }
 
+    @GetMapping("/summary-history")
+    public ApiResponse<List<SummaryHistoryVO>> allSummaryHistory() {
+        Long userId = UserContext.getCurrentUserId();
+        return ApiResponse.success(aiSummaryService.listAllSummaries(userId));
+    }
+
     @PostMapping("/material/{id}/question-set")
     public ApiResponse<QuestionSetDetailVO> generateQuestionSet(
             @PathVariable Long id,

@@ -7,13 +7,6 @@
       </div>
       <div class="toolbar" style="margin-bottom: 0">
         <el-button :loading="historyLoading" @click="loadHistory">刷新记录</el-button>
-        <el-button
-          v-if="practiceDetail?.questionSetId"
-          type="primary"
-          @click="restartPractice(practiceDetail.questionSetId)"
-        >
-          再练一次
-        </el-button>
       </div>
     </div>
 
@@ -39,7 +32,7 @@
         </div>
 
         <div class="workspace-toolbar__meta">
-          <span class="workspace-chip">共 {{ historyRecords.length }} 条记录</span>
+          <span class="workspace-chip">共 {{ total }} 条记录</span>
           <span v-if="practiceDetail" class="workspace-chip workspace-chip--brand">
             {{ practiceDetail.sessionStatus }}
           </span>
@@ -89,6 +82,18 @@
               </div>
             </div>
           </div>
+          <div class="workspace-pagination" v-if="historyRecords.length">
+            <div class="workspace-pagination__meta">第 {{ page.current }} / {{ Math.max(1, Math.ceil(total / page.size)) }} 页</div>
+            <el-pagination
+              v-model:current-page="page.current"
+              v-model:page-size="page.size"
+              :page-sizes="[10, 20, 50]"
+              layout="total, sizes, prev, pager, next"
+              :total="total"
+              @current-change="loadHistory"
+              @size-change="loadHistory"
+            />
+          </div>
           <div v-else-if="historyLoading" class="state-block">正在加载练习记录...</div>
           <div v-else class="state-block empty">暂无练习记录，先去 AI 出题页面生成一套题目吧。</div>
         </div>
@@ -118,26 +123,6 @@
                   正确率 {{ Number(practiceDetail.accuracyRate || 0).toFixed(0) }}%
                 </span>
               </div>
-            </div>
-
-            <div class="toolbar" style="margin-bottom: 0">
-              <el-button
-                v-if="practiceDetail.sessionStatus !== 'SUBMITTED'"
-                type="primary"
-                :loading="submitting"
-                @click="submitPractice"
-              >
-                提交练习
-              </el-button>
-              <el-button type="success" @click="restartPractice(practiceDetail.questionSetId)">再练一次</el-button>
-              <el-button
-                type="danger"
-                plain
-                :loading="actionLoadingId === practiceDetail.sessionId"
-                @click="removePractice(practiceDetail.sessionId, true)"
-              >
-                删除本次练习
-              </el-button>
             </div>
           </div>
 
@@ -222,6 +207,34 @@
               </div>
             </div>
           </div>
+
+          <div class="page-card workspace-card">
+            <div class="workspace-card__header">
+              <div>
+                <h3>本次操作</h3>
+                <p>提交、再练和删除都统一放在答题区最下方，避免和题目内容抢视觉重心。</p>
+              </div>
+            </div>
+            <div class="toolbar" style="margin-bottom: 0">
+              <el-button
+                v-if="practiceDetail.sessionStatus !== 'SUBMITTED'"
+                type="primary"
+                :loading="submitting"
+                @click="submitPractice"
+              >
+                提交练习
+              </el-button>
+              <el-button type="success" @click="restartPractice(practiceDetail.questionSetId)">再练一次</el-button>
+              <el-button
+                type="danger"
+                plain
+                :loading="actionLoadingId === practiceDetail.sessionId"
+                @click="removePractice(practiceDetail.sessionId, true)"
+              >
+                删除本次练习
+              </el-button>
+            </div>
+          </div>
         </template>
 
         <div v-else class="page-card workspace-card">
@@ -233,7 +246,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { deletePracticeApi, getPracticeDetailApi, getPracticePageApi, startPracticeApi, submitPracticeApi } from '@/api/modules/practice'
@@ -241,6 +254,7 @@ import { deletePracticeApi, getPracticeDetailApi, getPracticePageApi, startPract
 const route = useRoute()
 const router = useRouter()
 const historyRecords = ref<any[]>([])
+const total = ref(0)
 const practiceDetail = ref<any>(null)
 const answerForm = ref<Record<number, string>>({})
 const historyLoading = ref(false)
@@ -248,6 +262,10 @@ const detailLoading = ref(false)
 const submitting = ref(false)
 const activeTab = ref<'current' | 'history'>('current')
 const actionLoadingId = ref<number | null>(null)
+const page = reactive({
+  current: 1,
+  size: 10
+})
 
 const syncAnswerForm = () => {
   const form: Record<number, string> = {}
@@ -306,8 +324,9 @@ const formatAnswer = (answer: any, value?: string) => {
 const loadHistory = async () => {
   historyLoading.value = true
   try {
-    const res = await getPracticePageApi({ current: 1, size: 20 })
+    const res = await getPracticePageApi({ current: page.current, size: page.size })
     historyRecords.value = res.data.data.records || []
+    total.value = res.data.data.total || 0
   } catch (error: any) {
     ElMessage.error(error.message || '加载练习记录失败')
   } finally {
@@ -343,6 +362,7 @@ const restartPractice = async (questionSetId?: number) => {
   try {
     const res = await startPracticeApi(questionSetId)
     ElMessage.success('新的练习已开始')
+    page.current = 1
     await loadHistory()
     await loadPracticeDetail(res.data.data.sessionId)
     activeTab.value = 'current'
@@ -370,6 +390,9 @@ const removePractice = async (sessionId: number, clearCurrent = false) => {
       practiceDetail.value = null
       router.replace({ path: '/practice' })
       activeTab.value = 'history'
+    }
+    if (!clearCurrent && historyRecords.value.length === 1 && page.current > 1) {
+      page.current -= 1
     }
     await loadHistory()
   } catch (error: any) {

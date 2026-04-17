@@ -20,6 +20,9 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -184,17 +187,53 @@ public class AiSummaryServiceImpl implements AiSummaryService {
                         .eq(AiGenerationRecord::getMaterialId, materialId)
                         .eq(AiGenerationRecord::getTaskType, "SUMMARY")
                         .eq(AiGenerationRecord::getStatus, "SUCCESS")
-                        .orderByDesc(AiGenerationRecord::getCreatedAt))
+                .orderByDesc(AiGenerationRecord::getCreatedAt))
                 .stream()
                 .map(record -> SummaryHistoryVO.builder()
                         .recordId(record.getId())
                         .materialId(record.getMaterialId())
+                        .materialTitle(material.getTitle())
                         .noteId(record.getNoteId())
                         .modelName(record.getModelName())
                         .summaryType(record.getSummaryType())
                         .summaryText(record.getOutputText())
                         .createdAt(record.getCreatedAt())
                         .build())
+                .toList();
+    }
+
+    @Override
+    public List<SummaryHistoryVO> listAllSummaries(Long userId) {
+        List<AiGenerationRecord> records = aiGenerationRecordMapper.selectList(new LambdaQueryWrapper<AiGenerationRecord>()
+                .eq(AiGenerationRecord::getUserId, userId)
+                .eq(AiGenerationRecord::getTaskType, "SUMMARY")
+                .eq(AiGenerationRecord::getStatus, "SUCCESS")
+                .orderByDesc(AiGenerationRecord::getCreatedAt));
+
+        if (records.isEmpty()) {
+            return List.of();
+        }
+
+        Map<Long, StudyMaterial> materialMap = studyMaterialService.list(new LambdaQueryWrapper<StudyMaterial>()
+                        .eq(StudyMaterial::getUserId, userId)
+                        .in(StudyMaterial::getId, records.stream().map(AiGenerationRecord::getMaterialId).distinct().toList()))
+                .stream()
+                .collect(Collectors.toMap(StudyMaterial::getId, Function.identity(), (left, right) -> left));
+
+        return records.stream()
+                .map(record -> {
+                    StudyMaterial material = materialMap.get(record.getMaterialId());
+                    return SummaryHistoryVO.builder()
+                            .recordId(record.getId())
+                            .materialId(record.getMaterialId())
+                            .materialTitle(material == null ? "未知资料" : material.getTitle())
+                            .noteId(record.getNoteId())
+                            .modelName(record.getModelName())
+                            .summaryType(record.getSummaryType())
+                            .summaryText(record.getOutputText())
+                            .createdAt(record.getCreatedAt())
+                            .build();
+                })
                 .toList();
     }
 
