@@ -3,7 +3,7 @@
     <div class="page-header">
       <div>
         <h1 class="page-title">练习记录</h1>
-        <p class="page-desc">补上重复练习和删除，让练习页也像正常后台记录页一样能管理历史。</p>
+        <p class="page-desc">历史记录保留后台列表，当前练习详情改成更接近学习通的作业详情视图。</p>
       </div>
       <div class="toolbar" style="margin-bottom: 0">
         <el-button :loading="historyLoading" @click="loadHistory">刷新记录</el-button>
@@ -105,135 +105,184 @@
         </div>
 
         <template v-else-if="practiceDetail">
-          <div class="page-card workspace-card">
-            <div class="workspace-card__header workspace-card__header--spaced">
-              <div>
-                <h3>{{ practiceDetail.sessionName }}</h3>
-                <p>
-                  {{ practiceDetail.sessionStatus === 'SUBMITTED'
-                    ? '这次练习已经提交，可以回看 AI 判分、参考答案和解析；如果想重新做一遍，直接点“再练一次”。'
-                    : '当前是进行中的练习，填写完成后直接提交。'
-                  }}
-                </p>
-              </div>
-              <div class="workspace-toolbar__meta">
-                <span class="workspace-chip">题目 {{ practiceDetail.totalQuestions }}</span>
-                <span class="workspace-chip">得分 {{ practiceDetail.obtainedScore || 0 }}</span>
-                <span class="workspace-chip workspace-chip--brand">
-                  正确率 {{ Number(practiceDetail.accuracyRate || 0).toFixed(0) }}%
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div class="practice-question-list">
-            <div
-              v-for="(answer, index) in practiceDetail.answers"
-              :key="answer.questionId"
-              class="page-card practice-question-card practice-question-card--wide"
-            >
-              <div class="practice-question-card__head">
-                <div>
-                  <div class="practice-question-card__index">第 {{ index + 1 }} 题</div>
-                  <div class="section-card__title">{{ answer.stemText }}</div>
+          <div class="practice-paper-layout">
+            <div class="practice-paper-main">
+              <div class="page-card practice-paper-hero">
+                <div class="practice-paper-hero__head">
+                  <div>
+                    <h2 class="practice-paper-hero__title">{{ practiceDetail.sessionName }}</h2>
+                    <div class="practice-paper-hero__meta">
+                      <span>题量: {{ practiceDetail.totalQuestions }}</span>
+                      <span>满分: {{ practiceDetail.totalScore || 0 }}</span>
+                      <span>状态: {{ practiceDetail.sessionStatus }}</span>
+                    </div>
+                    <div class="practice-paper-hero__meta">
+                      <span>开始时间: {{ formatDateTime(practiceDetail.startTime) }}</span>
+                      <span v-if="practiceDetail.submitTime">提交时间: {{ formatDateTime(practiceDetail.submitTime) }}</span>
+                    </div>
+                  </div>
+                  <div class="practice-paper-hero__score">
+                    <strong>{{ practiceDetail.obtainedScore || 0 }}</strong>
+                    <span>分</span>
+                  </div>
                 </div>
-                <div class="practice-question-card__type">{{ getQuestionTypeLabel(answer.questionType) }}</div>
               </div>
 
-              <template v-if="isChoiceQuestion(answer)">
-                <el-radio-group
-                  v-model="answerForm[answer.questionId]"
-                  class="choice-group choice-group--cards"
-                  :disabled="practiceDetail.sessionStatus === 'SUBMITTED'"
+              <div
+                v-for="(section, sectionIndex) in groupedSections"
+                :key="section.type"
+                class="page-card practice-paper-section"
+              >
+                <div class="practice-paper-section__title">
+                  {{ toSectionLabel(sectionIndex) }}. {{ section.label }}（共{{ section.items.length }}题）
+                </div>
+
+                <div
+                  v-for="(answer, index) in section.items"
+                  :id="`question-${answer.questionId}`"
+                  :key="answer.questionId"
+                  class="practice-paper-question"
                 >
-                  <el-radio
-                    v-for="option in buildOptions(answer)"
-                    :key="option.value"
-                    :label="option.value"
-                    border
-                    class="choice-option"
+                  <div class="practice-paper-question__head">
+                    <div>
+                      <div class="practice-paper-question__index">
+                        {{ answer.globalIndex }}. <span class="practice-paper-question__type-tag">({{ section.label }})</span>
+                      </div>
+                      <div class="practice-paper-question__stem">{{ answer.stemText }}</div>
+                    </div>
+                    <el-button link type="primary">AI讲解</el-button>
+                  </div>
+
+                  <template v-if="isChoiceQuestion(answer)">
+                    <el-radio-group
+                      v-model="answerForm[answer.questionId]"
+                      class="choice-group practice-paper-choice-group"
+                      :disabled="practiceDetail.sessionStatus === 'SUBMITTED'"
+                    >
+                      <el-radio
+                        v-for="option in buildOptions(answer)"
+                        :key="option.value"
+                        :label="option.value"
+                        border
+                        class="choice-option practice-paper-choice"
+                      >
+                        {{ option.label }}
+                      </el-radio>
+                    </el-radio-group>
+                  </template>
+
+                  <template v-else>
+                    <el-input
+                      v-model="answerForm[answer.questionId]"
+                      :disabled="practiceDetail.sessionStatus === 'SUBMITTED'"
+                      type="textarea"
+                      :rows="4"
+                      placeholder="请输入你的答案"
+                    />
+                  </template>
+
+                  <div v-if="practiceDetail.sessionStatus === 'SUBMITTED'" class="practice-paper-result">
+                    <div class="practice-paper-result__top">
+                      <div class="practice-paper-result__answer-row">
+                        <strong>我的答案:</strong>
+                        <span>{{ formatAnswer(answer, answer.userAnswer) }}</span>
+                      </div>
+
+                      <template v-if="isShortQuestion(answer)">
+                        <div class="practice-paper-result__answer-row practice-paper-result__answer-row--brand">
+                          <strong>AI判分:</strong>
+                          <span>{{ answer.reviewLabel || `AI 判分：${answer.aiScore || 0}` }}</span>
+                        </div>
+                        <div class="practice-paper-result__answer-row practice-paper-result__answer-row--success">
+                          <strong>人工参考答案:</strong>
+                          <span>{{ answer.referenceAnswer || '暂无参考答案' }}</span>
+                        </div>
+                      </template>
+
+                      <template v-else>
+                        <div class="practice-paper-result__answer-row practice-paper-result__answer-row--success">
+                          <strong>正确答案:</strong>
+                          <span>{{ formatAnswer(answer, answer.referenceAnswer || answer.correctAnswer) }}</span>
+                        </div>
+                      </template>
+
+                      <div class="practice-paper-result__score">
+                        <span>{{ answer.isCorrect ? '✓' : '×' }}</span>
+                        <strong>{{ answer.obtainedScore || answer.aiScore || 0 }} 分</strong>
+                      </div>
+                    </div>
+
+                    <div class="practice-paper-result__analysis">
+                      <div v-if="isShortQuestion(answer) && answer.reviewComment" class="practice-paper-result__analysis-row">
+                        <strong>AI评语:</strong>
+                        <span>{{ answer.reviewComment }}</span>
+                      </div>
+                      <div class="practice-paper-result__analysis-row">
+                        <strong>答案解析:</strong>
+                        <span>{{ answer.answerAnalysis || '暂无解析' }}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="page-card workspace-card">
+                <div class="workspace-card__header">
+                  <div>
+                    <h3>本次操作</h3>
+                    <p>提交联系、再练一次、删除本次练习统一放在底部操作区。</p>
+                  </div>
+                </div>
+                <div class="toolbar" style="margin-bottom: 0">
+                  <el-button
+                    v-if="practiceDetail.sessionStatus !== 'SUBMITTED'"
+                    type="primary"
+                    :loading="submitting"
+                    @click="submitPractice"
                   >
-                    {{ option.label }}
-                  </el-radio>
-                </el-radio-group>
-              </template>
-
-              <template v-else>
-                <el-input
-                  v-model="answerForm[answer.questionId]"
-                  :disabled="practiceDetail.sessionStatus === 'SUBMITTED'"
-                  type="textarea"
-                  :rows="4"
-                  placeholder="请输入你的答案"
-                />
-              </template>
-
-              <div v-if="practiceDetail.sessionStatus === 'SUBMITTED'" class="analysis-box practice-answer-review">
-                <div class="practice-answer-review__item">
-                  <span>你的答案</span>
-                  <strong>{{ formatAnswer(answer, answer.userAnswer) }}</strong>
-                </div>
-
-                <template v-if="isShortQuestion(answer)">
-                  <div class="practice-answer-review__item practice-answer-review__item--accent">
-                    <span>AI 判分</span>
-                    <strong>{{ answer.reviewLabel || `AI 判分：${answer.aiScore || 0}` }}</strong>
-                  </div>
-                  <div class="practice-answer-review__item">
-                    <span>人工参考答案</span>
-                    <strong>{{ answer.referenceAnswer || '暂无参考答案' }}</strong>
-                  </div>
-                  <div class="practice-answer-review__item practice-answer-review__item--full">
-                    <span>AI 评语</span>
-                    <strong>{{ answer.reviewComment || 'AI 暂未返回评语' }}</strong>
-                  </div>
-                </template>
-
-                <template v-else>
-                  <div class="practice-answer-review__item">
-                    <span>参考答案</span>
-                    <strong>{{ formatAnswer(answer, answer.referenceAnswer || answer.correctAnswer) }}</strong>
-                  </div>
-                  <div class="practice-answer-review__item">
-                    <span>判定结果</span>
-                    <strong>{{ answer.isCorrect ? '正确' : '错误' }}</strong>
-                  </div>
-                </template>
-
-                <div class="practice-answer-review__item practice-answer-review__item--full">
-                  <span>解析</span>
-                  <strong>{{ answer.answerAnalysis || '暂无解析' }}</strong>
+                    提交练习
+                  </el-button>
+                  <el-button type="success" @click="restartPractice(practiceDetail.questionSetId)">再练一次</el-button>
+                  <el-button
+                    type="danger"
+                    plain
+                    :loading="actionLoadingId === practiceDetail.sessionId"
+                    @click="removePractice(practiceDetail.sessionId, true)"
+                  >
+                    删除本次练习
+                  </el-button>
                 </div>
               </div>
             </div>
-          </div>
 
-          <div class="page-card workspace-card">
-            <div class="workspace-card__header">
-              <div>
-                <h3>本次操作</h3>
-                <p>提交、再练和删除都统一放在答题区最下方，避免和题目内容抢视觉重心。</p>
+            <aside class="page-card practice-paper-sidebar">
+              <div class="practice-paper-sidebar__title">题目导航</div>
+              <div
+                v-for="section in groupedSections"
+                :key="section.type"
+                class="practice-paper-sidebar__group"
+              >
+                <div class="practice-paper-sidebar__group-title">
+                  {{ section.sidebarTitle }}
+                </div>
+                <div class="practice-paper-sidebar__grid">
+                  <button
+                    v-for="answer in section.items"
+                    :key="answer.questionId"
+                    type="button"
+                    class="practice-paper-sidebar__item"
+                    :class="{
+                      'practice-paper-sidebar__item--active': activeQuestionId === answer.questionId,
+                      'practice-paper-sidebar__item--done': Boolean(answer.userAnswer),
+                      'practice-paper-sidebar__item--correct': practiceDetail.sessionStatus === 'SUBMITTED' && answer.isCorrect
+                    }"
+                    @click="scrollToQuestion(answer.questionId)"
+                  >
+                    {{ answer.globalIndex }}
+                  </button>
+                </div>
               </div>
-            </div>
-            <div class="toolbar" style="margin-bottom: 0">
-              <el-button
-                v-if="practiceDetail.sessionStatus !== 'SUBMITTED'"
-                type="primary"
-                :loading="submitting"
-                @click="submitPractice"
-              >
-                提交练习
-              </el-button>
-              <el-button type="success" @click="restartPractice(practiceDetail.questionSetId)">再练一次</el-button>
-              <el-button
-                type="danger"
-                plain
-                :loading="actionLoadingId === practiceDetail.sessionId"
-                @click="removePractice(practiceDetail.sessionId, true)"
-              >
-                删除本次练习
-              </el-button>
-            </div>
+            </aside>
           </div>
         </template>
 
@@ -246,7 +295,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { deletePracticeApi, getPracticeDetailApi, getPracticePageApi, startPracticeApi, submitPracticeApi } from '@/api/modules/practice'
@@ -262,9 +311,42 @@ const detailLoading = ref(false)
 const submitting = ref(false)
 const activeTab = ref<'current' | 'history'>('current')
 const actionLoadingId = ref<number | null>(null)
+const activeQuestionId = ref<number | null>(null)
 const page = reactive({
   current: 1,
   size: 10
+})
+
+const questionTypeOrder: Record<string, number> = {
+  JUDGE: 1,
+  MULTI: 2,
+  SINGLE: 3,
+  SHORT: 4
+}
+
+const groupedSections = computed(() => {
+  const answers = (practiceDetail.value?.answers || []).map((item: any, index: number) => ({
+    ...item,
+    globalIndex: index + 1
+  }))
+
+  const groups = new Map<string, any[]>()
+  answers.forEach((item: any) => {
+    const type = String(item.questionType || 'OTHER').toUpperCase()
+    if (!groups.has(type)) {
+      groups.set(type, [])
+    }
+    groups.get(type)?.push(item)
+  })
+
+  return Array.from(groups.entries())
+    .sort((a, b) => (questionTypeOrder[a[0]] || 99) - (questionTypeOrder[b[0]] || 99))
+    .map(([type, items]) => ({
+      type,
+      label: getQuestionTypeLabel(type),
+      sidebarTitle: `${toChineseTypeTitle(type)}（${items.length}题）`,
+      items
+    }))
 })
 
 const syncAnswerForm = () => {
@@ -275,10 +357,29 @@ const syncAnswerForm = () => {
   answerForm.value = form
 }
 
+const toSectionLabel = (index: number) => ['一', '二', '三', '四', '五'][index] || String(index + 1)
+
+const toChineseTypeTitle = (type?: string) => {
+  switch ((type || '').toUpperCase()) {
+    case 'JUDGE':
+      return '判断题'
+    case 'MULTI':
+      return '多选题'
+    case 'SINGLE':
+      return '单选题'
+    case 'SHORT':
+      return '简答题'
+    default:
+      return '题目'
+  }
+}
+
 const getQuestionTypeLabel = (type?: string) => {
   switch ((type || '').toUpperCase()) {
     case 'SINGLE':
       return '单选题'
+    case 'MULTI':
+      return '多选题'
     case 'JUDGE':
       return '判断题'
     case 'SHORT':
@@ -288,17 +389,17 @@ const getQuestionTypeLabel = (type?: string) => {
   }
 }
 
-const isChoiceQuestion = (answer: any) => ['SINGLE', 'JUDGE'].includes(answer.questionType)
+const isChoiceQuestion = (answer: any) => ['SINGLE', 'JUDGE', 'MULTI'].includes(String(answer.questionType || '').toUpperCase())
 
 const isShortQuestion = (answer: any) => String(answer.questionType || '').toUpperCase() === 'SHORT'
 
 const isOptionItem = (item: any): item is { value: string; label: string } => Boolean(item)
 
 const buildOptions = (answer: any) => {
-  if (answer.questionType === 'JUDGE') {
+  if (String(answer.questionType || '').toUpperCase() === 'JUDGE') {
     return [
-      { value: '正确', label: '正确' },
-      { value: '错误', label: '错误' }
+      { value: '正确', label: 'A. 正确' },
+      { value: '错误', label: 'B. 错误' }
     ]
   }
 
@@ -314,11 +415,24 @@ const formatAnswer = (answer: any, value?: string) => {
   if (!value) {
     return '未作答'
   }
-  if (answer.questionType === 'SINGLE') {
+  if (['SINGLE', 'MULTI'].includes(String(answer.questionType || '').toUpperCase())) {
     const option = buildOptions(answer).find((item: any) => item.value === value)
     return option ? option.label : value
   }
   return value
+}
+
+const formatDateTime = (value?: string) => {
+  if (!value) {
+    return '未知时间'
+  }
+  return value.replace('T', ' ').slice(0, 19)
+}
+
+const scrollToQuestion = (questionId: number) => {
+  activeQuestionId.value = questionId
+  const target = document.getElementById(`question-${questionId}`)
+  target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
 const loadHistory = async () => {
@@ -340,6 +454,7 @@ const loadPracticeDetail = async (sessionId: number) => {
     const res = await getPracticeDetailApi(sessionId)
     practiceDetail.value = res.data.data
     syncAnswerForm()
+    activeQuestionId.value = practiceDetail.value?.answers?.[0]?.questionId || null
     router.replace({ path: '/practice', query: { sessionId: String(sessionId) } })
   } catch (error: any) {
     practiceDetail.value = null

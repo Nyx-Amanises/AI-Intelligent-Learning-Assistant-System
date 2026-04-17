@@ -783,6 +783,230 @@ a {
   gap: 14px;
 }
 
+.practice-paper-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 22px;
+  align-items: start;
+}
+
+.practice-paper-main {
+  display: grid;
+  gap: 18px;
+}
+
+.practice-paper-hero {
+  padding: 0;
+  overflow: hidden;
+}
+
+.practice-paper-hero__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 28px 32px;
+}
+
+.practice-paper-hero__title {
+  margin: 0;
+  font-size: 24px;
+}
+
+.practice-paper-hero__meta {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+  color: #94a3b8;
+  font-size: 14px;
+}
+
+.practice-paper-hero__score {
+  min-width: 90px;
+  text-align: right;
+  color: #ff6b3d;
+}
+
+.practice-paper-hero__score strong {
+  display: block;
+  font-size: 48px;
+  line-height: 1;
+}
+
+.practice-paper-hero__score span {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 18px;
+}
+
+.practice-paper-section {
+  padding: 32px;
+}
+
+.practice-paper-section__title {
+  margin-bottom: 28px;
+  font-size: 20px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.practice-paper-question + .practice-paper-question {
+  margin-top: 40px;
+}
+
+.practice-paper-question__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.practice-paper-question__index {
+  color: #0f172a;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.practice-paper-question__type-tag {
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.practice-paper-question__stem {
+  margin-top: 10px;
+  color: #0f172a;
+  font-size: 18px;
+  line-height: 1.8;
+}
+
+.practice-paper-choice-group {
+  margin-top: 18px;
+}
+
+.practice-paper-choice {
+  background: #fff;
+}
+
+.practice-paper-result {
+  margin-top: 18px;
+  padding: 18px 22px;
+  border-left: 4px solid #d7dee9;
+  border-radius: 0 16px 16px 0;
+  background: #fbfdff;
+  border-top: 1px solid #edf2f7;
+  border-right: 1px solid #edf2f7;
+  border-bottom: 1px solid #edf2f7;
+}
+
+.practice-paper-result__top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 120px;
+  gap: 16px;
+  align-items: start;
+}
+
+.practice-paper-result__answer-row {
+  color: #0f172a;
+  line-height: 1.8;
+}
+
+.practice-paper-result__answer-row strong,
+.practice-paper-result__analysis-row strong {
+  margin-right: 6px;
+}
+
+.practice-paper-result__answer-row--brand {
+  color: #1677ff;
+}
+
+.practice-paper-result__answer-row--success {
+  color: #12a150;
+}
+
+.practice-paper-result__score {
+  text-align: right;
+  color: #0f172a;
+}
+
+.practice-paper-result__score span {
+  display: block;
+  color: #10b981;
+  font-size: 42px;
+  line-height: 1;
+}
+
+.practice-paper-result__score strong {
+  display: block;
+  margin-top: 8px;
+  font-size: 18px;
+}
+
+.practice-paper-result__analysis {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid #edf2f7;
+  display: grid;
+  gap: 10px;
+  color: #94a3b8;
+  line-height: 1.8;
+}
+
+.practice-paper-sidebar {
+  position: sticky;
+  top: 24px;
+  padding: 24px;
+}
+
+.practice-paper-sidebar__title {
+  margin-bottom: 16px;
+  font-size: 18px;
+  font-weight: 700;
+  color: #334155;
+}
+
+.practice-paper-sidebar__group + .practice-paper-sidebar__group {
+  margin-top: 20px;
+}
+
+.practice-paper-sidebar__group-title {
+  margin-bottom: 12px;
+  color: #475569;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.practice-paper-sidebar__grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.practice-paper-sidebar__item {
+  height: 42px;
+  border-radius: 10px;
+  border: 1px solid #8fb9ff;
+  background: #dbeafe;
+  color: #3b82f6;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.practice-paper-sidebar__item--active {
+  background: #3b82f6;
+  color: #fff;
+}
+
+.practice-paper-sidebar__item--done {
+  border-color: #60a5fa;
+}
+
+.practice-paper-sidebar__item--correct {
+  background: #dcfce7;
+  border-color: #86efac;
+  color: #16a34a;
+}
+
 .summary-history-card,
 .practice-history__item {
   width: 100%;
@@ -1423,6 +1647,7 @@ a {
   .content-grid--2,
   .summary-layout,
   .practice-layout,
+  .practice-paper-layout,
   .overview-grid,
   .summary-metrics {
     grid-template-columns: 1fr 1fr;
@@ -1506,6 +1731,7 @@ a {
   .practice-overview,
   .summary-hero__stats,
   .practice-answer-review,
+  .practice-paper-result__top,
   .choice-group--cards,
   .workspace-form-grid,
   .workspace-form-grid--compact,
@@ -1514,7 +1740,8 @@ a {
   }
 
   .summary-rail__card,
-  .practice-sidebar__card {
+  .practice-sidebar__card,
+  .practice-paper-sidebar {
     position: static;
   }
 

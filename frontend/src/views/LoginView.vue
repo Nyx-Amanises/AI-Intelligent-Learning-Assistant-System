@@ -73,21 +73,24 @@
 
         <el-col :xs="24" :sm="10" :md="8" class="social-section">
           <div class="social-wrapper">
-            <div class="social-card">
-              <span>资料管理</span>
-              <strong>支持文本与文件上传</strong>
-              <em>课堂笔记、教材摘录、章节复习资料都能统一整理。</em>
-            </div>
-            <div class="social-card">
-              <span>AI 总结</span>
-              <strong>自动沉淀复习内容</strong>
-              <em>直接进入总结列表，查看历史、再生成、预览资料都在同一处完成。</em>
-            </div>
-            <div class="social-card">
-              <span>练习记录</span>
-              <strong>AI 判分 + 人工参考答案</strong>
-              <em>简答题支持双展示，练习提交后可继续查看评语与解析。</em>
-            </div>
+            <div class="social-login-title">第三方登录</div>
+            <el-button class="social-btn" disabled>
+              <span class="social-btn__icon">G</span>
+              <span>使用 Google 登录</span>
+            </el-button>
+            <el-button class="social-btn" disabled>
+              <span class="social-btn__icon">GH</span>
+              <span>使用 GitHub 登录</span>
+            </el-button>
+            <el-button class="social-btn" disabled>
+              <span class="social-btn__icon">D</span>
+              <span>使用 Discord 登录</span>
+            </el-button>
+            <el-button class="social-btn" disabled>
+              <span class="social-btn__icon">QQ</span>
+              <span>使用 QQ 登录</span>
+            </el-button>
+            <div class="social-login-note">当前先保留入口位，后续接入第三方登录时可直接替换为真实授权流程。</div>
           </div>
         </el-col>
       </el-row>
@@ -284,39 +287,39 @@ const submit = async () => {
   gap: 14px;
 }
 
-.social-card {
+.social-login-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #475569;
+}
+
+.social-btn {
   width: 100%;
-  padding: 18px 20px;
+  margin: 0 !important;
+  height: 50px;
+  justify-content: flex-start;
   border: 1px solid #e1e4e8;
-  border-radius: 18px;
+  color: #444;
   background: #fff;
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
 }
 
-.social-card span,
-.social-card em {
-  display: block;
-}
-
-.social-card span {
-  color: #0070d2;
-  font-size: 13px;
+.social-btn__icon {
+  width: 26px;
+  height: 26px;
+  display: inline-grid;
+  place-items: center;
+  margin-right: 14px;
+  border-radius: 50%;
+  background: #eef4ff;
+  color: #1677ff;
+  font-size: 12px;
   font-weight: 700;
 }
 
-.social-card strong {
-  display: block;
-  margin-top: 10px;
-  font-size: 18px;
-  color: #111827;
-}
-
-.social-card em {
-  margin-top: 10px;
-  color: #6b7280;
-  font-style: normal;
-  line-height: 1.75;
-  font-size: 14px;
+.social-login-note {
+  color: #94a3b8;
+  font-size: 13px;
+  line-height: 1.7;
 }
 
 @media (max-width: 768px) {
