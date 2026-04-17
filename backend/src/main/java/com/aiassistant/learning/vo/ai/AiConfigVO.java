@@ -20,4 +20,16 @@ public class AiConfigVO {
     private Boolean apiKeyConfigured;
 
     private String apiKeyPreview;
+
+    private String embeddingProviderType;
+
+    private String embeddingBaseUrl;
+
+    private String embeddingPath;
+
+    private String defaultEmbeddingModel;
+
+    private Boolean embeddingApiKeyConfigured;
+
+    private String embeddingApiKeyPreview;
 }

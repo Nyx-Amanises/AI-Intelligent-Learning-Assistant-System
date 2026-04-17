@@ -20,6 +20,11 @@ export interface AiConfigPayload {
   chatPath: string
   apiKey?: string
   defaultModel: string
+  embeddingProviderType?: string
+  embeddingBaseUrl?: string
+  embeddingPath?: string
+  embeddingApiKey?: string
+  defaultEmbeddingModel?: string
 }
 
 export interface AiTaskDetail {
@@ -71,6 +76,24 @@ export interface EmbeddingTaskPayload {
   forceRegenerate?: boolean
 }
 
+export interface RetrievalPreviewSegment {
+  segmentId: number
+  segmentNo?: number
+  pageNo?: number
+  sectionTitle?: string
+  contentText?: string
+  keywords?: string
+  score?: number
+}
+
+export interface RetrievalPreviewPayload {
+  materialId: number
+  queryText: string
+  limit: number
+  hitCount: number
+  segments: RetrievalPreviewSegment[]
+}
+
 export const generateSummaryApi = (id: number, data: SummaryPayload) =>
   http.post(`/ai/material/${id}/summary`, data)
 
@@ -94,6 +117,9 @@ export const submitPracticeReviewTaskApi = (sessionId: number) =>
 
 export const submitEmbeddingTaskApi = (materialId: number, data: EmbeddingTaskPayload = {}) =>
   http.post(`/ai/tasks/material/${materialId}/embedding`, data)
+
+export const previewMaterialRetrievalApi = (materialId: number, params: Record<string, unknown>) =>
+  http.get(`/rag/material/${materialId}/retrieve-preview`, { params })
 
 export const getAiTaskPageApi = (params: Record<string, unknown>) =>
   http.get('/ai/tasks/page', { params })

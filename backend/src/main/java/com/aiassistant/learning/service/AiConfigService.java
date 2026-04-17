@@ -16,8 +16,13 @@ public interface AiConfigService {
             Boolean mockMode,
             String baseUrl,
             String chatPath,
+            String embeddingProviderType,
+            String embeddingBaseUrl,
+            String embeddingPath,
             String apiKey,
-            String defaultModel
+            String embeddingApiKey,
+            String defaultModel,
+            String defaultEmbeddingModel
     ) {
     }
 }

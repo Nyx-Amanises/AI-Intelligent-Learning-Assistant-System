@@ -41,8 +41,23 @@ public class AiConfigServiceImpl implements AiConfigService {
         targetConfig.setMockMode(request.getMockMode() == null ? currentConfig.mockMode() : request.getMockMode());
         targetConfig.setBaseUrl(hasText(request.getBaseUrl()) ? request.getBaseUrl().trim() : currentConfig.baseUrl());
         targetConfig.setChatPath(hasText(request.getChatPath()) ? request.getChatPath().trim() : currentConfig.chatPath());
+        targetConfig.setEmbeddingProviderType(hasText(request.getEmbeddingProviderType())
+                ? request.getEmbeddingProviderType().trim()
+                : currentConfig.embeddingProviderType());
+        targetConfig.setEmbeddingBaseUrl(hasText(request.getEmbeddingBaseUrl())
+                ? request.getEmbeddingBaseUrl().trim()
+                : currentConfig.embeddingBaseUrl());
+        targetConfig.setEmbeddingPath(hasText(request.getEmbeddingPath())
+                ? request.getEmbeddingPath().trim()
+                : currentConfig.embeddingPath());
         targetConfig.setDefaultModel(hasText(request.getDefaultModel()) ? request.getDefaultModel().trim() : currentConfig.defaultModel());
+        targetConfig.setDefaultEmbeddingModel(hasText(request.getDefaultEmbeddingModel())
+                ? request.getDefaultEmbeddingModel().trim()
+                : currentConfig.defaultEmbeddingModel());
         targetConfig.setApiKey(hasText(request.getApiKey()) ? request.getApiKey().trim() : currentConfig.apiKey());
+        targetConfig.setEmbeddingApiKey(hasText(request.getEmbeddingApiKey())
+                ? request.getEmbeddingApiKey().trim()
+                : currentConfig.embeddingApiKey());
 
         validateConfig(targetConfig);
         savePersistedConfig(targetConfig);
@@ -61,8 +76,15 @@ public class AiConfigServiceImpl implements AiConfigService {
                 persistedConfig.getMockMode() == null ? aiProperties.getMockMode() : persistedConfig.getMockMode(),
                 hasText(persistedConfig.getBaseUrl()) ? persistedConfig.getBaseUrl().trim() : aiProperties.getBaseUrl(),
                 hasText(persistedConfig.getChatPath()) ? persistedConfig.getChatPath().trim() : aiProperties.getChatPath(),
+                resolveEmbeddingProviderType(persistedConfig),
+                resolveEmbeddingBaseUrl(persistedConfig),
+                resolveEmbeddingPath(persistedConfig),
                 hasText(persistedConfig.getApiKey()) ? persistedConfig.getApiKey().trim() : aiProperties.getApiKey(),
-                hasText(persistedConfig.getDefaultModel()) ? persistedConfig.getDefaultModel().trim() : aiProperties.getDefaultModel()
+                resolveEmbeddingApiKey(persistedConfig),
+                hasText(persistedConfig.getDefaultModel()) ? persistedConfig.getDefaultModel().trim() : aiProperties.getDefaultModel(),
+                hasText(persistedConfig.getDefaultEmbeddingModel())
+                        ? persistedConfig.getDefaultEmbeddingModel().trim()
+                        : resolveDefaultEmbeddingModel()
         );
     }
 
@@ -75,6 +97,12 @@ public class AiConfigServiceImpl implements AiConfigService {
                 .defaultModel(resolvedConfig.defaultModel())
                 .apiKeyConfigured(hasText(resolvedConfig.apiKey()))
                 .apiKeyPreview(maskApiKey(resolvedConfig.apiKey()))
+                .embeddingProviderType(resolvedConfig.embeddingProviderType())
+                .embeddingBaseUrl(resolvedConfig.embeddingBaseUrl())
+                .embeddingPath(resolvedConfig.embeddingPath())
+                .defaultEmbeddingModel(resolvedConfig.defaultEmbeddingModel())
+                .embeddingApiKeyConfigured(hasText(resolvedConfig.embeddingApiKey()))
+                .embeddingApiKeyPreview(maskApiKey(resolvedConfig.embeddingApiKey()))
                 .build();
     }
 
@@ -132,6 +160,59 @@ public class AiConfigServiceImpl implements AiConfigService {
         return StringUtils.hasText(value);
     }
 
+    private String resolveEmbeddingPath(PersistedAiConfig persistedConfig) {
+        if (hasText(persistedConfig.getEmbeddingPath())) {
+            return persistedConfig.getEmbeddingPath().trim();
+        }
+        if (hasText(aiProperties.getEmbeddingPath())) {
+            return aiProperties.getEmbeddingPath().trim();
+        }
+        if (hasText(persistedConfig.getChatPath()) && persistedConfig.getChatPath().contains("/chat/completions")) {
+            return persistedConfig.getChatPath().replace("/chat/completions", "/embeddings").trim();
+        }
+        if (hasText(aiProperties.getChatPath()) && aiProperties.getChatPath().contains("/chat/completions")) {
+            return aiProperties.getChatPath().replace("/chat/completions", "/embeddings").trim();
+        }
+        return "/v1/embeddings";
+    }
+
+    private String resolveEmbeddingProviderType(PersistedAiConfig persistedConfig) {
+        if (hasText(persistedConfig.getEmbeddingProviderType())) {
+            return persistedConfig.getEmbeddingProviderType().trim().toUpperCase();
+        }
+        if (hasText(aiProperties.getEmbeddingProviderType())) {
+            return aiProperties.getEmbeddingProviderType().trim().toUpperCase();
+        }
+        return "OPENAI_COMPATIBLE";
+    }
+
+    private String resolveEmbeddingBaseUrl(PersistedAiConfig persistedConfig) {
+        if (hasText(persistedConfig.getEmbeddingBaseUrl())) {
+            return persistedConfig.getEmbeddingBaseUrl().trim();
+        }
+        if (hasText(aiProperties.getEmbeddingBaseUrl())) {
+            return aiProperties.getEmbeddingBaseUrl().trim();
+        }
+        return hasText(persistedConfig.getBaseUrl()) ? persistedConfig.getBaseUrl().trim() : aiProperties.getBaseUrl();
+    }
+
+    private String resolveEmbeddingApiKey(PersistedAiConfig persistedConfig) {
+        if (hasText(persistedConfig.getEmbeddingApiKey())) {
+            return persistedConfig.getEmbeddingApiKey().trim();
+        }
+        if (hasText(aiProperties.getEmbeddingApiKey())) {
+            return aiProperties.getEmbeddingApiKey().trim();
+        }
+        return hasText(persistedConfig.getApiKey()) ? persistedConfig.getApiKey().trim() : aiProperties.getApiKey();
+    }
+
+    private String resolveDefaultEmbeddingModel() {
+        if (hasText(aiProperties.getDefaultEmbeddingModel())) {
+            return aiProperties.getDefaultEmbeddingModel().trim();
+        }
+        return aiProperties.getDefaultModel();
+    }
+
     private String maskApiKey(String apiKey) {
         if (!hasText(apiKey)) {
             return "";
@@ -149,8 +230,13 @@ public class AiConfigServiceImpl implements AiConfigService {
         private Boolean mockMode;
         private String baseUrl;
         private String chatPath;
+        private String embeddingProviderType;
+        private String embeddingBaseUrl;
+        private String embeddingPath;
         private String apiKey;
+        private String embeddingApiKey;
         private String defaultModel;
+        private String defaultEmbeddingModel;
 
         public Boolean getEnabled() {
             return enabled;
@@ -184,6 +270,30 @@ public class AiConfigServiceImpl implements AiConfigService {
             this.chatPath = chatPath;
         }
 
+        public String getEmbeddingProviderType() {
+            return embeddingProviderType;
+        }
+
+        public void setEmbeddingProviderType(String embeddingProviderType) {
+            this.embeddingProviderType = embeddingProviderType;
+        }
+
+        public String getEmbeddingBaseUrl() {
+            return embeddingBaseUrl;
+        }
+
+        public void setEmbeddingBaseUrl(String embeddingBaseUrl) {
+            this.embeddingBaseUrl = embeddingBaseUrl;
+        }
+
+        public String getEmbeddingPath() {
+            return embeddingPath;
+        }
+
+        public void setEmbeddingPath(String embeddingPath) {
+            this.embeddingPath = embeddingPath;
+        }
+
         public String getApiKey() {
             return apiKey;
         }
@@ -192,12 +302,28 @@ public class AiConfigServiceImpl implements AiConfigService {
             this.apiKey = apiKey;
         }
 
+        public String getEmbeddingApiKey() {
+            return embeddingApiKey;
+        }
+
+        public void setEmbeddingApiKey(String embeddingApiKey) {
+            this.embeddingApiKey = embeddingApiKey;
+        }
+
         public String getDefaultModel() {
             return defaultModel;
         }
 
         public void setDefaultModel(String defaultModel) {
             this.defaultModel = defaultModel;
+        }
+
+        public String getDefaultEmbeddingModel() {
+            return defaultEmbeddingModel;
+        }
+
+        public void setDefaultEmbeddingModel(String defaultEmbeddingModel) {
+            this.defaultEmbeddingModel = defaultEmbeddingModel;
         }
     }
 }

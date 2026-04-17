@@ -1,14 +1,19 @@
 package com.aiassistant.learning.service.impl;
 
 import com.aiassistant.learning.common.exception.BusinessException;
+import com.aiassistant.learning.config.QdrantProperties;
 import com.aiassistant.learning.entity.MaterialSegment;
 import com.aiassistant.learning.entity.StudyMaterial;
 import com.aiassistant.learning.mapper.MaterialSegmentMapper;
 import com.aiassistant.learning.mapper.StudyMaterialMapper;
+import com.aiassistant.learning.service.AiConfigService;
 import com.aiassistant.learning.service.AiEmbeddingService;
+import com.aiassistant.learning.service.TextEmbeddingService;
+import com.aiassistant.learning.service.VectorStoreService;
 import com.aiassistant.learning.vo.ai.EmbeddingTaskResultVO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import javax.sql.DataSource;
 import org.springframework.stereotype.Service;
@@ -18,22 +23,34 @@ import org.springframework.util.StringUtils;
 @Service
 public class AiEmbeddingServiceImpl implements AiEmbeddingService {
 
-    private static final String DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small";
     private static final String PARSE_STATUS_SUCCESS = "SUCCESS";
     private static final String EMBEDDING_STATUS_QUEUED = "QUEUED";
     private static final String EMBEDDING_STATUS_SUCCESS = "SUCCESS";
+    private static final String EMBEDDING_STATUS_FAILED = "FAILED";
 
     private final StudyMaterialMapper studyMaterialMapper;
     private final MaterialSegmentMapper materialSegmentMapper;
+    private final AiConfigService aiConfigService;
+    private final TextEmbeddingService textEmbeddingService;
+    private final VectorStoreService vectorStoreService;
+    private final QdrantProperties qdrantProperties;
     private final DataSource dataSource;
 
     public AiEmbeddingServiceImpl(
             StudyMaterialMapper studyMaterialMapper,
             MaterialSegmentMapper materialSegmentMapper,
+            AiConfigService aiConfigService,
+            TextEmbeddingService textEmbeddingService,
+            VectorStoreService vectorStoreService,
+            QdrantProperties qdrantProperties,
             DataSource dataSource
     ) {
         this.studyMaterialMapper = studyMaterialMapper;
         this.materialSegmentMapper = materialSegmentMapper;
+        this.aiConfigService = aiConfigService;
+        this.textEmbeddingService = textEmbeddingService;
+        this.vectorStoreService = vectorStoreService;
+        this.qdrantProperties = qdrantProperties;
         this.dataSource = dataSource;
     }
 
@@ -65,13 +82,14 @@ public class AiEmbeddingServiceImpl implements AiEmbeddingService {
         }
         ensureEmbeddingColumnsReady();
 
-        String resolvedModel = StringUtils.hasText(modelName) ? modelName.trim() : DEFAULT_EMBEDDING_MODEL;
+        String resolvedModel = resolveEmbeddingModel(modelName);
         boolean force = Boolean.TRUE.equals(forceRegenerate);
-        int queuedSegments = 0;
         int skippedSegments = 0;
+        List<MaterialSegment> pendingSegments = new ArrayList<>();
 
         for (MaterialSegment segment : segments) {
-            boolean alreadyEmbedded = EMBEDDING_STATUS_SUCCESS.equalsIgnoreCase(segment.getEmbeddingStatus());
+            boolean alreadyEmbedded = EMBEDDING_STATUS_SUCCESS.equalsIgnoreCase(segment.getEmbeddingStatus())
+                    && StringUtils.hasText(segment.getVectorId());
             if (alreadyEmbedded && !force) {
                 skippedSegments++;
                 continue;
@@ -85,7 +103,58 @@ public class AiEmbeddingServiceImpl implements AiEmbeddingService {
                 segment.setEmbeddedAt(null);
             }
             materialSegmentMapper.updateById(segment);
-            queuedSegments++;
+            pendingSegments.add(segment);
+        }
+
+        int storedSegments = 0;
+        try {
+            int batchSize = resolveBatchSize();
+            for (int start = 0; start < pendingSegments.size(); start += batchSize) {
+                int end = Math.min(start + batchSize, pendingSegments.size());
+                List<MaterialSegment> batch = pendingSegments.subList(start, end);
+                List<String> texts = batch.stream()
+                        .map(MaterialSegment::getContentText)
+                        .toList();
+
+                TextEmbeddingService.EmbeddingBatchResult embeddingBatch = textEmbeddingService.embedTexts(texts, resolvedModel);
+                List<List<Double>> vectors = embeddingBatch.vectors();
+                if (vectors.size() != batch.size()) {
+                    throw new BusinessException("Embedding 向量数量与资料分段数量不一致");
+                }
+
+                List<VectorStoreService.MaterialSegmentVector> vectorBatch = new ArrayList<>(batch.size());
+                for (int index = 0; index < batch.size(); index++) {
+                    MaterialSegment segment = batch.get(index);
+                    vectorBatch.add(new VectorStoreService.MaterialSegmentVector(
+                            segment.getId(),
+                            userId,
+                            materialId,
+                            segment.getSegmentNo(),
+                            segment.getPageNo(),
+                            segment.getSectionTitle(),
+                            segment.getContentText(),
+                            segment.getKeywords(),
+                            embeddingBatch.modelName(),
+                            vectors.get(index)
+                    ));
+                }
+
+                vectorStoreService.upsertMaterialSegments(vectorBatch);
+
+                LocalDateTime embeddedAt = LocalDateTime.now();
+                for (MaterialSegment segment : batch) {
+                    segment.setEmbeddingStatus(EMBEDDING_STATUS_SUCCESS);
+                    segment.setEmbeddingModel(embeddingBatch.modelName());
+                    segment.setEmbeddingTaskId(taskId);
+                    segment.setVectorId(String.valueOf(segment.getId()));
+                    segment.setEmbeddedAt(embeddedAt);
+                    materialSegmentMapper.updateById(segment);
+                    storedSegments++;
+                }
+            }
+        } catch (Exception exception) {
+            markPendingSegmentsFailed(pendingSegments, resolvedModel, taskId);
+            throw exception;
         }
 
         return EmbeddingTaskResultVO.builder()
@@ -93,11 +162,41 @@ public class AiEmbeddingServiceImpl implements AiEmbeddingService {
                 .materialTitle(material.getTitle())
                 .modelName(resolvedModel)
                 .totalSegments(segments.size())
-                .queuedSegments(queuedSegments)
+                .queuedSegments(pendingSegments.size())
                 .skippedSegments(skippedSegments)
-                .vectorStoreReady(false)
+                .storedSegments(storedSegments)
+                .collectionName(qdrantProperties.getCollectionName())
+                .vectorStoreReady(Boolean.TRUE)
                 .createdAt(LocalDateTime.now())
                 .build();
+    }
+
+    private void markPendingSegmentsFailed(List<MaterialSegment> pendingSegments, String modelName, Long taskId) {
+        for (MaterialSegment segment : pendingSegments) {
+            if (EMBEDDING_STATUS_SUCCESS.equalsIgnoreCase(segment.getEmbeddingStatus())) {
+                continue;
+            }
+            segment.setEmbeddingStatus(EMBEDDING_STATUS_FAILED);
+            segment.setEmbeddingModel(modelName);
+            segment.setEmbeddingTaskId(taskId);
+            materialSegmentMapper.updateById(segment);
+        }
+    }
+
+    private String resolveEmbeddingModel(String modelName) {
+        if (StringUtils.hasText(modelName)) {
+            return modelName.trim();
+        }
+        String defaultEmbeddingModel = aiConfigService.getResolvedConfig().defaultEmbeddingModel();
+        if (!StringUtils.hasText(defaultEmbeddingModel)) {
+            throw new BusinessException("未配置默认 Embedding 模型");
+        }
+        return defaultEmbeddingModel.trim();
+    }
+
+    private int resolveBatchSize() {
+        Integer batchSize = qdrantProperties.getUpsertBatchSize();
+        return batchSize == null || batchSize <= 0 ? 16 : batchSize;
     }
 
     private void ensureEmbeddingColumnsReady() {

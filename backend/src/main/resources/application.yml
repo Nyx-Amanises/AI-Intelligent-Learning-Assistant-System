@@ -36,9 +36,22 @@ app:
     mock-mode: true
     base-url: https://api.openai.com
     chat-path: /v1/chat/completions
+    embedding-provider-type: OPENAI_COMPATIBLE
+    embedding-base-url:
+    embedding-path: /v1/embeddings
     api-key: replace-with-your-api-key
+    embedding-api-key:
     default-model: gpt-4o-mini
+    default-embedding-model: text-embedding-3-small
     config-file: ./runtime/ai-config.json
+  qdrant:
+    enabled: true
+    base-url: http://127.0.0.1:6333
+    api-key:
+    collection-name: material_segment_vectors
+    distance: Cosine
+    upsert-batch-size: 16
+    retrieval-limit: 6
   file:
     upload-dir: C:/Users/雪/Desktop/AI-Intelligent-Learning-Assistant-System/backend/uploads
   jwt:

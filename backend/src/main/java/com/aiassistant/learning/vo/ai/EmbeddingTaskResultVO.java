@@ -20,6 +20,10 @@ public class EmbeddingTaskResultVO {
 
     private Integer skippedSegments;
 
+    private Integer storedSegments;
+
+    private String collectionName;
+
     private Boolean vectorStoreReady;
 
     private LocalDateTime createdAt;

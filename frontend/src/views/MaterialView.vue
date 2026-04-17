@@ -81,6 +81,15 @@
                   解析
                 </el-button>
                 <el-button link @click="viewDetail(row.id)">查看</el-button>
+                <el-button
+                  link
+                  type="primary"
+                  :loading="actionLoadingId === row.id && actionType === 'embedding'"
+                  @click="generateEmbedding(row)"
+                >
+                  生成 Embedding
+                </el-button>
+                <el-button link type="info" @click="openRetrievalPreview(row)">检索预览</el-button>
                 <el-button link type="success" @click="goSummary(row.id)">去总结</el-button>
                 <el-button link type="warning" @click="goQuiz(row.id)">去出题</el-button>
                 <el-button
@@ -192,6 +201,55 @@
         </div>
       </template>
     </el-drawer>
+
+    <el-dialog v-model="retrievalDialogVisible" title="检索预览" width="860px" destroy-on-close>
+      <div class="workspace-form-grid workspace-form-grid--compact">
+        <el-form-item label="资料">
+          <el-input :model-value="retrievalForm.materialTitle" disabled />
+        </el-form-item>
+        <el-form-item label="召回条数">
+          <el-input-number v-model="retrievalForm.limit" :min="1" :max="10" style="width: 100%" />
+        </el-form-item>
+      </div>
+      <el-form-item label="检索问题">
+        <el-input
+          v-model="retrievalForm.queryText"
+          type="textarea"
+          :rows="3"
+          placeholder="例如：事务的 ACID 特性 / 本章核心知识点 / 死锁的产生条件"
+        />
+      </el-form-item>
+
+      <div class="toolbar" style="justify-content: flex-end">
+        <el-button :loading="retrievalLoading" type="primary" @click="runRetrievalPreview">开始检索</el-button>
+      </div>
+
+      <div v-if="retrievalLoading" class="state-block">正在召回相关资料分段...</div>
+      <div v-else-if="retrievalResult" class="list-stack" style="margin-top: 18px">
+        <div class="soft-text">共命中 {{ retrievalResult.hitCount }} 条</div>
+        <div
+          v-for="segment in retrievalResult.segments"
+          :key="segment.segmentId"
+          class="section-card"
+        >
+          <div class="summary-history-card__top">
+            <div>
+              <div class="section-card__title">
+                {{ segment.sectionTitle || `第 ${segment.segmentNo || '--'} 段` }}
+              </div>
+              <div class="section-card__meta">
+                段落 #{{ segment.segmentNo || '--' }} · 页码 {{ segment.pageNo || '--' }} · 相似度
+                {{ formatRetrievalScore(segment.score) }}
+              </div>
+            </div>
+          </div>
+          <div class="summary-block">{{ segment.contentText || '暂无内容' }}</div>
+        </div>
+        <div v-if="!retrievalResult.segments.length" class="state-block empty">
+          当前检索语句没有召回到内容，可以换个更具体的问题再试试。
+        </div>
+      </div>
+    </el-dialog>
   </section>
 </template>
 
@@ -200,6 +258,11 @@ import { reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadRequestOptions } from 'element-plus'
 import { useRouter } from 'vue-router'
+import {
+  previewMaterialRetrievalApi,
+  submitEmbeddingTaskApi,
+  type RetrievalPreviewPayload
+} from '@/api/modules/ai'
 import {
   createTextMaterialApi,
   deleteMaterialApi,
@@ -215,12 +278,15 @@ const total = ref(0)
 const detail = ref<any>(null)
 const drawerVisible = ref(false)
 const textDialogVisible = ref(false)
+const retrievalDialogVisible = ref(false)
 const tableLoading = ref(false)
 const detailLoading = ref(false)
 const creating = ref(false)
 const uploading = ref(false)
+const retrievalLoading = ref(false)
 const actionLoadingId = ref<number | null>(null)
 const actionType = ref('')
+const retrievalResult = ref<RetrievalPreviewPayload | null>(null)
 
 const form = reactive({
   title: '',
@@ -241,11 +307,25 @@ const page = reactive({
   size: 10
 })
 
+const retrievalForm = reactive({
+  materialId: 0,
+  materialTitle: '',
+  queryText: '',
+  limit: 5
+})
+
 const formatDateTime = (value?: string) => {
   if (!value) {
     return '未知时间'
   }
   return value.replace('T', ' ').slice(0, 19)
+}
+
+const formatRetrievalScore = (value?: number) => {
+  if (typeof value !== 'number') {
+    return '--'
+  }
+  return value.toFixed(4)
 }
 
 const resetForm = () => {
@@ -329,6 +409,21 @@ const parseMaterial = async (id: number) => {
   }
 }
 
+const generateEmbedding = async (row: any) => {
+  actionLoadingId.value = row.id
+  actionType.value = 'embedding'
+  try {
+    const res = await submitEmbeddingTaskApi(row.id, {})
+    const task = res.data.data
+    ElMessage.success(`Embedding 任务已提交，任务 #${task.id}`)
+  } catch (error: any) {
+    ElMessage.error(error.message || '提交 Embedding 任务失败')
+  } finally {
+    actionLoadingId.value = null
+    actionType.value = ''
+  }
+}
+
 const removeMaterial = async (id: number) => {
   try {
     await ElMessageBox.confirm('删除后该资料及其解析分段将不可恢复，确定继续吗？', '删除确认', {
@@ -365,6 +460,43 @@ const viewDetail = async (id: number) => {
     ElMessage.error(error.message || '加载资料详情失败')
   } finally {
     detailLoading.value = false
+  }
+}
+
+const openRetrievalPreview = (row: any) => {
+  retrievalDialogVisible.value = true
+  retrievalResult.value = null
+  retrievalForm.materialId = row.id
+  retrievalForm.materialTitle = row.title
+  retrievalForm.queryText = ''
+  retrievalForm.limit = 5
+}
+
+const runRetrievalPreview = async () => {
+  if (!retrievalForm.materialId) {
+    ElMessage.warning('请先选择资料')
+    return
+  }
+  if (!retrievalForm.queryText.trim()) {
+    ElMessage.warning('请输入检索问题')
+    return
+  }
+
+  retrievalLoading.value = true
+  try {
+    const res = await previewMaterialRetrievalApi(retrievalForm.materialId, {
+      queryText: retrievalForm.queryText.trim(),
+      limit: retrievalForm.limit
+    })
+    retrievalResult.value = res.data.data as RetrievalPreviewPayload
+    if (!retrievalResult.value.segments.length) {
+      ElMessage.info('没有召回到相关内容，可以换个更具体的问题试试')
+    }
+  } catch (error: any) {
+    retrievalResult.value = null
+    ElMessage.error(error.message || '检索预览失败')
+  } finally {
+    retrievalLoading.value = false
   }
 }
 

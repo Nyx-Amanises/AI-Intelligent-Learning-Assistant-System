@@ -15,7 +15,9 @@ import com.aiassistant.learning.service.AiChatService;
 import com.aiassistant.learning.service.AiConfigService;
 import com.aiassistant.learning.service.AiQuestionService;
 import com.aiassistant.learning.service.QuestionSetService;
+import com.aiassistant.learning.service.RetrievalService;
 import com.aiassistant.learning.service.StudyMaterialService;
+import com.aiassistant.learning.service.VectorStoreService.RetrievedSegment;
 import com.aiassistant.learning.vo.question.QuestionSetDetailVO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -30,6 +32,8 @@ import org.springframework.util.StringUtils;
 @Service
 public class AiQuestionServiceImpl implements AiQuestionService {
 
+    private static final int QUESTION_RETRIEVAL_LIMIT = 10;
+
     private final StudyMaterialService studyMaterialService;
     private final MaterialSegmentMapper materialSegmentMapper;
     private final QuestionSetMapper questionSetMapper;
@@ -38,6 +42,7 @@ public class AiQuestionServiceImpl implements AiQuestionService {
     private final QuestionSetService questionSetService;
     private final AiConfigService aiConfigService;
     private final AiChatService aiChatService;
+    private final RetrievalService retrievalService;
     private final ObjectMapper objectMapper;
 
     public AiQuestionServiceImpl(
@@ -49,6 +54,7 @@ public class AiQuestionServiceImpl implements AiQuestionService {
             QuestionSetService questionSetService,
             AiConfigService aiConfigService,
             AiChatService aiChatService,
+            RetrievalService retrievalService,
             ObjectMapper objectMapper
     ) {
         this.studyMaterialService = studyMaterialService;
@@ -59,6 +65,7 @@ public class AiQuestionServiceImpl implements AiQuestionService {
         this.questionSetService = questionSetService;
         this.aiConfigService = aiConfigService;
         this.aiChatService = aiChatService;
+        this.retrievalService = retrievalService;
         this.objectMapper = objectMapper;
     }
 
@@ -85,7 +92,14 @@ public class AiQuestionServiceImpl implements AiQuestionService {
         String defaultModel = aiConfigService.getResolvedConfig().defaultModel();
         String modelName = StringUtils.hasText(request.getModelName()) ? request.getModelName() : defaultModel;
         String promptText = buildQuestionSystemPrompt();
-        String inputText = buildQuestionUserPrompt(material, segments, questionCount, difficultyLevel);
+        List<MaterialSegment> contextSegments = resolveQuestionContextSegments(
+                userId,
+                material,
+                segments,
+                questionCount,
+                difficultyLevel
+        );
+        String inputText = buildQuestionUserPrompt(material, contextSegments, questionCount, difficultyLevel);
 
         LocalDateTime start = LocalDateTime.now();
         List<GeneratedQuestion> generatedQuestions = callAiOrMock(
@@ -161,6 +175,39 @@ public class AiQuestionServiceImpl implements AiQuestionService {
         String userPrompt = buildQuestionUserPrompt(material, segments, questionCount, difficultyLevel);
         String content = aiChatService.chat(buildQuestionSystemPrompt(), userPrompt, modelName, 0.4);
         return parseGeneratedQuestions(content, questionCount);
+    }
+
+    private List<MaterialSegment> resolveQuestionContextSegments(
+            Long userId,
+            StudyMaterial material,
+            List<MaterialSegment> allSegments,
+            int questionCount,
+            int difficultyLevel
+    ) {
+        try {
+            List<RetrievedSegment> retrievedSegments = retrievalService.retrieveMaterialSegments(
+                    userId,
+                    material.getId(),
+                    buildQuestionRetrievalQuery(material, questionCount, difficultyLevel),
+                    QUESTION_RETRIEVAL_LIMIT
+            );
+            if (retrievedSegments == null || retrievedSegments.isEmpty()) {
+                return allSegments;
+            }
+            return retrievedSegments.stream()
+                    .map(this::toContextSegment)
+                    .toList();
+        } catch (Exception exception) {
+            return allSegments;
+        }
+    }
+
+    private String buildQuestionRetrievalQuery(StudyMaterial material, int questionCount, int difficultyLevel) {
+        return material.getTitle()
+                + " 生成练习题"
+                + " 数量 " + questionCount
+                + " 难度 " + difficultyLevel
+                + " 核心知识点 定义 易错点 应用场景";
     }
 
     private String buildQuestionSystemPrompt() {
@@ -385,6 +432,17 @@ public class AiQuestionServiceImpl implements AiQuestionService {
                 difficultyLevel >= 4 ? 15 : 10
         ));
         return questions.subList(0, Math.min(questionCount, questions.size()));
+    }
+
+    private MaterialSegment toContextSegment(RetrievedSegment segment) {
+        MaterialSegment materialSegment = new MaterialSegment();
+        materialSegment.setId(segment.segmentId());
+        materialSegment.setSegmentNo(segment.segmentNo());
+        materialSegment.setPageNo(segment.pageNo());
+        materialSegment.setSectionTitle(segment.sectionTitle());
+        materialSegment.setContentText(segment.contentText());
+        materialSegment.setKeywords(segment.keywords());
+        return materialSegment;
     }
 
     private record GeneratedQuestion(

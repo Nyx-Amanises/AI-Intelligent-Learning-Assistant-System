@@ -4,7 +4,7 @@
       <div>
         <h1 class="page-title">AI 配置</h1>
         <p class="page-desc">
-          在这里配置真实 OpenAI 兼容接口。保存后，AI 总结和 AI 出题都会优先使用这里的运行时配置。
+          聊天模型和向量模型分开配置。现在可以继续让 AI 总结 / AI 出题走现有中转站，再把 Embedding 单独切到豆包。
         </p>
       </div>
       <div class="toolbar" style="margin-bottom: 0">
@@ -13,66 +13,141 @@
       </div>
     </div>
 
-    <div class="content-grid content-grid--2">
-      <div class="page-card">
-        <div class="panel-title-row">
-          <h3>接口参数</h3>
-          <span class="soft-text">支持 OpenAI / DeepSeek / 通义千问兼容网关</span>
-        </div>
-        <el-form label-position="top">
-          <el-form-item label="启用 AI">
-            <el-switch v-model="form.enabled" />
-          </el-form-item>
-          <el-form-item label="Mock 模式">
-            <el-switch v-model="form.mockMode" />
-          </el-form-item>
-          <el-form-item label="Base URL">
-            <el-input v-model="form.baseUrl" placeholder="例如：https://api.openai.com" />
-          </el-form-item>
-          <el-form-item label="Chat Path">
-            <el-input v-model="form.chatPath" placeholder="例如：/v1/chat/completions" />
-          </el-form-item>
-          <el-form-item label="默认模型">
-            <el-input v-model="form.defaultModel" placeholder="例如：gpt-4o-mini / deepseek-chat" />
-          </el-form-item>
-          <el-form-item label="API Key">
-            <el-input
-              v-model="form.apiKey"
-              type="password"
-              show-password
-              placeholder="留空表示沿用当前已保存的 Key"
-            />
-            <div class="soft-text" style="margin-top: 8px">
-              当前状态：{{ configInfo.apiKeyConfigured ? configInfo.apiKeyPreview : '未配置' }}
+    <div class="content-grid">
+      <div class="content-grid content-grid--2">
+        <div class="page-card">
+          <div class="panel-title-row">
+            <h3>聊天模型</h3>
+            <span class="soft-text">AI 总结、AI 出题继续走这里</span>
+          </div>
+          <el-form label-position="top">
+            <div class="workspace-form-grid workspace-form-grid--compact">
+              <el-form-item label="启用 AI">
+                <el-switch v-model="form.enabled" />
+              </el-form-item>
+              <el-form-item label="Mock 模式">
+                <el-switch v-model="form.mockMode" />
+              </el-form-item>
             </div>
-          </el-form-item>
-        </el-form>
+            <el-form-item label="Chat Base URL">
+              <el-input v-model="form.baseUrl" placeholder="例如：https://newapi.hjlyywp.com" />
+            </el-form-item>
+            <el-form-item label="Chat Path">
+              <el-input v-model="form.chatPath" placeholder="例如：/v1/chat/completions" />
+            </el-form-item>
+            <el-form-item label="默认聊天模型">
+              <el-input v-model="form.defaultModel" placeholder="例如：gpt-5.4" />
+            </el-form-item>
+            <el-form-item label="聊天 API Key">
+              <el-input
+                v-model="form.apiKey"
+                type="password"
+                show-password
+                placeholder="留空表示沿用当前已保存的 Key"
+              />
+              <div class="soft-text" style="margin-top: 8px">
+                当前状态：{{ configInfo.apiKeyConfigured ? configInfo.apiKeyPreview : '未配置' }}
+              </div>
+            </el-form-item>
+          </el-form>
+        </div>
+
+        <div class="page-card">
+          <div class="panel-title-row">
+            <h3>向量模型</h3>
+            <span class="soft-text">Embedding / RAG 检索走这里</span>
+          </div>
+          <el-form label-position="top">
+            <el-form-item label="Embedding Provider">
+              <el-select v-model="form.embeddingProviderType" style="width: 100%">
+                <el-option label="OpenAI 兼容 Embedding" value="OPENAI_COMPATIBLE" />
+                <el-option label="豆包 Ark 多模态向量" value="ARK_MULTIMODAL_TEXT" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="Embedding Base URL">
+              <el-input
+                v-model="form.embeddingBaseUrl"
+                placeholder="例如：https://ark.cn-beijing.volces.com"
+              />
+            </el-form-item>
+            <el-form-item label="Embedding Path">
+              <el-input
+                v-model="form.embeddingPath"
+                :placeholder="embeddingPathPlaceholder"
+              />
+            </el-form-item>
+            <el-form-item label="默认向量模型">
+              <el-input
+                v-model="form.defaultEmbeddingModel"
+                :placeholder="embeddingModelPlaceholder"
+              />
+            </el-form-item>
+            <el-form-item label="Embedding API Key">
+              <el-input
+                v-model="form.embeddingApiKey"
+                type="password"
+                show-password
+                placeholder="留空表示沿用当前已保存的 Key"
+              />
+              <div class="soft-text" style="margin-top: 8px">
+                当前状态：{{
+                  configInfo.embeddingApiKeyConfigured ? configInfo.embeddingApiKeyPreview : '未配置'
+                }}
+              </div>
+            </el-form-item>
+          </el-form>
+        </div>
       </div>
 
-      <div class="page-card">
-        <div class="panel-title-row">
-          <h3>使用说明</h3>
+      <div class="content-grid content-grid--2">
+        <div class="page-card">
+          <div class="panel-title-row">
+            <h3>推荐配置</h3>
+          </div>
+          <div class="tips-stack">
+            <div class="tip-card">
+              <div class="tip-card__title">聊天接口</div>
+              <div class="tip-card__desc">
+                继续保持你现有中转站即可，填 `Chat Base URL / Chat Path / 默认聊天模型 / 聊天 API Key`。
+              </div>
+            </div>
+            <div class="tip-card">
+              <div class="tip-card__title">豆包向量接口</div>
+              <div class="tip-card__desc">
+                Provider 选 `豆包 Ark 多模态向量`，Base URL 一般是 `https://ark.cn-beijing.volces.com`，
+                Path 一般是 `/api/v3/embeddings/multimodal`。
+              </div>
+            </div>
+            <div class="tip-card">
+              <div class="tip-card__title">模型示例</div>
+              <div class="tip-card__desc">
+                你截图里的模型可以直接填 `doubao-embedding-vision-250615`。
+              </div>
+            </div>
+          </div>
         </div>
-        <div class="tips-stack">
-          <div class="tip-card">
-            <div class="tip-card__title">什么时候用真实接口</div>
-            <div class="tip-card__desc">关闭 Mock 模式后，AI 总结和 AI 出题都会调用真实模型。</div>
+
+        <div class="page-card">
+          <div class="panel-title-row">
+            <h3>运行说明</h3>
           </div>
-          <div class="tip-card">
-            <div class="tip-card__title">最常用配置</div>
-            <div class="tip-card__desc">
-              OpenAI 官方一般使用 `https://api.openai.com` 和 `/v1/chat/completions`。
+          <div class="tips-stack">
+            <div class="tip-card">
+              <div class="tip-card__title">配置保存位置</div>
+              <div class="tip-card__desc">后端会把运行时配置保存到 `backend/runtime/ai-config.json`。</div>
             </div>
-          </div>
-          <div class="tip-card">
-            <div class="tip-card__title">兼容平台怎么配</div>
-            <div class="tip-card__desc">
-              如果是 DeepSeek、通义等兼容平台，通常只需要替换 Base URL、API Key 和模型名称。
+            <div class="tip-card">
+              <div class="tip-card__title">什么时候会用到向量配置</div>
+              <div class="tip-card__desc">
+                点击“生成 Embedding”、调用检索预览，以及后续 RAG 总结/出题时，都会优先用这组向量配置。
+              </div>
             </div>
-          </div>
-          <div class="tip-card">
-            <div class="tip-card__title">配置保存到哪里</div>
-            <div class="tip-card__desc">后端会把运行时配置保存到 `backend/runtime/ai-config.json`。</div>
+            <div class="tip-card">
+              <div class="tip-card__title">没配向量接口也不影响聊天</div>
+              <div class="tip-card__desc">
+                聊天链路和向量链路已拆开，向量接口配错不会影响 AI 总结 / AI 出题的普通聊天调用。
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -81,7 +156,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getAiConfigApi, updateAiConfigApi } from '@/api/modules/ai'
 
@@ -89,7 +164,9 @@ const loading = ref(false)
 const saving = ref(false)
 const configInfo = ref({
   apiKeyConfigured: false,
-  apiKeyPreview: ''
+  apiKeyPreview: '',
+  embeddingApiKeyConfigured: false,
+  embeddingApiKeyPreview: ''
 })
 
 const form = reactive({
@@ -98,8 +175,25 @@ const form = reactive({
   baseUrl: '',
   chatPath: '',
   defaultModel: '',
-  apiKey: ''
+  apiKey: '',
+  embeddingProviderType: 'OPENAI_COMPATIBLE',
+  embeddingBaseUrl: '',
+  embeddingPath: '',
+  defaultEmbeddingModel: '',
+  embeddingApiKey: ''
 })
+
+const embeddingPathPlaceholder = computed(() =>
+  form.embeddingProviderType === 'ARK_MULTIMODAL_TEXT'
+    ? '例如：/api/v3/embeddings/multimodal'
+    : '例如：/v1/embeddings'
+)
+
+const embeddingModelPlaceholder = computed(() =>
+  form.embeddingProviderType === 'ARK_MULTIMODAL_TEXT'
+    ? '例如：doubao-embedding-vision-250615'
+    : '例如：text-embedding-3-small'
+)
 
 const loadConfig = async () => {
   loading.value = true
@@ -112,9 +206,16 @@ const loadConfig = async () => {
     form.chatPath = data.chatPath || ''
     form.defaultModel = data.defaultModel || ''
     form.apiKey = ''
+    form.embeddingProviderType = data.embeddingProviderType || 'OPENAI_COMPATIBLE'
+    form.embeddingBaseUrl = data.embeddingBaseUrl || ''
+    form.embeddingPath = data.embeddingPath || ''
+    form.defaultEmbeddingModel = data.defaultEmbeddingModel || ''
+    form.embeddingApiKey = ''
     configInfo.value = {
       apiKeyConfigured: data.apiKeyConfigured,
-      apiKeyPreview: data.apiKeyPreview
+      apiKeyPreview: data.apiKeyPreview,
+      embeddingApiKeyConfigured: data.embeddingApiKeyConfigured,
+      embeddingApiKeyPreview: data.embeddingApiKeyPreview
     }
   } catch (error: any) {
     ElMessage.error(error.message || '加载 AI 配置失败')
@@ -132,14 +233,22 @@ const saveConfig = async () => {
       baseUrl: form.baseUrl.trim(),
       chatPath: form.chatPath.trim(),
       defaultModel: form.defaultModel.trim(),
-      apiKey: form.apiKey.trim() || undefined
+      apiKey: form.apiKey.trim() || undefined,
+      embeddingProviderType: form.embeddingProviderType,
+      embeddingBaseUrl: form.embeddingBaseUrl.trim(),
+      embeddingPath: form.embeddingPath.trim(),
+      defaultEmbeddingModel: form.defaultEmbeddingModel.trim(),
+      embeddingApiKey: form.embeddingApiKey.trim() || undefined
     })
     const data = res.data.data
     configInfo.value = {
       apiKeyConfigured: data.apiKeyConfigured,
-      apiKeyPreview: data.apiKeyPreview
+      apiKeyPreview: data.apiKeyPreview,
+      embeddingApiKeyConfigured: data.embeddingApiKeyConfigured,
+      embeddingApiKeyPreview: data.embeddingApiKeyPreview
     }
     form.apiKey = ''
+    form.embeddingApiKey = ''
     ElMessage.success('AI 配置保存成功')
   } catch (error: any) {
     ElMessage.error(error.message || '保存 AI 配置失败')

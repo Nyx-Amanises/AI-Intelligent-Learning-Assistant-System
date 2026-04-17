@@ -17,9 +17,19 @@ public class AiProperties {
 
     private String chatPath;
 
+    private String embeddingProviderType;
+
+    private String embeddingBaseUrl;
+
+    private String embeddingPath;
+
     private String apiKey;
 
+    private String embeddingApiKey;
+
     private String defaultModel;
+
+    private String defaultEmbeddingModel;
 
     private String configFile;
 }

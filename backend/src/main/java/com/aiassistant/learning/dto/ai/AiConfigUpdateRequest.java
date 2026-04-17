@@ -16,4 +16,14 @@ public class AiConfigUpdateRequest {
     private String apiKey;
 
     private String defaultModel;
+
+    private String embeddingProviderType;
+
+    private String embeddingBaseUrl;
+
+    private String embeddingPath;
+
+    private String embeddingApiKey;
+
+    private String defaultEmbeddingModel;
 }

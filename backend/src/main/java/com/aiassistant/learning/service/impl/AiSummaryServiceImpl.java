@@ -12,7 +12,9 @@ import com.aiassistant.learning.mapper.AiGenerationRecordMapper;
 import com.aiassistant.learning.mapper.MaterialSegmentMapper;
 import com.aiassistant.learning.mapper.StudyNoteMapper;
 import com.aiassistant.learning.service.AiSummaryService;
+import com.aiassistant.learning.service.RetrievalService;
 import com.aiassistant.learning.service.StudyMaterialService;
+import com.aiassistant.learning.service.VectorStoreService.RetrievedSegment;
 import com.aiassistant.learning.vo.ai.SummaryHistoryVO;
 import com.aiassistant.learning.vo.ai.SummaryResultVO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -31,6 +33,7 @@ import org.springframework.util.StringUtils;
 public class AiSummaryServiceImpl implements AiSummaryService {
 
     private static final int MAX_ERROR_MESSAGE_LENGTH = 500;
+    private static final int SUMMARY_RETRIEVAL_LIMIT = 8;
 
     private final StudyMaterialService studyMaterialService;
     private final MaterialSegmentMapper materialSegmentMapper;
@@ -38,6 +41,7 @@ public class AiSummaryServiceImpl implements AiSummaryService {
     private final StudyNoteMapper studyNoteMapper;
     private final AiConfigService aiConfigService;
     private final AiChatService aiChatService;
+    private final RetrievalService retrievalService;
 
     public AiSummaryServiceImpl(
             StudyMaterialService studyMaterialService,
@@ -45,7 +49,8 @@ public class AiSummaryServiceImpl implements AiSummaryService {
             AiGenerationRecordMapper aiGenerationRecordMapper,
             StudyNoteMapper studyNoteMapper,
             AiConfigService aiConfigService,
-            AiChatService aiChatService
+            AiChatService aiChatService,
+            RetrievalService retrievalService
     ) {
         this.studyMaterialService = studyMaterialService;
         this.materialSegmentMapper = materialSegmentMapper;
@@ -53,6 +58,7 @@ public class AiSummaryServiceImpl implements AiSummaryService {
         this.studyNoteMapper = studyNoteMapper;
         this.aiConfigService = aiConfigService;
         this.aiChatService = aiChatService;
+        this.retrievalService = retrievalService;
     }
 
     @Override
@@ -76,7 +82,8 @@ public class AiSummaryServiceImpl implements AiSummaryService {
         String summaryType = StringUtils.hasText(request.getSummaryType()) ? request.getSummaryType() : "STANDARD";
         String defaultModel = aiConfigService.getResolvedConfig().defaultModel();
         String modelName = StringUtils.hasText(request.getModelName()) ? request.getModelName() : defaultModel;
-        String inputText = buildInputText(material, segments);
+        List<MaterialSegment> contextSegments = resolveSummaryContextSegments(userId, material, segments, summaryType);
+        String inputText = buildInputText(material, contextSegments);
         String promptText = buildPrompt(summaryType);
 
         LocalDateTime start = LocalDateTime.now();
@@ -268,6 +275,50 @@ public class AiSummaryServiceImpl implements AiSummaryService {
             builder.append(segment.getContentText()).append(System.lineSeparator());
         }
         return builder.toString();
+    }
+
+    private List<MaterialSegment> resolveSummaryContextSegments(
+            Long userId,
+            StudyMaterial material,
+            List<MaterialSegment> allSegments,
+            String summaryType
+    ) {
+        try {
+            List<RetrievedSegment> retrievedSegments = retrievalService.retrieveMaterialSegments(
+                    userId,
+                    material.getId(),
+                    buildSummaryRetrievalQuery(material, summaryType),
+                    SUMMARY_RETRIEVAL_LIMIT
+            );
+            if (retrievedSegments == null || retrievedSegments.isEmpty()) {
+                return allSegments;
+            }
+            return retrievedSegments.stream()
+                    .map(this::toContextSegment)
+                    .toList();
+        } catch (Exception exception) {
+            return allSegments;
+        }
+    }
+
+    private String buildSummaryRetrievalQuery(StudyMaterial material, String summaryType) {
+        String mode = switch (String.valueOf(summaryType).toUpperCase()) {
+            case "EXAM" -> "考试重点 高频考点 易错点 复习建议";
+            case "OUTLINE" -> "章节结构 主题层级 关键概念 大纲";
+            default -> "核心知识点 重点概念 复习方向";
+        };
+        return material.getTitle() + " " + mode;
+    }
+
+    private MaterialSegment toContextSegment(RetrievedSegment segment) {
+        MaterialSegment materialSegment = new MaterialSegment();
+        materialSegment.setId(segment.segmentId());
+        materialSegment.setSegmentNo(segment.segmentNo());
+        materialSegment.setPageNo(segment.pageNo());
+        materialSegment.setSectionTitle(segment.sectionTitle());
+        materialSegment.setContentText(segment.contentText());
+        materialSegment.setKeywords(segment.keywords());
+        return materialSegment;
     }
 
     private String buildMockSummary(String inputText) {
