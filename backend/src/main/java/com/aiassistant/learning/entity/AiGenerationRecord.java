@@ -28,6 +28,8 @@ public class AiGenerationRecord implements Serializable {
 
     private String taskType;
 
+    private String summaryType;
+
     private String modelName;
 
     private String promptText;

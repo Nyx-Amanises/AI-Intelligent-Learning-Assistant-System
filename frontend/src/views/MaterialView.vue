@@ -3,101 +3,137 @@
     <div class="page-header">
       <div>
         <h1 class="page-title">资料管理</h1>
-        <p class="page-desc">
-          统一管理课程资料，支持录入文本、上传文件、解析内容，并继续进入 AI 总结和智能出题。
-        </p>
-      </div>
-      <div class="toolbar" style="margin-bottom: 0">
-        <el-upload :show-file-list="false" :http-request="uploadMaterial" :disabled="uploading">
-          <el-button :loading="uploading">上传文件</el-button>
-        </el-upload>
-        <el-button type="primary" :loading="tableLoading" @click="loadMaterials">刷新列表</el-button>
+        <p class="page-desc">资料页就按后台列表页来做，新增、查询、查看、删除都围绕列表展开。</p>
       </div>
     </div>
 
-    <div class="content-grid content-grid--2">
-      <div class="page-card">
-        <div class="panel-title-row">
-          <h3>新增文本资料</h3>
-          <span class="soft-text">推荐先录入一节课的重点笔记</span>
+    <div class="workspace-panel">
+      <div class="workspace-toolbar">
+        <div class="toolbar" style="margin-bottom: 0">
+          <el-button type="primary" @click="textDialogVisible = true">新增文本资料</el-button>
+          <el-upload :show-file-list="false" :http-request="uploadMaterial" :disabled="uploading">
+            <el-button :loading="uploading">上传文件</el-button>
+          </el-upload>
+          <el-button :loading="tableLoading" @click="loadMaterials">刷新列表</el-button>
         </div>
-        <el-form label-position="top">
-          <el-form-item label="资料标题">
-            <el-input v-model="form.title" maxlength="100" placeholder="例如：数据库系统原理 第三章事务管理" />
-          </el-form-item>
+        <div class="workspace-toolbar__meta">
+          <span class="workspace-chip">共 {{ filteredMaterials.length }} 条</span>
+        </div>
+      </div>
+
+      <div class="workspace-body">
+        <div class="page-card workspace-card">
+          <div class="workspace-filter-bar">
+            <el-input
+              v-model="filters.keyword"
+              clearable
+              placeholder="按资料标题搜索"
+              class="workspace-filter-bar__search"
+            />
+            <el-select v-model="filters.materialType" clearable placeholder="资料类型">
+              <el-option label="TEXT" value="TEXT" />
+              <el-option label="MARKDOWN" value="MARKDOWN" />
+              <el-option label="FILE" value="FILE" />
+            </el-select>
+            <el-select v-model="filters.parseStatus" clearable placeholder="解析状态">
+              <el-option label="PENDING" value="PENDING" />
+              <el-option label="SUCCESS" value="SUCCESS" />
+              <el-option label="FAILED" value="FAILED" />
+            </el-select>
+            <el-button @click="resetFilters">重置条件</el-button>
+          </div>
+
+          <div v-if="tableLoading" class="state-block">正在加载资料列表...</div>
+          <div v-else-if="!filteredMaterials.length" class="state-block empty">
+            没有符合条件的资料，换个筛选条件试试。
+          </div>
+          <div v-else class="workspace-table">
+            <div class="workspace-table__head workspace-table__head--material">
+              <span>资料标题</span>
+              <span>类型</span>
+              <span>解析状态</span>
+              <span>总结状态</span>
+              <span>字数</span>
+              <span>操作</span>
+            </div>
+
+            <div
+              v-for="row in filteredMaterials"
+              :key="row.id"
+              class="workspace-table__row workspace-table__row--material"
+            >
+              <div class="workspace-table__title">
+                <strong>{{ row.title }}</strong>
+                <span>#{{ row.id }} · {{ formatDateTime(row.createdAt) }}</span>
+              </div>
+              <span>{{ row.materialType }}</span>
+              <span>{{ row.parseStatus }}</span>
+              <span>{{ row.summaryStatus }}</span>
+              <span>{{ row.totalCharacters || 0 }}</span>
+              <div class="workspace-action-row">
+                <el-button
+                  link
+                  type="primary"
+                  :loading="actionLoadingId === row.id && actionType === 'parse'"
+                  @click="parseMaterial(row.id)"
+                >
+                  解析
+                </el-button>
+                <el-button link @click="viewDetail(row.id)">查看</el-button>
+                <el-button link type="success" @click="goSummary(row.id)">去总结</el-button>
+                <el-button link type="warning" @click="goQuiz(row.id)">去出题</el-button>
+                <el-button
+                  link
+                  type="danger"
+                  :loading="actionLoadingId === row.id && actionType === 'delete'"
+                  @click="removeMaterial(row.id)"
+                >
+                  删除
+                </el-button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <el-dialog v-model="textDialogVisible" title="新增文本资料" width="720px" destroy-on-close>
+      <el-form label-position="top">
+        <el-form-item label="资料标题">
+          <el-input v-model="form.title" maxlength="100" placeholder="例如：数据库系统原理 第三章事务管理" />
+        </el-form-item>
+        <div class="workspace-form-grid workspace-form-grid--compact">
           <el-form-item label="资料类型">
             <el-select v-model="form.materialType" style="width: 100%">
               <el-option label="TEXT" value="TEXT" />
               <el-option label="MARKDOWN" value="MARKDOWN" />
             </el-select>
           </el-form-item>
-          <el-form-item label="难度等级">
-            <el-slider v-model="form.difficultyLevel" :min="1" :max="5" show-stops />
-          </el-form-item>
           <el-form-item label="标签">
             <el-input v-model="form.tags" placeholder="例如：数据库、期末复习、重点章节" />
           </el-form-item>
-          <el-form-item label="资料内容">
-            <el-input
-              v-model="form.contentText"
-              type="textarea"
-              :rows="10"
-              maxlength="10000"
-              show-word-limit
-              placeholder="请输入课堂笔记、知识点整理或教材摘录内容"
-            />
-          </el-form-item>
+        </div>
+        <el-form-item label="难度等级">
+          <el-slider v-model="form.difficultyLevel" :min="1" :max="5" show-stops />
+        </el-form-item>
+        <el-form-item label="资料内容">
+          <el-input
+            v-model="form.contentText"
+            type="textarea"
+            :rows="10"
+            maxlength="10000"
+            show-word-limit
+            placeholder="请输入课堂笔记、知识点整理或教材摘录内容"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <div class="toolbar" style="margin-bottom: 0; justify-content: flex-end">
+          <el-button @click="textDialogVisible = false">取消</el-button>
           <el-button type="primary" :loading="creating" @click="createMaterial">保存资料</el-button>
-        </el-form>
-      </div>
-
-      <div class="page-card">
-        <div class="panel-title-row">
-          <h3>使用建议</h3>
         </div>
-        <div class="tips-stack">
-          <div class="tip-card">
-            <div class="tip-card__title">适合放什么内容</div>
-            <div class="tip-card__desc">课堂笔记、知识点清单、实验报告提纲、章节总结都可以。</div>
-          </div>
-          <div class="tip-card">
-            <div class="tip-card__title">什么时候先解析</div>
-            <div class="tip-card__desc">文件上传后建议先执行解析，再进行 AI 总结或 AI 出题。</div>
-          </div>
-          <div class="tip-card">
-            <div class="tip-card__title">怎样更像完整产品</div>
-            <div class="tip-card__desc">资料页负责沉淀知识资产，后面两步再把内容变成练习和复习闭环。</div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="page-card" style="margin-top: 20px">
-      <div class="panel-title-row">
-        <h3>资料列表</h3>
-        <span class="soft-text">共 {{ materials.length }} 条</span>
-      </div>
-
-      <div v-if="tableLoading" class="state-block">正在加载资料列表...</div>
-      <div v-else-if="!materials.length" class="state-block empty">目前还没有资料，先新增一条文本资料或上传文件。</div>
-      <el-table v-else :data="materials">
-        <el-table-column prop="title" label="资料标题" min-width="220" />
-        <el-table-column prop="materialType" label="类型" width="120" />
-        <el-table-column prop="parseStatus" label="解析状态" width="130" />
-        <el-table-column prop="summaryStatus" label="总结状态" width="130" />
-        <el-table-column prop="totalCharacters" label="字数" width="100" />
-        <el-table-column label="操作" width="330" fixed="right">
-          <template #default="{ row }">
-            <el-button link type="primary" :loading="actionLoadingId === row.id && actionType === 'parse'" @click="parseMaterial(row.id)">
-              解析
-            </el-button>
-            <el-button link @click="viewDetail(row.id)">查看</el-button>
-            <el-button link type="success" @click="goSummary(row.id)">去总结</el-button>
-            <el-button link type="warning" @click="goQuiz(row.id)">去出题</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-    </div>
+      </template>
+    </el-dialog>
 
     <el-drawer v-model="drawerVisible" title="资料详情" size="52%">
       <template v-if="detailLoading">
@@ -146,12 +182,13 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { computed, reactive, ref } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadRequestOptions } from 'element-plus'
 import { useRouter } from 'vue-router'
 import {
   createTextMaterialApi,
+  deleteMaterialApi,
   getMaterialDetailApi,
   getMaterialPageApi,
   parseMaterialApi,
@@ -162,6 +199,7 @@ const router = useRouter()
 const materials = ref<any[]>([])
 const detail = ref<any>(null)
 const drawerVisible = ref(false)
+const textDialogVisible = ref(false)
 const tableLoading = ref(false)
 const detailLoading = ref(false)
 const creating = ref(false)
@@ -177,12 +215,40 @@ const form = reactive({
   contentText: ''
 })
 
+const filters = reactive({
+  keyword: '',
+  materialType: '',
+  parseStatus: ''
+})
+
+const filteredMaterials = computed(() =>
+  materials.value.filter((item) => {
+    const matchKeyword = !filters.keyword || item.title?.toLowerCase().includes(filters.keyword.toLowerCase())
+    const matchType = !filters.materialType || item.materialType === filters.materialType
+    const matchStatus = !filters.parseStatus || item.parseStatus === filters.parseStatus
+    return matchKeyword && matchType && matchStatus
+  })
+)
+
+const formatDateTime = (value?: string) => {
+  if (!value) {
+    return '未知时间'
+  }
+  return value.replace('T', ' ').slice(0, 19)
+}
+
 const resetForm = () => {
   form.title = ''
   form.materialType = 'TEXT'
   form.difficultyLevel = 3
   form.tags = ''
   form.contentText = ''
+}
+
+const resetFilters = () => {
+  filters.keyword = ''
+  filters.materialType = ''
+  filters.parseStatus = ''
 }
 
 const loadMaterials = async () => {
@@ -213,6 +279,7 @@ const createMaterial = async () => {
     })
     ElMessage.success('资料保存成功')
     resetForm()
+    textDialogVisible.value = false
     await loadMaterials()
   } catch (error: any) {
     ElMessage.error(error.message || '新增资料失败')
@@ -230,6 +297,31 @@ const parseMaterial = async (id: number) => {
     await loadMaterials()
   } catch (error: any) {
     ElMessage.error(error.message || '资料解析失败')
+  } finally {
+    actionLoadingId.value = null
+    actionType.value = ''
+  }
+}
+
+const removeMaterial = async (id: number) => {
+  try {
+    await ElMessageBox.confirm('删除后该资料及其解析分段将不可恢复，确定继续吗？', '删除确认', {
+      type: 'warning',
+      confirmButtonText: '确认删除',
+      cancelButtonText: '取消'
+    })
+  } catch {
+    return
+  }
+
+  actionLoadingId.value = id
+  actionType.value = 'delete'
+  try {
+    await deleteMaterialApi(id)
+    ElMessage.success('资料删除成功')
+    await loadMaterials()
+  } catch (error: any) {
+    ElMessage.error(error.message || '删除资料失败')
   } finally {
     actionLoadingId.value = null
     actionType.value = ''

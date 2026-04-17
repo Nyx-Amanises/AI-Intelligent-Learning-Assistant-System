@@ -15,3 +15,5 @@ export const getPracticePageApi = (params: Record<string, unknown>) =>
   http.get('/practice/page', { params })
 
 export const getPracticeDetailApi = (sessionId: number) => http.get(`/practice/${sessionId}`)
+
+export const deletePracticeApi = (sessionId: number) => http.delete(`/practice/${sessionId}`)

@@ -25,6 +25,10 @@ export interface AiConfigPayload {
 export const generateSummaryApi = (id: number, data: SummaryPayload) =>
   http.post(`/ai/material/${id}/summary`, data)
 
+export const getLatestSummaryApi = (id: number) => http.get(`/ai/material/${id}/latest-summary`)
+
+export const getSummaryHistoryApi = (id: number) => http.get(`/ai/material/${id}/summary-history`)
+
 export const generateQuestionSetApi = (id: number, data: QuestionGeneratePayload) =>
   http.post(`/ai/material/${id}/question-set`, data)
 

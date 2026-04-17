@@ -11,4 +11,6 @@ public interface QuestionSetService extends IService<QuestionSet> {
     PageVO<QuestionSetPageVO> pageQuestionSets(Long userId, Long current, Long size);
 
     QuestionSetDetailVO getQuestionSetDetail(Long userId, Long questionSetId);
+
+    void deleteQuestionSet(Long userId, Long questionSetId);
 }

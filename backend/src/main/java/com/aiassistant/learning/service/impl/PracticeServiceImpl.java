@@ -23,8 +23,10 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
@@ -33,6 +35,10 @@ import org.springframework.util.StringUtils;
 
 @Service
 public class PracticeServiceImpl implements PracticeService {
+
+    private static final String REVIEW_MODE_RULE = "RULE";
+
+    private static final String REVIEW_MODE_AI = "AI";
 
     private final PracticeSessionMapper practiceSessionMapper;
     private final PracticeAnswerMapper practiceAnswerMapper;
@@ -100,20 +106,20 @@ public class PracticeServiceImpl implements PracticeService {
         for (QuestionItem question : questions) {
             PracticeAnswerRequest answerRequest = answerMap.get(question.getId());
             String userAnswer = answerRequest == null ? null : answerRequest.getUserAnswer();
-            boolean correct = isCorrect(question, userAnswer);
-            if (correct) {
+            AnswerReview review = evaluateAnswer(question, userAnswer);
+            if (review.correct()) {
                 correctCount++;
-                obtainedScore += question.getScore();
             }
+            obtainedScore += review.score();
 
             PracticeAnswer answer = new PracticeAnswer();
             answer.setSessionId(session.getId());
             answer.setQuestionId(question.getId());
             answer.setUserAnswer(userAnswer);
-            answer.setIsCorrect(correct ? 1 : 0);
-            answer.setObtainedScore(correct ? question.getScore() : 0);
+            answer.setIsCorrect(review.correct() ? 1 : 0);
+            answer.setObtainedScore(review.score());
             answer.setAnswerTime(LocalDateTime.now());
-            answer.setMarkedWrong(correct ? 0 : 1);
+            answer.setMarkedWrong(review.correct() ? 0 : 1);
             practiceAnswerMapper.insert(answer);
         }
 
@@ -143,6 +149,7 @@ public class PracticeServiceImpl implements PracticeService {
         List<PracticeSessionPageVO> records = page.getRecords().stream()
                 .map(item -> PracticeSessionPageVO.builder()
                         .id(item.getId())
+                        .questionSetId(item.getQuestionSetId())
                         .sessionName(item.getSessionName())
                         .totalQuestions(item.getTotalQuestions())
                         .correctCount(item.getCorrectCount())
@@ -179,6 +186,22 @@ public class PracticeServiceImpl implements PracticeService {
         return buildPracticeDetail(session, questions, answers);
     }
 
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void deletePracticeSession(Long userId, Long sessionId) {
+        PracticeSession session = practiceSessionMapper.selectOne(new LambdaQueryWrapper<PracticeSession>()
+                .eq(PracticeSession::getId, sessionId)
+                .eq(PracticeSession::getUserId, userId)
+                .last("limit 1"));
+        if (session == null) {
+            throw new BusinessException(404, "练习记录不存在");
+        }
+
+        practiceAnswerMapper.delete(new LambdaQueryWrapper<PracticeAnswer>()
+                .eq(PracticeAnswer::getSessionId, sessionId));
+        practiceSessionMapper.deleteById(sessionId);
+    }
+
     private QuestionSet getOwnedQuestionSet(Long userId, Long questionSetId) {
         QuestionSet questionSet = questionSetMapper.selectOne(new LambdaQueryWrapper<QuestionSet>()
                 .eq(QuestionSet::getId, questionSetId)
@@ -196,11 +219,174 @@ public class PracticeServiceImpl implements PracticeService {
                 .orderByAsc(QuestionItem::getSortNo));
     }
 
+    private AnswerReview evaluateAnswer(QuestionItem question, String userAnswer) {
+        if ("SHORT".equalsIgnoreCase(question.getQuestionType())) {
+            return evaluateShortAnswer(question, userAnswer);
+        }
+        boolean correct = isCorrect(question, userAnswer);
+        return new AnswerReview(
+                correct,
+                correct ? safeScore(question.getScore()) : 0,
+                REVIEW_MODE_RULE,
+                correct ? "规则判定：答案匹配" : "规则判定：答案不匹配",
+                correct ? "系统根据标准答案完成自动判定。" : "系统按标准答案精确匹配，当前答案未命中参考答案。"
+        );
+    }
+
     private boolean isCorrect(QuestionItem question, String userAnswer) {
         if (!StringUtils.hasText(userAnswer) || !StringUtils.hasText(question.getCorrectAnswer())) {
             return false;
         }
         return question.getCorrectAnswer().trim().equalsIgnoreCase(userAnswer.trim());
+    }
+
+    private AnswerReview evaluateShortAnswer(QuestionItem question, String userAnswer) {
+        int fullScore = safeScore(question.getScore());
+        if (!StringUtils.hasText(userAnswer)) {
+            return new AnswerReview(
+                    false,
+                    0,
+                    REVIEW_MODE_AI,
+                    "AI 判分：0/" + fullScore,
+                    "未作答，AI 无法识别关键知识点。"
+            );
+        }
+
+        String referenceAnswer = question.getCorrectAnswer();
+        if (!StringUtils.hasText(referenceAnswer)) {
+            return new AnswerReview(
+                    false,
+                    0,
+                    REVIEW_MODE_AI,
+                    "AI 判分：0/" + fullScore,
+                    "题目暂未配置参考答案，当前仅展示学生作答。"
+            );
+        }
+
+        String normalizedUser = normalizeText(userAnswer);
+        String normalizedReference = normalizeText(referenceAnswer);
+        if (!StringUtils.hasText(normalizedUser) || !StringUtils.hasText(normalizedReference)) {
+            return new AnswerReview(
+                    false,
+                    0,
+                    REVIEW_MODE_AI,
+                    "AI 判分：0/" + fullScore,
+                    "答案文本过短或缺少有效内容，无法完成可信判分。"
+            );
+        }
+
+        if (normalizedUser.equals(normalizedReference)) {
+            return new AnswerReview(
+                    true,
+                    fullScore,
+                    REVIEW_MODE_AI,
+                    "AI 判分：" + fullScore + "/" + fullScore,
+                    "答案与参考答案高度一致，核心知识点覆盖完整。"
+            );
+        }
+
+        double coverage = calculateCoverage(normalizedReference, normalizedUser);
+        double lengthRatio = calculateLengthRatio(normalizedReference, normalizedUser);
+        double keywordCoverage = calculateKeywordCoverage(referenceAnswer, userAnswer);
+        double similarity = Math.min(1.0, coverage * 0.45 + lengthRatio * 0.2 + keywordCoverage * 0.35);
+
+        if (normalizedUser.contains(normalizedReference) || normalizedReference.contains(normalizedUser)) {
+            similarity = Math.max(similarity, 0.82);
+        }
+
+        int awardedScore;
+        String feedback;
+        if (similarity >= 0.85) {
+            awardedScore = fullScore;
+            feedback = "答案覆盖了大部分核心要点，表述已接近人工参考答案。";
+        } else if (similarity >= 0.65) {
+            awardedScore = Math.max(1, Math.round(fullScore * 0.7f));
+            feedback = "答案命中了主要知识点，但仍有个别关键表述不完整。";
+        } else if (similarity >= 0.4) {
+            awardedScore = Math.max(1, Math.round(fullScore * 0.4f));
+            feedback = "答案只覆盖了部分知识点，建议对照参考答案补全关键概念。";
+        } else {
+            awardedScore = 0;
+            feedback = "答案与参考答案重合较少，核心知识点覆盖不足。";
+        }
+
+        boolean correct = awardedScore >= Math.max(1, Math.round(fullScore * 0.6f));
+        return new AnswerReview(
+                correct,
+                awardedScore,
+                REVIEW_MODE_AI,
+                "AI 判分：" + awardedScore + "/" + fullScore,
+                feedback
+        );
+    }
+
+    private String normalizeText(String text) {
+        if (!StringUtils.hasText(text)) {
+            return "";
+        }
+        return text.toLowerCase()
+                .replaceAll("[\\p{Punct}\\p{IsPunctuation}\\s]+", "")
+                .replace("，", "")
+                .replace("。", "")
+                .replace("；", "")
+                .replace("：", "");
+    }
+
+    private double calculateCoverage(String reference, String userAnswer) {
+        if (!StringUtils.hasText(reference) || !StringUtils.hasText(userAnswer)) {
+            return 0;
+        }
+        int matched = 0;
+        for (int i = 0; i < reference.length(); i++) {
+            if (userAnswer.indexOf(reference.charAt(i)) >= 0) {
+                matched++;
+            }
+        }
+        return Math.min(1.0, matched * 1.0 / Math.max(1, reference.length()));
+    }
+
+    private double calculateLengthRatio(String reference, String userAnswer) {
+        if (!StringUtils.hasText(reference) || !StringUtils.hasText(userAnswer)) {
+            return 0;
+        }
+        int longer = Math.max(reference.length(), userAnswer.length());
+        int shorter = Math.min(reference.length(), userAnswer.length());
+        return longer == 0 ? 0 : shorter * 1.0 / longer;
+    }
+
+    private double calculateKeywordCoverage(String referenceAnswer, String userAnswer) {
+        Set<String> keywords = extractKeywords(referenceAnswer);
+        if (keywords.isEmpty() || !StringUtils.hasText(userAnswer)) {
+            return 0;
+        }
+        int matched = 0;
+        for (String keyword : keywords) {
+            if (userAnswer.contains(keyword)) {
+                matched++;
+            }
+        }
+        return matched * 1.0 / keywords.size();
+    }
+
+    private Set<String> extractKeywords(String text) {
+        if (!StringUtils.hasText(text)) {
+            return Set.of();
+        }
+        Set<String> keywords = new LinkedHashSet<>();
+        for (String token : text.split("[，。；：、,.;:\\s()（）]+")) {
+            String item = token.trim();
+            if (item.length() >= 2) {
+                keywords.add(item);
+            }
+        }
+        if (keywords.isEmpty()) {
+            keywords.add(text.trim());
+        }
+        return keywords;
+    }
+
+    private int safeScore(Integer score) {
+        return score == null || score <= 0 ? 1 : score;
     }
 
     private BigDecimal calculateAccuracy(int correctCount, int total) {
@@ -221,6 +407,8 @@ public class PracticeServiceImpl implements PracticeService {
         List<PracticeAnswerVO> answerVOS = questions.stream()
                 .map(question -> {
                     PracticeAnswer answer = answerMap.get(question.getId());
+                    String userAnswer = answer == null ? null : answer.getUserAnswer();
+                    AnswerReview review = evaluateAnswer(question, userAnswer);
                     return PracticeAnswerVO.builder()
                             .questionId(question.getId())
                             .questionType(question.getQuestionType())
@@ -230,9 +418,14 @@ public class PracticeServiceImpl implements PracticeService {
                             .optionC(question.getOptionC())
                             .optionD(question.getOptionD())
                             .correctAnswer(question.getCorrectAnswer())
-                            .userAnswer(answer == null ? null : answer.getUserAnswer())
+                            .referenceAnswer(question.getCorrectAnswer())
+                            .userAnswer(userAnswer)
                             .isCorrect(answer == null ? null : answer.getIsCorrect())
                             .obtainedScore(answer == null ? null : answer.getObtainedScore())
+                            .aiScore(review.score())
+                            .reviewMode(review.mode())
+                            .reviewLabel(review.label())
+                            .reviewComment(review.comment())
                             .answerAnalysis(question.getAnswerAnalysis())
                             .build();
                 })
@@ -252,5 +445,14 @@ public class PracticeServiceImpl implements PracticeService {
                 .submitTime(session.getSubmitTime())
                 .answers(answerVOS)
                 .build();
+    }
+
+    private record AnswerReview(
+            boolean correct,
+            int score,
+            String mode,
+            String label,
+            String comment
+    ) {
     }
 }

@@ -23,11 +23,21 @@ public class PracticeAnswerVO {
 
     private String correctAnswer;
 
+    private String referenceAnswer;
+
     private String userAnswer;
 
     private Integer isCorrect;
 
     private Integer obtainedScore;
+
+    private Integer aiScore;
+
+    private String reviewMode;
+
+    private String reviewLabel;
+
+    private String reviewComment;
 
     private String answerAnalysis;
 }

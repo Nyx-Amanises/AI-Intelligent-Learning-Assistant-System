@@ -111,6 +111,7 @@ CREATE TABLE ai_generation_record (
   material_id BIGINT DEFAULT NULL COMMENT '资料ID',
   note_id BIGINT DEFAULT NULL COMMENT '笔记ID',
   task_type VARCHAR(30) NOT NULL COMMENT '任务类型: SUMMARY/QUIZ/REVIEW_PLAN/QA',
+  summary_type VARCHAR(32) DEFAULT NULL COMMENT '总结类型: STANDARD/EXAM/OUTLINE',
   model_name VARCHAR(100) NOT NULL COMMENT '模型名称',
   prompt_text MEDIUMTEXT DEFAULT NULL COMMENT '提示词',
   input_text MEDIUMTEXT DEFAULT NULL COMMENT '输入内容',
@@ -127,6 +128,7 @@ CREATE TABLE ai_generation_record (
   KEY idx_ai_generation_user (user_id),
   KEY idx_ai_generation_material (material_id),
   KEY idx_ai_generation_task_type (task_type),
+  KEY idx_ai_generation_material_task_created (material_id, task_type, created_at),
   KEY idx_ai_generation_created_at (created_at)
 ) ENGINE = InnoDB COMMENT = 'AI生成记录表';
 
@@ -159,7 +161,7 @@ CREATE TABLE question_item (
   option_b VARCHAR(500) DEFAULT NULL COMMENT '选项B',
   option_c VARCHAR(500) DEFAULT NULL COMMENT '选项C',
   option_d VARCHAR(500) DEFAULT NULL COMMENT '选项D',
-  correct_answer VARCHAR(100) NOT NULL COMMENT '正确答案',
+  correct_answer TEXT NOT NULL COMMENT '正确答案',
   answer_analysis TEXT DEFAULT NULL COMMENT '题目解析',
   knowledge_point VARCHAR(200) DEFAULT NULL COMMENT '知识点',
   difficulty_level TINYINT DEFAULT 3 COMMENT '难度: 1-5',

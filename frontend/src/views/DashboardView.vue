@@ -4,8 +4,13 @@
       <div>
         <h1 class="page-title">学习概览</h1>
         <p class="page-desc">
-          用真实数据展示资料沉淀、AI 生成结果和练习表现，让整个项目更像一个完整产品。
+          建议流程：先录入资料并完成解析，再去 AI 总结和 AI 出题，最后回到练习记录查看结果。
         </p>
+        <div class="inline-actions">
+          <el-button link type="primary" @click="router.push('/materials')">去录入资料</el-button>
+          <el-button link type="primary" @click="router.push('/summary')">去生成总结</el-button>
+          <el-button link type="primary" @click="router.push('/quiz')">去智能出题</el-button>
+        </div>
       </div>
       <div class="toolbar" style="margin-bottom: 0">
         <el-button :loading="loading" @click="loadDashboard">刷新数据</el-button>
@@ -34,7 +39,8 @@
             <div>
               <div class="list-row__title">{{ item.title }}</div>
               <div class="list-row__meta">
-                {{ formatTag(item.materialType) }} · 解析{{ formatTag(item.parseStatus) }} · 总结{{ formatTag(item.summaryStatus) }}
+                {{ formatTag(item.materialType) }} · 解析 {{ formatTag(item.parseStatus) }} · 总结
+                {{ formatTag(item.summaryStatus) }}
               </div>
             </div>
             <div class="list-row__aside">{{ item.totalCharacters || 0 }} 字</div>
@@ -75,26 +81,6 @@
         </div>
         <div v-else-if="!loading" class="state-block empty" style="margin-top: 18px">
           还没有练习记录，生成题集后就可以开始刷题。
-        </div>
-      </div>
-    </div>
-
-    <div class="page-card" style="margin-top: 20px">
-      <div class="panel-title-row">
-        <h3>推荐操作</h3>
-      </div>
-      <div class="action-grid">
-        <div class="action-card" @click="router.push('/materials')">
-          <div class="action-card__title">1. 导入课程资料</div>
-          <div class="action-card__desc">支持文本录入与文件上传，先把知识内容沉淀下来。</div>
-        </div>
-        <div class="action-card" @click="router.push('/summary')">
-          <div class="action-card__title">2. 生成 AI 总结</div>
-          <div class="action-card__desc">把长文本转成考试重点、结构提纲和复习笔记。</div>
-        </div>
-        <div class="action-card" @click="router.push('/quiz')">
-          <div class="action-card__title">3. 进行智能练习</div>
-          <div class="action-card__desc">自动出题并记录成绩，让简历里的闭环更完整。</div>
         </div>
       </div>
     </div>
@@ -139,7 +125,9 @@ const statCards = computed(() => {
     {
       label: '最新得分',
       value: latestPractice ? `${latestPractice.obtainedScore || 0}` : '--',
-      footnote: latestPractice ? `${latestPractice.correctCount || 0}/${latestPractice.totalQuestions || 0} 题` : '暂无练习记录'
+      footnote: latestPractice
+        ? `${latestPractice.correctCount || 0}/${latestPractice.totalQuestions || 0} 题`
+        : '暂无练习记录'
     }
   ]
 })

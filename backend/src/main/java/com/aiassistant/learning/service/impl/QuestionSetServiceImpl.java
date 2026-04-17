@@ -3,6 +3,10 @@ package com.aiassistant.learning.service.impl;
 import com.aiassistant.learning.common.exception.BusinessException;
 import com.aiassistant.learning.entity.QuestionItem;
 import com.aiassistant.learning.entity.QuestionSet;
+import com.aiassistant.learning.entity.PracticeAnswer;
+import com.aiassistant.learning.entity.PracticeSession;
+import com.aiassistant.learning.mapper.PracticeAnswerMapper;
+import com.aiassistant.learning.mapper.PracticeSessionMapper;
 import com.aiassistant.learning.mapper.QuestionItemMapper;
 import com.aiassistant.learning.service.QuestionSetService;
 import com.aiassistant.learning.vo.page.PageVO;
@@ -14,15 +18,24 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import java.util.List;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class QuestionSetServiceImpl extends ServiceImpl<com.aiassistant.learning.mapper.QuestionSetMapper, QuestionSet>
         implements QuestionSetService {
 
     private final QuestionItemMapper questionItemMapper;
+    private final PracticeSessionMapper practiceSessionMapper;
+    private final PracticeAnswerMapper practiceAnswerMapper;
 
-    public QuestionSetServiceImpl(QuestionItemMapper questionItemMapper) {
+    public QuestionSetServiceImpl(
+            QuestionItemMapper questionItemMapper,
+            PracticeSessionMapper practiceSessionMapper,
+            PracticeAnswerMapper practiceAnswerMapper
+    ) {
         this.questionItemMapper = questionItemMapper;
+        this.practiceSessionMapper = practiceSessionMapper;
+        this.practiceAnswerMapper = practiceAnswerMapper;
     }
 
     @Override
@@ -97,5 +110,35 @@ public class QuestionSetServiceImpl extends ServiceImpl<com.aiassistant.learning
                 .createdAt(questionSet.getCreatedAt())
                 .questions(questions)
                 .build();
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteQuestionSet(Long userId, Long questionSetId) {
+        QuestionSet questionSet = this.getOne(new LambdaQueryWrapper<QuestionSet>()
+                .eq(QuestionSet::getId, questionSetId)
+                .eq(QuestionSet::getUserId, userId)
+                .last("limit 1"));
+        if (questionSet == null) {
+            throw new BusinessException(404, "题集不存在");
+        }
+
+        List<Long> sessionIds = practiceSessionMapper.selectList(new LambdaQueryWrapper<PracticeSession>()
+                        .eq(PracticeSession::getQuestionSetId, questionSetId)
+                        .select(PracticeSession::getId))
+                .stream()
+                .map(PracticeSession::getId)
+                .toList();
+
+        if (!sessionIds.isEmpty()) {
+            practiceAnswerMapper.delete(new LambdaQueryWrapper<PracticeAnswer>()
+                    .in(PracticeAnswer::getSessionId, sessionIds));
+            practiceSessionMapper.delete(new LambdaQueryWrapper<PracticeSession>()
+                    .in(PracticeSession::getId, sessionIds));
+        }
+
+        questionItemMapper.delete(new LambdaQueryWrapper<QuestionItem>()
+                .eq(QuestionItem::getQuestionSetId, questionSetId));
+        this.removeById(questionSetId);
     }
 }

@@ -213,6 +213,8 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
     @Transactional(rollbackFor = Exception.class)
     public void deleteMaterial(Long userId, Long materialId) {
         StudyMaterial material = getUserOwnedMaterial(userId, materialId);
+        materialSegmentMapper.delete(Wrappers.<MaterialSegment>lambdaQuery()
+                .eq(MaterialSegment::getMaterialId, material.getId()));
         this.removeById(material.getId());
     }
 

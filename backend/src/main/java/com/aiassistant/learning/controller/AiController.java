@@ -9,9 +9,11 @@ import com.aiassistant.learning.service.AiConfigService;
 import com.aiassistant.learning.service.AiQuestionService;
 import com.aiassistant.learning.service.AiSummaryService;
 import com.aiassistant.learning.vo.ai.AiConfigVO;
+import com.aiassistant.learning.vo.ai.SummaryHistoryVO;
 import com.aiassistant.learning.vo.ai.SummaryResultVO;
 import com.aiassistant.learning.vo.question.QuestionSetDetailVO;
 import jakarta.validation.Valid;
+import java.util.List;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -61,6 +63,12 @@ public class AiController {
     public ApiResponse<SummaryResultVO> latestSummary(@PathVariable Long id) {
         Long userId = UserContext.getCurrentUserId();
         return ApiResponse.success(aiSummaryService.getLatestMaterialSummary(userId, id));
+    }
+
+    @GetMapping("/material/{id}/summary-history")
+    public ApiResponse<List<SummaryHistoryVO>> summaryHistory(@PathVariable Long id) {
+        Long userId = UserContext.getCurrentUserId();
+        return ApiResponse.success(aiSummaryService.listMaterialSummaries(userId, id));
     }
 
     @PostMapping("/material/{id}/question-set")

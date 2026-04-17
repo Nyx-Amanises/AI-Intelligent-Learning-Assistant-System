@@ -3,131 +3,137 @@
     <div class="page-header">
       <div>
         <h1 class="page-title">AI 出题</h1>
-        <p class="page-desc">
-          基于已解析的学习资料自动生成题集，并支持立即开始练习，把 AI 能力真正落到学习场景里。
-        </p>
+        <p class="page-desc">和资料管理保持同一套交互，生成题集也放到列表页工具栏里，通过弹窗完成。</p>
       </div>
     </div>
 
-    <div class="page-card" style="margin-bottom: 20px">
-      <div class="panel-title-row">
-        <h3>当前 AI 运行状态</h3>
-        <el-button link type="primary" @click="router.push('/ai-config')">前往配置</el-button>
+    <div class="workspace-panel">
+      <div class="workspace-toolbar">
+        <div class="toolbar" style="margin-bottom: 0">
+          <el-button type="primary" @click="generateDialogVisible = true">生成题集</el-button>
+          <el-button :loading="questionSetLoading" @click="loadQuestionSets">刷新列表</el-button>
+          <el-button link type="primary" @click="router.push('/ai-config')">前往 AI 配置</el-button>
+        </div>
+        <div class="workspace-toolbar__meta">
+          <span class="workspace-chip">{{ aiConfig.mockMode ? 'Mock 模式' : '真实接口模式' }}</span>
+          <span class="workspace-chip workspace-chip--brand">共 {{ filteredQuestionSets.length }} 套题</span>
+        </div>
       </div>
-      <div v-if="configLoading" class="state-block">正在加载 AI 配置...</div>
-      <div v-else class="detail-meta-grid">
+
+      <div class="workspace-body">
+        <div class="page-card workspace-card">
+          <div class="workspace-filter-bar">
+            <el-input
+              v-model="filters.keyword"
+              clearable
+              placeholder="按题集标题搜索"
+              class="workspace-filter-bar__search"
+            />
+            <el-select v-model="filters.status" clearable placeholder="题集状态">
+              <el-option label="ACTIVE" value="ACTIVE" />
+              <el-option label="DISABLED" value="DISABLED" />
+            </el-select>
+            <el-select v-model="filters.difficultyLevel" clearable placeholder="难度等级">
+              <el-option v-for="level in 5" :key="level" :label="`难度 ${level}`" :value="level" />
+            </el-select>
+            <el-button @click="resetFilters">重置条件</el-button>
+          </div>
+
+          <div v-if="questionSetLoading" class="state-block">正在加载题集列表...</div>
+          <div v-else-if="!filteredQuestionSets.length" class="state-block empty">
+            还没有符合条件的题集，先生成一套试试。
+          </div>
+          <div v-else class="workspace-table">
+            <div class="workspace-table__head workspace-table__head--quiz">
+              <span>题集标题</span>
+              <span>题量</span>
+              <span>总分</span>
+              <span>难度</span>
+              <span>状态</span>
+              <span>操作</span>
+            </div>
+
+            <div
+              v-for="item in filteredQuestionSets"
+              :key="item.id"
+              class="workspace-table__row workspace-table__row--quiz"
+            >
+              <div class="workspace-table__title">
+                <strong>{{ item.title }}</strong>
+                <span>#{{ item.id }} · {{ formatDateTime(item.createdAt) }}</span>
+              </div>
+              <span>{{ item.questionCount }}</span>
+              <span>{{ item.totalScore }}</span>
+              <span>{{ item.difficultyLevel }}</span>
+              <span>{{ item.status }}</span>
+              <div class="workspace-action-row">
+                <el-button link @click="viewQuestionSet(item.id)">查看</el-button>
+                <el-button link type="success" @click="startPractice(item.id)">开始练习</el-button>
+                <el-button link type="primary" @click="startPractice(item.id)">再练一次</el-button>
+                <el-button
+                  link
+                  type="danger"
+                  :loading="actionLoadingId === item.id"
+                  @click="removeQuestionSet(item.id)"
+                >
+                  删除
+                </el-button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <el-dialog v-model="generateDialogVisible" title="生成题集" width="720px" destroy-on-close>
+      <div class="detail-meta-grid" style="margin-bottom: 18px">
         <div class="detail-meta-item">
           <span>AI 开关</span>
           <strong>{{ aiConfig.enabled ? '已启用' : '已关闭' }}</strong>
         </div>
         <div class="detail-meta-item">
-          <span>运行模式</span>
-          <strong>{{ aiConfig.mockMode ? 'Mock 模式' : '真实接口模式' }}</strong>
-        </div>
-        <div class="detail-meta-item">
           <span>默认模型</span>
           <strong>{{ aiConfig.defaultModel || '未设置' }}</strong>
         </div>
-        <div class="detail-meta-item">
-          <span>Key 状态</span>
-          <strong>{{ aiConfig.apiKeyConfigured ? aiConfig.apiKeyPreview : '未配置' }}</strong>
-        </div>
       </div>
-    </div>
 
-    <div class="content-grid content-grid--2">
-      <div class="page-card">
-        <div class="panel-title-row">
-          <h3>生成题集</h3>
-          <span class="soft-text">建议从重点章节资料开始</span>
-        </div>
-        <el-form label-position="top">
-          <el-form-item label="选择资料">
-            <el-select
-              v-model="form.materialId"
-              filterable
-              style="width: 100%"
-              placeholder="请选择已解析资料"
-              :loading="materialsLoading"
-            >
-              <el-option
-                v-for="item in materials"
-                :key="item.id"
-                :label="`${item.title} · 难度${item.difficultyLevel || 3}`"
-                :value="item.id"
-              />
-            </el-select>
-          </el-form-item>
+      <el-form label-position="top">
+        <el-form-item label="选择资料">
+          <el-select
+            v-model="form.materialId"
+            filterable
+            style="width: 100%"
+            placeholder="请选择已解析资料"
+            :loading="materialsLoading"
+          >
+            <el-option
+              v-for="item in materials"
+              :key="item.id"
+              :label="`${item.title} · 难度${item.difficultyLevel || 3} · #${item.id}`"
+              :value="item.id"
+            />
+          </el-select>
+        </el-form-item>
+        <div class="workspace-form-grid workspace-form-grid--compact">
           <el-form-item label="模型名称">
             <el-input v-model="form.modelName" placeholder="留空则使用当前默认模型" />
           </el-form-item>
           <el-form-item label="题目数量">
             <el-input-number v-model="form.questionCount" :min="1" :max="20" style="width: 100%" />
           </el-form-item>
-          <el-form-item label="难度等级">
-            <el-slider v-model="form.difficultyLevel" :min="1" :max="5" show-stops />
-          </el-form-item>
+        </div>
+        <el-form-item label="难度等级">
+          <el-slider v-model="form.difficultyLevel" :min="1" :max="5" show-stops />
+        </el-form-item>
+      </el-form>
+
+      <template #footer>
+        <div class="toolbar" style="margin-bottom: 0; justify-content: flex-end">
+          <el-button @click="generateDialogVisible = false">取消</el-button>
           <el-button type="primary" :loading="generating" @click="generateQuestionSet">生成题集</el-button>
-        </el-form>
-      </div>
-
-      <div class="page-card">
-        <div class="panel-title-row">
-          <h3>题集预览</h3>
         </div>
-        <div v-if="generatedSet" class="preview-stack">
-          <div class="detail-meta-grid">
-            <div class="detail-meta-item">
-              <span>题集标题</span>
-              <strong>{{ generatedSet.title }}</strong>
-            </div>
-            <div class="detail-meta-item">
-              <span>题目数量</span>
-              <strong>{{ generatedSet.questionCount }}</strong>
-            </div>
-            <div class="detail-meta-item">
-              <span>总分</span>
-              <strong>{{ generatedSet.totalScore }}</strong>
-            </div>
-            <div class="detail-meta-item">
-              <span>难度</span>
-              <strong>{{ generatedSet.difficultyLevel }}</strong>
-            </div>
-          </div>
-          <div class="list-stack">
-            <div v-for="question in generatedSet.questions" :key="question.id" class="section-card">
-              <div class="section-card__title">{{ question.sortNo }}. {{ question.stemText }}</div>
-              <div class="section-card__meta">{{ question.questionType }} · {{ question.score }} 分</div>
-            </div>
-          </div>
-          <el-button type="success" @click="startPractice(generatedSet.id)">立即练习</el-button>
-        </div>
-        <div v-else class="state-block empty">生成成功后，这里会展示题集概况和题目预览。</div>
-      </div>
-    </div>
-
-    <div class="page-card" style="margin-top: 20px">
-      <div class="panel-title-row">
-        <h3>已生成题集</h3>
-        <el-button :loading="questionSetLoading" @click="loadQuestionSets">刷新</el-button>
-      </div>
-      <div v-if="questionSetLoading" class="state-block">正在加载题集列表...</div>
-      <div v-else-if="!questionSets.length" class="state-block empty">暂时没有题集，先生成一套试题。</div>
-      <div v-else class="list-stack">
-        <div v-for="item in questionSets" :key="item.id" class="list-row list-row--action">
-          <div>
-            <div class="list-row__title">{{ item.title }}</div>
-            <div class="list-row__meta">
-              {{ item.questionCount }} 题 · {{ item.totalScore }} 分 · 难度 {{ item.difficultyLevel }}
-            </div>
-          </div>
-          <div class="toolbar" style="margin-bottom: 0">
-            <el-button link @click="viewQuestionSet(item.id)">查看</el-button>
-            <el-button link type="success" @click="startPractice(item.id)">开始练习</el-button>
-          </div>
-        </div>
-      </div>
-    </div>
+      </template>
+    </el-dialog>
 
     <el-drawer v-model="drawerVisible" title="题集详情" size="52%">
       <div v-if="detailLoading" class="state-block">正在加载题集详情...</div>
@@ -174,19 +180,18 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { computed, onMounted, reactive, ref } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { generateQuestionSetApi, getAiConfigApi } from '@/api/modules/ai'
 import { getMaterialPageApi } from '@/api/modules/material'
 import { startPracticeApi } from '@/api/modules/practice'
-import { getQuestionSetDetailApi, getQuestionSetPageApi } from '@/api/modules/question'
+import { deleteQuestionSetApi, getQuestionSetDetailApi, getQuestionSetPageApi } from '@/api/modules/question'
 
 const route = useRoute()
 const router = useRouter()
 const materials = ref<any[]>([])
 const questionSets = ref<any[]>([])
-const generatedSet = ref<any>(null)
 const questionSetDetail = ref<any>(null)
 const materialsLoading = ref(false)
 const questionSetLoading = ref(false)
@@ -194,6 +199,8 @@ const generating = ref(false)
 const detailLoading = ref(false)
 const drawerVisible = ref(false)
 const configLoading = ref(false)
+const generateDialogVisible = ref(false)
+const actionLoadingId = ref<number | null>(null)
 
 const aiConfig = ref({
   enabled: true,
@@ -209,6 +216,34 @@ const form = reactive({
   questionCount: 5,
   difficultyLevel: 3
 })
+
+const filters = reactive({
+  keyword: '',
+  status: '',
+  difficultyLevel: undefined as number | undefined
+})
+
+const filteredQuestionSets = computed(() =>
+  questionSets.value.filter((item) => {
+    const matchKeyword = !filters.keyword || item.title?.toLowerCase().includes(filters.keyword.toLowerCase())
+    const matchStatus = !filters.status || item.status === filters.status
+    const matchDifficulty = !filters.difficultyLevel || item.difficultyLevel === filters.difficultyLevel
+    return matchKeyword && matchStatus && matchDifficulty
+  })
+)
+
+const formatDateTime = (value?: string) => {
+  if (!value) {
+    return '未知时间'
+  }
+  return value.replace('T', ' ').slice(0, 19)
+}
+
+const resetFilters = () => {
+  filters.keyword = ''
+  filters.status = ''
+  filters.difficultyLevel = undefined
+}
 
 const loadAiConfig = async () => {
   configLoading.value = true
@@ -259,9 +294,10 @@ const generateQuestionSet = async () => {
       questionCount: form.questionCount,
       difficultyLevel: form.difficultyLevel
     })
-    generatedSet.value = res.data.data
+    generateDialogVisible.value = false
     ElMessage.success(aiConfig.value.mockMode ? 'Mock 题集生成成功' : 'AI 出题成功')
     await loadQuestionSets()
+    await viewQuestionSet(res.data.data.id)
   } catch (error: any) {
     ElMessage.error(error.message || '题集生成失败')
   } finally {
@@ -290,6 +326,33 @@ const startPractice = async (questionSetId: number) => {
     router.push({ path: '/practice', query: { sessionId: String(res.data.data.sessionId) } })
   } catch (error: any) {
     ElMessage.error(error.message || '开始练习失败')
+  }
+}
+
+const removeQuestionSet = async (id: number) => {
+  try {
+    await ElMessageBox.confirm('删除题集后，关联的练习记录也会一起删除，确定继续吗？', '删除确认', {
+      type: 'warning',
+      confirmButtonText: '确认删除',
+      cancelButtonText: '取消'
+    })
+  } catch {
+    return
+  }
+
+  actionLoadingId.value = id
+  try {
+    await deleteQuestionSetApi(id)
+    ElMessage.success('题集删除成功')
+    if (questionSetDetail.value?.id === id) {
+      drawerVisible.value = false
+      questionSetDetail.value = null
+    }
+    await loadQuestionSets()
+  } catch (error: any) {
+    ElMessage.error(error.message || '删除题集失败')
+  } finally {
+    actionLoadingId.value = null
   }
 }
 

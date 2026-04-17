@@ -11,6 +11,8 @@ public class PracticeSessionPageVO {
 
     private Long id;
 
+    private Long questionSetId;
+
     private String sessionName;
 
     private Integer totalQuestions;

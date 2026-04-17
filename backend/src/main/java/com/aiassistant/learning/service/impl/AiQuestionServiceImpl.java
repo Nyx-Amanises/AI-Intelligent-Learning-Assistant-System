@@ -190,6 +190,7 @@ public class AiQuestionServiceImpl implements AiQuestionService {
                 JUDGE 必须提供 optionA=正确、optionB=错误，correctAnswer 用 正确 或 错误。
                 SHORT_ANSWER 不要提供 optionC/optionD，可不提供 optionA/optionB。
                 score 必须是正整数。
+                请优先生成 SINGLE 和 JUDGE 题，比例至少占 80%，SHORT_ANSWER 最多 1 题。
                 """;
     }
 
@@ -202,7 +203,7 @@ public class AiQuestionServiceImpl implements AiQuestionService {
         StringBuilder builder = new StringBuilder();
         builder.append("请基于以下学习资料生成 ").append(questionCount).append(" 道题。").append(System.lineSeparator());
         builder.append("难度等级: ").append(difficultyLevel).append(" / 5").append(System.lineSeparator());
-        builder.append("题目尽量覆盖不同知识点，题型可以混合。").append(System.lineSeparator());
+        builder.append("题目尽量覆盖不同知识点，题型可以混合，但优先使用单选题和判断题。").append(System.lineSeparator());
         builder.append("题集标题请与资料标题相关。").append(System.lineSeparator());
         builder.append("资料标题: ").append(material.getTitle()).append(System.lineSeparator());
         builder.append("资料内容: ").append(System.lineSeparator());
@@ -234,7 +235,7 @@ public class AiQuestionServiceImpl implements AiQuestionService {
                         trimToNull(item.optionB),
                         trimToNull(item.optionC),
                         trimToNull(item.optionD),
-                        trimToNull(item.correctAnswer),
+                        normalizeCorrectAnswer(questionType, item.correctAnswer),
                         trimToNull(item.answerAnalysis),
                         trimToNull(item.knowledgePoint),
                         item.score == null || item.score <= 0 ? 5 : item.score
@@ -270,6 +271,43 @@ public class AiQuestionServiceImpl implements AiQuestionService {
 
     private String trimToNull(String value) {
         return StringUtils.hasText(value) ? value.trim() : null;
+    }
+
+    private String normalizeCorrectAnswer(String questionType, String value) {
+        String normalized = trimToNull(value);
+        if (!StringUtils.hasText(normalized)) {
+            return switch (questionType) {
+                case "JUDGE" -> "正确";
+                case "SINGLE" -> "A";
+                default -> "待补充答案";
+            };
+        }
+
+        if ("SINGLE".equals(questionType)) {
+            String upper = normalized.toUpperCase();
+            if (upper.contains("A")) {
+                return "A";
+            }
+            if (upper.contains("B")) {
+                return "B";
+            }
+            if (upper.contains("C")) {
+                return "C";
+            }
+            if (upper.contains("D")) {
+                return "D";
+            }
+            return "A";
+        }
+
+        if ("JUDGE".equals(questionType)) {
+            if (normalized.contains("错")) {
+                return "错误";
+            }
+            return "正确";
+        }
+
+        return normalized.length() > 1000 ? normalized.substring(0, 1000) : normalized;
     }
 
     private List<GeneratedQuestion> buildMockQuestions(

@@ -16,6 +16,8 @@ export const getMaterialDetailApi = (id: number) => http.get(`/material/${id}`)
 
 export const parseMaterialApi = (id: number) => http.post(`/material/${id}/parse`)
 
+export const deleteMaterialApi = (id: number) => http.delete(`/material/${id}`)
+
 export const uploadMaterialApi = (file: File) => {
   const formData = new FormData()
   formData.append('file', file)

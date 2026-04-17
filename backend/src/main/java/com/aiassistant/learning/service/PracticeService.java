@@ -15,4 +15,6 @@ public interface PracticeService {
     PageVO<PracticeSessionPageVO> pagePracticeSessions(Long userId, Long current, Long size);
 
     PracticeDetailVO getPracticeDetail(Long userId, Long sessionId);
+
+    void deletePracticeSession(Long userId, Long sessionId);
 }

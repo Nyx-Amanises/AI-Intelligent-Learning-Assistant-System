@@ -6,11 +6,11 @@ import lombok.Data;
 
 @Data
 @Builder
-public class SummaryResultVO {
-
-    private Long materialId;
+public class SummaryHistoryVO {
 
     private Long recordId;
+
+    private Long materialId;
 
     private Long noteId;
 

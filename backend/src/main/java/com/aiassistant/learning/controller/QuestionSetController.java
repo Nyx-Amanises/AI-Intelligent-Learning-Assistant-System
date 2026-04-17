@@ -6,6 +6,7 @@ import com.aiassistant.learning.service.QuestionSetService;
 import com.aiassistant.learning.vo.page.PageVO;
 import com.aiassistant.learning.vo.question.QuestionSetDetailVO;
 import com.aiassistant.learning.vo.question.QuestionSetPageVO;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -35,5 +36,12 @@ public class QuestionSetController {
     public ApiResponse<QuestionSetDetailVO> detail(@PathVariable Long id) {
         Long userId = UserContext.getCurrentUserId();
         return ApiResponse.success(questionSetService.getQuestionSetDetail(userId, id));
+    }
+
+    @DeleteMapping("/{id}")
+    public ApiResponse<Void> delete(@PathVariable Long id) {
+        Long userId = UserContext.getCurrentUserId();
+        questionSetService.deleteQuestionSet(userId, id);
+        return ApiResponse.success("删除成功", null);
     }
 }

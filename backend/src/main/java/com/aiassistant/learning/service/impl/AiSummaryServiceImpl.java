@@ -13,6 +13,7 @@ import com.aiassistant.learning.mapper.MaterialSegmentMapper;
 import com.aiassistant.learning.mapper.StudyNoteMapper;
 import com.aiassistant.learning.service.AiSummaryService;
 import com.aiassistant.learning.service.StudyMaterialService;
+import com.aiassistant.learning.vo.ai.SummaryHistoryVO;
 import com.aiassistant.learning.vo.ai.SummaryResultVO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import java.time.Duration;
@@ -90,6 +91,7 @@ public class AiSummaryServiceImpl implements AiSummaryService {
         record.setUserId(userId);
         record.setMaterialId(materialId);
         record.setTaskType("SUMMARY");
+        record.setSummaryType(summaryType);
         record.setModelName(modelName);
         record.setPromptText(promptText);
         record.setInputText(inputText);
@@ -131,7 +133,69 @@ public class AiSummaryServiceImpl implements AiSummaryService {
                 .modelName(modelName)
                 .summaryType(summaryType)
                 .summaryText(summaryText)
+                .createdAt(record.getCreatedAt())
                 .build();
+    }
+
+    @Override
+    public SummaryResultVO getLatestMaterialSummary(Long userId, Long materialId) {
+        StudyMaterial material = studyMaterialService.getOne(new LambdaQueryWrapper<StudyMaterial>()
+                .eq(StudyMaterial::getId, materialId)
+                .eq(StudyMaterial::getUserId, userId)
+                .last("limit 1"));
+        if (material == null) {
+            throw new BusinessException(404, "资料不存在");
+        }
+
+        AiGenerationRecord record = aiGenerationRecordMapper.selectOne(new LambdaQueryWrapper<AiGenerationRecord>()
+                .eq(AiGenerationRecord::getUserId, userId)
+                .eq(AiGenerationRecord::getMaterialId, materialId)
+                .eq(AiGenerationRecord::getTaskType, "SUMMARY")
+                .eq(AiGenerationRecord::getStatus, "SUCCESS")
+                .orderByDesc(AiGenerationRecord::getCreatedAt)
+                .last("limit 1"));
+        if (record == null || !StringUtils.hasText(record.getOutputText())) {
+            throw new BusinessException(404, "当前资料还没有 AI 总结记录");
+        }
+
+        return SummaryResultVO.builder()
+                .materialId(materialId)
+                .recordId(record.getId())
+                .noteId(record.getNoteId())
+                .modelName(record.getModelName())
+                .summaryType(record.getSummaryType())
+                .summaryText(record.getOutputText())
+                .createdAt(record.getCreatedAt())
+                .build();
+    }
+
+    @Override
+    public List<SummaryHistoryVO> listMaterialSummaries(Long userId, Long materialId) {
+        StudyMaterial material = studyMaterialService.getOne(new LambdaQueryWrapper<StudyMaterial>()
+                .eq(StudyMaterial::getId, materialId)
+                .eq(StudyMaterial::getUserId, userId)
+                .last("limit 1"));
+        if (material == null) {
+            throw new BusinessException(404, "资料不存在");
+        }
+
+        return aiGenerationRecordMapper.selectList(new LambdaQueryWrapper<AiGenerationRecord>()
+                        .eq(AiGenerationRecord::getUserId, userId)
+                        .eq(AiGenerationRecord::getMaterialId, materialId)
+                        .eq(AiGenerationRecord::getTaskType, "SUMMARY")
+                        .eq(AiGenerationRecord::getStatus, "SUCCESS")
+                        .orderByDesc(AiGenerationRecord::getCreatedAt))
+                .stream()
+                .map(record -> SummaryHistoryVO.builder()
+                        .recordId(record.getId())
+                        .materialId(record.getMaterialId())
+                        .noteId(record.getNoteId())
+                        .modelName(record.getModelName())
+                        .summaryType(record.getSummaryType())
+                        .summaryText(record.getOutputText())
+                        .createdAt(record.getCreatedAt())
+                        .build())
+                .toList();
     }
 
     private String callAiOrMock(String promptText, String inputText, String modelName, Double temperature) {
