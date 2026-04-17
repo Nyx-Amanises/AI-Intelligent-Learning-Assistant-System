@@ -1,0 +1,23 @@
+CREATE TABLE ai_task (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT 'AI task id',
+    user_id BIGINT NOT NULL COMMENT 'owner user id',
+    task_type VARCHAR(32) NOT NULL COMMENT 'task type: SUMMARY/QUESTION_GENERATE/PRACTICE_REVIEW/EMBEDDING',
+    biz_type VARCHAR(32) DEFAULT NULL COMMENT 'business type: MATERIAL/PRACTICE_SESSION/QUESTION_SET',
+    biz_id BIGINT DEFAULT NULL COMMENT 'business id',
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING' COMMENT 'task status: PENDING/RUNNING/SUCCESS/FAILED/CANCELLED',
+    progress_rate INT NOT NULL DEFAULT 0 COMMENT 'progress percentage 0-100',
+    retry_count INT NOT NULL DEFAULT 0 COMMENT 'retry count',
+    priority INT NOT NULL DEFAULT 5 COMMENT 'priority 1-9',
+    model_name VARCHAR(100) DEFAULT NULL COMMENT 'target model name',
+    payload_json LONGTEXT DEFAULT NULL COMMENT 'task payload json',
+    result_json LONGTEXT DEFAULT NULL COMMENT 'task result json',
+    error_message VARCHAR(1000) DEFAULT NULL COMMENT 'failure reason',
+    started_at DATETIME DEFAULT NULL COMMENT 'execution start time',
+    finished_at DATETIME DEFAULT NULL COMMENT 'execution finish time',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'create time',
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'update time',
+    CONSTRAINT fk_ai_task_user FOREIGN KEY (user_id) REFERENCES sys_user (id),
+    KEY idx_ai_task_user_created (user_id, created_at),
+    KEY idx_ai_task_status_created (status, created_at),
+    KEY idx_ai_task_biz (biz_type, biz_id)
+) ENGINE = InnoDB COMMENT = 'AI unified task center';

@@ -3,14 +3,18 @@
     <div class="page-header">
       <div>
         <h1 class="page-title">AI 出题</h1>
-        <p class="page-desc">和资料管理保持同一套交互，生成题集也放到列表页工具栏里，通过弹窗完成。</p>
+        <p class="page-desc">
+          题集生成改为统一走任务中心，生成完成后自动刷新列表并打开详情。
+        </p>
       </div>
     </div>
 
     <div class="workspace-panel">
       <div class="workspace-toolbar">
         <div class="toolbar" style="margin-bottom: 0">
-          <el-button type="primary" @click="generateDialogVisible = true">生成题集</el-button>
+          <el-button type="primary" :loading="generating" @click="generateDialogVisible = true">
+            生成题集
+          </el-button>
           <el-button :loading="questionSetLoading" @click="loadQuestionSets">刷新列表</el-button>
           <el-button link type="primary" @click="router.push('/ai-config')">前往 AI 配置</el-button>
         </div>
@@ -21,6 +25,15 @@
       </div>
 
       <div class="workspace-body">
+        <el-alert
+          v-if="taskStatusText"
+          :title="taskStatusText"
+          type="info"
+          :closable="false"
+          show-icon
+          style="margin-bottom: 16px"
+        />
+
         <div class="page-card workspace-card">
           <div class="workspace-filter-bar">
             <el-input
@@ -84,7 +97,9 @@
           </div>
 
           <div class="workspace-pagination">
-            <div class="workspace-pagination__meta">第 {{ page.current }} / {{ Math.max(1, Math.ceil(total / page.size)) }} 页</div>
+            <div class="workspace-pagination__meta">
+              第 {{ page.current }} / {{ Math.max(1, Math.ceil(total / page.size)) }} 页
+            </div>
             <el-pagination
               v-model:current-page="page.current"
               v-model:page-size="page.size"
@@ -144,7 +159,9 @@
       <template #footer>
         <div class="toolbar" style="margin-bottom: 0; justify-content: flex-end">
           <el-button @click="generateDialogVisible = false">取消</el-button>
-          <el-button type="primary" :loading="generating" @click="generateQuestionSet">生成题集</el-button>
+          <el-button type="primary" :loading="generating" @click="generateQuestionSet">
+            生成题集
+          </el-button>
         </div>
       </template>
     </el-dialog>
@@ -174,7 +191,8 @@
           <div v-for="question in questionSetDetail.questions" :key="question.id" class="section-card">
             <div class="section-card__title">{{ question.sortNo }}. {{ question.stemText }}</div>
             <div class="section-card__meta">
-              {{ question.questionType }} · {{ question.knowledgePoint || '未标注知识点' }} · {{ question.score }} 分
+              {{ question.questionType }} · {{ question.knowledgePoint || '未标注知识点' }} ·
+              {{ question.score }} 分
             </div>
             <div v-if="question.optionA" class="option-list">
               <div>A. {{ question.optionA }}</div>
@@ -194,13 +212,14 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
-import { generateQuestionSetApi, getAiConfigApi } from '@/api/modules/ai'
+import { getAiConfigApi, submitQuestionGenerateTaskApi, type AiTaskDetail } from '@/api/modules/ai'
 import { getMaterialPageApi } from '@/api/modules/material'
 import { startPracticeApi } from '@/api/modules/practice'
 import { deleteQuestionSetApi, getQuestionSetDetailApi, getQuestionSetPageApi } from '@/api/modules/question'
+import { isAiTaskSuccess, isAiTaskTerminal, parseAiTaskResult, waitForAiTask } from '@/utils/aiTask'
 
 const route = useRoute()
 const router = useRouter()
@@ -216,6 +235,7 @@ const drawerVisible = ref(false)
 const configLoading = ref(false)
 const generateDialogVisible = ref(false)
 const actionLoadingId = ref<number | null>(null)
+const currentTask = ref<AiTaskDetail | null>(null)
 
 const aiConfig = ref({
   enabled: true,
@@ -240,6 +260,20 @@ const filters = reactive({
 const page = reactive({
   current: 1,
   size: 10
+})
+
+const taskStatusText = computed(() => {
+  if (!currentTask.value) {
+    return ''
+  }
+  const materialLabel = materials.value.find((item) => item.id === currentTask.value?.bizId)?.title
+  if (generating.value) {
+    return `任务 #${currentTask.value.id} 正在生成题集${materialLabel ? `：${materialLabel}` : ''}`
+  }
+  if (!isAiTaskTerminal(currentTask.value.status)) {
+    return `任务 #${currentTask.value.id} 仍在处理中，可稍后刷新列表查看结果`
+  }
+  return ''
 })
 
 const formatDateTime = (value?: string) => {
@@ -313,18 +347,37 @@ const generateQuestionSet = async () => {
 
   generating.value = true
   try {
-    const res = await generateQuestionSetApi(form.materialId, {
+    const submitRes = await submitQuestionGenerateTaskApi(form.materialId, {
       modelName: form.modelName.trim() || undefined,
       questionCount: form.questionCount,
       difficultyLevel: form.difficultyLevel
     })
-    page.current = 1
+    const submittedTask = submitRes.data.data as AiTaskDetail
+    currentTask.value = submittedTask
+    const taskId = submittedTask.id
     generateDialogVisible.value = false
-    ElMessage.success(aiConfig.value.mockMode ? 'Mock 题集生成成功' : 'AI 出题成功')
+    ElMessage.success('AI 出题任务已提交')
+
+    const finishedTask = await waitForAiTask(taskId)
+    currentTask.value = finishedTask
+    if (!isAiTaskTerminal(finishedTask.status)) {
+      ElMessage.info('题集任务仍在处理中，可稍后刷新列表查看结果')
+      return
+    }
+    if (!isAiTaskSuccess(finishedTask.status)) {
+      throw new Error(finishedTask.errorMessage || 'AI 出题任务执行失败')
+    }
+
+    page.current = 1
     await loadQuestionSets()
-    await viewQuestionSet(res.data.data.id)
+    const taskResult = parseAiTaskResult<any>(finishedTask)
+    if (taskResult) {
+      questionSetDetail.value = taskResult
+      drawerVisible.value = true
+    }
+    ElMessage.success(aiConfig.value.mockMode ? 'Mock 题集生成完成' : 'AI 出题完成')
   } catch (error: any) {
-    ElMessage.error(error.message || '题集生成失败')
+    ElMessage.error(error.message || '题集任务失败')
   } finally {
     generating.value = false
   }

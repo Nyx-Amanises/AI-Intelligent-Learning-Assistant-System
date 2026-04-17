@@ -906,6 +906,10 @@ a {
   align-items: start;
 }
 
+.practice-paper-result--short .practice-paper-result__top {
+  grid-template-columns: 1fr;
+}
+
 .practice-paper-result__answer-row {
   color: #0f172a;
   line-height: 1.8;
@@ -927,6 +931,40 @@ a {
 .practice-paper-result__score {
   text-align: right;
   color: #0f172a;
+}
+
+.practice-paper-result--short .practice-paper-result__score {
+  margin-top: 8px;
+  padding-top: 14px;
+  border-top: 1px solid #edf2f7;
+  text-align: left;
+}
+
+.practice-paper-result__score--pending {
+  position: relative;
+  color: #2563eb;
+}
+
+.practice-paper-result__score--pending span,
+.practice-paper-result__score--pending strong {
+  visibility: hidden;
+}
+
+.practice-paper-result__score--pending::before {
+  content: "...";
+  display: block;
+  color: #2563eb;
+  font-size: 36px;
+  line-height: 1;
+}
+
+.practice-paper-result__score--pending::after {
+  content: "AI 评分中";
+  display: block;
+  margin-top: 8px;
+  color: #2563eb;
+  font-size: 16px;
+  font-weight: 700;
 }
 
 .practice-paper-result__score span {

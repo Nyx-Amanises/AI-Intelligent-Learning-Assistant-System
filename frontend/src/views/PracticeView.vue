@@ -130,7 +130,7 @@
 
               <el-alert
                 v-if="hasPendingAiReview"
-                title="客观题已完成判分，简答题正在由 AI 评分"
+                :title="pendingReviewText"
                 type="info"
                 :closable="false"
                 show-icon
@@ -189,7 +189,11 @@
                     />
                   </template>
 
-                  <div v-if="practiceDetail.sessionStatus === 'SUBMITTED'" class="practice-paper-result">
+                  <div
+                    v-if="practiceDetail.sessionStatus === 'SUBMITTED'"
+                    class="practice-paper-result"
+                    :class="{ 'practice-paper-result--short': isShortQuestion(answer) }"
+                  >
                     <div class="practice-paper-result__top">
                       <div class="practice-paper-result__answer-row">
                         <strong>我的答案:</strong>
@@ -214,7 +218,10 @@
                         </div>
                       </template>
 
-                      <div class="practice-paper-result__score">
+                      <div
+                        class="practice-paper-result__score"
+                        :class="{ 'practice-paper-result__score--pending': isPendingReview(answer) }"
+                      >
                         <span>{{ answer.isCorrect ? '✓' : '×' }}</span>
                         <strong>{{ answer.obtainedScore || answer.aiScore || 0 }} 分</strong>
                       </div>
@@ -305,14 +312,15 @@
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
+import { submitPracticeReviewTaskApi, type AiTaskDetail } from '@/api/modules/ai'
 import {
   deletePracticeApi,
   getPracticeDetailApi,
   getPracticePageApi,
   startPracticeApi,
-  submitPracticeApi,
-  waitPracticeReviewApi
+  submitPracticeApi
 } from '@/api/modules/practice'
+import { isAiTaskSuccess, isAiTaskTerminal, waitForAiTask } from '@/utils/aiTask'
 
 const route = useRoute()
 const router = useRouter()
@@ -326,8 +334,9 @@ const submitting = ref(false)
 const activeTab = ref<'current' | 'history'>('current')
 const actionLoadingId = ref<number | null>(null)
 const activeQuestionId = ref<number | null>(null)
-const aiReviewCompletedNoticeShown = ref(false)
-let aiReviewWaitAborted = false
+const currentReviewTask = ref<AiTaskDetail | null>(null)
+const reviewTaskWaiting = ref(false)
+let reviewTaskWaitAborted = false
 const page = reactive({
   current: 1,
   size: 10
@@ -350,6 +359,16 @@ const hasPendingAiReview = computed(() =>
   )
 )
 
+const pendingReviewText = computed(() => {
+  if (!hasPendingAiReview.value) {
+    return ''
+  }
+  if (reviewTaskWaiting.value && currentReviewTask.value?.id) {
+    return `客观题已完成判分，简答题正在由 AI 评分（任务 #${currentReviewTask.value.id}）`
+  }
+  return '客观题已完成判分，简答题等待任务中心处理'
+})
+
 const groupedSections = computed(() => {
   const answers = (practiceDetail.value?.answers || []).map((item: any, index: number) => ({
     ...item,
@@ -369,7 +388,7 @@ const groupedSections = computed(() => {
     .sort((a, b) => (questionTypeOrder[a[0]] || 99) - (questionTypeOrder[b[0]] || 99))
     .map(([type, items]) => ({
       type,
-      label: getQuestionTypeLabel(type),
+      label: toChineseTypeTitle(type),
       sidebarTitle: `${toChineseTypeTitle(type)}（${items.length}题）`,
       items
     }))
@@ -394,7 +413,6 @@ const toChineseTypeTitle = (type?: string) => {
     case 'SINGLE':
       return '单选题'
     case 'SHORT':
-    case 'SHORT_ANSWER':
     case 'SHORT_ANSWER':
       return '简答题'
     default:
@@ -421,6 +439,8 @@ const isChoiceQuestion = (answer: any) => ['SINGLE', 'JUDGE', 'MULTI'].includes(
 
 const isShortQuestion = (answer: any) =>
   ['SHORT', 'SHORT_ANSWER'].includes(String(answer.questionType || '').toUpperCase())
+
+const isPendingReview = (answer: any) => String(answer.reviewMode || '').toUpperCase() === 'AI_PENDING'
 
 const isOptionItem = (item: any): item is { value: string; label: string } => Boolean(item)
 
@@ -458,37 +478,51 @@ const formatDateTime = (value?: string) => {
   return value.replace('T', ' ').slice(0, 19)
 }
 
-const stopAiReviewWaiting = () => {
-  aiReviewWaitAborted = true
+const resetReviewTaskWaiting = () => {
+  reviewTaskWaitAborted = true
+  reviewTaskWaiting.value = false
 }
 
-const waitForAiReviewCompletion = async (sessionId: number) => {
-  aiReviewWaitAborted = false
-  try {
-    const res = await waitPracticeReviewApi(sessionId, 60000)
-    if (aiReviewWaitAborted) {
-      return
-    }
-    const status = res.data.data
-    if (status?.completed) {
-      await loadPracticeDetail(sessionId, true)
-      await loadHistory()
-      if (!aiReviewCompletedNoticeShown.value) {
-        ElMessage.success('简答题 AI 评分已完成')
-        aiReviewCompletedNoticeShown.value = true
-      }
-    }
-  } catch {
-    // keep current page unchanged on timeout or transient errors
-  }
-}
-
-const scheduleAiReviewPolling = async () => {
-  stopAiReviewWaiting()
-  if (!practiceDetail.value?.sessionId || !hasPendingAiReview.value) {
+const ensurePracticeReviewTask = async (sessionId: number) => {
+  if (reviewTaskWaiting.value) {
     return
   }
-  await waitForAiReviewCompletion(practiceDetail.value.sessionId)
+
+  reviewTaskWaiting.value = true
+  reviewTaskWaitAborted = false
+  try {
+    const submitRes = await submitPracticeReviewTaskApi(sessionId)
+    if (reviewTaskWaitAborted) {
+      return
+    }
+    const submittedTask = submitRes.data.data as AiTaskDetail
+    currentReviewTask.value = submittedTask
+    const taskId = submittedTask.id
+
+    const finishedTask = await waitForAiTask(taskId)
+    if (reviewTaskWaitAborted) {
+      return
+    }
+    currentReviewTask.value = finishedTask
+    if (!isAiTaskTerminal(finishedTask.status)) {
+      ElMessage.info('简答题评分仍在处理中，可稍后回到本页查看结果')
+      return
+    }
+    if (!isAiTaskSuccess(finishedTask.status)) {
+      throw new Error(finishedTask.errorMessage || '简答题评分任务执行失败')
+    }
+
+    await Promise.all([loadPracticeDetail(sessionId, true), loadHistory()])
+    if (!reviewTaskWaitAborted) {
+      ElMessage.success('简答题 AI 评分已完成')
+    }
+  } catch (error: any) {
+    if (!reviewTaskWaitAborted) {
+      ElMessage.error(error.message || '简答题评分任务失败')
+    }
+  } finally {
+    reviewTaskWaiting.value = false
+  }
 }
 
 const scrollToQuestion = (questionId: number) => {
@@ -513,24 +547,23 @@ const loadHistory = async () => {
 const loadPracticeDetail = async (sessionId: number, silent = false) => {
   detailLoading.value = true
   try {
-    const hadPendingBefore = hasPendingAiReview.value
     const res = await getPracticeDetailApi(sessionId)
     practiceDetail.value = res.data.data
     syncAnswerForm()
     activeQuestionId.value = practiceDetail.value?.answers?.[0]?.questionId || null
     router.replace({ path: '/practice', query: { sessionId: String(sessionId) } })
     if (hasPendingAiReview.value) {
-      void scheduleAiReviewPolling()
-    } else {
-      stopAiReviewWaiting()
-      if (hadPendingBefore && !aiReviewCompletedNoticeShown.value) {
-        ElMessage.success('简答题 AI 评分已完成')
-        aiReviewCompletedNoticeShown.value = true
+      if (currentReviewTask.value?.bizId !== sessionId) {
+        currentReviewTask.value = null
       }
+      if (!silent) {
+        void ensurePracticeReviewTask(sessionId)
+      }
+    } else {
+      currentReviewTask.value = null
     }
   } catch (error: any) {
     practiceDetail.value = null
-    stopAiReviewWaiting()
     ElMessage.error(error.message || '加载练习详情失败')
   } finally {
     detailLoading.value = false
@@ -538,6 +571,7 @@ const loadPracticeDetail = async (sessionId: number, silent = false) => {
 }
 
 const openPracticeFromHistory = async (sessionId: number) => {
+  resetReviewTaskWaiting()
   await loadPracticeDetail(sessionId)
   activeTab.value = 'current'
 }
@@ -551,6 +585,7 @@ const restartPractice = async (questionSetId?: number) => {
     const res = await startPracticeApi(questionSetId)
     ElMessage.success('新的练习已开始')
     page.current = 1
+    resetReviewTaskWaiting()
     await loadHistory()
     await loadPracticeDetail(res.data.data.sessionId)
     activeTab.value = 'current'
@@ -602,14 +637,13 @@ const submitPractice = async () => {
       userAnswer: answerForm.value[item.questionId] || ''
     }))
 
-    aiReviewCompletedNoticeShown.value = false
     const res = await submitPracticeApi(practiceDetail.value.sessionId, answers)
     practiceDetail.value = res.data.data
     syncAnswerForm()
     if (hasPendingAiReview.value) {
-      ElMessage.success('客观题已完成判分，简答题正在进行 AI 评分')
-      void scheduleAiReviewPolling()
       await loadHistory()
+      ElMessage.success('客观题已完成判分，简答题评分任务已进入任务中心')
+      void ensurePracticeReviewTask(practiceDetail.value.sessionId)
       return
     }
     ElMessage.success('练习提交成功')
@@ -633,6 +667,6 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  stopAiReviewWaiting()
+  resetReviewTaskWaiting()
 })
 </script>

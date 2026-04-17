@@ -3,7 +3,9 @@
     <div class="page-header">
       <div>
         <h1 class="page-title">AI 总结</h1>
-        <p class="page-desc">进入页面直接查看总结列表，生成、筛选、分页和详情都围绕表格展开。</p>
+        <p class="page-desc">
+          直接进入总结列表，支持筛选、分页、预览资料和再次生成，生成过程统一走任务中心。
+        </p>
       </div>
     </div>
 
@@ -32,7 +34,7 @@
           <el-input
             v-model="keyword"
             clearable
-            placeholder="按资料名或总结内容搜索"
+            placeholder="按资料名称或总结内容搜索"
             class="workspace-filter-bar__search"
           />
           <el-button @click="resetFilters">重置条件</el-button>
@@ -40,13 +42,26 @@
 
         <div class="toolbar" style="margin-bottom: 0">
           <el-button :loading="historyLoading" @click="loadSummaryHistory">刷新列表</el-button>
-          <el-button type="primary" @click="openGenerateDialog">生成 AI 总结</el-button>
+          <el-button type="primary" :loading="generating" @click="openGenerateDialog">
+            生成 AI 总结
+          </el-button>
         </div>
       </div>
 
       <div class="workspace-body">
+        <el-alert
+          v-if="taskStatusText"
+          :title="taskStatusText"
+          type="info"
+          :closable="false"
+          show-icon
+          style="margin-bottom: 16px"
+        />
+
         <div v-if="historyLoading" class="state-block">正在加载总结列表...</div>
-        <div v-else-if="!pagedSummaryHistory.length" class="state-block empty">当前筛选条件下没有总结记录。</div>
+        <div v-else-if="!pagedSummaryHistory.length" class="state-block empty">
+          当前筛选条件下还没有总结记录。
+        </div>
         <div v-else class="workspace-table">
           <div class="workspace-table__head workspace-table__head--summary-list">
             <span>资料 / 总结</span>
@@ -71,7 +86,9 @@
             <div class="workspace-action-row workspace-action-row--fit">
               <el-button link type="primary" @click="openSummaryDialog(item)">查看内容</el-button>
               <el-button link @click="previewMaterial(item)">查看资料</el-button>
-              <el-button link type="success" @click="quickGenerateForMaterial(item.materialId)">再生成</el-button>
+              <el-button link type="success" @click="quickGenerateForMaterial(item.materialId)">
+                再生成
+              </el-button>
             </div>
           </div>
         </div>
@@ -99,7 +116,9 @@
         <div class="dialog-title-row">
           <div>
             <div class="dialog-title">生成 AI 总结</div>
-            <div class="dialog-subtitle">在弹窗里选择资料和总结类型，生成后会自动回到列表。</div>
+            <div class="dialog-subtitle">
+              选择资料和总结类型后提交任务，生成完成会自动回到列表并打开结果。
+            </div>
           </div>
         </div>
       </template>
@@ -133,7 +152,9 @@
       <template #footer>
         <div class="toolbar" style="margin-bottom: 0; justify-content: flex-end">
           <el-button @click="generateDialogVisible = false">取消</el-button>
-          <el-button type="primary" :loading="generating" @click="generateSummary">生成 AI 总结</el-button>
+          <el-button type="primary" :loading="generating" @click="generateSummary">
+            生成 AI 总结
+          </el-button>
         </div>
       </template>
     </el-dialog>
@@ -226,7 +247,7 @@
             :key="segment.id"
             class="summary-preview-card"
           >
-            <div class="summary-preview-card__label">片段 {{ segment.sortNo || segment.id }}</div>
+            <div class="summary-preview-card__label">片段 {{ segment.segmentNo || segment.id }}</div>
             <div class="summary-block">{{ segment.contentText }}</div>
           </div>
         </div>
@@ -240,8 +261,9 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRoute } from 'vue-router'
-import { generateSummaryApi, getAllSummaryHistoryApi } from '@/api/modules/ai'
+import { getAllSummaryHistoryApi, submitSummaryTaskApi, type AiTaskDetail } from '@/api/modules/ai'
 import { getMaterialDetailApi, getMaterialPageApi } from '@/api/modules/material'
+import { isAiTaskSuccess, isAiTaskTerminal, parseAiTaskResult, waitForAiTask } from '@/utils/aiTask'
 
 const route = useRoute()
 const materialId = ref<number>()
@@ -260,6 +282,7 @@ const materialsLoading = ref(false)
 const detailLoading = ref(false)
 const generating = ref(false)
 const historyLoading = ref(false)
+const currentTask = ref<AiTaskDetail | null>(null)
 const pagination = reactive({
   current: 1,
   size: 10
@@ -278,6 +301,20 @@ const filteredSummaryHistory = computed(() =>
 const pagedSummaryHistory = computed(() => {
   const start = (pagination.current - 1) * pagination.size
   return filteredSummaryHistory.value.slice(start, start + pagination.size)
+})
+
+const taskStatusText = computed(() => {
+  if (!currentTask.value) {
+    return ''
+  }
+  const materialLabel = materials.value.find((item) => item.id === currentTask.value?.bizId)?.title
+  if (generating.value) {
+    return `任务 #${currentTask.value.id} 正在生成总结${materialLabel ? `：${materialLabel}` : ''}`
+  }
+  if (!isAiTaskTerminal(currentTask.value.status)) {
+    return `任务 #${currentTask.value.id} 仍在处理中，可稍后刷新列表查看结果`
+  }
+  return ''
 })
 
 watch([filterMaterialId, filterSummaryType, keyword], () => {
@@ -381,18 +418,41 @@ const generateSummary = async () => {
 
   generating.value = true
   try {
-    const res = await generateSummaryApi(materialId.value, {
+    const submitRes = await submitSummaryTaskApi(materialId.value, {
       summaryType: summaryType.value,
       saveAsNote: true
     })
+    const submittedTask = submitRes.data.data as AiTaskDetail
+    currentTask.value = submittedTask
+    const taskId = submittedTask.id
     generateDialogVisible.value = false
+    ElMessage.success('AI 总结任务已提交')
+
+    const finishedTask = await waitForAiTask(taskId)
+    currentTask.value = finishedTask
+    if (!isAiTaskTerminal(finishedTask.status)) {
+      ElMessage.info('总结任务仍在处理中，可稍后刷新列表查看结果')
+      return
+    }
+    if (!isAiTaskSuccess(finishedTask.status)) {
+      throw new Error(finishedTask.errorMessage || 'AI 总结任务执行失败')
+    }
+
     await loadSummaryHistory()
-    const created = summaryHistory.value.find((item) => item.recordId === res.data.data.recordId) || res.data.data
-    activeSummary.value = created
-    summaryDialogVisible.value = true
-    ElMessage.success('AI 总结生成成功')
+    const taskResult = parseAiTaskResult<any>(finishedTask)
+    const created =
+      (taskResult?.recordId
+        ? summaryHistory.value.find((item) => item.recordId === taskResult.recordId)
+        : null) ||
+      taskResult
+
+    if (created) {
+      activeSummary.value = created
+      summaryDialogVisible.value = true
+    }
+    ElMessage.success('AI 总结生成完成')
   } catch (error: any) {
-    ElMessage.error(error.message || '生成总结失败')
+    ElMessage.error(error.message || 'AI 总结任务失败')
   } finally {
     generating.value = false
   }

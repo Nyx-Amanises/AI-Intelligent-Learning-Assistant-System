@@ -21,5 +21,7 @@ public interface PracticeService {
 
     void reviewPendingShortAnswers(Long sessionId);
 
+    void reviewPendingShortAnswersNow(Long sessionId);
+
     void deletePracticeSession(Long userId, Long sessionId);
 }

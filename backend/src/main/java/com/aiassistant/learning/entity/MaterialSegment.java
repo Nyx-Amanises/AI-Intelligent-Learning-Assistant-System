@@ -34,4 +34,12 @@ public class MaterialSegment extends BaseEntity {
     private String keywords;
 
     private String embeddingStatus;
+
+    private String embeddingModel;
+
+    private Long embeddingTaskId;
+
+    private String vectorId;
+
+    private java.time.LocalDateTime embeddedAt;
 }

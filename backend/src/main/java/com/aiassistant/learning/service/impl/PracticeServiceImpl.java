@@ -126,7 +126,6 @@ public class PracticeServiceImpl implements PracticeService {
 
         int correctCount = 0;
         int obtainedScore = 0;
-        boolean hasPendingAiReview = false;
         for (QuestionItem question : questions) {
             PracticeAnswerRequest answerRequest = answerMap.get(question.getId());
             String userAnswer = answerRequest == null ? null : answerRequest.getUserAnswer();
@@ -139,8 +138,6 @@ public class PracticeServiceImpl implements PracticeService {
             }
             if (!REVIEW_MODE_AI_PENDING.equals(review.mode())) {
                 obtainedScore += review.score();
-            } else {
-                hasPendingAiReview = true;
             }
 
             PracticeAnswer answer = new PracticeAnswer();
@@ -163,10 +160,6 @@ public class PracticeServiceImpl implements PracticeService {
         session.setAccuracyRate(calculateAccuracy(correctCount, questions.size()));
         session.setSessionStatus(SESSION_STATUS_SUBMITTED);
         practiceSessionMapper.updateById(session);
-
-        if (hasPendingAiReview) {
-            selfPracticeService.reviewPendingShortAnswers(session.getId());
-        }
 
         List<PracticeAnswer> answers = practiceAnswerMapper.selectList(new LambdaQueryWrapper<PracticeAnswer>()
                 .eq(PracticeAnswer::getSessionId, session.getId())
@@ -255,8 +248,13 @@ public class PracticeServiceImpl implements PracticeService {
 
     @Override
     @Async
-    @Transactional(rollbackFor = Exception.class)
     public void reviewPendingShortAnswers(Long sessionId) {
+        selfPracticeService.reviewPendingShortAnswersNow(sessionId);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void reviewPendingShortAnswersNow(Long sessionId) {
         PracticeSession session = practiceSessionMapper.selectById(sessionId);
         if (session == null) {
             return;
