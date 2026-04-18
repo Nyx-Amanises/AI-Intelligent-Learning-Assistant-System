@@ -22,6 +22,9 @@ public class AssistantTaskIntentParser {
             Pattern.compile("(?:来|给我|出|生成|做)\\s*([0-9一二两三四五六七八九十百]+)\\s*道\\s*(?:题|题目|练习题|试题|题集)"),
             Pattern.compile("([0-9一二两三四五六七八九十百]+)\\s*道\\s*(?:题|题目|练习题|试题|题集)")
     );
+    private static final Pattern COMMAND_TOTAL_QUESTION_PATTERN = Pattern.compile(
+            "(?:来|给我|出|生成|做)\\s*([0-9一二两三四五六七八九十百]+)\\s*道"
+    );
     private static final Pattern DIFFICULTY_PATTERN = Pattern.compile("难度\\s*([1-5])");
     private static final Pattern TITLE_BRACKET_PATTERN = Pattern.compile("《([^》]{2,80})》");
     private static final Pattern TITLE_QUOTE_PATTERN = Pattern.compile("[“\"]([^”\"]{2,80})[”\"]");
@@ -439,12 +442,25 @@ public class AssistantTaskIntentParser {
     }
 
     public Long resolveMaterialCandidateSelection(String userMessage, List<AssistantMaterialCandidate> candidates) {
-        if (!StringUtils.hasText(userMessage) || candidates == null || candidates.isEmpty()) {
+        return resolveMaterialCandidateSelection(userMessage, candidates, null);
+    }
+
+    public Long resolveMaterialCandidateSelection(
+            String userMessage,
+            List<AssistantMaterialCandidate> candidates,
+            AssistantStructuredIntent structuredIntent
+    ) {
+        if ((!StringUtils.hasText(userMessage)
+                && !StringUtils.hasText(structuredIntent == null ? null : structuredIntent.getMaterialQuery()))
+                || candidates == null || candidates.isEmpty()) {
             return null;
         }
         String normalized = normalize(userMessage);
         String cleanedMessage = cleanMaterialQueryText(userMessage);
-        if (candidates.size() == 1 && (isDefaultChoice(userMessage) || containsAny(normalized, "就这个", "这个", "它"))) {
+        String structuredQuery = cleanMaterialQueryText(structuredIntent == null ? null : structuredIntent.getMaterialQuery());
+        boolean defaultChoice = Boolean.TRUE.equals(structuredIntent == null ? null : structuredIntent.getDefaultChoice())
+                || isDefaultChoice(userMessage);
+        if (candidates.size() == 1 && (defaultChoice || containsAny(normalized, "就这个", "这个", "它"))) {
             return candidates.get(0).getId();
         }
 
@@ -467,10 +483,27 @@ public class AssistantTaskIntentParser {
         if (matchedCandidates.size() == 1) {
             return matchedCandidates.get(0).getId();
         }
+        if (StringUtils.hasText(structuredQuery)) {
+            String normalizedStructuredQuery = normalize(structuredQuery);
+            matchedCandidates = candidates.stream()
+                    .filter(candidate -> matchesCandidateSelection(candidate, normalizedStructuredQuery, structuredQuery))
+                    .toList();
+            if (matchedCandidates.size() == 1) {
+                return matchedCandidates.get(0).getId();
+            }
+        }
         return null;
     }
 
     public QuestionConfigResolution resolveQuestionConfigReply(String userMessage, AssistantPlannedTask pendingTask) {
+        return resolveQuestionConfigReply(userMessage, pendingTask, null);
+    }
+
+    public QuestionConfigResolution resolveQuestionConfigReply(
+            String userMessage,
+            AssistantPlannedTask pendingTask,
+            AssistantStructuredIntent structuredIntent
+    ) {
         if (pendingTask == null) {
             return new QuestionConfigResolution(false, null, "当前没有待补充的出题配置。");
         }
@@ -478,17 +511,34 @@ public class AssistantTaskIntentParser {
         if (!StringUtils.hasText(text)) {
             return new QuestionConfigResolution(false, null, buildQuestionConfigPrompt(pendingTask));
         }
-        if (isDefaultChoice(text)) {
+        boolean defaultChoice = Boolean.TRUE.equals(structuredIntent == null ? null : structuredIntent.getDefaultChoice())
+                || isDefaultChoice(text);
+        if (defaultChoice) {
             AssistantPlannedTask resolvedTask = copyQuestionTask(pendingTask);
             resolvedTask.setRequiresQuestionTypeConfirmation(false);
             return new QuestionConfigResolution(true, resolvedTask, null);
         }
 
-        Integer requestedTotal = extractTotalQuestionCount(text);
-        Integer requestedSingle = extractTypedCount(text, "单选题", "单选", "选择题");
-        Integer requestedJudge = extractTypedCount(text, "判断题", "判断");
-        Integer requestedShortAnswer = extractTypedCount(text, "简答题", "简答");
-        String exclusiveQuestionType = detectExclusiveQuestionType(text);
+        Integer requestedTotal = firstNonNull(
+                structuredIntent == null ? null : structuredIntent.getQuestionCount(),
+                extractTotalQuestionCount(text)
+        );
+        Integer requestedSingle = firstNonNull(
+                structuredIntent == null ? null : structuredIntent.getSingleCount(),
+                extractTypedCount(text, "单选题", "单选", "选择题")
+        );
+        Integer requestedJudge = firstNonNull(
+                structuredIntent == null ? null : structuredIntent.getJudgeCount(),
+                extractTypedCount(text, "判断题", "判断")
+        );
+        Integer requestedShortAnswer = firstNonNull(
+                structuredIntent == null ? null : structuredIntent.getShortAnswerCount(),
+                extractTypedCount(text, "简答题", "简答")
+        );
+        String exclusiveQuestionType = firstNonBlank(
+                structuredIntent == null ? null : structuredIntent.getExclusiveQuestionType(),
+                detectExclusiveQuestionType(text)
+        );
 
         boolean singleSpecified = requestedSingle != null;
         boolean judgeSpecified = requestedJudge != null;
@@ -542,7 +592,10 @@ public class AssistantTaskIntentParser {
         resolvedTask.setJudgeCount(judgeCount);
         resolvedTask.setShortAnswerCount(shortAnswerCount);
         resolvedTask.setRequiresQuestionTypeConfirmation(false);
-        Integer difficultyLevel = detectDifficultyLevel(text);
+        Integer difficultyLevel = firstNonNull(
+                structuredIntent == null ? null : structuredIntent.getDifficultyLevel(),
+                detectDifficultyLevel(text)
+        );
         if (difficultyLevel != null) {
             resolvedTask.setDifficultyLevel(difficultyLevel);
         }
@@ -551,6 +604,34 @@ public class AssistantTaskIntentParser {
 
     public boolean isDefaultChoice(String userMessage) {
         return containsAny(userMessage, DEFAULT_CHOICE_KEYWORDS.toArray(String[]::new));
+    }
+
+    public boolean looksLikeQuestionConfigReply(String userMessage) {
+        if (!StringUtils.hasText(userMessage)) {
+            return false;
+        }
+        String text = userMessage.trim();
+        return isDefaultChoice(text)
+                || extractTotalQuestionCount(text) != null
+                || extractTypedCount(text, "单选题", "单选", "选择题") != null
+                || extractTypedCount(text, "判断题", "判断") != null
+                || extractTypedCount(text, "简答题", "简答") != null
+                || detectExclusiveQuestionType(text) != null
+                || containsAny(text, "题型", "题量", "数量");
+    }
+
+    public boolean looksLikeMaterialAmbiguityChallenge(String userMessage) {
+        if (!StringUtils.hasText(userMessage)) {
+            return false;
+        }
+        String text = userMessage.trim();
+        boolean mentionsMaterial = StringUtils.hasText(extractMaterialQueryText(text))
+                || containsAny(text, "资料", "定位", "id", "#", "哪一份", "哪份");
+        boolean hasChallengeSignal = containsAny(
+                text,
+                "怎么定位", "定位到", "哪一份", "哪份", "还是", "没说", "没选", "没指定", "不对", "不是"
+        );
+        return mentionsMaterial && hasChallengeSignal;
     }
 
     public String buildQuestionConfigPrompt(AssistantPlannedTask questionTask) {
@@ -771,6 +852,10 @@ public class AssistantTaskIntentParser {
             if (matcher.find()) {
                 return parseFlexibleInt(matcher.group(1));
             }
+        }
+        Matcher commandMatcher = COMMAND_TOTAL_QUESTION_PATTERN.matcher(text);
+        if (commandMatcher.find()) {
+            return parseFlexibleInt(commandMatcher.group(1));
         }
         return null;
     }

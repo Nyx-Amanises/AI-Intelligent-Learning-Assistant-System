@@ -44,6 +44,10 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
     private static final List<String> MATERIAL_SELECTION_REPLY_HINT_KEYWORDS = List.of(
             "这个", "那个", "这份", "那份", "资料", "序号", "第", "id", "#"
     );
+    private static final List<String> STUDY_QA_HINT_KEYWORDS = List.of(
+            "带我学习", "带我复习", "帮我学习", "帮我复习", "讲讲", "解释", "说明", "告诉我", "什么是", "为什么", "怎么", "如何",
+            "区别", "联系", "原理", "概念", "简介", "概述", "知识点", "重点", "难点", "考点", "学习"
+    );
 
     private final AssistantToolRegistry toolRegistry;
     private final AssistantMemoryService assistantMemoryService;
@@ -93,6 +97,7 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
     public AssistantPreparedResult prepare(Long userId, AssistantSession session, String userMessage, String modelName) {
         List<MemorySnippet> memories = assistantMemoryService.findRelevantMemories(userId, userMessage, 3);
         AssistantStructuredIntent structuredIntent = structuredIntentExtractor.extract(userMessage, modelName);
+        InteractionMode interactionMode = resolveInteractionMode(session, userMessage, structuredIntent);
         List<MemoryUsage> usedMemories = memories.stream()
                 .map(memory -> new MemoryUsage(
                         memory.id(),
@@ -103,7 +108,22 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
                 ))
                 .toList();
 
-        WorkflowResolution workflowResolution = handleTaskWorkflow(userId, session, userMessage, modelName, structuredIntent);
+        WorkflowResolution workflowResolution = resolvePendingAction(
+                userId,
+                session,
+                userMessage,
+                structuredIntent,
+                interactionMode
+        );
+        if (!workflowResolution.handled()) {
+            workflowResolution = switch (interactionMode) {
+                case TASK_CREATE -> handleTaskCreationWorkflow(userId, session, userMessage, modelName, structuredIntent);
+                case STUDY_QA -> handleStudyQaWorkflow(userId, session, userMessage, modelName, structuredIntent);
+                case CONTEXT_CHALLENGE -> handleContextChallengeWorkflow(userId, session, userMessage, structuredIntent);
+                case UNSUPPORTED -> buildUnsupportedResolution(structuredIntent);
+                default -> WorkflowResolution.notHandled();
+            };
+        }
         if (workflowResolution.handled()) {
             return buildPreparedResult(
                     session,
@@ -111,14 +131,15 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
                     memories,
                     workflowResolution.executions(),
                     usedMemories,
-                    false,
+                    workflowResolution.useModel(),
                     workflowResolution.replyText(),
                     workflowResolution.planSnapshot(),
+                    interactionMode.name(),
                     resolveModelName(modelName)
             );
         }
 
-        List<PlannedTool> plan = planTools(session, userMessage, structuredIntent);
+        List<PlannedTool> plan = planTools(session, userMessage, structuredIntent, interactionMode);
         List<AssistantTool.ToolExecutionResult> executions = executeTools(userId, session, userMessage, modelName, structuredIntent, plan);
         return buildPreparedResult(
                 session,
@@ -126,9 +147,10 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
                 memories,
                 executions,
                 usedMemories,
-                shouldUseAiModel(),
+                shouldUseAiModelForMode(interactionMode),
                 null,
                 plan,
+                interactionMode.name(),
                 resolveModelName(modelName)
         );
     }
@@ -174,17 +196,19 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
             boolean useModel,
             String fallbackReplyOverride,
             Object planSnapshot,
+            String interactionMode,
             String resolvedModelName
     ) {
         return new AssistantPreparedResult(
                 useModel,
                 buildSystemPrompt(),
-                buildUserPrompt(session, userMessage, memories, executions),
+                buildUserPrompt(session, userMessage, memories, executions, interactionMode),
                 StringUtils.hasText(fallbackReplyOverride)
                         ? fallbackReplyOverride
                         : buildFallbackReply(session, memories, executions),
                 toJson(Map.of(
                         "strategy", executions.isEmpty() ? "DIRECT_REPLY" : "TOOL_AUGMENTED",
+                        "interactionMode", interactionMode,
                         "memoryCount", memories.size(),
                         "toolCount", executions.size()
                 )),
@@ -195,18 +219,240 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
         );
     }
 
-    private WorkflowResolution handleTaskWorkflow(
+    private InteractionMode resolveInteractionMode(
+            AssistantSession session,
+            String userMessage,
+            AssistantStructuredIntent structuredIntent
+    ) {
+        InteractionMode extractedMode = normalizeInteractionMode(structuredIntent == null ? null : structuredIntent.getInteractionMode());
+        AssistantPendingActionPayload pendingPayload = readPendingActionPayload(session);
+        String pendingActionType = session == null ? null : session.getPendingActionType();
+
+        if (taskIntentParser.looksLikeMaterialAmbiguityChallenge(userMessage)
+                || Boolean.TRUE.equals(structuredIntent == null ? null : structuredIntent.getMaterialDisambiguation())
+                || Boolean.TRUE.equals(structuredIntent == null ? null : structuredIntent.getContextChallenge())) {
+            return InteractionMode.CONTEXT_CHALLENGE;
+        }
+        if ("QUESTION_CONFIG".equalsIgnoreCase(pendingActionType)
+                && looksLikeQuestionConfigReply(userMessage, structuredIntent)) {
+            return InteractionMode.TASK_CONFIG_REPLY;
+        }
+        if ("MATERIAL_SELECTION".equalsIgnoreCase(pendingActionType)
+                && looksLikeMaterialSelectionReply(userMessage, pendingPayload, structuredIntent)) {
+            return InteractionMode.MATERIAL_SELECTION;
+        }
+        if (extractedMode == InteractionMode.TASK_CREATE && !looksLikeExplicitTaskRequest(userMessage, structuredIntent)) {
+            if (looksLikeStudyQaMessage(session, userMessage, structuredIntent)) {
+                return InteractionMode.STUDY_QA;
+            }
+            if (looksLikeCasualChat(userMessage)) {
+                return InteractionMode.CHAT;
+            }
+        }
+        if (extractedMode != InteractionMode.UNKNOWN) {
+            return extractedMode;
+        }
+        if (looksLikeCasualChat(userMessage)) {
+            return InteractionMode.CHAT;
+        }
+        if (looksLikeExplicitTaskRequest(userMessage, structuredIntent)) {
+            return InteractionMode.TASK_CREATE;
+        }
+        if (taskIntentParser.looksLikeMaterialBrowseRequest(userMessage, structuredIntent)) {
+            return InteractionMode.MATERIAL_BROWSE;
+        }
+        if (taskIntentParser.looksLikeTaskListRequest(userMessage, structuredIntent)) {
+            return InteractionMode.TASK_BROWSE;
+        }
+        if (taskIntentParser.looksLikeQuestionSetListRequest(userMessage, structuredIntent)) {
+            return InteractionMode.QUESTION_SET_BROWSE;
+        }
+        if (taskIntentParser.looksLikeChapterBrowseRequest(userMessage, structuredIntent)) {
+            return InteractionMode.CHAPTER_BROWSE;
+        }
+        if (looksLikeStudyQaMessage(session, userMessage, structuredIntent)) {
+            return InteractionMode.STUDY_QA;
+        }
+        return InteractionMode.UNKNOWN;
+    }
+
+    private InteractionMode normalizeInteractionMode(String rawMode) {
+        if (!StringUtils.hasText(rawMode)) {
+            return InteractionMode.UNKNOWN;
+        }
+        try {
+            return InteractionMode.valueOf(rawMode.trim().toUpperCase());
+        } catch (IllegalArgumentException ignored) {
+            return InteractionMode.UNKNOWN;
+        }
+    }
+
+    private boolean looksLikeExplicitTaskRequest(String userMessage, AssistantStructuredIntent structuredIntent) {
+        return !taskIntentParser.resolveRequestedTaskTypes(userMessage, structuredIntent).isEmpty();
+    }
+
+    private boolean looksLikeStudyQaMessage(
+            AssistantSession session,
+            String userMessage,
+            AssistantStructuredIntent structuredIntent
+    ) {
+        if (!StringUtils.hasText(userMessage)) {
+            return false;
+        }
+        if (taskIntentParser.looksLikeMaterialBrowseRequest(userMessage, structuredIntent)
+                || taskIntentParser.looksLikeTaskListRequest(userMessage, structuredIntent)
+                || taskIntentParser.looksLikeQuestionSetListRequest(userMessage, structuredIntent)
+                || taskIntentParser.looksLikeChapterBrowseRequest(userMessage, structuredIntent)
+                || looksLikeExplicitTaskRequest(userMessage, structuredIntent)
+                || looksLikeCasualChat(userMessage)) {
+            return false;
+        }
+        if (AssistantToolSupport.containsAnyIgnoreCase(userMessage, STUDY_QA_HINT_KEYWORDS)) {
+            return true;
+        }
+        if (StringUtils.hasText(taskIntentParser.extractMaterialQueryText(userMessage, structuredIntent))) {
+            return true;
+        }
+        if (AssistantToolSupport.resolveMaterialId(session) != null && (userMessage.contains("？") || userMessage.contains("?"))) {
+            return true;
+        }
+        return AssistantToolSupport.resolveMaterialId(session) != null;
+    }
+
+    private WorkflowResolution buildUnsupportedResolution(AssistantStructuredIntent structuredIntent) {
+        String unsupportedFeature = structuredIntent == null ? null : structuredIntent.getUnsupportedFeature();
+        String replyText = StringUtils.hasText(unsupportedFeature)
+                ? "目前我还没有“%s”这个功能。你可以先让我做资料检索、知识讲解、AI 总结、AI 出题、任务查询这些系统内能力。".formatted(unsupportedFeature)
+                : "目前我还没有这个功能。你可以先让我做资料检索、知识讲解、AI 总结、AI 出题、任务查询这些系统内能力。";
+        return new WorkflowResolution(true, false, List.of(), replyText, List.of());
+    }
+
+    private WorkflowResolution handleStudyQaWorkflow(
             Long userId,
             AssistantSession session,
             String userMessage,
             String modelName,
             AssistantStructuredIntent structuredIntent
     ) {
-        WorkflowResolution pendingResolution = resolvePendingAction(userId, session, userMessage);
-        if (pendingResolution.handled()) {
-            return pendingResolution;
+        List<AssistantTool.ToolExecutionResult> executions = new ArrayList<>();
+        List<Map<String, Object>> planSnapshot = new ArrayList<>();
+
+        Long materialId = AssistantToolSupport.resolveMaterialId(session);
+        if (materialId == null) {
+            materialId = resolveMaterialIdFromQuestionSetContext(userId, session);
         }
 
+        String materialQuery = taskIntentParser.extractMaterialQueryText(userMessage, structuredIntent);
+        if (StringUtils.hasText(materialQuery)) {
+            AssistantTool.ToolExecutionResult searchExecution = materialSearchAssistantTool.search(userId, materialQuery);
+            executions.add(searchExecution);
+            planSnapshot.add(Map.of("toolName", "material.search", "reason", "学习问答前先定位资料"));
+            if ("FAILED".equalsIgnoreCase(searchExecution.status())) {
+                return new WorkflowResolution(true, false, executions, searchExecution.errorMessage(), planSnapshot);
+            }
+
+            AssistantMaterialSearchResult searchResult = readMaterialSearchResult(searchExecution.toolResultJson());
+            if (searchResult != null && searchResult.getSelectedMaterialId() != null) {
+                materialId = searchResult.getSelectedMaterialId();
+                bindMaterialContext(session, materialId);
+            } else {
+                savePendingAction(session, "MATERIAL_SELECTION", AssistantPendingActionPayload.builder()
+                        .promptText(searchExecution.summaryText())
+                        .materialQuery(materialQuery)
+                        .followUpActionType("STUDY_QA")
+                        .followUpUserMessage(userMessage)
+                        .materialCandidates(searchResult == null ? List.of() : searchResult.getCandidates())
+                        .build());
+                return new WorkflowResolution(true, false, executions, searchExecution.summaryText(), planSnapshot);
+            }
+        }
+
+        if (materialId == null) {
+            RecentContextResolution recentContext = resolveRecentContext(userId);
+            if (recentContext != null) {
+                materialId = recentContext.materialId();
+                bindRecentContext(session, recentContext);
+                executions.add(infoExecution(
+                        "context.resolve_recent",
+                        recentContext.args(),
+                        recentContext.result(),
+                        recentContext.summaryText()
+                ));
+                planSnapshot.add(Map.of("toolName", "context.resolve_recent", "reason", "学习问答未显式指定资料，自动绑定最近学习内容"));
+            }
+        }
+
+        if (materialId == null) {
+            String replyText = "我可以先带你学，不过还需要先知道你想基于哪份资料。你可以直接告诉我资料标题，或者从某份资料页进入后再继续问我。";
+            executions.add(waitingExecution(
+                    "material.search",
+                    Map.of("reason", "material_context_missing"),
+                    Map.of(),
+                    replyText
+            ));
+            planSnapshot.add(Map.of("toolName", "material.search", "reason", "学习问答需要先定位资料"));
+            return new WorkflowResolution(true, false, executions, replyText, planSnapshot);
+        }
+
+        String effectiveQuery = resolveStudyQaQuery(userMessage, materialQuery);
+        String toolMessage = StringUtils.hasText(effectiveQuery) ? effectiveQuery : userMessage;
+        String toolName = isMaterialDetailQuestion(userMessage) ? "material.detail" : "rag.retrieve";
+        planSnapshot.add(Map.of("toolName", toolName, "reason", "围绕当前资料回答学习问题"));
+        AssistantTool.ToolExecutionResult execution = executeToolByName(
+                toolName,
+                userId,
+                session,
+                toolMessage,
+                modelName,
+                structuredIntent
+        );
+        if (execution != null) {
+            executions.add(execution);
+        }
+        return new WorkflowResolution(true, shouldUseAiModel(), executions, null, planSnapshot);
+    }
+
+    private WorkflowResolution handleContextChallengeWorkflow(
+            Long userId,
+            AssistantSession session,
+            String userMessage,
+            AssistantStructuredIntent structuredIntent
+    ) {
+        String materialQuery = taskIntentParser.extractMaterialQueryText(userMessage, structuredIntent);
+        if (!StringUtils.hasText(materialQuery)) {
+            String replyText = "你说得对，当前还没有足够信息让我唯一定位到资料。你可以直接告诉我资料 ID、回复候选序号，或者把资料标题再说完整一点。";
+            return new WorkflowResolution(true, false, List.of(), replyText, List.of());
+        }
+
+        List<AssistantTool.ToolExecutionResult> executions = new ArrayList<>();
+        List<Map<String, Object>> planSnapshot = new ArrayList<>();
+        AssistantTool.ToolExecutionResult searchExecution = materialSearchAssistantTool.search(userId, materialQuery);
+        executions.add(searchExecution);
+        planSnapshot.add(Map.of("toolName", "material.search", "reason", "用户在质疑或澄清当前资料定位"));
+        if ("FAILED".equalsIgnoreCase(searchExecution.status())) {
+            return new WorkflowResolution(true, false, executions, searchExecution.errorMessage(), planSnapshot);
+        }
+
+        AssistantMaterialSearchResult searchResult = readMaterialSearchResult(searchExecution.toolResultJson());
+        if (searchResult != null && searchResult.getSelectedMaterialId() != null) {
+            bindMaterialContext(session, searchResult.getSelectedMaterialId());
+        } else {
+            savePendingAction(session, "MATERIAL_SELECTION", AssistantPendingActionPayload.builder()
+                    .promptText(searchExecution.summaryText())
+                    .materialQuery(materialQuery)
+                    .materialCandidates(searchResult == null ? List.of() : searchResult.getCandidates())
+                    .build());
+        }
+        return new WorkflowResolution(true, false, executions, searchExecution.summaryText(), planSnapshot);
+    }
+
+    private WorkflowResolution handleTaskCreationWorkflow(
+            Long userId,
+            AssistantSession session,
+            String userMessage,
+            String modelName,
+            AssistantStructuredIntent structuredIntent
+    ) {
         List<String> requestedTaskTypes = taskIntentParser.resolveRequestedTaskTypes(userMessage, structuredIntent);
         if (requestedTaskTypes.isEmpty()) {
             return WorkflowResolution.notHandled();
@@ -243,7 +489,7 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
                     );
                     executions.add(waitingExecution);
                     planSnapshot.add(Map.of("toolName", "material.search", "reason", "需要先定位资料"));
-                    return new WorkflowResolution(true, executions, null, planSnapshot);
+                    return new WorkflowResolution(true, false, executions, null, planSnapshot);
                 }
             }
 
@@ -253,7 +499,7 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
                 planSnapshot.add(Map.of("toolName", "material.search", "reason", "先根据标题关键词定位资料"));
 
                 if ("FAILED".equalsIgnoreCase(searchExecution.status())) {
-                    return new WorkflowResolution(true, executions, searchExecution.errorMessage(), planSnapshot);
+                    return new WorkflowResolution(true, false, executions, searchExecution.errorMessage(), planSnapshot);
                 }
 
                 AssistantMaterialSearchResult searchResult = readMaterialSearchResult(searchExecution.toolResultJson());
@@ -268,7 +514,7 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
                             .materialCandidates(searchResult == null ? List.of() : searchResult.getCandidates())
                             .tasks(plannedTasks)
                             .build());
-                    return new WorkflowResolution(true, executions, searchExecution.summaryText(), planSnapshot);
+                    return new WorkflowResolution(true, false, executions, searchExecution.summaryText(), planSnapshot);
                 }
             }
         }
@@ -276,10 +522,16 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
         WorkflowResolution executionResolution = executePlannedTasks(userId, session, materialId, plannedTasks, executions, planSnapshot);
         return executionResolution.handled()
                 ? executionResolution
-                : new WorkflowResolution(true, executions, null, planSnapshot);
+                : new WorkflowResolution(true, false, executions, null, planSnapshot);
     }
 
-    private WorkflowResolution resolvePendingAction(Long userId, AssistantSession session, String userMessage) {
+    private WorkflowResolution resolvePendingAction(
+            Long userId,
+            AssistantSession session,
+            String userMessage,
+            AssistantStructuredIntent structuredIntent,
+            InteractionMode interactionMode
+    ) {
         if (session == null || !StringUtils.hasText(session.getPendingActionType())) {
             return WorkflowResolution.notHandled();
         }
@@ -294,9 +546,13 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
         List<Map<String, Object>> planSnapshot = new ArrayList<>();
 
         if ("MATERIAL_SELECTION".equals(pendingActionType)) {
-            Long selectedMaterialId = taskIntentParser.resolveMaterialCandidateSelection(userMessage, payload.getMaterialCandidates());
+            Long selectedMaterialId = taskIntentParser.resolveMaterialCandidateSelection(
+                    userMessage,
+                    payload.getMaterialCandidates(),
+                    structuredIntent
+            );
             if (selectedMaterialId == null) {
-                if (shouldBypassPendingAction(userMessage, pendingActionType, payload)) {
+                if (shouldBypassPendingAction(pendingActionType, interactionMode)) {
                     clearPendingAction(session);
                     return WorkflowResolution.notHandled();
                 }
@@ -310,24 +566,49 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
                         promptText
                 ));
                 planSnapshot.add(Map.of("toolName", "material.search", "reason", "等待用户确认具体资料"));
-                return new WorkflowResolution(true, executions, promptText, planSnapshot);
+                return new WorkflowResolution(true, false, executions, promptText, planSnapshot);
             }
 
             bindMaterialContext(session, selectedMaterialId);
+            String selectedMaterialTitle = resolveMaterialTitle(payload, selectedMaterialId);
+            String selectionSummary = StringUtils.hasText(selectedMaterialTitle)
+                    ? "已确认资料《%s》，后续我会按这份资料继续。".formatted(selectedMaterialTitle)
+                    : "已确认当前资料，后续我会按这份资料继续。";
+            executions.add(infoExecution(
+                    "material.select",
+                    Map.of("materialId", selectedMaterialId),
+                    buildMaterialSelectionResult(selectedMaterialId, selectedMaterialTitle),
+                    selectionSummary
+            ));
             clearPendingAction(session);
             WorkflowResolution followUpResolution = executePendingFollowUp(userId, session, payload, executions, planSnapshot);
             if (followUpResolution.handled()) {
                 return followUpResolution;
+            }
+            if (payload.getTasks() == null || payload.getTasks().isEmpty()) {
+                return new WorkflowResolution(true, false, executions, selectionSummary, planSnapshot);
             }
             return executePlannedTasks(userId, session, selectedMaterialId, payload.getTasks(), executions, planSnapshot);
         }
 
         if ("QUESTION_CONFIG".equals(pendingActionType)) {
             AssistantPlannedTask pendingQuestionTask = payload.getTasks().isEmpty() ? null : payload.getTasks().get(0);
+            WorkflowResolution materialDisambiguationResolution = resolveMaterialDisambiguationDuringPendingQuestionConfig(
+                    userId,
+                    session,
+                    userMessage,
+                    structuredIntent,
+                    payload,
+                    executions,
+                    planSnapshot
+            );
+            if (materialDisambiguationResolution.handled()) {
+                return materialDisambiguationResolution;
+            }
             AssistantTaskIntentParser.QuestionConfigResolution resolution =
-                    taskIntentParser.resolveQuestionConfigReply(userMessage, pendingQuestionTask);
+                    taskIntentParser.resolveQuestionConfigReply(userMessage, pendingQuestionTask, structuredIntent);
             if (!resolution.resolved()) {
-                if (shouldBypassPendingAction(userMessage, pendingActionType, payload)) {
+                if (shouldBypassPendingAction(pendingActionType, interactionMode)) {
                     clearPendingAction(session);
                     return WorkflowResolution.notHandled();
                 }
@@ -343,7 +624,7 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
                         promptText
                 ));
                 planSnapshot.add(Map.of("toolName", "task.submit_question_generate", "reason", "等待用户补充题型配置"));
-                return new WorkflowResolution(true, executions, promptText, planSnapshot);
+                return new WorkflowResolution(true, false, executions, promptText, planSnapshot);
             }
 
             clearPendingAction(session);
@@ -367,7 +648,7 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
             List<Map<String, Object>> planSnapshot
     ) {
         if (materialId == null || tasks == null || tasks.isEmpty()) {
-            return new WorkflowResolution(true, executions, null, planSnapshot);
+            return new WorkflowResolution(true, false, executions, null, planSnapshot);
         }
 
         for (AssistantPlannedTask task : tasks) {
@@ -401,7 +682,7 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
                             payload,
                             promptText
                     ));
-                    return new WorkflowResolution(true, executions, null, planSnapshot);
+                    return new WorkflowResolution(true, false, executions, null, planSnapshot);
                 }
 
                 planSnapshot.add(Map.of("toolName", "task.submit_question_generate", "reason", "按当前资料提交出题任务"));
@@ -421,7 +702,7 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
             }
         }
         clearPendingAction(session);
-        return new WorkflowResolution(true, executions, null, planSnapshot);
+        return new WorkflowResolution(true, false, executions, null, planSnapshot);
     }
 
     private WorkflowResolution executePendingFollowUp(
@@ -451,7 +732,30 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
                     )
             );
             executions.add(execution);
-            return new WorkflowResolution(true, executions, execution.summaryText(), planSnapshot);
+            return new WorkflowResolution(true, false, executions, execution.summaryText(), planSnapshot);
+        }
+        if ("STUDY_QA".equals(followUpActionType)) {
+            String followUpMessage = StringUtils.hasText(payload.getFollowUpUserMessage())
+                    ? payload.getFollowUpUserMessage()
+                    : "继续回答当前资料问题";
+            String effectiveQuery = resolveStudyQaQuery(followUpMessage, payload.getMaterialQuery());
+            String toolMessage = StringUtils.hasText(effectiveQuery) ? effectiveQuery : followUpMessage;
+            String toolName = isMaterialDetailQuestion(followUpMessage) ? "material.detail" : "rag.retrieve";
+            String reason = "已确认资料，继续回答用户刚才的问题";
+            AssistantTool.ToolExecutionResult execution = executeToolByName(
+                    toolName,
+                    userId,
+                    session,
+                    toolMessage,
+                    null,
+                    AssistantStructuredIntent.builder().build()
+            );
+            if (execution == null) {
+                return new WorkflowResolution(true, false, executions, "资料已确认，但我这边暂时还没继续执行后续回答。你可以再问我一次。", planSnapshot);
+            }
+            planSnapshot.add(Map.of("toolName", toolName, "reason", reason));
+            executions.add(execution);
+            return new WorkflowResolution(true, shouldUseAiModel(), executions, null, planSnapshot);
         }
         return WorkflowResolution.notHandled();
     }
@@ -498,48 +802,42 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
     private List<PlannedTool> planTools(
             AssistantSession session,
             String userMessage,
-            AssistantStructuredIntent structuredIntent
+            AssistantStructuredIntent structuredIntent,
+            InteractionMode interactionMode
     ) {
         LinkedHashSet<String> toolNames = new LinkedHashSet<>();
         List<PlannedTool> plan = new ArrayList<>();
         String normalizedMessage = userMessage == null ? "" : userMessage.trim();
-        boolean materialBrowseIntent = taskIntentParser.looksLikeMaterialBrowseRequest(normalizedMessage, structuredIntent);
-        boolean taskListIntent = taskIntentParser.looksLikeTaskListRequest(normalizedMessage, structuredIntent);
-        boolean questionSetListIntent = taskIntentParser.looksLikeQuestionSetListRequest(normalizedMessage, structuredIntent);
-        boolean chapterBrowseIntent = taskIntentParser.looksLikeChapterBrowseRequest(normalizedMessage, structuredIntent);
 
-        if (materialBrowseIntent) {
+        if (interactionMode == InteractionMode.MATERIAL_BROWSE) {
             addPlan(plan, toolNames, "material.list", "用户想查看当前资料列表或按关键词找资料");
         }
-        if (taskListIntent) {
-            addPlan(plan, toolNames, "task.list", "用户想查看任务列表或按状态筛选任务");
+        if (interactionMode == InteractionMode.TASK_BROWSE) {
+            if (AssistantToolSupport.resolveTaskId(session, normalizedMessage) != null
+                    && AssistantToolSupport.containsAnyIgnoreCase(normalizedMessage, TASK_STATUS_KEYWORDS)) {
+                addPlan(plan, toolNames, "task.get_status", "用户正在询问任务进度");
+            } else {
+                addPlan(plan, toolNames, "task.list", "用户想查看任务列表或按状态筛选任务");
+            }
         }
-        if (questionSetListIntent) {
+        if (interactionMode == InteractionMode.QUESTION_SET_BROWSE) {
             addPlan(plan, toolNames, "question_set.list", "用户想查看题集列表或题集筛选结果");
         }
-        if (chapterBrowseIntent) {
+        if (interactionMode == InteractionMode.CHAPTER_BROWSE) {
             addPlan(plan, toolNames, "material.chapter_outline", "用户想查看资料章节、目录或某一章的位置");
-        }
-        if (!taskListIntent
-                && AssistantToolSupport.resolveTaskId(session, normalizedMessage) != null
-                && AssistantToolSupport.containsAnyIgnoreCase(normalizedMessage, TASK_STATUS_KEYWORDS)) {
-            addPlan(plan, toolNames, "task.get_status", "用户正在询问任务进度");
         }
         if (AssistantToolSupport.resolvePracticeSessionId(session) != null
                 && AssistantToolSupport.containsAnyIgnoreCase(normalizedMessage, PRACTICE_KEYWORDS)) {
             addPlan(plan, toolNames, "practice.detail", "当前会话绑定了练习记录");
         }
-        if (!questionSetListIntent
+        if (interactionMode != InteractionMode.QUESTION_SET_BROWSE
                 && AssistantToolSupport.resolveQuestionSetId(session) != null
                 && AssistantToolSupport.containsAnyIgnoreCase(normalizedMessage, QUESTION_SET_KEYWORDS)) {
             addPlan(plan, toolNames, "question_set.detail", "当前会话绑定了题集");
         }
-        if (!materialBrowseIntent && !chapterBrowseIntent && AssistantToolSupport.resolveMaterialId(session) != null) {
-            if (AssistantToolSupport.containsAnyIgnoreCase(normalizedMessage, MATERIAL_DETAIL_KEYWORDS)) {
-                addPlan(plan, toolNames, "material.detail", "用户更像在问当前资料基本信息");
-            } else {
-                addPlan(plan, toolNames, "rag.retrieve", "默认走资料检索问答");
-            }
+        if (AssistantToolSupport.resolveMaterialId(session) != null
+                && AssistantToolSupport.containsAnyIgnoreCase(normalizedMessage, MATERIAL_DETAIL_KEYWORDS)) {
+            addPlan(plan, toolNames, "material.detail", "用户更像在问当前资料基本信息");
         }
         return plan.stream().limit(4).toList();
     }
@@ -570,40 +868,115 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
         return executions;
     }
 
-    private boolean shouldBypassPendingAction(
+    private AssistantTool.ToolExecutionResult executeToolByName(
+            String toolName,
+            Long userId,
+            AssistantSession session,
             String userMessage,
-            String pendingActionType,
-            AssistantPendingActionPayload payload
+            String modelName,
+            AssistantStructuredIntent structuredIntent
     ) {
-        if (!StringUtils.hasText(userMessage)) {
+        AssistantTool tool = toolRegistry.findTool(toolName);
+        if (tool == null) {
+            return null;
+        }
+        AssistantTool.ToolContext toolContext = new AssistantTool.ToolContext(
+                userId,
+                session,
+                userMessage,
+                modelName,
+                structuredIntent
+        );
+        if (!tool.supports(toolContext)) {
+            return null;
+        }
+        return tool.execute(toolContext);
+    }
+
+    private WorkflowResolution resolveMaterialDisambiguationDuringPendingQuestionConfig(
+            Long userId,
+            AssistantSession session,
+            String userMessage,
+            AssistantStructuredIntent structuredIntent,
+            AssistantPendingActionPayload payload,
+            List<AssistantTool.ToolExecutionResult> executions,
+            List<Map<String, Object>> planSnapshot
+    ) {
+        boolean materialDisambiguation = Boolean.TRUE.equals(structuredIntent == null ? null : structuredIntent.getMaterialDisambiguation())
+                || taskIntentParser.looksLikeMaterialAmbiguityChallenge(userMessage);
+        String materialQuery = taskIntentParser.extractMaterialQueryText(userMessage, structuredIntent);
+        if (!materialDisambiguation || !StringUtils.hasText(materialQuery)) {
+            return WorkflowResolution.notHandled();
+        }
+
+        AssistantTool.ToolExecutionResult searchExecution = materialSearchAssistantTool.search(userId, materialQuery);
+        executions.add(searchExecution);
+        planSnapshot.add(Map.of("toolName", "material.search", "reason", "用户在补题型阶段转而澄清资料定位"));
+        if ("FAILED".equalsIgnoreCase(searchExecution.status())) {
+            return new WorkflowResolution(true, false, executions, searchExecution.errorMessage(), planSnapshot);
+        }
+
+        AssistantMaterialSearchResult searchResult = readMaterialSearchResult(searchExecution.toolResultJson());
+        if (searchResult != null && searchResult.getSelectedMaterialId() != null) {
+            bindMaterialContext(session, searchResult.getSelectedMaterialId());
+            payload.setMaterialId(searchResult.getSelectedMaterialId());
+            String promptText = taskIntentParser.buildQuestionConfigPrompt(payload.getTasks().isEmpty() ? null : payload.getTasks().get(0));
+            payload.setPromptText(promptText);
+            savePendingAction(session, "QUESTION_CONFIG", payload);
+            return new WorkflowResolution(
+                    true,
+                    false,
+                    executions,
+                    searchExecution.summaryText() + System.lineSeparator() + promptText,
+                    planSnapshot
+            );
+        }
+
+        clearMaterialContext(session);
+        savePendingAction(session, "MATERIAL_SELECTION", AssistantPendingActionPayload.builder()
+                .promptText(searchExecution.summaryText())
+                .materialQuery(materialQuery)
+                .materialCandidates(searchResult == null ? List.of() : searchResult.getCandidates())
+                .tasks(payload.getTasks())
+                .build());
+        return new WorkflowResolution(true, false, executions, searchExecution.summaryText(), planSnapshot);
+    }
+
+    private boolean shouldBypassPendingAction(String pendingActionType, InteractionMode interactionMode) {
+        if (interactionMode == null || interactionMode == InteractionMode.UNKNOWN) {
             return false;
         }
-        if (looksLikeCasualChat(userMessage)) {
-            return true;
-        }
         if ("QUESTION_CONFIG".equalsIgnoreCase(pendingActionType)) {
-            return !looksLikeQuestionConfigReply(userMessage);
+            return interactionMode != InteractionMode.TASK_CONFIG_REPLY;
         }
         if ("MATERIAL_SELECTION".equalsIgnoreCase(pendingActionType)) {
-            return !looksLikeMaterialSelectionReply(userMessage, payload);
+            return interactionMode != InteractionMode.MATERIAL_SELECTION;
         }
-        return false;
+        return interactionMode == InteractionMode.CHAT;
     }
 
     private boolean looksLikeCasualChat(String userMessage) {
         return AssistantToolSupport.containsAnyIgnoreCase(userMessage, CASUAL_CHAT_KEYWORDS);
     }
 
-    private boolean looksLikeQuestionConfigReply(String userMessage) {
-        if (taskIntentParser.isDefaultChoice(userMessage)) {
+    private boolean looksLikeQuestionConfigReply(String userMessage, AssistantStructuredIntent structuredIntent) {
+        if (Boolean.TRUE.equals(structuredIntent == null ? null : structuredIntent.getQuestionConfigReply())) {
             return true;
         }
-        return containsFlexibleNumber(userMessage)
+        return taskIntentParser.looksLikeQuestionConfigReply(userMessage)
                 || AssistantToolSupport.containsAnyIgnoreCase(userMessage, QUESTION_CONFIG_REPLY_HINT_KEYWORDS);
     }
 
-    private boolean looksLikeMaterialSelectionReply(String userMessage, AssistantPendingActionPayload payload) {
-        if (taskIntentParser.isDefaultChoice(userMessage)) {
+    private boolean looksLikeMaterialSelectionReply(
+            String userMessage,
+            AssistantPendingActionPayload payload,
+            AssistantStructuredIntent structuredIntent
+    ) {
+        if (Boolean.TRUE.equals(structuredIntent == null ? null : structuredIntent.getDefaultChoice())
+                || taskIntentParser.isDefaultChoice(userMessage)) {
+            return true;
+        }
+        if (StringUtils.hasText(structuredIntent == null ? null : structuredIntent.getMaterialQuery())) {
             return true;
         }
         if (containsFlexibleNumber(userMessage)
@@ -731,6 +1104,55 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
                 && StringUtils.hasText(config.apiKey());
     }
 
+    private boolean shouldUseAiModelForMode(InteractionMode interactionMode) {
+        return shouldUseAiModel() && interactionMode != InteractionMode.UNSUPPORTED;
+    }
+
+    private String resolveMaterialTitle(AssistantPendingActionPayload payload, Long materialId) {
+        if (payload == null || materialId == null || payload.getMaterialCandidates() == null) {
+            return null;
+        }
+        return payload.getMaterialCandidates().stream()
+                .filter(candidate -> materialId.equals(candidate.getId()))
+                .map(AssistantMaterialCandidate::getTitle)
+                .filter(StringUtils::hasText)
+                .findFirst()
+                .orElse(null);
+    }
+
+    private Map<String, Object> buildMaterialSelectionResult(Long materialId, String materialTitle) {
+        LinkedHashMap<String, Object> result = new LinkedHashMap<>();
+        result.put("materialId", materialId);
+        result.put("materialTitle", materialTitle);
+        return result;
+    }
+
+    private String resolveStudyQaQuery(String userMessage, String materialQuery) {
+        if (!StringUtils.hasText(userMessage)) {
+            return null;
+        }
+        String query = userMessage.trim();
+        if (StringUtils.hasText(materialQuery)) {
+            query = query.replace("《" + materialQuery + "》", "")
+                    .replace(materialQuery, "")
+                    .trim();
+        }
+        query = query.replaceAll("^(根据|围绕|结合|针对|基于|关于)\\s*", "")
+                .replaceAll("(这份|这个|该)?资料", "")
+                .replaceAll("^(请|请你|麻烦|麻烦你|帮我|帮忙|给我|让我)\\s*", "")
+                .replaceAll("^(告诉我|讲讲|解释一下|带我学习一下|带我学习|帮我学习一下|帮我学习)\\s*", "")
+                .replaceAll("\\s+", " ")
+                .trim();
+        if (!StringUtils.hasText(query)) {
+            return "这份资料的核心知识点、重点内容和学习主线";
+        }
+        return query;
+    }
+
+    private boolean isMaterialDetailQuestion(String userMessage) {
+        return AssistantToolSupport.containsAnyIgnoreCase(userMessage, MATERIAL_DETAIL_KEYWORDS);
+    }
+
     private String buildSystemPrompt() {
         return """
                 你是系统内置的 AI 学习助手。
@@ -748,7 +1170,8 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
             AssistantSession session,
             String userMessage,
             List<MemorySnippet> memories,
-            List<AssistantTool.ToolExecutionResult> executions
+            List<AssistantTool.ToolExecutionResult> executions,
+            String interactionMode
     ) {
         StringBuilder builder = new StringBuilder();
         builder.append("当前会话上下文：").append(System.lineSeparator())
@@ -757,6 +1180,7 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
                 .append("materialId=").append(session == null ? null : session.getCurrentMaterialId()).append(System.lineSeparator())
                 .append("questionSetId=").append(session == null ? null : session.getCurrentQuestionSetId()).append(System.lineSeparator())
                 .append("practiceSessionId=").append(session == null ? null : session.getCurrentPracticeSessionId()).append(System.lineSeparator())
+                .append("interactionMode=").append(interactionMode).append(System.lineSeparator())
                 .append(System.lineSeparator())
                 .append("用户消息：").append(System.lineSeparator()).append(userMessage).append(System.lineSeparator()).append(System.lineSeparator())
                 .append("相关记忆：").append(System.lineSeparator());
@@ -830,6 +1254,17 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
         session.setCurrentMaterialId(materialId);
         session.setCurrentContextType("MATERIAL");
         session.setCurrentContextId(materialId);
+    }
+
+    private void clearMaterialContext(AssistantSession session) {
+        if (session == null) {
+            return;
+        }
+        session.setCurrentMaterialId(null);
+        if ("MATERIAL".equalsIgnoreCase(session.getCurrentContextType())) {
+            session.setCurrentContextType(null);
+            session.setCurrentContextId(null);
+        }
     }
 
     private void savePendingAction(AssistantSession session, String pendingActionType, AssistantPendingActionPayload payload) {
@@ -917,12 +1352,28 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
 
     private record WorkflowResolution(
             boolean handled,
+            boolean useModel,
             List<AssistantTool.ToolExecutionResult> executions,
             String replyText,
             Object planSnapshot
     ) {
         private static WorkflowResolution notHandled() {
-            return new WorkflowResolution(false, List.of(), null, List.of());
+            return new WorkflowResolution(false, false, List.of(), null, List.of());
         }
+    }
+
+    private enum InteractionMode {
+        TASK_CREATE,
+        TASK_CONFIG_REPLY,
+        MATERIAL_SELECTION,
+        MATERIAL_BROWSE,
+        TASK_BROWSE,
+        QUESTION_SET_BROWSE,
+        CHAPTER_BROWSE,
+        CONTEXT_CHALLENGE,
+        STUDY_QA,
+        CHAT,
+        UNSUPPORTED,
+        UNKNOWN
     }
 }

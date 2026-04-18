@@ -1,9 +1,12 @@
 package com.aiassistant.learning.service.assistant;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class AssistantTaskIntentParserTest {
@@ -26,6 +29,92 @@ class AssistantTaskIntentParserTest {
     }
 
     @Test
+    void shouldResolveExclusiveSingleChoiceWithCommandStyleTotalCount() {
+        AssistantPlannedTask pendingTask = buildPendingQuestionTask();
+
+        AssistantTaskIntentParser.QuestionConfigResolution resolution =
+                parser.resolveQuestionConfigReply("出10道，全出选择题", pendingTask);
+
+        assertTrue(resolution.resolved());
+        assertNotNull(resolution.task());
+        assertEquals(10, resolution.task().getQuestionCount());
+        assertEquals(10, resolution.task().getSingleCount());
+        assertEquals(0, resolution.task().getJudgeCount());
+        assertEquals(0, resolution.task().getShortAnswerCount());
+    }
+
+    @Test
+    void shouldResolveCommandStyleTotalCountForDirectQuestionRequest() {
+        AssistantTaskIntentParser.QuestionTaskOptions options =
+                parser.parseQuestionRequest("出10道，全出选择题", null);
+
+        assertEquals(10, options.questionCount());
+        assertEquals(10, options.singleCount());
+        assertEquals(0, options.judgeCount());
+        assertEquals(0, options.shortAnswerCount());
+    }
+
+    @Test
+    void shouldPreferStructuredIntentForQuestionConfigReply() {
+        AssistantPlannedTask pendingTask = buildPendingQuestionTask();
+
+        AssistantTaskIntentParser.QuestionConfigResolution resolution = parser.resolveQuestionConfigReply(
+                "十个，全部做成选择",
+                pendingTask,
+                AssistantStructuredIntent.builder()
+                        .questionCount(10)
+                        .exclusiveQuestionType("SINGLE")
+                        .questionConfigReply(true)
+                        .build()
+        );
+
+        assertTrue(resolution.resolved());
+        assertNotNull(resolution.task());
+        assertEquals(10, resolution.task().getQuestionCount());
+        assertEquals(10, resolution.task().getSingleCount());
+        assertEquals(0, resolution.task().getJudgeCount());
+        assertEquals(0, resolution.task().getShortAnswerCount());
+    }
+
+    @Test
+    void shouldPreferStructuredIntentForMaterialCandidateSelection() {
+        List<AssistantMaterialCandidate> candidates = List.of(
+                AssistantMaterialCandidate.builder().id(7L).title("Java核心知识全面梳理").build(),
+                AssistantMaterialCandidate.builder().id(8L).title("Docker入门").build()
+        );
+
+        Long selectedMaterialId = parser.resolveMaterialCandidateSelection(
+                "就学 Java 那份吧",
+                candidates,
+                AssistantStructuredIntent.builder()
+                        .interactionMode("MATERIAL_SELECTION")
+                        .materialQuery("Java核心知识全面梳理")
+                        .build()
+        );
+
+        assertEquals(7L, selectedMaterialId);
+    }
+
+    @Test
+    void shouldReturnNullWhenStructuredIntentCannotDisambiguateMaterialSelection() {
+        List<AssistantMaterialCandidate> candidates = List.of(
+                AssistantMaterialCandidate.builder().id(7L).title("Java核心知识全面梳理").build(),
+                AssistantMaterialCandidate.builder().id(8L).title("Java高级编程").build()
+        );
+
+        Long selectedMaterialId = parser.resolveMaterialCandidateSelection(
+                "就学 Java 那份吧",
+                candidates,
+                AssistantStructuredIntent.builder()
+                        .interactionMode("MATERIAL_SELECTION")
+                        .materialQuery("Java")
+                        .build()
+        );
+
+        assertNull(selectedMaterialId);
+    }
+
+    @Test
     void shouldNotTreatTypedCountAsStandaloneTotalCount() {
         AssistantPlannedTask pendingTask = buildPendingQuestionTask();
 
@@ -38,6 +127,14 @@ class AssistantTaskIntentParserTest {
         assertEquals(10, resolution.task().getSingleCount());
         assertEquals(2, resolution.task().getJudgeCount());
         assertEquals(0, resolution.task().getShortAnswerCount());
+    }
+
+    @Test
+    void shouldNotTreatMaterialChallengeWithIdsAsQuestionConfigReply() {
+        String userMessage = "你怎么定位到的？我还没说是id为6还是id为7的那一份《Java核心知识全面梳理》呢";
+
+        assertFalse(parser.looksLikeQuestionConfigReply(userMessage));
+        assertTrue(parser.looksLikeMaterialAmbiguityChallenge(userMessage));
     }
 
     private AssistantPlannedTask buildPendingQuestionTask() {
