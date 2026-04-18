@@ -1,7 +1,9 @@
 package com.aiassistant.learning.entity;
 
 import com.aiassistant.learning.common.entity.BaseEntity;
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import java.io.Serial;
@@ -37,6 +39,12 @@ public class AssistantSession extends BaseEntity {
     private Long currentQuestionSetId;
 
     private Long currentPracticeSessionId;
+
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private String pendingActionType;
+
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private String pendingActionPayloadJson;
 
     private LocalDateTime lastMessageAt;
 }

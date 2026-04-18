@@ -93,6 +93,51 @@ public class QuestionSetServiceImpl extends ServiceImpl<com.aiassistant.learning
     }
 
     @Override
+    public PageVO<QuestionSetPageVO> browseAssistantQuestionSets(
+            Long userId,
+            String keyword,
+            String status,
+            Integer difficultyLevel,
+            Long materialId,
+            int limit
+    ) {
+        long resolvedLimit = Math.max(1, Math.min(limit, 10));
+        String normalizedKeyword = StringUtils.hasText(keyword) ? keyword.trim() : null;
+        String normalizedStatus = StringUtils.hasText(status) ? status.trim().toUpperCase() : null;
+        Page<QuestionSet> page = this.page(
+                new Page<>(1L, resolvedLimit),
+                new LambdaQueryWrapper<QuestionSet>()
+                        .eq(QuestionSet::getUserId, userId)
+                        .like(StringUtils.hasText(normalizedKeyword), QuestionSet::getTitle, normalizedKeyword)
+                        .eq(StringUtils.hasText(normalizedStatus), QuestionSet::getStatus, normalizedStatus)
+                        .eq(difficultyLevel != null, QuestionSet::getDifficultyLevel, difficultyLevel)
+                        .eq(materialId != null, QuestionSet::getMaterialId, materialId)
+                        .orderByDesc(QuestionSet::getCreatedAt)
+        );
+
+        List<QuestionSetPageVO> records = page.getRecords().stream()
+                .map(item -> QuestionSetPageVO.builder()
+                        .id(item.getId())
+                        .materialId(item.getMaterialId())
+                        .title(item.getTitle())
+                        .questionCount(item.getQuestionCount())
+                        .totalScore(item.getTotalScore())
+                        .difficultyLevel(item.getDifficultyLevel())
+                        .status(item.getStatus())
+                        .createdAt(item.getCreatedAt())
+                        .build())
+                .toList();
+
+        return PageVO.<QuestionSetPageVO>builder()
+                .current(page.getCurrent())
+                .size(page.getSize())
+                .total(page.getTotal())
+                .pages(page.getPages())
+                .records(records)
+                .build();
+    }
+
+    @Override
     public QuestionSetDetailVO getQuestionSetDetail(Long userId, Long questionSetId) {
         QuestionSet questionSet = this.getOne(new LambdaQueryWrapper<QuestionSet>()
                 .eq(QuestionSet::getId, questionSetId)

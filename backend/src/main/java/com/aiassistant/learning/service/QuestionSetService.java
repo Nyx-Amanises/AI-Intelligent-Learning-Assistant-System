@@ -17,6 +17,15 @@ public interface QuestionSetService extends IService<QuestionSet> {
             Integer difficultyLevel
     );
 
+    PageVO<QuestionSetPageVO> browseAssistantQuestionSets(
+            Long userId,
+            String keyword,
+            String status,
+            Integer difficultyLevel,
+            Long materialId,
+            int limit
+    );
+
     QuestionSetDetailVO getQuestionSetDetail(Long userId, Long questionSetId);
 
     void deleteQuestionSet(Long userId, Long questionSetId);

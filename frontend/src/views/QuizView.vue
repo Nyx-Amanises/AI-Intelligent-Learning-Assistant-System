@@ -81,7 +81,7 @@
               <span>{{ item.difficultyLevel }}</span>
               <span>{{ item.status }}</span>
               <div class="workspace-action-row">
-                <el-button link @click="viewQuestionSet(item.id)">查看</el-button>
+                <el-button link @click="viewQuestionSet(item)">查看</el-button>
                 <el-button link type="success" @click="startPractice(item.id)">开始练习</el-button>
                 <el-button link type="primary" @click="startPractice(item.id)">再练一次</el-button>
                 <el-button
@@ -259,6 +259,11 @@ const route = useRoute()
 const router = useRouter()
 const ASSISTANT_QUESTION_SET_QUERY_KEY = 'assistantQuestionSetId'
 const ASSISTANT_MATERIAL_QUERY_KEY = 'assistantMaterialId'
+type AssistantQuestionContext = {
+  questionSetId?: number
+  materialId?: number
+}
+
 const materials = ref<any[]>([])
 const questionSets = ref<any[]>([])
 const total = ref(0)
@@ -272,6 +277,7 @@ const configLoading = ref(false)
 const generateDialogVisible = ref(false)
 const actionLoadingId = ref<number | null>(null)
 const currentTask = ref<AiTaskDetail | null>(null)
+const pendingQuestionContext = ref<AssistantQuestionContext | null>(null)
 
 const aiConfig = ref({
   enabled: true,
@@ -304,15 +310,51 @@ const totalQuestionCount = computed(
   () => Number(form.singleCount || 0) + Number(form.judgeCount || 0) + Number(form.shortAnswerCount || 0)
 )
 
+const preferredAssistantQuestionContext = computed<AssistantQuestionContext>(() => {
+  if (drawerVisible.value && questionSetDetail.value?.id) {
+    return {
+      questionSetId: questionSetDetail.value.id,
+      materialId: questionSetDetail.value.materialId
+    }
+  }
+  if (drawerVisible.value && pendingQuestionContext.value?.questionSetId) {
+    return pendingQuestionContext.value
+  }
+  if (questionSets.value[0]?.id) {
+    return {
+      questionSetId: questionSets.value[0].id,
+      materialId: questionSets.value[0].materialId
+    }
+  }
+  if (currentTask.value?.bizId) {
+    return {
+      materialId: Number(currentTask.value.bizId)
+    }
+  }
+  if (generateDialogVisible.value && form.materialId) {
+    return {
+      materialId: form.materialId
+    }
+  }
+  return {}
+})
+
 watch(drawerVisible, (visible) => {
   if (!visible) {
-    void syncAssistantQuestionContext()
-    return
-  }
-  if (questionSetDetail.value?.id) {
-    void syncAssistantQuestionContext(questionSetDetail.value.id, questionSetDetail.value.materialId)
+    pendingQuestionContext.value = null
   }
 })
+
+watch(
+  () => [
+    preferredAssistantQuestionContext.value.questionSetId,
+    preferredAssistantQuestionContext.value.materialId
+  ],
+  ([questionSetId, materialId]) => {
+    void syncAssistantQuestionContext(questionSetId, materialId)
+  },
+  { immediate: true }
+)
 
 const taskStatusText = computed(() => {
   if (!currentTask.value) {
@@ -349,7 +391,7 @@ const buildSegmentMeta = (segment: any) => {
   return parts.join(' · ') || '资料摘录'
 }
 
-const syncAssistantQuestionContext = async (questionSetId?: number, materialId?: number) => {
+async function syncAssistantQuestionContext(questionSetId?: number, materialId?: number) {
   const currentQuestionSetId = Number(route.query[ASSISTANT_QUESTION_SET_QUERY_KEY] || 0) || undefined
   const currentMaterialId = Number(route.query[ASSISTANT_MATERIAL_QUERY_KEY] || 0) || undefined
   if (currentQuestionSetId === questionSetId && currentMaterialId === materialId) {
@@ -471,8 +513,11 @@ const generateQuestionSet = async () => {
     const taskResult = parseAiTaskResult<any>(finishedTask)
     if (taskResult) {
       questionSetDetail.value = taskResult
+      pendingQuestionContext.value = {
+        questionSetId: taskResult.id,
+        materialId: taskResult.materialId || form.materialId
+      }
       drawerVisible.value = true
-      void syncAssistantQuestionContext(taskResult.id, taskResult.materialId || form.materialId)
     }
     ElMessage.success(aiConfig.value.mockMode ? 'Mock 题集生成完成' : 'AI 出题完成')
   } catch (error: any) {
@@ -482,17 +527,20 @@ const generateQuestionSet = async () => {
   }
 }
 
-const viewQuestionSet = async (id: number) => {
+const viewQuestionSet = async (item: any) => {
   drawerVisible.value = true
   detailLoading.value = true
-  void syncAssistantQuestionContext(id)
+  questionSetDetail.value = null
+  pendingQuestionContext.value = {
+    questionSetId: item.id,
+    materialId: item.materialId
+  }
   try {
-    const res = await getQuestionSetDetailApi(id)
+    const res = await getQuestionSetDetailApi(item.id)
     questionSetDetail.value = res.data.data
-    void syncAssistantQuestionContext(res.data.data?.id, res.data.data?.materialId)
   } catch (error: any) {
     questionSetDetail.value = null
-    void syncAssistantQuestionContext()
+    pendingQuestionContext.value = null
     ElMessage.error(error.message || '加载题集详情失败')
   } finally {
     detailLoading.value = false
@@ -527,7 +575,7 @@ const removeQuestionSet = async (id: number) => {
     if (questionSetDetail.value?.id === id) {
       drawerVisible.value = false
       questionSetDetail.value = null
-      void syncAssistantQuestionContext()
+      pendingQuestionContext.value = null
     }
     await loadQuestionSets()
   } catch (error: any) {

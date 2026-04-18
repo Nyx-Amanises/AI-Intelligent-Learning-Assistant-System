@@ -13,6 +13,7 @@ import com.aiassistant.learning.vo.material.MaterialDetailVO;
 import com.aiassistant.learning.vo.material.MaterialPageVO;
 import com.aiassistant.learning.vo.material.MaterialSegmentVO;
 import com.aiassistant.learning.vo.page.PageVO;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -24,8 +25,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -133,26 +136,65 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
                         .orderByDesc(StudyMaterial::getCreatedAt)
         );
 
-        List<MaterialPageVO> records = page.getRecords().stream()
-                .map(item -> MaterialPageVO.builder()
-                        .id(item.getId())
-                        .title(item.getTitle())
-                        .materialType(item.getMaterialType())
-                        .parseStatus(item.getParseStatus())
-                        .summaryStatus(item.getSummaryStatus())
-                        .difficultyLevel(item.getDifficultyLevel())
-                        .tags(item.getTags())
-                        .totalCharacters(item.getTotalCharacters())
-                        .lastStudyTime(item.getLastStudyTime())
-                        .createdAt(item.getCreatedAt())
-                        .build())
-                .toList();
+        List<MaterialPageVO> records = buildMaterialPageRecords(page.getRecords());
 
         return PageVO.<MaterialPageVO>builder()
                 .current(page.getCurrent())
                 .size(page.getSize())
                 .total(page.getTotal())
                 .pages(page.getPages())
+                .records(records)
+                .build();
+    }
+
+    @Override
+    public List<MaterialPageVO> searchAssistantMaterials(Long userId, String keyword, int limit) {
+        int resolvedLimit = Math.max(1, Math.min(limit, 10));
+        String normalizedKeyword = StringUtils.hasText(keyword) ? keyword.trim() : null;
+        List<StudyMaterial> records = this.list(new LambdaQueryWrapper<StudyMaterial>()
+                .eq(StudyMaterial::getUserId, userId)
+                .eq(StudyMaterial::getParseStatus, "SUCCESS")
+                .and(StringUtils.hasText(normalizedKeyword), wrapper -> wrapper
+                        .like(StudyMaterial::getTitle, normalizedKeyword)
+                        .or()
+                        .like(StudyMaterial::getTags, normalizedKeyword))
+                .orderByDesc(StudyMaterial::getLastStudyTime)
+                .orderByDesc(StudyMaterial::getCreatedAt)
+                .last("limit " + resolvedLimit));
+        return buildMaterialPageRecords(records);
+    }
+
+    @Override
+    public PageVO<MaterialPageVO> browseAssistantMaterials(Long userId, String keyword, int limit) {
+        return browseAssistantMaterials(userId, keyword, limit, false);
+    }
+
+    @Override
+    public PageVO<MaterialPageVO> browseAssistantMaterials(Long userId, String keyword, int limit, boolean embeddingReadyOnly) {
+        long resolvedLimit = Math.max(1, Math.min(limit, 10));
+        String normalizedKeyword = StringUtils.hasText(keyword) ? keyword.trim() : null;
+        List<StudyMaterial> materials = this.list(new LambdaQueryWrapper<StudyMaterial>()
+                .eq(StudyMaterial::getUserId, userId)
+                .and(StringUtils.hasText(normalizedKeyword), wrapper -> wrapper
+                        .like(StudyMaterial::getTitle, normalizedKeyword)
+                        .or()
+                        .like(StudyMaterial::getTags, normalizedKeyword))
+                .orderByDesc(StudyMaterial::getLastStudyTime)
+                .orderByDesc(StudyMaterial::getCreatedAt));
+
+        List<MaterialPageVO> allRecords = buildMaterialPageRecords(materials);
+        List<MaterialPageVO> filteredRecords = allRecords.stream()
+                .filter(item -> !embeddingReadyOnly || (item.getEmbeddedSegmentCount() != null && item.getEmbeddedSegmentCount() > 0))
+                .toList();
+        List<MaterialPageVO> records = filteredRecords.stream()
+                .limit(resolvedLimit)
+                .toList();
+
+        return PageVO.<MaterialPageVO>builder()
+                .current(1L)
+                .size(resolvedLimit)
+                .total((long) filteredRecords.size())
+                .pages(filteredRecords.isEmpty() ? 0L : (long) Math.ceil((double) filteredRecords.size() / resolvedLimit))
                 .records(records)
                 .build();
     }
@@ -227,6 +269,145 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
         materialSegmentMapper.delete(Wrappers.<MaterialSegment>lambdaQuery()
                 .eq(MaterialSegment::getMaterialId, material.getId()));
         this.removeById(material.getId());
+    }
+
+    private List<MaterialPageVO> buildMaterialPageRecords(List<StudyMaterial> materials) {
+        if (materials == null || materials.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, EmbeddingStats> embeddingStatsMap = buildEmbeddingStatsMap(materials.stream()
+                .map(StudyMaterial::getId)
+                .toList());
+        return materials.stream()
+                .map(item -> {
+                    EmbeddingStats stats = embeddingStatsMap.getOrDefault(item.getId(), EmbeddingStats.empty());
+                    return MaterialPageVO.builder()
+                            .id(item.getId())
+                            .title(item.getTitle())
+                            .materialType(item.getMaterialType())
+                            .parseStatus(item.getParseStatus())
+                            .summaryStatus(item.getSummaryStatus())
+                            .difficultyLevel(item.getDifficultyLevel())
+                            .tags(item.getTags())
+                            .totalCharacters(item.getTotalCharacters())
+                            .embeddingStatus(resolveEmbeddingStatus(item.getParseStatus(), stats))
+                            .embeddedSegmentCount(stats.embeddedSegments())
+                            .totalSegmentCount(stats.totalSegments())
+                            .lastStudyTime(item.getLastStudyTime())
+                            .createdAt(item.getCreatedAt())
+                            .build();
+                })
+                .toList();
+    }
+
+    private Map<Long, EmbeddingStats> buildEmbeddingStatsMap(List<Long> materialIds) {
+        if (materialIds == null || materialIds.isEmpty()) {
+            return Map.of();
+        }
+        List<Map<String, Object>> rows = materialSegmentMapper.selectMaps(new QueryWrapper<MaterialSegment>()
+                .select(
+                        "material_id AS material_id",
+                        "COUNT(*) AS total_segments",
+                        "SUM(CASE WHEN embedding_status = 'SUCCESS' AND vector_id IS NOT NULL AND vector_id <> '' THEN 1 ELSE 0 END) AS embedded_segments",
+                        "SUM(CASE WHEN embedding_status = 'FAILED' THEN 1 ELSE 0 END) AS failed_segments",
+                        "SUM(CASE WHEN embedding_status = 'QUEUED' THEN 1 ELSE 0 END) AS queued_segments"
+                )
+                .in("material_id", materialIds)
+                .groupBy("material_id"));
+
+        Map<Long, EmbeddingStats> statsMap = new HashMap<>();
+        for (Map<String, Object> row : rows) {
+            Long materialId = toLong(readIgnoreCase(row, "material_id"));
+            if (materialId == null) {
+                continue;
+            }
+            statsMap.put(materialId, new EmbeddingStats(
+                    toInt(readIgnoreCase(row, "total_segments")),
+                    toInt(readIgnoreCase(row, "embedded_segments")),
+                    toInt(readIgnoreCase(row, "failed_segments")),
+                    toInt(readIgnoreCase(row, "queued_segments"))
+            ));
+        }
+        return statsMap;
+    }
+
+    private String resolveEmbeddingStatus(String parseStatus, EmbeddingStats stats) {
+        String normalizedParseStatus = normalizeStatus(parseStatus);
+        if (!"SUCCESS".equals(normalizedParseStatus)) {
+            return switch (normalizedParseStatus) {
+                case "PROCESSING" -> "PARSING";
+                case "FAILED" -> "PARSE_FAILED";
+                default -> "NOT_READY";
+            };
+        }
+        if (stats.totalSegments() <= 0) {
+            return "NOT_READY";
+        }
+        if (stats.queuedSegments() > 0) {
+            return stats.embeddedSegments() > 0 ? "PARTIAL" : "RUNNING";
+        }
+        if (stats.failedSegments() > 0) {
+            return stats.embeddedSegments() > 0 ? "PARTIAL_FAILED" : "FAILED";
+        }
+        if (stats.embeddedSegments() >= stats.totalSegments()) {
+            return "SUCCESS";
+        }
+        if (stats.embeddedSegments() > 0) {
+            return "PARTIAL";
+        }
+        return "PENDING";
+    }
+
+    private String normalizeStatus(String value) {
+        return StringUtils.hasText(value) ? value.trim().toUpperCase(Locale.ROOT) : "";
+    }
+
+    private Object readIgnoreCase(Map<String, Object> source, String key) {
+        for (Map.Entry<String, Object> entry : source.entrySet()) {
+            if (key.equalsIgnoreCase(entry.getKey())) {
+                return entry.getValue();
+            }
+        }
+        return null;
+    }
+
+    private Long toLong(Object value) {
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        if (value instanceof String text && StringUtils.hasText(text)) {
+            try {
+                return Long.parseLong(text.trim());
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private Integer toInt(Object value) {
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        if (value instanceof String text && StringUtils.hasText(text)) {
+            try {
+                return Integer.parseInt(text.trim());
+            } catch (NumberFormatException ignored) {
+                return 0;
+            }
+        }
+        return 0;
+    }
+
+    private record EmbeddingStats(
+            int totalSegments,
+            int embeddedSegments,
+            int failedSegments,
+            int queuedSegments
+    ) {
+        private static EmbeddingStats empty() {
+            return new EmbeddingStats(0, 0, 0, 0);
+        }
     }
 
     private StudyMaterial getUserOwnedMaterial(Long userId, Long materialId) {

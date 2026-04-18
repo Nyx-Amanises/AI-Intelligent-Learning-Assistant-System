@@ -44,13 +44,27 @@ public class SummaryTaskAssistantTool extends AbstractAssistantTool {
         Long materialId = AssistantToolSupport.resolveMaterialId(context.session());
         AssistantTaskIntentParser.SummaryTaskOptions options = taskIntentParser.parseSummaryRequest(
                 context.userMessage(),
-                context.modelName()
+                context.modelName(),
+                context.structuredIntent()
         );
         SummaryGenerateRequest request = new SummaryGenerateRequest();
         request.setModelName(options.modelName());
         request.setSummaryType(options.summaryType());
         request.setSaveAsNote(options.saveAsNote());
         request.setTemperature(options.temperature());
+        return executeRequest(context.userId(), materialId, request, startedAt);
+    }
+
+    public ToolExecutionResult executeRequest(Long userId, Long materialId, SummaryGenerateRequest request) {
+        return executeRequest(userId, materialId, request, LocalDateTime.now());
+    }
+
+    private ToolExecutionResult executeRequest(
+            Long userId,
+            Long materialId,
+            SummaryGenerateRequest request,
+            LocalDateTime startedAt
+    ) {
         Map<String, Object> args = new LinkedHashMap<>();
         args.put("materialId", materialId);
         args.put("summaryType", request.getSummaryType());
@@ -59,7 +73,7 @@ public class SummaryTaskAssistantTool extends AbstractAssistantTool {
             args.put("modelName", request.getModelName());
         }
         try {
-            AiTaskDetailVO detail = aiTaskService.submitSummaryTask(context.userId(), materialId, request);
+            AiTaskDetailVO detail = aiTaskService.submitSummaryTask(userId, materialId, request);
             String summary = "已为当前资料创建 AI 总结任务（%s%s），任务号 #%s，当前状态 %s。".formatted(
                     formatSummaryType(request.getSummaryType()),
                     Boolean.TRUE.equals(request.getSaveAsNote()) ? "，保存到笔记" : "，仅生成不保存",

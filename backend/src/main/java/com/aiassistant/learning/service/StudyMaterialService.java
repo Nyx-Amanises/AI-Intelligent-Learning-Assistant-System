@@ -3,10 +3,11 @@ package com.aiassistant.learning.service;
 import com.aiassistant.learning.dto.material.MaterialCreateRequest;
 import com.aiassistant.learning.dto.material.MaterialPageQuery;
 import com.aiassistant.learning.entity.StudyMaterial;
-import com.aiassistant.learning.vo.material.MaterialDetailVO;
 import com.aiassistant.learning.vo.material.MaterialPageVO;
+import com.aiassistant.learning.vo.material.MaterialDetailVO;
 import com.aiassistant.learning.vo.page.PageVO;
 import com.baomidou.mybatisplus.extension.service.IService;
+import java.util.List;
 import org.springframework.web.multipart.MultipartFile;
 
 public interface StudyMaterialService extends IService<StudyMaterial> {
@@ -16,6 +17,12 @@ public interface StudyMaterialService extends IService<StudyMaterial> {
     Long uploadMaterial(Long userId, MultipartFile file);
 
     PageVO<MaterialPageVO> pageMaterials(Long userId, MaterialPageQuery query);
+
+    List<MaterialPageVO> searchAssistantMaterials(Long userId, String keyword, int limit);
+
+    PageVO<MaterialPageVO> browseAssistantMaterials(Long userId, String keyword, int limit);
+
+    PageVO<MaterialPageVO> browseAssistantMaterials(Long userId, String keyword, int limit, boolean embeddingReadyOnly);
 
     MaterialDetailVO getMaterialDetail(Long userId, Long materialId);
 

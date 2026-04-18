@@ -44,7 +44,8 @@ public class QuestionGenerateTaskAssistantTool extends AbstractAssistantTool {
         Long materialId = AssistantToolSupport.resolveMaterialId(context.session());
         AssistantTaskIntentParser.QuestionTaskOptions options = taskIntentParser.parseQuestionRequest(
                 context.userMessage(),
-                context.modelName()
+                context.modelName(),
+                context.structuredIntent()
         );
         QuestionGenerateRequest request = new QuestionGenerateRequest();
         request.setModelName(options.modelName());
@@ -53,6 +54,20 @@ public class QuestionGenerateTaskAssistantTool extends AbstractAssistantTool {
         request.setJudgeCount(options.judgeCount());
         request.setShortAnswerCount(options.shortAnswerCount());
         request.setDifficultyLevel(options.difficultyLevel());
+        return executeRequest(context.userId(), materialId, request, options.adjustmentNote(), startedAt);
+    }
+
+    public ToolExecutionResult executeRequest(Long userId, Long materialId, QuestionGenerateRequest request, String adjustmentNote) {
+        return executeRequest(userId, materialId, request, adjustmentNote, LocalDateTime.now());
+    }
+
+    private ToolExecutionResult executeRequest(
+            Long userId,
+            Long materialId,
+            QuestionGenerateRequest request,
+            String adjustmentNote,
+            LocalDateTime startedAt
+    ) {
         Map<String, Object> args = new LinkedHashMap<>();
         args.put("materialId", materialId);
         args.put("questionCount", request.getQuestionCount());
@@ -63,11 +78,11 @@ public class QuestionGenerateTaskAssistantTool extends AbstractAssistantTool {
         if (request.getModelName() != null) {
             args.put("modelName", request.getModelName());
         }
-        if (options.adjustmentNote() != null) {
-            args.put("adjustmentNote", options.adjustmentNote());
+        if (adjustmentNote != null) {
+            args.put("adjustmentNote", adjustmentNote);
         }
         try {
-            AiTaskDetailVO detail = aiTaskService.submitQuestionGenerateTask(context.userId(), materialId, request);
+            AiTaskDetailVO detail = aiTaskService.submitQuestionGenerateTask(userId, materialId, request);
             String summary = "已为当前资料创建 AI 出题任务（单选 %s、判断 %s、简答 %s，难度 %s），任务号 #%s，当前状态 %s。%s".formatted(
                     request.getSingleCount(),
                     request.getJudgeCount(),
@@ -75,7 +90,7 @@ public class QuestionGenerateTaskAssistantTool extends AbstractAssistantTool {
                     request.getDifficultyLevel(),
                     detail.getId(),
                     detail.getStatus(),
-                    options.adjustmentNote() == null ? "" : options.adjustmentNote()
+                    adjustmentNote == null ? "" : adjustmentNote
             );
             return success(name(), args, detail, summary.trim(), startedAt);
         } catch (Exception exception) {

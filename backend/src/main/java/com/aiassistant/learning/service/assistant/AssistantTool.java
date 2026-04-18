@@ -15,7 +15,8 @@ public interface AssistantTool {
             Long userId,
             AssistantSession session,
             String userMessage,
-            String modelName
+            String modelName,
+            AssistantStructuredIntent structuredIntent
     ) {
     }
 

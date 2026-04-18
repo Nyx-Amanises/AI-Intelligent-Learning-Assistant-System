@@ -1,5 +1,21 @@
 import http from '@/api/http'
 
+export interface MaterialPageItem {
+  id: number
+  title: string
+  materialType: string
+  parseStatus: string
+  summaryStatus: string
+  difficultyLevel: number
+  tags?: string
+  totalCharacters?: number
+  embeddingStatus?: string
+  embeddedSegmentCount?: number
+  totalSegmentCount?: number
+  lastStudyTime?: string
+  createdAt?: string
+}
+
 export interface MaterialForm {
   title: string
   materialType: string

@@ -325,6 +325,29 @@ const pagedSummaryHistory = computed(() => {
   return filteredSummaryHistory.value.slice(start, start + pagination.size)
 })
 
+const preferredAssistantMaterialId = computed(() => {
+  if (summaryDialogVisible.value && activeSummary.value?.materialId) {
+    return activeSummary.value.materialId as number
+  }
+  if (previewDialogVisible.value && selectedMaterialDetail.value?.id) {
+    return selectedMaterialDetail.value.id as number
+  }
+  if (generateDialogVisible.value && materialId.value) {
+    return materialId.value
+  }
+  if (filterMaterialId.value) {
+    return filterMaterialId.value
+  }
+  if (currentTask.value?.bizId) {
+    return Number(currentTask.value.bizId)
+  }
+  return (
+    pagedSummaryHistory.value[0]?.materialId ||
+    filteredSummaryHistory.value[0]?.materialId ||
+    materials.value[0]?.id
+  )
+})
+
 const taskStatusText = computed(() => {
   if (!currentTask.value) {
     return ''
@@ -343,11 +366,13 @@ watch([filterMaterialId, filterSummaryType, keyword], () => {
   pagination.current = 1
 })
 
-watch([summaryDialogVisible, previewDialogVisible], ([summaryVisible, previewVisible]) => {
-  if (!summaryVisible && !previewVisible) {
-    void syncAssistantMaterialContext()
-  }
-})
+watch(
+  preferredAssistantMaterialId,
+  (materialIdValue) => {
+    void syncAssistantMaterialContext(materialIdValue)
+  },
+  { immediate: true }
+)
 
 const formatSummaryType = (value?: string) => {
   switch ((value || '').toUpperCase()) {
@@ -433,7 +458,7 @@ const resetFilters = () => {
   keyword.value = ''
 }
 
-const syncAssistantMaterialContext = async (targetMaterialId?: number) => {
+async function syncAssistantMaterialContext(targetMaterialId?: number) {
   const currentMaterialId = Number(route.query[ASSISTANT_MATERIAL_QUERY_KEY] || 0) || undefined
   if (currentMaterialId === targetMaterialId) {
     return

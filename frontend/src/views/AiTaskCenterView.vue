@@ -94,7 +94,7 @@
             <span>{{ item.modelName || '--' }}</span>
             <span>{{ formatDateTime(item.createdAt) }}</span>
 
-            <div class="workspace-action-row workspace-action-row--fit">
+            <div class="workspace-action-row workspace-action-row--task">
               <el-button link type="primary" @click="openTaskDetail(item.id)">查看详情</el-button>
               <el-button v-if="canOpenBizPage(item)" link @click="openBizPage(item)">前往业务</el-button>
               <el-button

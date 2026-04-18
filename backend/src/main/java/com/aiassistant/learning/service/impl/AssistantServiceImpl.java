@@ -391,6 +391,15 @@ public class AssistantServiceImpl implements AssistantService {
             Long questionSetId,
             Long practiceSessionId
     ) {
+        boolean explicitContextProvided = materialId != null
+                || questionSetId != null
+                || practiceSessionId != null
+                || StringUtils.hasText(contextType)
+                || contextId != null;
+        if (explicitContextProvided) {
+            session.setPendingActionType(null);
+            session.setPendingActionPayloadJson(null);
+        }
         if (materialId != null) {
             session.setCurrentMaterialId(materialId);
             session.setCurrentContextType("MATERIAL");

@@ -24,6 +24,12 @@ public class MaterialPageVO {
 
     private Integer totalCharacters;
 
+    private String embeddingStatus;
+
+    private Integer embeddedSegmentCount;
+
+    private Integer totalSegmentCount;
+
     private LocalDateTime lastStudyTime;
 
     private LocalDateTime createdAt;

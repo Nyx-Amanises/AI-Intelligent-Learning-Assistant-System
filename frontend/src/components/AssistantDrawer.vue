@@ -485,7 +485,7 @@ const currentBinding = computed<CurrentPageBinding>(() => {
   return {
     bindable: false,
     label: routeLabel,
-    helperText: '当前页面没有具体资料或练习上下文。你可以先创建通用会话，或从资料、题集、练习页进入后再问。',
+    helperText: '当前会话会优先使用你最近学习过的内容；如果从资料、题集或练习页进入，回答会更精准。',
     payload: {}
   }
 })
@@ -695,6 +695,7 @@ const toolStatusClass = (status?: string) => {
     case 'FAILED':
       return 'assistant-inline-chip--danger'
     case 'RUNNING':
+    case 'WAITING':
       return 'assistant-inline-chip--warning'
     default:
       return ''
@@ -1204,7 +1205,7 @@ onBeforeUnmount(() => {
   position: fixed;
   right: 24px;
   bottom: 24px;
-  z-index: 1200;
+  z-index: 2400;
   display: inline-flex;
   align-items: center;
   gap: 10px;
@@ -1249,7 +1250,7 @@ onBeforeUnmount(() => {
 .assistant-overlay {
   position: fixed;
   inset: 0;
-  z-index: 1300;
+  z-index: 2500;
   padding: 0;
   background: rgba(244, 247, 252, 0.96);
   backdrop-filter: blur(8px);
@@ -1685,9 +1686,13 @@ onBeforeUnmount(() => {
 .assistant-turn {
   width: min(920px, 100%);
   margin: 0 auto 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
 }
 
 .assistant-turn--user {
+  align-items: flex-end;
   margin-bottom: 20px;
 }
 
@@ -1715,6 +1720,7 @@ onBeforeUnmount(() => {
 }
 
 .assistant-turn__content {
+  width: 100%;
   margin-top: 8px;
   padding: 0;
   border: 0;
@@ -1736,11 +1742,19 @@ onBeforeUnmount(() => {
 }
 
 .assistant-turn--user .assistant-turn__content {
-  max-width: 70%;
-  margin-left: auto;
-  color: #2a3650;
+  width: auto;
+  max-width: min(640px, 72%);
+  padding: 14px 18px;
+  border-radius: 24px 24px 10px 24px;
+  background: linear-gradient(135deg, rgba(233, 241, 255, 0.98), rgba(243, 248, 255, 0.98));
+  box-shadow: 0 10px 24px rgba(148, 163, 184, 0.16);
+  color: #26344e;
   font-weight: 600;
   text-align: left;
+}
+
+.assistant-turn__trace {
+  width: 100%;
 }
 
 .assistant-turn__trace {

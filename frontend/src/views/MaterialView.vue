@@ -54,6 +54,7 @@
               <span>类型</span>
               <span>解析状态</span>
               <span>总结状态</span>
+              <span>Embedding 状态 / 已向量化段数</span>
               <span>字数</span>
               <span>操作</span>
             </div>
@@ -70,6 +71,15 @@
               <span>{{ row.materialType }}</span>
               <span>{{ row.parseStatus }}</span>
               <span>{{ row.summaryStatus }}</span>
+              <div class="material-embedding-cell">
+                <strong
+                  class="material-embedding-cell__status"
+                  :class="`material-embedding-cell__status--${formatEmbeddingTone(row.embeddingStatus)}`"
+                >
+                  {{ formatEmbeddingStatus(row.embeddingStatus) }}
+                </strong>
+                <span>{{ formatEmbeddingProgress(row) }}</span>
+              </div>
               <span>{{ row.totalCharacters || 0 }}</span>
               <div class="workspace-action-row">
                 <el-button
@@ -269,11 +279,12 @@ import {
   getMaterialDetailApi,
   getMaterialPageApi,
   parseMaterialApi,
-  uploadMaterialApi
+  uploadMaterialApi,
+  type MaterialPageItem
 } from '@/api/modules/material'
 
 const router = useRouter()
-const materials = ref<any[]>([])
+const materials = ref<MaterialPageItem[]>([])
 const total = ref(0)
 const detail = ref<any>(null)
 const drawerVisible = ref(false)
@@ -337,6 +348,67 @@ const formatSegmentLocation = (segment: { pageNo?: number; segmentNo?: number })
     parts.push(`段落 #${segment.segmentNo}`)
   }
   return parts.length ? parts.join(' · ') : '定位信息暂缺'
+}
+
+const formatEmbeddingStatus = (value?: string) => {
+  switch ((value || '').toUpperCase()) {
+    case 'SUCCESS':
+      return '已完成'
+    case 'RUNNING':
+      return '生成中'
+    case 'PARTIAL':
+      return '部分完成'
+    case 'PARTIAL_FAILED':
+      return '部分失败'
+    case 'FAILED':
+      return '失败'
+    case 'PARSING':
+      return '解析中'
+    case 'PARSE_FAILED':
+      return '解析失败'
+    case 'PENDING':
+      return '未生成'
+    case 'NOT_READY':
+    default:
+      return '待解析'
+  }
+}
+
+const formatEmbeddingTone = (value?: string) => {
+  switch ((value || '').toUpperCase()) {
+    case 'SUCCESS':
+      return 'success'
+    case 'RUNNING':
+    case 'PARTIAL':
+      return 'running'
+    case 'FAILED':
+    case 'PARTIAL_FAILED':
+    case 'PARSE_FAILED':
+      return 'failed'
+    case 'PENDING':
+      return 'pending'
+    case 'PARSING':
+      return 'info'
+    case 'NOT_READY':
+    default:
+      return 'default'
+  }
+}
+
+const formatEmbeddingProgress = (row: MaterialPageItem) => {
+  const embedded = Number(row.embeddedSegmentCount || 0)
+  const total = Number(row.totalSegmentCount || 0)
+  if (total > 0) {
+    return `已向量化 ${embedded} / ${total}`
+  }
+  const parseStatus = String(row.parseStatus || '').toUpperCase()
+  if (parseStatus === 'PROCESSING') {
+    return '解析完成后可生成'
+  }
+  if (parseStatus === 'FAILED') {
+    return '当前资料解析失败'
+  }
+  return '需先解析后生成'
 }
 
 const resetForm = () => {
@@ -420,7 +492,7 @@ const parseMaterial = async (id: number) => {
   }
 }
 
-const generateEmbedding = async (row: any) => {
+const generateEmbedding = async (row: MaterialPageItem) => {
   actionLoadingId.value = row.id
   actionType.value = 'embedding'
   try {
@@ -474,7 +546,7 @@ const viewDetail = async (id: number) => {
   }
 }
 
-const openRetrievalPreview = (row: any) => {
+const openRetrievalPreview = (row: MaterialPageItem) => {
   retrievalDialogVisible.value = true
   retrievalResult.value = null
   retrievalForm.materialId = row.id

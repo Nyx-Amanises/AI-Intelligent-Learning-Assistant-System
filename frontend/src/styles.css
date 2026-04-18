@@ -628,7 +628,7 @@ a {
 
 .workspace-table__head--material,
 .workspace-table__row--material {
-  grid-template-columns: minmax(0, 2.2fr) 110px 120px 120px 90px minmax(320px, 1fr);
+  grid-template-columns: minmax(0, 1.9fr) 100px 110px 110px minmax(180px, 1fr) 90px minmax(320px, 1fr);
 }
 
 .workspace-table__head--quiz,
@@ -638,7 +638,7 @@ a {
 
 .workspace-table__head--task,
 .workspace-table__row--task {
-  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.2fr) minmax(220px, 1.1fr) 160px 180px minmax(180px, 0.9fr);
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.2fr) minmax(220px, 1.1fr) 160px 180px minmax(240px, 1fr);
 }
 
 .workspace-table__row {
@@ -693,6 +693,46 @@ a {
 .task-status-cell {
   display: grid;
   gap: 10px;
+}
+
+.material-embedding-cell {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.material-embedding-cell__status {
+  width: fit-content;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.material-embedding-cell__status--success {
+  color: #15803d;
+}
+
+.material-embedding-cell__status--running,
+.material-embedding-cell__status--info {
+  color: #2563eb;
+}
+
+.material-embedding-cell__status--failed {
+  color: #e11d48;
+}
+
+.material-embedding-cell__status--pending {
+  color: #b45309;
+}
+
+.material-embedding-cell__status--default {
+  color: #475569;
+}
+
+.material-embedding-cell span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.65;
 }
 
 .task-status-pill {
@@ -780,6 +820,14 @@ a {
 .workspace-action-row--fit {
   overflow-x: visible;
   flex-wrap: wrap;
+}
+
+.workspace-action-row--task {
+  gap: 8px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  justify-content: flex-start;
+  scrollbar-width: thin;
 }
 
 .workspace-pagination {

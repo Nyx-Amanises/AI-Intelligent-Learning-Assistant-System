@@ -50,6 +50,25 @@ public abstract class AbstractAssistantTool implements AssistantTool {
         );
     }
 
+    protected ToolExecutionResult waiting(
+            String toolName,
+            Object args,
+            Object result,
+            String summaryText,
+            LocalDateTime startedAt
+    ) {
+        return new ToolExecutionResult(
+                toolName,
+                "WAITING",
+                toJson(args),
+                toJson(result),
+                summaryText,
+                null,
+                startedAt,
+                LocalDateTime.now()
+        );
+    }
+
     protected String toJson(Object value) {
         if (value == null) {
             return null;
