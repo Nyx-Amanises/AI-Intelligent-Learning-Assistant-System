@@ -50,17 +50,30 @@ public class QuestionSetServiceImpl extends ServiceImpl<com.aiassistant.learning
     }
 
     @Override
-    public PageVO<QuestionSetPageVO> pageQuestionSets(Long userId, Long current, Long size) {
+    public PageVO<QuestionSetPageVO> pageQuestionSets(
+            Long userId,
+            Long current,
+            Long size,
+            String keyword,
+            String status,
+            Integer difficultyLevel
+    ) {
+        String normalizedKeyword = StringUtils.hasText(keyword) ? keyword.trim() : null;
+        String normalizedStatus = StringUtils.hasText(status) ? status.trim().toUpperCase() : null;
         Page<QuestionSet> page = this.page(
                 new Page<>(current, size),
                 new LambdaQueryWrapper<QuestionSet>()
                         .eq(QuestionSet::getUserId, userId)
+                        .like(StringUtils.hasText(normalizedKeyword), QuestionSet::getTitle, normalizedKeyword)
+                        .eq(StringUtils.hasText(normalizedStatus), QuestionSet::getStatus, normalizedStatus)
+                        .eq(difficultyLevel != null, QuestionSet::getDifficultyLevel, difficultyLevel)
                         .orderByDesc(QuestionSet::getCreatedAt)
         );
 
         List<QuestionSetPageVO> records = page.getRecords().stream()
                 .map(item -> QuestionSetPageVO.builder()
                         .id(item.getId())
+                        .materialId(item.getMaterialId())
                         .title(item.getTitle())
                         .questionCount(item.getQuestionCount())
                         .totalScore(item.getTotalScore())

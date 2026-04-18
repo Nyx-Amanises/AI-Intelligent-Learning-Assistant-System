@@ -8,7 +8,14 @@ import com.baomidou.mybatisplus.extension.service.IService;
 
 public interface QuestionSetService extends IService<QuestionSet> {
 
-    PageVO<QuestionSetPageVO> pageQuestionSets(Long userId, Long current, Long size);
+    PageVO<QuestionSetPageVO> pageQuestionSets(
+            Long userId,
+            Long current,
+            Long size,
+            String keyword,
+            String status,
+            Integer difficultyLevel
+    );
 
     QuestionSetDetailVO getQuestionSetDetail(Long userId, Long questionSetId);
 

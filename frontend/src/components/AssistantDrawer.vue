@@ -60,7 +60,6 @@
               <span>对话</span>
               <strong>{{ sessionPage.total }}</strong>
             </div>
-            <em>第 {{ sessionPage.current }} / {{ totalSessionPages }} 页</em>
           </div>
 
           <div v-if="sessionPageLoading && !sessionPage.records.length" class="assistant-sidebar__empty">
@@ -81,12 +80,7 @@
               @click="selectSession(item.id)"
             >
               <div class="assistant-session-card__top">
-                <strong>{{ item.title || '新对话' }}</strong>
-                <span>{{ formatSessionTime(item.lastMessageAt || item.createdAt) }}</span>
-              </div>
-              <p>{{ item.lastMessagePreview || '还没有消息，开始提问吧。' }}</p>
-              <div class="assistant-session-card__bottom">
-                <span>{{ formatContextLabel(item.currentContextType, item.currentContextId) }}</span>
+                <strong :title="item.title || '新对话'">{{ item.title || '新对话' }}</strong>
                 <button
                   type="button"
                   class="assistant-session-card__delete"
@@ -97,25 +91,6 @@
                 </button>
               </div>
             </article>
-          </div>
-
-          <div class="assistant-session-pagination">
-            <button
-              type="button"
-              class="assistant-page-button"
-              :disabled="sessionPage.current <= 1 || sessionPageLoading"
-              @click="changeSessionPage(sessionPage.current - 1)"
-            >
-              上一页
-            </button>
-            <button
-              type="button"
-              class="assistant-page-button"
-              :disabled="sessionPage.current >= totalSessionPages || sessionPageLoading"
-              @click="changeSessionPage(sessionPage.current + 1)"
-            >
-              下一页
-            </button>
           </div>
         </aside>
 
@@ -293,7 +268,9 @@
 
             <div class="assistant-composer assistant-composer--dock">
               <div class="assistant-composer__topline">
-                <span>{{ sessionDetail.currentContextType ? '当前会话已绑定上下文，可直接追问。' : currentBinding.helperText }}</span>
+                <span v-if="sessionDetail.currentContextType">
+                  {{ formatContextLabel(sessionDetail.currentContextType, sessionDetail.currentContextId, sessionDetail) }}
+                </span>
                 <button type="button" class="assistant-inline-danger" @click="removeSession(sessionDetail.id)">
                   删除会话
                 </button>
@@ -309,7 +286,6 @@
 
               <div class="assistant-composer__bottom">
                 <div class="assistant-composer__meta">
-                  <span>{{ formatContextLabel(sessionDetail.currentContextType, sessionDetail.currentContextId, sessionDetail) }}</span>
                   <span>{{ draftCount }}/4000</span>
                 </div>
                 <button
@@ -383,7 +359,7 @@ const visible = computed({
 
 const sessionPage = reactive({
   current: 1,
-  size: 8,
+  size: 100,
   total: 0,
   pages: 0,
   records: [] as AssistantSessionPageItem[]
@@ -440,6 +416,16 @@ const toNumeric = (value: unknown): number | undefined => {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined
 }
 
+const resolveContextQueryId = (...keys: string[]) => {
+  for (const key of keys) {
+    const resolved = toNumeric(route.query[key])
+    if (resolved) {
+      return resolved
+    }
+  }
+  return undefined
+}
+
 const toTimeValue = (value?: string) => {
   if (!value) {
     return 0
@@ -449,9 +435,9 @@ const toTimeValue = (value?: string) => {
 }
 
 const currentBinding = computed<CurrentPageBinding>(() => {
-  const materialId = toNumeric(route.query.materialId)
-  const questionSetId = toNumeric(route.query.questionSetId)
-  const practiceSessionId = toNumeric(route.query.sessionId)
+  const materialId = resolveContextQueryId('assistantMaterialId', 'materialId')
+  const questionSetId = resolveContextQueryId('assistantQuestionSetId', 'questionSetId')
+  const practiceSessionId = resolveContextQueryId('assistantSessionId', 'sessionId')
   const routeLabel = resolveRouteLabel(route.path)
 
   if (practiceSessionId) {
@@ -462,7 +448,9 @@ const currentBinding = computed<CurrentPageBinding>(() => {
       payload: {
         contextType: 'PRACTICE_SESSION',
         contextId: practiceSessionId,
-        practiceSessionId
+        practiceSessionId,
+        questionSetId,
+        materialId
       }
     }
   }
@@ -475,7 +463,8 @@ const currentBinding = computed<CurrentPageBinding>(() => {
       payload: {
         contextType: 'QUESTION_SET',
         contextId: questionSetId,
-        questionSetId
+        questionSetId,
+        materialId
       }
     }
   }
@@ -1261,29 +1250,27 @@ onBeforeUnmount(() => {
   position: fixed;
   inset: 0;
   z-index: 1300;
-  padding: 16px;
-  background: rgba(231, 236, 243, 0.74);
-  backdrop-filter: blur(14px);
+  padding: 0;
+  background: rgba(244, 247, 252, 0.96);
+  backdrop-filter: blur(8px);
 }
 
 .assistant-panel {
   height: 100%;
   display: grid;
-  grid-template-columns: 292px minmax(0, 1fr);
-  border: 1px solid rgba(214, 221, 230, 0.88);
-  border-radius: 28px;
+  grid-template-columns: 286px minmax(0, 1fr);
   overflow: hidden;
-  background: linear-gradient(180deg, #f4f7fb, #f8fafd 34%, #ffffff 100%);
-  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.14);
+  background: #fff;
+  box-shadow: none;
 }
 
 .assistant-sidebar {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 24px 20px 20px;
-  background: rgba(246, 248, 251, 0.92);
-  border-right: 1px solid rgba(218, 225, 234, 0.92);
+  gap: 14px;
+  padding: 28px 18px 18px;
+  background: #edf2fa;
+  border-right: 1px solid rgba(221, 227, 237, 0.9);
 }
 
 .assistant-sidebar__brand h2,
@@ -1307,8 +1294,8 @@ onBeforeUnmount(() => {
 .assistant-context-card em,
 .assistant-thread__empty p {
   margin: 10px 0 0;
-  color: #617089;
-  line-height: 1.75;
+  color: #6c7b95;
+  line-height: 1.7;
   font-size: 13px;
 }
 
@@ -1318,32 +1305,34 @@ onBeforeUnmount(() => {
 .assistant-conversation__hero,
 .assistant-thread,
 .assistant-composer {
-  border: 1px solid rgba(218, 224, 233, 0.88);
-  background: rgba(255, 255, 255, 0.84);
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
+  background: transparent;
+  box-shadow: none;
 }
 
 .assistant-context-card {
-  padding: 16px;
-  border-radius: 22px;
+  padding: 0 0 14px;
+  border: 0;
+  border-bottom: 1px solid rgba(210, 219, 232, 0.92);
+  border-radius: 0;
 }
 
 .assistant-context-card__label {
   display: block;
-  color: #70809a;
+  color: #7d8ca6;
   font-size: 12px;
   font-weight: 700;
 }
 
 .assistant-context-card strong {
   display: block;
-  margin-top: 10px;
-  font-size: 18px;
+  margin-top: 12px;
+  font-size: 16px;
+  color: #24324b;
 }
 
 .assistant-sidebar__actions {
   display: grid;
-  gap: 10px;
+  gap: 2px;
 }
 
 .assistant-control,
@@ -1358,23 +1347,27 @@ onBeforeUnmount(() => {
 }
 
 .assistant-control {
-  padding: 13px 16px;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.88);
-  color: #344256;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: transparent;
+  color: #3a4a64;
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 600;
+  text-align: left;
 }
 
 .assistant-control--primary,
 .assistant-send-button {
-  background: linear-gradient(135deg, #7ea8ff, #9ccfff 55%, #b5ebff);
-  color: #0f172a;
+  background: rgba(109, 150, 255, 0.12);
+  color: #2f65d9;
 }
 
 .assistant-control--ghost,
 .assistant-top-button--ghost {
-  background: rgba(255, 255, 255, 0.62);
+  background: transparent;
 }
 
 .assistant-control:disabled,
@@ -1391,8 +1384,8 @@ onBeforeUnmount(() => {
 .assistant-top-button:not(:disabled):hover,
 .assistant-page-button:not(:disabled):hover,
 .assistant-send-button:not(:disabled):hover {
-  transform: translateY(-1px);
-  box-shadow: 0 12px 24px rgba(66, 118, 177, 0.16);
+  transform: none;
+  box-shadow: none;
 }
 
 .assistant-session-header,
@@ -1433,30 +1426,33 @@ onBeforeUnmount(() => {
 
 .assistant-session-header strong {
   margin-left: 8px;
-  font-size: 20px;
+  font-size: 18px;
   color: #1f2937;
 }
 
 .assistant-sidebar__empty {
-  padding: 18px;
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.58);
+  padding: 8px 0;
+  border-radius: 0;
+  background: transparent;
   color: #6b7b92;
   font-size: 13px;
   line-height: 1.75;
 }
 
 .assistant-session-list {
-  display: grid;
-  gap: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
   min-height: 0;
   overflow: auto;
-  padding-right: 4px;
+  padding-right: 2px;
 }
 
 .assistant-session-card {
-  padding: 16px;
-  border-radius: 22px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 10px;
   cursor: pointer;
 }
 
@@ -1466,46 +1462,45 @@ onBeforeUnmount(() => {
 }
 
 .assistant-session-card--active {
-  background: rgba(255, 255, 255, 0.96);
-  border-color: rgba(145, 173, 232, 0.74);
+  background: rgba(111, 153, 255, 0.16);
 }
 
 .assistant-session-card__top strong {
-  font-size: 15px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .assistant-session-card p {
-  margin: 10px 0 0;
+  margin: 6px 0 0;
   color: #5f6d85;
-  font-size: 13px;
-  line-height: 1.7;
+  font-size: 12px;
+  line-height: 1.6;
   display: -webkit-box;
   overflow: hidden;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 1;
 }
 
 .assistant-session-card__delete,
 .assistant-inline-danger {
   padding: 0;
   background: transparent;
-  color: #f05c5c;
-  font-size: 12px;
+  color: #ef6464;
+  font-size: 11px;
 }
 
-.assistant-session-pagination {
-  display: flex;
-  gap: 10px;
-}
-
-.assistant-page-button,
 .assistant-top-button {
-  padding: 11px 16px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.84);
-  color: #344256;
+  padding: 8px 0;
+  border-radius: 0;
+  background: transparent;
+  color: #51627f;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .assistant-main {
@@ -1513,12 +1508,12 @@ onBeforeUnmount(() => {
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  padding: 22px 28px 24px 24px;
+  padding: 22px 28px 28px 28px;
 }
 
 .assistant-main__topbar h1 {
-  margin-top: 8px;
-  font-size: 30px;
+  margin-top: 6px;
+  font-size: 20px;
   letter-spacing: -0.03em;
 }
 
@@ -1533,42 +1528,45 @@ onBeforeUnmount(() => {
 .assistant-home {
   align-items: center;
   justify-content: center;
-  gap: 28px;
-  padding: 20px 28px 42px;
+  gap: 24px;
+  padding: 34px 28px 48px;
 }
 
 .assistant-home__hero {
-  max-width: 720px;
+  max-width: 760px;
   text-align: center;
 }
 
 .assistant-home__greeting {
   color: #52627f;
-  font-size: 17px;
+  font-size: 16px;
 }
 
 .assistant-home__hero h2 {
   margin-top: 6px;
-  font-size: 50px;
-  line-height: 1.08;
+  font-size: 42px;
+  line-height: 1.12;
   letter-spacing: -0.04em;
 }
 
 .assistant-home__composer,
 .assistant-composer {
-  width: min(960px, 100%);
-  padding: 18px 20px;
-  border-radius: 26px;
+  width: min(720px, 100%);
+  padding: 16px 20px;
+  border: 1px solid rgba(219, 225, 234, 0.96);
+  border-radius: 32px;
+  background: #fff;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
 }
 
 .assistant-composer--dock {
-  width: 100%;
-  margin-top: 18px;
+  width: min(690px, 100%);
+  margin: 16px auto 0;
 }
 
 .assistant-textarea {
   width: 100%;
-  min-height: 112px;
+  min-height: 92px;
   resize: none;
   border: 0;
   outline: none;
@@ -1576,11 +1574,11 @@ onBeforeUnmount(() => {
   color: #1f2937;
   font: inherit;
   font-size: 16px;
-  line-height: 1.75;
+  line-height: 1.7;
 }
 
 .assistant-textarea--compact {
-  min-height: 88px;
+  min-height: 64px;
   font-size: 15px;
 }
 
@@ -1596,16 +1594,18 @@ onBeforeUnmount(() => {
 }
 
 .assistant-send-button {
-  padding: 12px 20px;
+  padding: 10px 18px;
   border-radius: 999px;
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 600;
+  box-shadow: none;
 }
 
 .assistant-suggestion-row {
   max-width: 820px;
   flex-wrap: wrap;
   justify-content: center;
+  gap: 18px;
 }
 
 .assistant-suggestion-row--thread {
@@ -1613,22 +1613,28 @@ onBeforeUnmount(() => {
 }
 
 .assistant-suggestion-chip {
-  padding: 10px 14px;
-  border: 1px solid rgba(219, 225, 234, 0.92);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.92);
-  color: #324255;
-  box-shadow: none;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: #566987;
+  font-size: 14px;
   cursor: pointer;
 }
 
 .assistant-suggestion-chip:hover {
-  background: rgba(242, 247, 255, 0.98);
+  color: #2f65d9;
+  border-bottom-color: rgba(47, 101, 217, 0.4);
 }
 
 .assistant-conversation__hero {
-  padding: 14px 18px;
-  border-radius: 24px;
+  width: min(920px, 100%);
+  margin: 0 auto;
+  padding: 0 0 14px;
+  border: 0;
+  border-bottom: 1px solid rgba(229, 233, 240, 1);
+  border-radius: 0;
   box-shadow: none;
 }
 
@@ -1641,16 +1647,15 @@ onBeforeUnmount(() => {
 .assistant-status-chip {
   display: inline-flex;
   align-items: center;
-  padding: 8px 12px;
-  border-radius: 999px;
-  background: rgba(240, 244, 249, 0.92);
-  color: #52627c;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #6b7a92;
   font-size: 12px;
   font-weight: 600;
 }
 
 .assistant-status-chip--brand {
-  background: rgba(105, 172, 255, 0.12);
   color: #356bdc;
 }
 
@@ -1658,28 +1663,32 @@ onBeforeUnmount(() => {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  margin-top: 16px;
-  padding: 8px 22px 18px;
-  border-radius: 28px;
-  background: rgba(255, 255, 255, 0.62);
+  margin-top: 14px;
+  padding: 0 0 8px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .assistant-thread__empty {
-  padding: 8px 0 18px;
+  width: min(920px, 100%);
+  margin: 0 auto;
+  padding: 12px 0 18px;
 }
 
 .assistant-thread__empty strong {
   display: block;
-  font-size: 22px;
+  font-size: 28px;
+  letter-spacing: -0.03em;
 }
 
 .assistant-turn {
-  max-width: 860px;
-  margin-bottom: 24px;
+  width: min(920px, 100%);
+  margin: 0 auto 28px;
 }
 
 .assistant-turn--user {
-  margin-left: auto;
+  margin-bottom: 20px;
 }
 
 .assistant-turn__meta {
@@ -1707,36 +1716,40 @@ onBeforeUnmount(() => {
 
 .assistant-turn__content {
   margin-top: 8px;
-  padding: 14px 16px;
-  border: 1px solid rgba(221, 226, 234, 0.84);
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.88);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: #1f2937;
-  font-size: 14px;
-  line-height: 1.85;
+  font-size: 15px;
+  line-height: 1.95;
   white-space: pre-wrap;
   word-break: break-word;
 }
 
 .assistant-turn__content--assistant {
-  background: rgba(255, 255, 255, 0.72);
+  color: #1f2937;
 }
 
 .assistant-turn__content--streaming {
-  box-shadow: 0 0 0 1px rgba(140, 169, 242, 0.18) inset;
+  color: #1f2937;
 }
 
 .assistant-turn--user .assistant-turn__content {
-  border-color: transparent;
-  background: linear-gradient(135deg, rgba(190, 219, 255, 0.4), rgba(214, 244, 232, 0.7));
+  max-width: 70%;
+  margin-left: auto;
+  color: #2a3650;
+  font-weight: 600;
+  text-align: left;
 }
 
 .assistant-turn__trace {
   margin-top: 10px;
-  padding: 12px 14px;
-  border-radius: 18px;
-  background: rgba(249, 250, 252, 0.84);
-  border: 1px solid rgba(220, 226, 234, 0.84);
+  padding: 12px 0 0;
+  border: 0;
+  border-top: 1px solid rgba(229, 233, 240, 1);
+  border-radius: 0;
+  background: transparent;
 }
 
 .assistant-turn__trace summary {
@@ -1764,9 +1777,9 @@ onBeforeUnmount(() => {
 .assistant-trace-chip {
   display: inline-flex;
   align-items: center;
-  padding: 7px 10px;
+  padding: 0;
   border-radius: 999px;
-  background: rgba(241, 245, 249, 0.94);
+  background: transparent;
   color: #435268;
   font-size: 12px;
 }
@@ -1787,14 +1800,14 @@ onBeforeUnmount(() => {
 }
 
 .assistant-trace-chip--memory {
-  background: rgba(93, 141, 255, 0.12);
+  color: #356bdc;
 }
 
 .assistant-trace-block pre {
   margin: 0;
-  padding: 14px;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.84);
+  padding: 12px 0 0;
+  border-radius: 0;
+  background: transparent;
   color: #324255;
   font-size: 12px;
   line-height: 1.7;
@@ -1808,10 +1821,10 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 8px;
   margin-top: 8px;
-  padding: 14px 16px;
-  border: 1px solid rgba(220, 226, 234, 0.84);
-  border-radius: 22px;
-  background: rgba(255, 255, 255, 0.82);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: #5d6c86;
   box-shadow: none;
 }
@@ -1879,21 +1892,16 @@ onBeforeUnmount(() => {
 
 @media (max-width: 1120px) {
   .assistant-panel {
-    grid-template-columns: 272px minmax(0, 1fr);
+    grid-template-columns: 264px minmax(0, 1fr);
   }
 
   .assistant-home__hero h2 {
-    font-size: 42px;
+    font-size: 38px;
   }
 }
 
 @media (max-width: 960px) {
-  .assistant-overlay {
-    padding: 0;
-  }
-
   .assistant-panel {
-    border-radius: 0;
     grid-template-columns: 1fr;
   }
 
@@ -1909,7 +1917,7 @@ onBeforeUnmount(() => {
 
   .assistant-home__hero h2,
   .assistant-main__topbar h1 {
-    font-size: 32px;
+    font-size: 28px;
   }
 }
 
@@ -1933,7 +1941,7 @@ onBeforeUnmount(() => {
   }
 
   .assistant-home__hero h2 {
-    font-size: 28px;
+    font-size: 30px;
   }
 
   .assistant-thread,

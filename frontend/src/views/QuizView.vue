@@ -184,7 +184,7 @@
       </template>
     </el-dialog>
 
-    <el-drawer v-model="drawerVisible" title="题集详情" size="52%">
+    <el-drawer v-model="drawerVisible" title="题集详情" size="52%" :close-on-click-modal="false">
       <div v-if="detailLoading" class="state-block">正在加载题集详情...</div>
       <template v-else-if="questionSetDetail">
         <div class="detail-meta-grid">
@@ -246,7 +246,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { getAiConfigApi, submitQuestionGenerateTaskApi, type AiTaskDetail } from '@/api/modules/ai'
@@ -257,6 +257,8 @@ import { isAiTaskSuccess, isAiTaskTerminal, parseAiTaskResult, waitForAiTask } f
 
 const route = useRoute()
 const router = useRouter()
+const ASSISTANT_QUESTION_SET_QUERY_KEY = 'assistantQuestionSetId'
+const ASSISTANT_MATERIAL_QUERY_KEY = 'assistantMaterialId'
 const materials = ref<any[]>([])
 const questionSets = ref<any[]>([])
 const total = ref(0)
@@ -302,6 +304,16 @@ const totalQuestionCount = computed(
   () => Number(form.singleCount || 0) + Number(form.judgeCount || 0) + Number(form.shortAnswerCount || 0)
 )
 
+watch(drawerVisible, (visible) => {
+  if (!visible) {
+    void syncAssistantQuestionContext()
+    return
+  }
+  if (questionSetDetail.value?.id) {
+    void syncAssistantQuestionContext(questionSetDetail.value.id, questionSetDetail.value.materialId)
+  }
+})
+
 const taskStatusText = computed(() => {
   if (!currentTask.value) {
     return ''
@@ -335,6 +347,27 @@ const buildSegmentMeta = (segment: any) => {
     parts.push(`相似度 ${Number(segment.score).toFixed(4)}`)
   }
   return parts.join(' · ') || '资料摘录'
+}
+
+const syncAssistantQuestionContext = async (questionSetId?: number, materialId?: number) => {
+  const currentQuestionSetId = Number(route.query[ASSISTANT_QUESTION_SET_QUERY_KEY] || 0) || undefined
+  const currentMaterialId = Number(route.query[ASSISTANT_MATERIAL_QUERY_KEY] || 0) || undefined
+  if (currentQuestionSetId === questionSetId && currentMaterialId === materialId) {
+    return
+  }
+
+  const nextQuery = { ...route.query }
+  if (questionSetId) {
+    nextQuery[ASSISTANT_QUESTION_SET_QUERY_KEY] = String(questionSetId)
+  } else {
+    delete nextQuery[ASSISTANT_QUESTION_SET_QUERY_KEY]
+  }
+  if (materialId) {
+    nextQuery[ASSISTANT_MATERIAL_QUERY_KEY] = String(materialId)
+  } else {
+    delete nextQuery[ASSISTANT_MATERIAL_QUERY_KEY]
+  }
+  await router.replace({ path: route.path, query: nextQuery })
 }
 
 const resetFilters = () => {
@@ -439,6 +472,7 @@ const generateQuestionSet = async () => {
     if (taskResult) {
       questionSetDetail.value = taskResult
       drawerVisible.value = true
+      void syncAssistantQuestionContext(taskResult.id, taskResult.materialId || form.materialId)
     }
     ElMessage.success(aiConfig.value.mockMode ? 'Mock 题集生成完成' : 'AI 出题完成')
   } catch (error: any) {
@@ -451,11 +485,14 @@ const generateQuestionSet = async () => {
 const viewQuestionSet = async (id: number) => {
   drawerVisible.value = true
   detailLoading.value = true
+  void syncAssistantQuestionContext(id)
   try {
     const res = await getQuestionSetDetailApi(id)
     questionSetDetail.value = res.data.data
+    void syncAssistantQuestionContext(res.data.data?.id, res.data.data?.materialId)
   } catch (error: any) {
     questionSetDetail.value = null
+    void syncAssistantQuestionContext()
     ElMessage.error(error.message || '加载题集详情失败')
   } finally {
     detailLoading.value = false
@@ -490,6 +527,7 @@ const removeQuestionSet = async (id: number) => {
     if (questionSetDetail.value?.id === id) {
       drawerVisible.value = false
       questionSetDetail.value = null
+      void syncAssistantQuestionContext()
     }
     await loadQuestionSets()
   } catch (error: any) {

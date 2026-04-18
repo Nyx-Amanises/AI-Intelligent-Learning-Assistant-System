@@ -26,10 +26,20 @@ public class QuestionSetController {
     @GetMapping("/page")
     public ApiResponse<PageVO<QuestionSetPageVO>> page(
             @RequestParam(defaultValue = "1") Long current,
-            @RequestParam(defaultValue = "10") Long size
+            @RequestParam(defaultValue = "10") Long size,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) Integer difficultyLevel
     ) {
         Long userId = UserContext.getCurrentUserId();
-        return ApiResponse.success(questionSetService.pageQuestionSets(userId, current, size));
+        return ApiResponse.success(questionSetService.pageQuestionSets(
+                userId,
+                current,
+                size,
+                keyword,
+                status,
+                difficultyLevel
+        ));
     }
 
     @GetMapping("/{id}")

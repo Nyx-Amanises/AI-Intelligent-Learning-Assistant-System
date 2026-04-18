@@ -3,10 +3,12 @@ package com.aiassistant.learning.service.assistant.tool;
 import com.aiassistant.learning.dto.ai.QuestionGenerateRequest;
 import com.aiassistant.learning.service.AiTaskService;
 import com.aiassistant.learning.service.assistant.AbstractAssistantTool;
+import com.aiassistant.learning.service.assistant.AssistantTaskIntentParser;
 import com.aiassistant.learning.service.assistant.AssistantToolSupport;
 import com.aiassistant.learning.vo.ai.AiTaskDetailVO;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.stereotype.Component;
 
@@ -14,10 +16,16 @@ import org.springframework.stereotype.Component;
 public class QuestionGenerateTaskAssistantTool extends AbstractAssistantTool {
 
     private final AiTaskService aiTaskService;
+    private final AssistantTaskIntentParser taskIntentParser;
 
-    public QuestionGenerateTaskAssistantTool(AiTaskService aiTaskService, ObjectMapper objectMapper) {
+    public QuestionGenerateTaskAssistantTool(
+            AiTaskService aiTaskService,
+            AssistantTaskIntentParser taskIntentParser,
+            ObjectMapper objectMapper
+    ) {
         super(objectMapper);
         this.aiTaskService = aiTaskService;
+        this.taskIntentParser = taskIntentParser;
     }
 
     @Override
@@ -34,28 +42,42 @@ public class QuestionGenerateTaskAssistantTool extends AbstractAssistantTool {
     public ToolExecutionResult execute(ToolContext context) {
         LocalDateTime startedAt = LocalDateTime.now();
         Long materialId = AssistantToolSupport.resolveMaterialId(context.session());
-        QuestionGenerateRequest request = new QuestionGenerateRequest();
-        request.setModelName(context.modelName());
-        request.setQuestionCount(8);
-        request.setSingleCount(5);
-        request.setJudgeCount(2);
-        request.setShortAnswerCount(1);
-        request.setDifficultyLevel(3);
-        Map<String, Object> args = Map.of(
-                "materialId", materialId,
-                "questionCount", request.getQuestionCount(),
-                "singleCount", request.getSingleCount(),
-                "judgeCount", request.getJudgeCount(),
-                "shortAnswerCount", request.getShortAnswerCount(),
-                "difficultyLevel", request.getDifficultyLevel()
+        AssistantTaskIntentParser.QuestionTaskOptions options = taskIntentParser.parseQuestionRequest(
+                context.userMessage(),
+                context.modelName()
         );
+        QuestionGenerateRequest request = new QuestionGenerateRequest();
+        request.setModelName(options.modelName());
+        request.setQuestionCount(options.questionCount());
+        request.setSingleCount(options.singleCount());
+        request.setJudgeCount(options.judgeCount());
+        request.setShortAnswerCount(options.shortAnswerCount());
+        request.setDifficultyLevel(options.difficultyLevel());
+        Map<String, Object> args = new LinkedHashMap<>();
+        args.put("materialId", materialId);
+        args.put("questionCount", request.getQuestionCount());
+        args.put("singleCount", request.getSingleCount());
+        args.put("judgeCount", request.getJudgeCount());
+        args.put("shortAnswerCount", request.getShortAnswerCount());
+        args.put("difficultyLevel", request.getDifficultyLevel());
+        if (request.getModelName() != null) {
+            args.put("modelName", request.getModelName());
+        }
+        if (options.adjustmentNote() != null) {
+            args.put("adjustmentNote", options.adjustmentNote());
+        }
         try {
             AiTaskDetailVO detail = aiTaskService.submitQuestionGenerateTask(context.userId(), materialId, request);
-            String summary = "已为当前资料创建 AI 出题任务，任务号 #%s，当前状态 %s。".formatted(
+            String summary = "已为当前资料创建 AI 出题任务（单选 %s、判断 %s、简答 %s，难度 %s），任务号 #%s，当前状态 %s。%s".formatted(
+                    request.getSingleCount(),
+                    request.getJudgeCount(),
+                    request.getShortAnswerCount(),
+                    request.getDifficultyLevel(),
                     detail.getId(),
-                    detail.getStatus()
+                    detail.getStatus(),
+                    options.adjustmentNote() == null ? "" : options.adjustmentNote()
             );
-            return success(name(), args, detail, summary, startedAt);
+            return success(name(), args, detail, summary.trim(), startedAt);
         } catch (Exception exception) {
             return failure(name(), args, exception.getMessage(), startedAt);
         }

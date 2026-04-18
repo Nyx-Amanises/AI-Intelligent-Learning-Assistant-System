@@ -163,6 +163,7 @@
       v-model="summaryDialogVisible"
       width="920px"
       top="5vh"
+      :close-on-click-modal="false"
       destroy-on-close
       class="summary-dialog"
     >
@@ -226,6 +227,7 @@
       v-model="previewDialogVisible"
       width="920px"
       top="5vh"
+      :close-on-click-modal="false"
       destroy-on-close
       class="summary-dialog"
     >
@@ -278,12 +280,14 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { getAllSummaryHistoryApi, submitSummaryTaskApi, type AiTaskDetail } from '@/api/modules/ai'
 import { getMaterialDetailApi, getMaterialPageApi } from '@/api/modules/material'
 import { isAiTaskSuccess, isAiTaskTerminal, parseAiTaskResult, waitForAiTask } from '@/utils/aiTask'
 
 const route = useRoute()
+const router = useRouter()
+const ASSISTANT_MATERIAL_QUERY_KEY = 'assistantMaterialId'
 const materialId = ref<number>()
 const summaryType = ref('STANDARD')
 const filterMaterialId = ref<number>()
@@ -337,6 +341,12 @@ const taskStatusText = computed(() => {
 
 watch([filterMaterialId, filterSummaryType, keyword], () => {
   pagination.current = 1
+})
+
+watch([summaryDialogVisible, previewDialogVisible], ([summaryVisible, previewVisible]) => {
+  if (!summaryVisible && !previewVisible) {
+    void syncAssistantMaterialContext()
+  }
 })
 
 const formatSummaryType = (value?: string) => {
@@ -423,6 +433,21 @@ const resetFilters = () => {
   keyword.value = ''
 }
 
+const syncAssistantMaterialContext = async (targetMaterialId?: number) => {
+  const currentMaterialId = Number(route.query[ASSISTANT_MATERIAL_QUERY_KEY] || 0) || undefined
+  if (currentMaterialId === targetMaterialId) {
+    return
+  }
+
+  const nextQuery = { ...route.query }
+  if (targetMaterialId) {
+    nextQuery[ASSISTANT_MATERIAL_QUERY_KEY] = String(targetMaterialId)
+  } else {
+    delete nextQuery[ASSISTANT_MATERIAL_QUERY_KEY]
+  }
+  await router.replace({ path: route.path, query: nextQuery })
+}
+
 const openGenerateDialog = () => {
   generateDialogVisible.value = true
 }
@@ -430,11 +455,13 @@ const openGenerateDialog = () => {
 const openSummaryDialog = (item: any) => {
   activeSummary.value = item
   summaryDialogVisible.value = true
+  void syncAssistantMaterialContext(item?.materialId)
 }
 
 const previewMaterial = async (item: any) => {
   await loadMaterialDetail(item.materialId)
   previewDialogVisible.value = true
+  void syncAssistantMaterialContext(item?.materialId)
 }
 
 const quickGenerateForMaterial = (id: number) => {

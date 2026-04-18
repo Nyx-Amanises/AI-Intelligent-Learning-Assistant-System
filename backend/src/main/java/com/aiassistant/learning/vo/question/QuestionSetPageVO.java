@@ -10,6 +10,8 @@ public class QuestionSetPageVO {
 
     private Long id;
 
+    private Long materialId;
+
     private String title;
 
     private Integer questionCount;

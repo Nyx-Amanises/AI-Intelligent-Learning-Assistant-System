@@ -28,6 +28,7 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
     private final AssistantMemoryService assistantMemoryService;
     private final AiConfigService aiConfigService;
     private final AiChatService aiChatService;
+    private final AssistantTaskIntentParser taskIntentParser;
     private final ObjectMapper objectMapper;
 
     public AssistantAgentOrchestratorImpl(
@@ -35,12 +36,14 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
             AssistantMemoryService assistantMemoryService,
             AiConfigService aiConfigService,
             AiChatService aiChatService,
+            AssistantTaskIntentParser taskIntentParser,
             ObjectMapper objectMapper
     ) {
         this.toolRegistry = toolRegistry;
         this.assistantMemoryService = assistantMemoryService;
         this.aiConfigService = aiConfigService;
         this.aiChatService = aiChatService;
+        this.taskIntentParser = taskIntentParser;
         this.objectMapper = objectMapper;
     }
 
@@ -112,6 +115,10 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
         LinkedHashSet<String> toolNames = new LinkedHashSet<>();
         List<PlannedTool> plan = new ArrayList<>();
         String normalizedMessage = userMessage == null ? "" : userMessage.trim();
+        boolean summaryIntent = taskIntentParser.looksLikeSummaryRequest(normalizedMessage)
+                || AssistantToolSupport.containsAnyIgnoreCase(normalizedMessage, SUMMARY_TASK_KEYWORDS);
+        boolean questionIntent = taskIntentParser.looksLikeQuestionRequest(normalizedMessage)
+                || AssistantToolSupport.containsAnyIgnoreCase(normalizedMessage, QUESTION_TASK_KEYWORDS);
 
         if (AssistantToolSupport.resolveTaskId(session, normalizedMessage) != null
                 && AssistantToolSupport.containsAnyIgnoreCase(normalizedMessage, TASK_STATUS_KEYWORDS)) {
@@ -126,9 +133,9 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
             addPlan(plan, toolNames, "question_set.detail", "当前会话绑定了题集");
         }
         if (AssistantToolSupport.resolveMaterialId(session) != null) {
-            if (AssistantToolSupport.containsAnyIgnoreCase(normalizedMessage, SUMMARY_TASK_KEYWORDS)) {
+            if (summaryIntent) {
                 addPlan(plan, toolNames, "task.submit_summary", "用户明确提出生成总结");
-            } else if (AssistantToolSupport.containsAnyIgnoreCase(normalizedMessage, QUESTION_TASK_KEYWORDS)) {
+            } else if (questionIntent) {
                 addPlan(plan, toolNames, "task.submit_question_generate", "用户明确提出生成题目");
             } else if (AssistantToolSupport.containsAnyIgnoreCase(normalizedMessage, MATERIAL_DETAIL_KEYWORDS)) {
                 addPlan(plan, toolNames, "material.detail", "用户更像在问当前资料基本信息");
