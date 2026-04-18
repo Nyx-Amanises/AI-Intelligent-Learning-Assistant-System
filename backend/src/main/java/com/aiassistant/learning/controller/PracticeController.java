@@ -2,6 +2,7 @@ package com.aiassistant.learning.controller;
 
 import com.aiassistant.learning.common.result.ApiResponse;
 import com.aiassistant.learning.context.UserContext;
+import com.aiassistant.learning.dto.practice.PracticeSessionRenameRequest;
 import com.aiassistant.learning.dto.practice.PracticeStartRequest;
 import com.aiassistant.learning.dto.practice.PracticeSubmitRequest;
 import com.aiassistant.learning.service.PracticeService;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -54,6 +56,16 @@ public class PracticeController {
     public ApiResponse<PracticeDetailVO> detail(@PathVariable Long sessionId) {
         Long userId = UserContext.getCurrentUserId();
         return ApiResponse.success(practiceService.getPracticeDetail(userId, sessionId));
+    }
+
+    @PutMapping("/{sessionId}/name")
+    public ApiResponse<Void> rename(
+            @PathVariable Long sessionId,
+            @Valid @RequestBody PracticeSessionRenameRequest request
+    ) {
+        Long userId = UserContext.getCurrentUserId();
+        practiceService.renamePracticeSession(userId, sessionId, request.getSessionName());
+        return ApiResponse.success("练习名称已更新", null);
     }
 
     @GetMapping("/{sessionId}/review-status")

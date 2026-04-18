@@ -144,11 +144,24 @@
           </el-select>
         </el-form-item>
         <div class="workspace-form-grid workspace-form-grid--compact">
+          <el-form-item label="题集名称">
+            <el-input
+              v-model="form.questionSetTitle"
+              maxlength="200"
+              show-word-limit
+              placeholder="请输入题集名称"
+            />
+          </el-form-item>
           <el-form-item label="模型名称">
             <el-input v-model="form.modelName" placeholder="留空则使用当前默认模型" />
           </el-form-item>
+        </div>
+        <div class="workspace-form-grid workspace-form-grid--compact">
           <el-form-item label="题目总数">
             <el-input :model-value="`${totalQuestionCount} 道`" readonly />
+          </el-form-item>
+          <el-form-item label="默认名称参考">
+            <el-input :model-value="lastAutoQuestionSetTitle || 'AI练习题'" readonly />
           </el-form-item>
         </div>
         <div class="workspace-form-grid workspace-form-grid--compact">
@@ -289,12 +302,14 @@ const aiConfig = ref({
 
 const form = reactive({
   materialId: undefined as number | undefined,
+  questionSetTitle: '',
   modelName: '',
   singleCount: 3,
   judgeCount: 1,
   shortAnswerCount: 1,
   difficultyLevel: 3
 })
+const lastAutoQuestionSetTitle = ref('')
 
 const filters = reactive({
   keyword: '',
@@ -346,6 +361,19 @@ watch(drawerVisible, (visible) => {
 })
 
 watch(
+  () => form.materialId,
+  () => {
+    syncDefaultQuestionSetTitle()
+  }
+)
+
+watch(generateDialogVisible, (visible) => {
+  if (visible) {
+    syncDefaultQuestionSetTitle()
+  }
+})
+
+watch(
   () => [
     preferredAssistantQuestionContext.value.questionSetId,
     preferredAssistantQuestionContext.value.materialId
@@ -389,6 +417,25 @@ const buildSegmentMeta = (segment: any) => {
     parts.push(`相似度 ${Number(segment.score).toFixed(4)}`)
   }
   return parts.join(' · ') || '资料摘录'
+}
+
+const buildDefaultQuestionSetTitle = (materialId?: number) => {
+  if (!materialId) {
+    return 'AI练习题'
+  }
+  const material = materials.value.find((item) => item.id === materialId)
+  if (!material?.title) {
+    return 'AI练习题'
+  }
+  return `${material.title} - AI练习题`
+}
+
+const syncDefaultQuestionSetTitle = () => {
+  const nextAutoTitle = buildDefaultQuestionSetTitle(form.materialId)
+  if (!form.questionSetTitle.trim() || form.questionSetTitle === lastAutoQuestionSetTitle.value) {
+    form.questionSetTitle = nextAutoTitle
+  }
+  lastAutoQuestionSetTitle.value = nextAutoTitle
 }
 
 async function syncAssistantQuestionContext(questionSetId?: number, materialId?: number) {
@@ -486,6 +533,7 @@ const generateQuestionSet = async () => {
   try {
     const submitRes = await submitQuestionGenerateTaskApi(form.materialId, {
       modelName: form.modelName.trim() || undefined,
+      title: form.questionSetTitle.trim() || undefined,
       questionCount: totalQuestionCount.value,
       singleCount: form.singleCount,
       judgeCount: form.judgeCount,
@@ -591,5 +639,6 @@ onMounted(async () => {
   if (queryId && materials.value.some((item) => item.id === queryId)) {
     form.materialId = queryId
   }
+  syncDefaultQuestionSetTitle()
 })
 </script>

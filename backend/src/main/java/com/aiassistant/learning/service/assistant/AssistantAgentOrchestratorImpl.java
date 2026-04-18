@@ -42,7 +42,7 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
             "单选", "选择题", "判断", "简答", "默认", "全部", "全都", "只出", "都出", "题量", "数量", "道题"
     );
     private static final List<String> MATERIAL_SELECTION_REPLY_HINT_KEYWORDS = List.of(
-            "这个", "那个", "这份", "那份", "资料", "序号", "第"
+            "这个", "那个", "这份", "那份", "资料", "序号", "第", "id", "#"
     );
 
     private final AssistantToolRegistry toolRegistry;
@@ -301,7 +301,7 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
                 }
                 String promptText = StringUtils.hasText(payload.getPromptText())
                         ? payload.getPromptText()
-                        : "我还没确认你指的是哪份资料。你可以直接回复序号，或者把资料标题说完整一点。";
+                        : "我还没确认你指的是哪份资料。你可以直接回复序号、资料ID（例如 #7），或者把资料标题说完整一点。";
                 executions.add(waitingExecution(
                         "material.search",
                         Map.of("pending", true),

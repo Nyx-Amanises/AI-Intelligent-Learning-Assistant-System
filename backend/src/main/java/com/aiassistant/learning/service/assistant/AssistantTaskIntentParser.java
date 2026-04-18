@@ -441,8 +441,14 @@ public class AssistantTaskIntentParser {
             return null;
         }
         String normalized = normalize(userMessage);
+        String cleanedMessage = cleanMaterialQueryText(userMessage);
         if (candidates.size() == 1 && (isDefaultChoice(userMessage) || containsAny(normalized, "就这个", "这个", "它"))) {
             return candidates.get(0).getId();
+        }
+
+        Long explicitId = extractExplicitCandidateId(userMessage, candidates.size());
+        if (explicitId != null && candidates.stream().anyMatch(candidate -> explicitId.equals(candidate.getId()))) {
+            return explicitId;
         }
 
         Matcher matcher = ORDINAL_SELECTION_PATTERN.matcher(userMessage);
@@ -454,7 +460,7 @@ public class AssistantTaskIntentParser {
         }
 
         List<AssistantMaterialCandidate> matchedCandidates = candidates.stream()
-                .filter(candidate -> normalize(candidate.getTitle()).contains(normalized))
+                .filter(candidate -> matchesCandidateSelection(candidate, normalized, cleanedMessage))
                 .toList();
         if (matchedCandidates.size() == 1) {
             return matchedCandidates.get(0).getId();
@@ -947,6 +953,54 @@ public class AssistantTaskIntentParser {
             return null;
         }
         return cleaned;
+    }
+
+    private Long extractExplicitCandidateId(String userMessage, int candidateSize) {
+        if (!StringUtils.hasText(userMessage)) {
+            return null;
+        }
+        Matcher explicitIdMatcher = Pattern.compile("(?:#|id\\s*(?:为|是|=)?\\s*)(\\d+)", Pattern.CASE_INSENSITIVE)
+                .matcher(userMessage);
+        if (explicitIdMatcher.find()) {
+            return Long.parseLong(explicitIdMatcher.group(1));
+        }
+
+        String trimmed = userMessage.trim();
+        if (!trimmed.matches("^\\d+$")) {
+            return null;
+        }
+        long numericValue = Long.parseLong(trimmed);
+        return numericValue > candidateSize ? numericValue : null;
+    }
+
+    private boolean matchesCandidateSelection(
+            AssistantMaterialCandidate candidate,
+            String normalizedMessage,
+            String cleanedMessage
+    ) {
+        if (candidate == null) {
+            return false;
+        }
+        String normalizedTitle = normalize(candidate.getTitle());
+        if (StringUtils.hasText(normalizedMessage) && normalizedTitle.contains(normalizedMessage)) {
+            return true;
+        }
+        if (StringUtils.hasText(cleanedMessage) && normalizedTitle.contains(normalize(cleanedMessage))) {
+            return true;
+        }
+        if (candidate.getId() != null && StringUtils.hasText(normalizedMessage)) {
+            String candidateIdToken = "#" + candidate.getId();
+            if (normalize(candidateIdToken).equals(normalizedMessage)
+                    || normalize(candidateIdToken).contains(normalizedMessage)
+                    || normalizedMessage.contains(normalize(candidateIdToken))) {
+                return true;
+            }
+            String combined = normalize((candidate.getTitle() == null ? "" : candidate.getTitle()) + " #" + candidate.getId());
+            if (combined.contains(normalizedMessage) || normalizedMessage.contains(combined)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private boolean isAllMaterialsQuery(String userMessage) {

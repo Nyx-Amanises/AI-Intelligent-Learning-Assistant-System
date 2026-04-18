@@ -237,6 +237,21 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    public void renameMaterial(Long userId, Long materialId, String title) {
+        StudyMaterial material = getUserOwnedMaterial(userId, materialId);
+        String previousTitle = material.getTitle();
+        String normalizedTitle = normalizeTitle(title, "资料标题不能为空");
+        material.setTitle(normalizedTitle);
+        this.updateById(material);
+        materialSegmentMapper.update(null, Wrappers.<MaterialSegment>lambdaUpdate()
+                .eq(MaterialSegment::getMaterialId, materialId)
+                .eq(MaterialSegment::getSegmentNo, 1)
+                .eq(StringUtils.hasText(previousTitle), MaterialSegment::getSectionTitle, previousTitle)
+                .set(MaterialSegment::getSectionTitle, normalizedTitle));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
     public void parseMaterial(Long userId, Long materialId) {
         StudyMaterial material = getUserOwnedMaterial(userId, materialId);
         if (!StringUtils.hasText(material.getFileUrl())) {
@@ -616,6 +631,17 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
     private String extractBaseName(String fileName) {
         int index = fileName.lastIndexOf(".");
         return index > 0 ? fileName.substring(0, index) : fileName;
+    }
+
+    private String normalizeTitle(String title, String emptyMessage) {
+        if (!StringUtils.hasText(title)) {
+            throw new BusinessException(emptyMessage);
+        }
+        String normalized = title.trim();
+        if (normalized.length() > 200) {
+            throw new BusinessException("标题长度不能超过200个字符");
+        }
+        return normalized;
     }
 
     private record ParsedContent(String text, Integer totalPages, List<ParsedSegment> segments) {

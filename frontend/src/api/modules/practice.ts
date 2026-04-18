@@ -16,6 +16,9 @@ export const getPracticePageApi = (params: Record<string, unknown>) =>
 
 export const getPracticeDetailApi = (sessionId: number) => http.get(`/practice/${sessionId}`)
 
+export const renamePracticeApi = (sessionId: number, sessionName: string) =>
+  http.put(`/practice/${sessionId}/name`, { sessionName })
+
 export const waitPracticeReviewApi = (sessionId: number, timeoutMs = 60000) =>
   http.get(`/practice/${sessionId}/review-status`, {
     params: { timeoutMs }

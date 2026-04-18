@@ -116,8 +116,8 @@ public class AiQuestionServiceImpl implements AiQuestionService {
         int questionCount = questionPlan.totalCount();
         int difficultyLevel = request.getDifficultyLevel() == null ? 3 : request.getDifficultyLevel();
         String defaultModel = aiConfigService.getResolvedConfig().defaultModel();
-        String modelName = StringUtils.hasText(request.getModelName()) ? request.getModelName() : defaultModel;
-        String promptText = buildQuestionSystemPrompt();
+            String modelName = StringUtils.hasText(request.getModelName()) ? request.getModelName() : defaultModel;
+            String promptText = buildQuestionSystemPrompt();
         List<MaterialSegment> contextSegments = resolveQuestionContextSegments(
                 userId,
                 material,
@@ -139,7 +139,7 @@ public class AiQuestionServiceImpl implements AiQuestionService {
         QuestionSet questionSet = new QuestionSet();
         questionSet.setUserId(userId);
         questionSet.setMaterialId(materialId);
-        questionSet.setTitle(material.getTitle() + " - AI练习题");
+        questionSet.setTitle(resolveQuestionSetTitle(material, request));
         questionSet.setSourceType("AI");
         questionSet.setQuestionCount(generatedQuestions.size());
         questionSet.setTotalScore(generatedQuestions.stream().mapToInt(GeneratedQuestion::score).sum());
@@ -805,6 +805,14 @@ public class AiQuestionServiceImpl implements AiQuestionService {
 
     private String trimToNull(String value) {
         return StringUtils.hasText(value) ? value.trim() : null;
+    }
+
+    private String resolveQuestionSetTitle(StudyMaterial material, QuestionGenerateRequest request) {
+        String requestedTitle = request == null ? null : trimToNull(request.getTitle());
+        if (!StringUtils.hasText(requestedTitle)) {
+            requestedTitle = (material == null ? "学习资料" : material.getTitle()) + " - AI练习题";
+        }
+        return requestedTitle.length() <= 200 ? requestedTitle : requestedTitle.substring(0, 200);
     }
 
     private String normalizeCorrectAnswer(String questionType, String value) {

@@ -163,7 +163,7 @@ public class MaterialChapterOutlineAssistantTool extends AbstractAssistantTool {
                     .append("》 · #")
                     .append(item.getId());
         }
-        builder.append(System.lineSeparator()).append("你直接回复序号，或者把资料标题说完整一点也可以，我会继续把目录展开。");
+        builder.append(System.lineSeparator()).append("你可以直接回复序号、资料ID，或者把资料标题说完整一点也可以，我会继续把目录展开。");
         return builder.toString();
     }
 

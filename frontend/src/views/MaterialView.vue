@@ -85,6 +85,13 @@
                 <el-button
                   link
                   type="primary"
+                  @click="openRenameDialog(row)"
+                >
+                  改名
+                </el-button>
+                <el-button
+                  link
+                  type="primary"
                   :loading="actionLoadingId === row.id && actionType === 'parse'"
                   @click="parseMaterial(row.id)"
                 >
@@ -164,6 +171,25 @@
         <div class="toolbar" style="margin-bottom: 0; justify-content: flex-end">
           <el-button @click="textDialogVisible = false">取消</el-button>
           <el-button type="primary" :loading="creating" @click="createMaterial">保存资料</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="renameDialogVisible" title="修改资料名称" width="520px" destroy-on-close>
+      <el-form label-position="top">
+        <el-form-item label="资料名称">
+          <el-input
+            v-model="renameForm.title"
+            maxlength="200"
+            show-word-limit
+            placeholder="请输入新的资料名称"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <div class="toolbar" style="margin-bottom: 0; justify-content: flex-end">
+          <el-button @click="renameDialogVisible = false">取消</el-button>
+          <el-button type="primary" :loading="renaming" @click="renameMaterial">保存</el-button>
         </div>
       </template>
     </el-dialog>
@@ -279,6 +305,7 @@ import {
   getMaterialDetailApi,
   getMaterialPageApi,
   parseMaterialApi,
+  renameMaterialApi,
   uploadMaterialApi,
   type MaterialPageItem
 } from '@/api/modules/material'
@@ -289,10 +316,12 @@ const total = ref(0)
 const detail = ref<any>(null)
 const drawerVisible = ref(false)
 const textDialogVisible = ref(false)
+const renameDialogVisible = ref(false)
 const retrievalDialogVisible = ref(false)
 const tableLoading = ref(false)
 const detailLoading = ref(false)
 const creating = ref(false)
+const renaming = ref(false)
 const uploading = ref(false)
 const retrievalLoading = ref(false)
 const actionLoadingId = ref<number | null>(null)
@@ -305,6 +334,11 @@ const form = reactive({
   difficultyLevel: 3,
   tags: '',
   contentText: ''
+})
+
+const renameForm = reactive({
+  id: 0,
+  title: ''
 })
 
 const filters = reactive({
@@ -543,6 +577,40 @@ const viewDetail = async (id: number) => {
     ElMessage.error(error.message || '加载资料详情失败')
   } finally {
     detailLoading.value = false
+  }
+}
+
+const openRenameDialog = (row: MaterialPageItem) => {
+  renameForm.id = row.id
+  renameForm.title = row.title
+  renameDialogVisible.value = true
+}
+
+const renameMaterial = async () => {
+  if (!renameForm.id) {
+    return
+  }
+  if (!renameForm.title.trim()) {
+    ElMessage.warning('请输入资料名称')
+    return
+  }
+
+  renaming.value = true
+  try {
+    await renameMaterialApi(renameForm.id, renameForm.title.trim())
+    ElMessage.success('资料名称已更新')
+    renameDialogVisible.value = false
+    if (detail.value?.id === renameForm.id) {
+      detail.value = {
+        ...detail.value,
+        title: renameForm.title.trim()
+      }
+    }
+    await loadMaterials()
+  } catch (error: any) {
+    ElMessage.error(error.message || '修改资料名称失败')
+  } finally {
+    renaming.value = false
   }
 }
 

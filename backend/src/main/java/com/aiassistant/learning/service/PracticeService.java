@@ -17,6 +17,8 @@ public interface PracticeService {
 
     PracticeDetailVO getPracticeDetail(Long userId, Long sessionId);
 
+    void renamePracticeSession(Long userId, Long sessionId, String sessionName);
+
     PracticeReviewStatusVO waitForAiReview(Long userId, Long sessionId, Long timeoutMs);
 
     void reviewPendingShortAnswers(Long sessionId);

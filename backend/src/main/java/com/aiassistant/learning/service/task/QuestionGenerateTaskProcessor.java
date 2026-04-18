@@ -35,6 +35,7 @@ public class QuestionGenerateTaskProcessor implements AiTaskProcessor {
 
         QuestionGenerateRequest request = new QuestionGenerateRequest();
         request.setModelName(payload.getModelName());
+        request.setTitle(payload.getTitle());
         request.setQuestionCount(payload.getQuestionCount());
         request.setSingleCount(payload.getSingleCount());
         request.setJudgeCount(payload.getJudgeCount());

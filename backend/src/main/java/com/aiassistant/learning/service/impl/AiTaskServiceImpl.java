@@ -99,6 +99,7 @@ public class AiTaskServiceImpl implements AiTaskService {
         QuestionGenerateTaskPayload payload = new QuestionGenerateTaskPayload();
         payload.setMaterialId(materialId);
         payload.setModelName(request.getModelName());
+        payload.setTitle(request.getTitle());
         payload.setQuestionCount(request.getQuestionCount());
         payload.setSingleCount(request.getSingleCount());
         payload.setJudgeCount(request.getJudgeCount());

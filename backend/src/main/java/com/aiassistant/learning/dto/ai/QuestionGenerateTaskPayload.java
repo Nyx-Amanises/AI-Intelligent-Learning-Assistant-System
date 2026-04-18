@@ -9,6 +9,8 @@ public class QuestionGenerateTaskPayload {
 
     private String modelName;
 
+    private String title;
+
     private Integer questionCount;
 
     private Integer singleCount;

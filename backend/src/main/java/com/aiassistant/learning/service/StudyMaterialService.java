@@ -26,6 +26,8 @@ public interface StudyMaterialService extends IService<StudyMaterial> {
 
     MaterialDetailVO getMaterialDetail(Long userId, Long materialId);
 
+    void renameMaterial(Long userId, Long materialId, String title);
+
     void parseMaterial(Long userId, Long materialId);
 
     void deleteMaterial(Long userId, Long materialId);

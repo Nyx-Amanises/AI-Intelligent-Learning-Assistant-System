@@ -9,6 +9,7 @@ export interface SummaryPayload {
 
 export interface QuestionGeneratePayload {
   modelName?: string
+  title?: string
   questionCount?: number
   singleCount?: number
   judgeCount?: number

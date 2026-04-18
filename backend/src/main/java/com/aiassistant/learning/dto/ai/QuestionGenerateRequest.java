@@ -2,12 +2,16 @@ package com.aiassistant.learning.dto.ai;
 
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 @Data
 public class QuestionGenerateRequest {
 
     private String modelName;
+
+    @Size(max = 200, message = "题集名称长度不能超过200个字符")
+    private String title;
 
     @Min(value = 1, message = "题目数量最少为1")
     @Max(value = 20, message = "题目数量最多为20")

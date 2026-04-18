@@ -64,6 +64,7 @@
               <span>{{ item.obtainedScore || 0 }}</span>
               <div class="workspace-action-row workspace-action-row--fit">
                 <el-button link type="primary" @click="openPracticeFromHistory(item.id)">查看</el-button>
+                <el-button link type="warning" @click="openRenameDialog(item)">改名</el-button>
                 <el-button
                   link
                   type="success"
@@ -110,7 +111,16 @@
               <div class="page-card practice-paper-hero">
                 <div class="practice-paper-hero__head">
                   <div>
-                    <h2 class="practice-paper-hero__title">{{ practiceDetail.sessionName }}</h2>
+                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+                      <h2 class="practice-paper-hero__title">{{ practiceDetail.sessionName }}</h2>
+                      <el-button
+                        link
+                        type="warning"
+                        @click="openRenameDialog({ id: practiceDetail.sessionId, sessionName: practiceDetail.sessionName })"
+                      >
+                        改名
+                      </el-button>
+                    </div>
                     <div class="practice-paper-hero__meta">
                       <span>题量: {{ practiceDetail.totalQuestions }}</span>
                       <span>满分: {{ practiceDetail.totalScore || 0 }}</span>
@@ -324,6 +334,25 @@
         </div>
       </div>
     </div>
+
+    <el-dialog v-model="renameDialogVisible" title="修改练习名称" width="520px" destroy-on-close>
+      <el-form label-position="top">
+        <el-form-item label="练习名称">
+          <el-input
+            v-model="renameForm.sessionName"
+            maxlength="200"
+            show-word-limit
+            placeholder="请输入新的练习名称"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <div class="toolbar" style="margin-bottom: 0; justify-content: flex-end">
+          <el-button @click="renameDialogVisible = false">取消</el-button>
+          <el-button type="primary" :loading="renaming" @click="renamePracticeSession">保存</el-button>
+        </div>
+      </template>
+    </el-dialog>
   </section>
 </template>
 
@@ -336,6 +365,7 @@ import {
   deletePracticeApi,
   getPracticeDetailApi,
   getPracticePageApi,
+  renamePracticeApi,
   startPracticeApi,
   submitPracticeApi
 } from '@/api/modules/practice'
@@ -350,15 +380,22 @@ const answerForm = ref<Record<number, string>>({})
 const historyLoading = ref(false)
 const detailLoading = ref(false)
 const submitting = ref(false)
+const renaming = ref(false)
 const activeTab = ref<'current' | 'history'>('current')
 const actionLoadingId = ref<number | null>(null)
 const activeQuestionId = ref<number | null>(null)
 const currentReviewTask = ref<AiTaskDetail | null>(null)
 const reviewTaskWaiting = ref(false)
+const renameDialogVisible = ref(false)
 let reviewTaskWaitAborted = false
 const page = reactive({
   current: 1,
   size: 10
+})
+
+const renameForm = reactive({
+  sessionId: 0,
+  sessionName: ''
 })
 
 const questionTypeOrder: Record<string, number> = {
@@ -607,6 +644,40 @@ const openPracticeFromHistory = async (sessionId: number) => {
   resetReviewTaskWaiting()
   await loadPracticeDetail(sessionId)
   activeTab.value = 'current'
+}
+
+const openRenameDialog = (item: { id: number; sessionName: string }) => {
+  renameForm.sessionId = item.id
+  renameForm.sessionName = item.sessionName
+  renameDialogVisible.value = true
+}
+
+const renamePracticeSession = async () => {
+  if (!renameForm.sessionId) {
+    return
+  }
+  if (!renameForm.sessionName.trim()) {
+    ElMessage.warning('请输入练习名称')
+    return
+  }
+
+  renaming.value = true
+  try {
+    await renamePracticeApi(renameForm.sessionId, renameForm.sessionName.trim())
+    ElMessage.success('练习名称已更新')
+    renameDialogVisible.value = false
+    if (practiceDetail.value?.sessionId === renameForm.sessionId) {
+      practiceDetail.value = {
+        ...practiceDetail.value,
+        sessionName: renameForm.sessionName.trim()
+      }
+    }
+    await loadHistory()
+  } catch (error: any) {
+    ElMessage.error(error.message || '修改练习名称失败')
+  } finally {
+    renaming.value = false
+  }
 }
 
 const restartPractice = async (questionSetId?: number) => {

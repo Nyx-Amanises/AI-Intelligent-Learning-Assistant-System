@@ -234,6 +234,20 @@ public class PracticeServiceImpl implements PracticeService {
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void renamePracticeSession(Long userId, Long sessionId, String sessionName) {
+        PracticeSession session = practiceSessionMapper.selectOne(new LambdaQueryWrapper<PracticeSession>()
+                .eq(PracticeSession::getId, sessionId)
+                .eq(PracticeSession::getUserId, userId)
+                .last("limit 1"));
+        if (session == null) {
+            throw new BusinessException(404, "练习记录不存在");
+        }
+        session.setSessionName(normalizeSessionName(sessionName));
+        practiceSessionMapper.updateById(session);
+    }
+
+    @Override
     public PracticeReviewStatusVO waitForAiReview(Long userId, Long sessionId, Long timeoutMs) {
         PracticeSession session = practiceSessionMapper.selectOne(new LambdaQueryWrapper<PracticeSession>()
                 .eq(PracticeSession::getId, sessionId)
@@ -941,6 +955,17 @@ public class PracticeServiceImpl implements PracticeService {
             return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
         }
         return BigDecimal.valueOf(correctCount * 100.0 / total).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private String normalizeSessionName(String sessionName) {
+        if (!StringUtils.hasText(sessionName)) {
+            throw new BusinessException("练习名称不能为空");
+        }
+        String normalized = sessionName.trim();
+        if (normalized.length() > 200) {
+            throw new BusinessException("练习名称长度不能超过200个字符");
+        }
+        return normalized;
     }
 
     private PracticeDetailVO buildPracticeDetail(

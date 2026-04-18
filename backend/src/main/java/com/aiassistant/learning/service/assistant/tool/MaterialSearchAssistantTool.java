@@ -158,7 +158,9 @@ public class MaterialSearchAssistantTool extends AbstractAssistantTool {
                     .append(" · #")
                     .append(candidate.getId());
         }
-        builder.append(System.lineSeparator()).append("你直接回复序号，或者把资料标题再说完整一点也可以。");
+        builder.append(System.lineSeparator()).append("你可以直接回复序号、资料ID（例如 #")
+                .append(candidates.get(0).getId())
+                .append("），或者把资料标题再说完整一点也可以。");
         return builder.toString();
     }
 }
