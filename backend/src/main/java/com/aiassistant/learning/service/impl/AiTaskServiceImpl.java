@@ -100,6 +100,9 @@ public class AiTaskServiceImpl implements AiTaskService {
         payload.setMaterialId(materialId);
         payload.setModelName(request.getModelName());
         payload.setQuestionCount(request.getQuestionCount());
+        payload.setSingleCount(request.getSingleCount());
+        payload.setJudgeCount(request.getJudgeCount());
+        payload.setShortAnswerCount(request.getShortAnswerCount());
         payload.setDifficultyLevel(request.getDifficultyLevel());
 
         AiTask task = createTaskRecord(
@@ -236,6 +239,13 @@ public class AiTaskServiceImpl implements AiTaskService {
 
         scheduleExecuteAfterCommit(task.getId());
         return toDetailVO(task);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteTask(Long userId, Long taskId) {
+        AiTask task = getOwnedTask(userId, taskId);
+        aiTaskMapper.deleteById(task.getId());
     }
 
     @Override

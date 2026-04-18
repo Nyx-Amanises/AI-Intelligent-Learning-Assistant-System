@@ -15,11 +15,14 @@ import com.aiassistant.learning.mapper.QuestionSetMapper;
 import com.aiassistant.learning.service.AiChatService;
 import com.aiassistant.learning.service.AiConfigService;
 import com.aiassistant.learning.service.PracticeService;
+import com.aiassistant.learning.service.RetrievalService;
+import com.aiassistant.learning.service.VectorStoreService.RetrievedSegment;
 import com.aiassistant.learning.vo.page.PageVO;
 import com.aiassistant.learning.vo.practice.PracticeAnswerVO;
 import com.aiassistant.learning.vo.practice.PracticeDetailVO;
 import com.aiassistant.learning.vo.practice.PracticeReviewStatusVO;
 import com.aiassistant.learning.vo.practice.PracticeSessionPageVO;
+import com.aiassistant.learning.vo.rag.RetrievedSegmentVO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -28,6 +31,8 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -50,6 +55,15 @@ public class PracticeServiceImpl implements PracticeService {
     private static final String QUESTION_TYPE_SHORT_ANSWER = "SHORT_ANSWER";
     private static final String SESSION_STATUS_IN_PROGRESS = "IN_PROGRESS";
     private static final String SESSION_STATUS_SUBMITTED = "SUBMITTED";
+    private static final int SHORT_ANSWER_SOURCE_LIMIT = 2;
+    private static final int SHORT_ANSWER_SOURCE_CANDIDATE_LIMIT = 8;
+    private static final Set<String> SHORT_ANSWER_LOW_SIGNAL_MARKERS = Set.of(
+            "参考文档", "参考链接", "参考资料", "附录", "目录", "模板", "资源", "官网", "官方文档", "mdpress"
+    );
+    private static final Set<String> SHORT_ANSWER_KEYWORD_STOP_WORDS = Set.of(
+            "根据", "资料", "材料", "内容", "简要", "说明", "概括", "写出", "列出", "任意", "其中",
+            "一个", "两个", "三个", "四个", "答案", "学生", "题目", "示例", "即可", "作答", "回答"
+    );
 
     private final PracticeSessionMapper practiceSessionMapper;
     private final PracticeAnswerMapper practiceAnswerMapper;
@@ -57,6 +71,7 @@ public class PracticeServiceImpl implements PracticeService {
     private final QuestionItemMapper questionItemMapper;
     private final AiConfigService aiConfigService;
     private final AiChatService aiChatService;
+    private final RetrievalService retrievalService;
     private final ObjectMapper objectMapper;
     private final PracticeService selfPracticeService;
 
@@ -67,6 +82,7 @@ public class PracticeServiceImpl implements PracticeService {
             QuestionItemMapper questionItemMapper,
             AiConfigService aiConfigService,
             AiChatService aiChatService,
+            RetrievalService retrievalService,
             ObjectMapper objectMapper,
             @Lazy PracticeService selfPracticeService
     ) {
@@ -76,6 +92,7 @@ public class PracticeServiceImpl implements PracticeService {
         this.questionItemMapper = questionItemMapper;
         this.aiConfigService = aiConfigService;
         this.aiChatService = aiChatService;
+        this.retrievalService = retrievalService;
         this.objectMapper = objectMapper;
         this.selfPracticeService = selfPracticeService;
     }
@@ -103,7 +120,7 @@ public class PracticeServiceImpl implements PracticeService {
         session.setSessionStatus(SESSION_STATUS_IN_PROGRESS);
         practiceSessionMapper.insert(session);
 
-        return buildPracticeDetail(session, questions, List.of());
+        return buildPracticeDetail(userId, session, questions, List.of());
     }
 
     @Override
@@ -164,7 +181,7 @@ public class PracticeServiceImpl implements PracticeService {
         List<PracticeAnswer> answers = practiceAnswerMapper.selectList(new LambdaQueryWrapper<PracticeAnswer>()
                 .eq(PracticeAnswer::getSessionId, session.getId())
                 .orderByAsc(PracticeAnswer::getId));
-        return buildPracticeDetail(session, questions, answers);
+        return buildPracticeDetail(userId, session, questions, answers);
     }
 
     @Override
@@ -213,7 +230,7 @@ public class PracticeServiceImpl implements PracticeService {
         List<PracticeAnswer> answers = practiceAnswerMapper.selectList(new LambdaQueryWrapper<PracticeAnswer>()
                 .eq(PracticeAnswer::getSessionId, sessionId)
                 .orderByAsc(PracticeAnswer::getId));
-        return buildPracticeDetail(session, questions, answers);
+        return buildPracticeDetail(userId, session, questions, answers);
     }
 
     @Override
@@ -277,7 +294,12 @@ public class PracticeServiceImpl implements PracticeService {
             if (question == null || !isShortAnswer(question.getQuestionType())) {
                 continue;
             }
-            AnswerReview review = evaluateShortAnswerWithAi(question, answer.getUserAnswer());
+            AnswerReview review = evaluateShortAnswerWithAi(
+                    session.getUserId(),
+                    session.getMaterialId(),
+                    question,
+                    answer.getUserAnswer()
+            );
             answer.setIsCorrect(review.correct() ? 1 : 0);
             answer.setObtainedScore(review.score());
             answer.setReviewMode(review.mode());
@@ -393,7 +415,12 @@ public class PracticeServiceImpl implements PracticeService {
         return question.getCorrectAnswer().trim().equalsIgnoreCase(userAnswer.trim());
     }
 
-    private AnswerReview evaluateShortAnswerWithAi(QuestionItem question, String userAnswer) {
+    private AnswerReview evaluateShortAnswerWithAi(
+            Long userId,
+            Long materialId,
+            QuestionItem question,
+            String userAnswer
+    ) {
         int fullScore = safeScore(question.getScore());
         if (!StringUtils.hasText(userAnswer)) {
             return new AnswerReview(
@@ -416,6 +443,12 @@ public class PracticeServiceImpl implements PracticeService {
             );
         }
 
+        List<RetrievedSegmentVO> sourceSegments = resolvePracticeAnswerSourceSegments(
+                userId,
+                materialId,
+                question
+        );
+
         AiConfigService.ResolvedAiConfig config = aiConfigService.getResolvedConfig();
         if (!Boolean.TRUE.equals(config.enabled())
                 || Boolean.TRUE.equals(config.mockMode())
@@ -428,7 +461,7 @@ public class PracticeServiceImpl implements PracticeService {
             String modelName = StringUtils.hasText(config.defaultModel()) ? config.defaultModel() : "gpt-4o-mini";
             String content = aiChatService.chat(
                     buildShortAnswerSystemPrompt(),
-                    buildShortAnswerUserPrompt(question, userAnswer, referenceAnswer, fullScore),
+                    buildShortAnswerUserPrompt(question, userAnswer, referenceAnswer, fullScore, sourceSegments),
                     modelName,
                     0.2
             );
@@ -524,7 +557,7 @@ public class PracticeServiceImpl implements PracticeService {
     private String buildShortAnswerSystemPrompt() {
         return """
                 你是一名严谨的中文主观题阅卷助手。
-                请严格依据题目、参考答案、题目解析和学生答案给出分数。
+                请严格依据题目、资料摘录、参考答案、题目解析和学生答案给出分数。
                 评分要求：
                 1. score 必须是 0 到满分之间的整数。
                 2. 可以给部分分，但不要超过满分。
@@ -544,7 +577,8 @@ public class PracticeServiceImpl implements PracticeService {
             QuestionItem question,
             String userAnswer,
             String referenceAnswer,
-            int fullScore
+            int fullScore,
+            List<RetrievedSegmentVO> sourceSegments
     ) {
         String analysis = StringUtils.hasText(question.getAnswerAnalysis()) ? question.getAnswerAnalysis().trim() : "无";
         return """
@@ -562,6 +596,11 @@ public class PracticeServiceImpl implements PracticeService {
                 题目解析：
                 %s
 
+                评分时请优先参考最贴近题目要点的资料摘录，不要泛化到目录、附录、参考链接。
+
+                资料摘录：
+                %s
+
                 学生答案：
                 %s
                 """.formatted(
@@ -569,8 +608,220 @@ public class PracticeServiceImpl implements PracticeService {
                 fullScore,
                 referenceAnswer,
                 analysis,
+                formatRagSegments(sourceSegments),
                 userAnswer
         );
+    }
+
+    private List<RetrievedSegmentVO> resolvePracticeAnswerSourceSegments(
+            Long userId,
+            Long materialId,
+            QuestionItem question
+    ) {
+        if (userId == null || materialId == null || question == null) {
+            return List.of();
+        }
+
+        try {
+            List<RetrievedSegment> segments = retrievalService.retrieveMaterialSegments(
+                    userId,
+                    materialId,
+                    buildPracticeRetrievalQuery(question),
+                    SHORT_ANSWER_SOURCE_CANDIDATE_LIMIT
+            );
+            return selectPracticeSourceSegments(question, AiQuestionServiceImpl.toRetrievedSegmentVOList(segments));
+        } catch (Exception exception) {
+            return List.of();
+        }
+    }
+
+    private String buildPracticeRetrievalQuery(QuestionItem question) {
+        StringBuilder builder = new StringBuilder();
+        builder.append(trimForQuery(question.getStemText(), 80)).append(" ");
+        if (StringUtils.hasText(question.getKnowledgePoint())) {
+            builder.append(question.getKnowledgePoint().trim()).append(" ");
+        }
+        for (String keyword : buildPracticeFocusKeywords(question)) {
+            builder.append(trimForQuery(keyword, 24)).append(" ");
+        }
+        if (StringUtils.hasText(question.getAnswerAnalysis())) {
+            builder.append(trimForQuery(question.getAnswerAnalysis(), 60)).append(" ");
+        }
+        builder.append("核心知识点 关键要点 定义 特点 作用 原理");
+        return builder.toString().trim();
+    }
+
+    private String formatRagSegments(List<RetrievedSegmentVO> sourceSegments) {
+        if (sourceSegments == null || sourceSegments.isEmpty()) {
+            return "暂无命中的资料摘录，可仅结合参考答案与题目解析评分。";
+        }
+
+        StringBuilder builder = new StringBuilder();
+        for (RetrievedSegmentVO segment : sourceSegments) {
+            builder.append("[片段#")
+                    .append(segment.getSegmentNo() == null ? "--" : segment.getSegmentNo())
+                    .append("]");
+            if (segment.getPageNo() != null) {
+                builder.append("[第 ").append(segment.getPageNo()).append(" 页]");
+            }
+            if (StringUtils.hasText(segment.getSectionTitle())) {
+                builder.append("[")
+                        .append(segment.getSectionTitle().trim())
+                        .append("]");
+            }
+            builder.append(" ")
+                    .append(trimSourceExcerpt(segment.getContentText()))
+                    .append(System.lineSeparator());
+        }
+        return builder.toString().trim();
+    }
+
+    private List<RetrievedSegmentVO> selectPracticeSourceSegments(
+            QuestionItem question,
+            List<RetrievedSegmentVO> candidates
+    ) {
+        if (candidates == null || candidates.isEmpty()) {
+            return List.of();
+        }
+
+        List<String> focusKeywords = buildPracticeFocusKeywords(question);
+        List<RankedPracticeSource> rankedSources = new ArrayList<>();
+        for (int index = 0; index < candidates.size(); index++) {
+            RetrievedSegmentVO segment = candidates.get(index);
+            rankedSources.add(new RankedPracticeSource(
+                    segment,
+                    scorePracticeSourceSegment(question, segment, focusKeywords),
+                    index
+            ));
+        }
+
+        List<RetrievedSegmentVO> selected = rankedSources.stream()
+                .sorted(Comparator.comparingDouble(RankedPracticeSource::score).reversed()
+                        .thenComparingInt(RankedPracticeSource::originalIndex))
+                .map(RankedPracticeSource::segment)
+                .limit(SHORT_ANSWER_SOURCE_LIMIT)
+                .toList();
+        return selected.isEmpty()
+                ? candidates.stream().limit(SHORT_ANSWER_SOURCE_LIMIT).toList()
+                : selected;
+    }
+
+    private List<String> buildPracticeFocusKeywords(QuestionItem question) {
+        LinkedHashSet<String> keywords = new LinkedHashSet<>();
+        if (question == null) {
+            return List.of();
+        }
+        keywords.addAll(extractKeywords(trimForQuery(question.getStemText(), 80)));
+        if (StringUtils.hasText(question.getKnowledgePoint())) {
+            keywords.addAll(extractKeywords(question.getKnowledgePoint()));
+        }
+        if (StringUtils.hasText(question.getCorrectAnswer())) {
+            keywords.addAll(extractKeywords(trimForQuery(question.getCorrectAnswer(), 120)));
+        }
+        if (StringUtils.hasText(question.getAnswerAnalysis())) {
+            keywords.addAll(extractKeywords(trimForQuery(question.getAnswerAnalysis(), 60)));
+        }
+        return keywords.stream().limit(10).toList();
+    }
+
+    private double scorePracticeSourceSegment(
+            QuestionItem question,
+            RetrievedSegmentVO segment,
+            List<String> focusKeywords
+    ) {
+        if (segment == null) {
+            return 0D;
+        }
+
+        String title = trimToNull(segment.getSectionTitle());
+        String content = trimToNull(segment.getContentText());
+        String normalizedTitle = normalizeText(title);
+        String normalizedContent = normalizeText(content);
+        double semanticScore = segment.getScore() == null ? 0D : segment.getScore();
+        double keywordScore = computePracticeKeywordCoverage(focusKeywords, normalizedTitle, normalizedContent);
+        double score = semanticScore * 0.78D + keywordScore * 0.98D;
+
+        String normalizedKnowledgePoint = normalizeText(question == null ? null : question.getKnowledgePoint());
+        if (StringUtils.hasText(normalizedKnowledgePoint) && normalizedTitle.contains(normalizedKnowledgePoint)) {
+            score += 0.22D;
+        }
+        if (StringUtils.hasText(normalizedKnowledgePoint) && normalizedContent.contains(normalizedKnowledgePoint)) {
+            score += 0.12D;
+        }
+        if (containsLowSignalSourceMarker(title)) {
+            score -= 0.32D;
+        }
+        if (containsLowSignalSourceMarker(content)) {
+            score -= 0.16D;
+        }
+
+        int contentLength = content == null ? 0 : content.trim().length();
+        if (contentLength >= 60 && contentLength <= 420) {
+            score += 0.08D;
+        } else if (contentLength > 900) {
+            score -= 0.08D;
+        }
+        return score;
+    }
+
+    private double computePracticeKeywordCoverage(
+            List<String> keywords,
+            String normalizedTitle,
+            String normalizedContent
+    ) {
+        if ((keywords == null || keywords.isEmpty())
+                || (!StringUtils.hasText(normalizedTitle) && !StringUtils.hasText(normalizedContent))) {
+            return 0D;
+        }
+
+        double totalWeight = 0D;
+        double matchedWeight = 0D;
+        for (String keyword : keywords) {
+            String normalizedKeyword = normalizeText(keyword);
+            if (!StringUtils.hasText(normalizedKeyword)) {
+                continue;
+            }
+            double weight = Math.max(1D, Math.min(3.2D, normalizedKeyword.length() * 0.4D));
+            totalWeight += weight;
+            if (normalizedTitle.contains(normalizedKeyword)) {
+                matchedWeight += weight * 1.15D;
+                continue;
+            }
+            if (normalizedContent.contains(normalizedKeyword)) {
+                matchedWeight += weight;
+            }
+        }
+        return totalWeight <= 0 ? 0D : matchedWeight / totalWeight;
+    }
+
+    private boolean containsLowSignalSourceMarker(String text) {
+        if (!StringUtils.hasText(text)) {
+            return false;
+        }
+        String normalized = text.toLowerCase();
+        for (String marker : SHORT_ANSWER_LOW_SIGNAL_MARKERS) {
+            if (text.contains(marker) || normalized.contains(marker.toLowerCase())) {
+                return true;
+            }
+        }
+        return normalized.contains("http://") || normalized.contains("https://") || normalized.contains("www.");
+    }
+
+    private String trimSourceExcerpt(String content) {
+        String normalized = trimToNull(content);
+        if (!StringUtils.hasText(normalized)) {
+            return "";
+        }
+        String singleLine = normalized.replaceAll("\\s+", " ").trim();
+        return singleLine.length() <= 260 ? singleLine : singleLine.substring(0, 260) + "...";
+    }
+
+    private String trimForQuery(String value, int maxLength) {
+        if (!StringUtils.hasText(value)) {
+            return "";
+        }
+        String normalized = value.replaceAll("\\s+", " ").trim();
+        return normalized.length() <= maxLength ? normalized : normalized.substring(0, maxLength);
     }
 
     private ShortAnswerAiReviewPayload parseShortAnswerReview(String content) {
@@ -671,7 +922,7 @@ public class PracticeServiceImpl implements PracticeService {
         Set<String> keywords = new LinkedHashSet<>();
         for (String token : text.split("[，。；：,.;:\\s()（）]+")) {
             String item = token.trim();
-            if (item.length() >= 2) {
+            if (item.length() >= 2 && !SHORT_ANSWER_KEYWORD_STOP_WORDS.contains(item)) {
                 keywords.add(item);
             }
         }
@@ -693,6 +944,7 @@ public class PracticeServiceImpl implements PracticeService {
     }
 
     private PracticeDetailVO buildPracticeDetail(
+            Long userId,
             PracticeSession session,
             List<QuestionItem> questions,
             List<PracticeAnswer> answers
@@ -704,6 +956,13 @@ public class PracticeServiceImpl implements PracticeService {
                 .map(question -> {
                     PracticeAnswer answer = answerMap.get(question.getId());
                     AnswerReview review = buildReviewForDetail(question, answer);
+                    List<RetrievedSegmentVO> sourceSegments = shouldResolvePracticeAnswerSources(session, question)
+                            ? resolvePracticeAnswerSourceSegments(
+                                    userId,
+                                    session.getMaterialId(),
+                                    question
+                            )
+                            : List.of();
                     return PracticeAnswerVO.builder()
                             .questionId(question.getId())
                             .questionType(question.getQuestionType())
@@ -722,6 +981,7 @@ public class PracticeServiceImpl implements PracticeService {
                             .reviewLabel(review.label())
                             .reviewComment(review.comment())
                             .answerAnalysis(question.getAnswerAnalysis())
+                            .sourceSegments(sourceSegments)
                             .build();
                 })
                 .toList();
@@ -740,6 +1000,13 @@ public class PracticeServiceImpl implements PracticeService {
                 .submitTime(session.getSubmitTime())
                 .answers(answerVOS)
                 .build();
+    }
+
+    private boolean shouldResolvePracticeAnswerSources(PracticeSession session, QuestionItem question) {
+        return session != null
+                && SESSION_STATUS_SUBMITTED.equalsIgnoreCase(session.getSessionStatus())
+                && session.getMaterialId() != null
+                && isShortAnswer(question.getQuestionType());
     }
 
     private AnswerReview buildReviewForDetail(QuestionItem question, PracticeAnswer answer) {
@@ -823,6 +1090,13 @@ public class PracticeServiceImpl implements PracticeService {
             Integer score,
             Boolean correct,
             String comment
+    ) {
+    }
+
+    private record RankedPracticeSource(
+            RetrievedSegmentVO segment,
+            double score,
+            int originalIndex
     ) {
     }
 }

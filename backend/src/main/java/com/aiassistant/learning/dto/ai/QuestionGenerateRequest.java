@@ -13,6 +13,18 @@ public class QuestionGenerateRequest {
     @Max(value = 20, message = "题目数量最多为20")
     private Integer questionCount = 5;
 
+    @Min(value = 0, message = "单选题数量不能小于0")
+    @Max(value = 20, message = "单选题数量不能超过20")
+    private Integer singleCount;
+
+    @Min(value = 0, message = "判断题数量不能小于0")
+    @Max(value = 20, message = "判断题数量不能超过20")
+    private Integer judgeCount;
+
+    @Min(value = 0, message = "简答题数量不能小于0")
+    @Max(value = 20, message = "简答题数量不能超过20")
+    private Integer shortAnswerCount;
+
     @Min(value = 1, message = "难度等级最小为1")
     @Max(value = 5, message = "难度等级最大为5")
     private Integer difficultyLevel = 3;

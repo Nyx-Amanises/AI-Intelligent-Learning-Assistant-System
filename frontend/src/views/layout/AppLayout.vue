@@ -10,9 +10,10 @@
       </div>
 
       <div class="app-header__actions">
-        <span class="app-header__icon">搜</span>
-        <span class="app-header__icon">铃</span>
-        <span class="app-header__icon">助</span>
+        <div class="app-header__user-badge">
+          <span class="app-header__user-label">当前用户</span>
+          <strong>{{ displayName }}</strong>
+        </div>
       </div>
     </header>
 
@@ -43,16 +44,20 @@
         <RouterView />
       </main>
     </div>
+
+    <AssistantDrawer v-model="assistantVisible" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { RouterLink, RouterView, useRouter } from 'vue-router'
+import AssistantDrawer from '@/components/AssistantDrawer.vue'
 import { useUserStore } from '@/stores/user'
 
 const userStore = useUserStore()
 const router = useRouter()
+const assistantVisible = ref(false)
 
 const displayName = computed(() => userStore.profile?.nickname || userStore.profile?.username || '学习者')
 
@@ -71,3 +76,27 @@ const logout = () => {
   router.push('/login')
 }
 </script>
+
+<style scoped>
+.app-header__user-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.app-header__user-label {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+@media (max-width: 768px) {
+  .app-header__actions {
+    gap: 8px;
+  }
+
+  .app-header__user-badge {
+    display: none;
+  }
+}
+</style>

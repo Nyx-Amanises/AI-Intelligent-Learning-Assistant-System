@@ -10,6 +10,9 @@ export interface SummaryPayload {
 export interface QuestionGeneratePayload {
   modelName?: string
   questionCount?: number
+  singleCount?: number
+  judgeCount?: number
+  shortAnswerCount?: number
   difficultyLevel?: number
 }
 
@@ -134,6 +137,8 @@ export const waitAiTaskApi = (taskId: number, timeoutMs = 120000) =>
 export const dispatchAiTaskApi = (taskId: number) => http.post(`/ai/tasks/${taskId}/dispatch`)
 
 export const retryAiTaskApi = (taskId: number) => http.post(`/ai/tasks/${taskId}/retry`)
+
+export const deleteAiTaskApi = (taskId: number) => http.delete(`/ai/tasks/${taskId}`)
 
 export const getAiConfigApi = () => http.get('/ai/config')
 

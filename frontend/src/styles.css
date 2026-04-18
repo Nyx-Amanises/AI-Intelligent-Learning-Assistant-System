@@ -1026,6 +1026,12 @@ a {
   margin-right: 6px;
 }
 
+.practice-paper-result__analysis-row--block strong {
+  display: block;
+  margin-right: 0;
+  margin-bottom: 8px;
+}
+
 .practice-paper-result__answer-row--brand {
   color: #1677ff;
 }
@@ -1793,6 +1799,34 @@ a {
   border-radius: 14px;
   background: #f8fafc;
   border: 1px solid #e8edf2;
+}
+
+.rag-reference-list {
+  display: grid;
+  gap: 12px;
+}
+
+.rag-reference-list--compact {
+  margin-top: 10px;
+}
+
+.rag-reference-item {
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: #fff;
+  border: 1px solid #e8edf2;
+}
+
+.rag-reference-item__title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.rag-reference-item__meta {
+  margin: 6px 0 10px;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .summary-preview-card__label {

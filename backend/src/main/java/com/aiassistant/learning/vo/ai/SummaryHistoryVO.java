@@ -1,6 +1,8 @@
 package com.aiassistant.learning.vo.ai;
 
+import com.aiassistant.learning.vo.rag.RetrievedSegmentVO;
 import java.time.LocalDateTime;
+import java.util.List;
 import lombok.Builder;
 import lombok.Data;
 
@@ -21,6 +23,8 @@ public class SummaryHistoryVO {
     private String summaryType;
 
     private String summaryText;
+
+    private List<RetrievedSegmentVO> sourceSegments;
 
     private LocalDateTime createdAt;
 }

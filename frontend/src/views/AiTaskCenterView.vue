@@ -115,6 +115,14 @@
               >
                 重试
               </el-button>
+              <el-button
+                link
+                type="danger"
+                :loading="deletingTaskId === item.id"
+                @click="removeTask(item.id, false, item.status)"
+              >
+                删除记录
+              </el-button>
             </div>
           </div>
         </div>
@@ -194,6 +202,14 @@
           >
             重试任务
           </el-button>
+          <el-button
+            type="danger"
+            plain
+            :loading="deletingTaskId === taskDetail.id"
+            @click="removeTask(taskDetail.id, true, taskDetail.status)"
+          >
+            删除记录
+          </el-button>
         </div>
 
         <div class="task-json-grid">
@@ -217,9 +233,10 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRouter } from 'vue-router'
 import {
+  deleteAiTaskApi,
   dispatchAiTaskApi,
   getAiTaskDetailApi,
   getAiTaskPageApi,
@@ -235,6 +252,7 @@ const detailLoading = ref(false)
 const drawerVisible = ref(false)
 const retryingTaskId = ref<number | null>(null)
 const dispatchingTaskId = ref<number | null>(null)
+const deletingTaskId = ref<number | null>(null)
 const tasks = ref<AiTaskPageItem[]>([])
 const total = ref(0)
 const taskDetail = ref<AiTaskDetail | null>(null)
@@ -485,6 +503,41 @@ const dispatchTask = async (taskId: number, reloadDetail = false) => {
     ElMessage.error(error.message || '任务重新派发失败')
   } finally {
     dispatchingTaskId.value = null
+  }
+}
+
+const removeTask = async (taskId: number, closeDetail = false, status?: string) => {
+  const normalizedStatus = String(status || '').toUpperCase()
+  const confirmMessage =
+    normalizedStatus === 'RUNNING'
+      ? '删除后只会移除这条任务记录，不会中断已经发出的 AI 请求，确定继续吗？'
+      : '删除后将只移除任务记录，不会删除已经生成的业务结果，确定继续吗？'
+  try {
+    await ElMessageBox.confirm(confirmMessage, '删除确认', {
+      type: 'warning',
+      confirmButtonText: '确认删除',
+      cancelButtonText: '取消'
+    })
+  } catch {
+    return
+  }
+
+  deletingTaskId.value = taskId
+  try {
+    await deleteAiTaskApi(taskId)
+    ElMessage.success('任务记录已删除')
+    if (closeDetail || taskDetail.value?.id === taskId) {
+      drawerVisible.value = false
+      taskDetail.value = null
+    }
+    if (tasks.value.length === 1 && page.current > 1) {
+      page.current -= 1
+    }
+    await loadTasks()
+  } catch (error: any) {
+    ElMessage.error(error.message || '删除任务记录失败')
+  } finally {
+    deletingTaskId.value = null
   }
 }
 

@@ -1,5 +1,6 @@
 package com.aiassistant.learning.vo.question;
 
+import com.aiassistant.learning.vo.rag.RetrievedSegmentVO;
 import java.time.LocalDateTime;
 import java.util.List;
 import lombok.Builder;
@@ -24,6 +25,8 @@ public class QuestionSetDetailVO {
     private String status;
 
     private LocalDateTime createdAt;
+
+    private List<RetrievedSegmentVO> sourceSegments;
 
     private List<QuestionItemVO> questions;
 }

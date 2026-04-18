@@ -3,27 +3,132 @@ package com.aiassistant.learning.service.impl;
 import com.aiassistant.learning.common.exception.BusinessException;
 import com.aiassistant.learning.service.AiChatService;
 import com.aiassistant.learning.service.AiConfigService;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
+import java.util.function.Consumer;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
-import org.springframework.web.client.RestClient;
-import org.springframework.web.client.ResourceAccessException;
-import org.springframework.web.client.RestClientResponseException;
 
 @Service
 public class AiChatServiceImpl implements AiChatService {
 
     private final AiConfigService aiConfigService;
+    private final ObjectMapper objectMapper;
+    private final HttpClient httpClient;
 
-    public AiChatServiceImpl(AiConfigService aiConfigService) {
+    public AiChatServiceImpl(AiConfigService aiConfigService, ObjectMapper objectMapper) {
         this.aiConfigService = aiConfigService;
+        this.objectMapper = objectMapper;
+        this.httpClient = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(20))
+                .build();
     }
 
     @Override
     public String chat(String systemPrompt, String userPrompt, String modelName, Double temperature) {
+        AiConfigService.ResolvedAiConfig config = validateConfig();
+        Map<String, Object> requestBody = buildChatRequestBody(systemPrompt, userPrompt, modelName, temperature, false);
+        HttpRequest request = buildHttpRequest(config, requestBody);
+
+        try {
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            ensureSuccessStatus(response.statusCode(), response.body());
+            JsonNode root = objectMapper.readTree(response.body());
+            String content = extractChatContent(root);
+            if (!StringUtils.hasText(content)) {
+                throw new BusinessException("AI 返回内容为空");
+            }
+            return content.trim();
+        } catch (BusinessException exception) {
+            throw exception;
+        } catch (java.net.http.HttpTimeoutException exception) {
+            throw new BusinessException(500, "调用 AI 接口失败: 请求超时，请稍后重试");
+        } catch (java.io.IOException exception) {
+            throw new BusinessException(
+                    500,
+                    "调用 AI 接口失败: 无法连接到 AI 服务，请检查接口地址、网络或 TLS 配置"
+                            + buildCauseSuffix(exception)
+            );
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new BusinessException(500, "调用 AI 接口失败: 请求被中断");
+        } catch (Exception exception) {
+            throw new BusinessException(500, "调用 AI 接口失败: " + extractBestMessage(exception));
+        }
+    }
+
+    @Override
+    public void streamChat(
+            String systemPrompt,
+            String userPrompt,
+            String modelName,
+            Double temperature,
+            Consumer<String> onDelta
+    ) {
+        AiConfigService.ResolvedAiConfig config = validateConfig();
+        Map<String, Object> requestBody = buildChatRequestBody(systemPrompt, userPrompt, modelName, temperature, true);
+        HttpRequest request = buildHttpRequest(config, requestBody);
+
+        try {
+            HttpResponse<InputStream> response = httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                throw new BusinessException(
+                        500,
+                        "调用 AI 接口失败: HTTP " + response.statusCode() + " " + truncateMessage(readStreamBody(response.body()), 300)
+                );
+            }
+
+            try (InputStream inputStream = response.body();
+                 BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))) {
+                List<String> dataLines = new ArrayList<>();
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    if (line.isEmpty()) {
+                        consumeEventPayload(dataLines, onDelta);
+                        dataLines.clear();
+                        continue;
+                    }
+                    if (line.startsWith(":")) {
+                        continue;
+                    }
+                    if (line.startsWith("data:")) {
+                        dataLines.add(line.substring(5).trim());
+                    }
+                }
+                consumeEventPayload(dataLines, onDelta);
+            }
+        } catch (BusinessException exception) {
+            throw exception;
+        } catch (java.net.http.HttpTimeoutException exception) {
+            throw new BusinessException(500, "调用 AI 接口失败: 请求超时，请稍后重试");
+        } catch (java.io.IOException exception) {
+            throw new BusinessException(
+                    500,
+                    "调用 AI 接口失败: 无法连接到 AI 服务，请检查接口地址、网络或 TLS 配置"
+                            + buildCauseSuffix(exception)
+            );
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new BusinessException(500, "调用 AI 接口失败: 请求被中断");
+        } catch (Exception exception) {
+            throw new BusinessException(500, "调用 AI 接口失败: " + extractBestMessage(exception));
+        }
+    }
+
+    private AiConfigService.ResolvedAiConfig validateConfig() {
         AiConfigService.ResolvedAiConfig config = aiConfigService.getResolvedConfig();
         if (!Boolean.TRUE.equals(config.enabled())) {
             throw new BusinessException("AI 功能未启用");
@@ -34,62 +139,163 @@ public class AiChatServiceImpl implements AiChatService {
         if (!StringUtils.hasText(config.apiKey())) {
             throw new BusinessException("AI API Key 未配置");
         }
+        return config;
+    }
 
+    private Map<String, Object> buildChatRequestBody(
+            String systemPrompt,
+            String userPrompt,
+            String modelName,
+            Double temperature,
+            boolean stream
+    ) {
+        if (!StringUtils.hasText(modelName)) {
+            throw new BusinessException("AI 默认模型未配置");
+        }
+        Map<String, Object> requestBody = new LinkedHashMap<>();
+        requestBody.put("model", modelName.trim());
+        requestBody.put("temperature", temperature == null ? 0.7 : temperature);
+        requestBody.put("stream", stream);
+        requestBody.put("messages", List.of(
+                Map.of("role", "system", "content", systemPrompt),
+                Map.of("role", "user", "content", userPrompt)
+        ));
+        return requestBody;
+    }
+
+    private HttpRequest buildHttpRequest(AiConfigService.ResolvedAiConfig config, Map<String, Object> requestBody) {
         try {
-            RestClient restClient = RestClient.builder()
-                    .baseUrl(config.baseUrl())
+            return HttpRequest.newBuilder(buildChatUri(config.baseUrl(), config.chatPath()))
+                    .timeout(Duration.ofMinutes(3))
+                    .header("Content-Type", "application/json")
+                    .header("Authorization", "Bearer " + config.apiKey())
+                    .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(requestBody), StandardCharsets.UTF_8))
                     .build();
-
-            Map<String, Object> response = restClient.post()
-                    .uri(config.chatPath())
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + config.apiKey())
-                    .body(Map.of(
-                            "model", modelName,
-                            "temperature", temperature == null ? 0.7 : temperature,
-                            "messages", List.of(
-                                    Map.of("role", "system", "content", systemPrompt),
-                                    Map.of("role", "user", "content", userPrompt)
-                            )
-                    ))
-                    .retrieve()
-                    .body(Map.class);
-
-            Object choicesObj = response == null ? null : response.get("choices");
-            if (!(choicesObj instanceof List<?> choices) || choices.isEmpty()) {
-                throw new BusinessException("AI 返回结果为空");
-            }
-            Object firstChoice = choices.get(0);
-            if (!(firstChoice instanceof Map<?, ?> firstChoiceMap)) {
-                throw new BusinessException("AI 返回结构异常");
-            }
-            Object messageObj = firstChoiceMap.get("message");
-            if (!(messageObj instanceof Map<?, ?> messageMap)) {
-                throw new BusinessException("AI 返回消息为空");
-            }
-            Object contentObj = messageMap.get("content");
-            if (!(contentObj instanceof String content) || !StringUtils.hasText(content)) {
-                throw new BusinessException("AI 返回内容为空");
-            }
-            return content.trim();
         } catch (BusinessException exception) {
             throw exception;
-        } catch (RestClientResponseException exception) {
-            String responseBody = StringUtils.hasText(exception.getResponseBodyAsString())
-                    ? exception.getResponseBodyAsString()
-                    : exception.getStatusText();
-            throw new BusinessException(
-                    500,
-                    "调用 AI 接口失败: HTTP " + exception.getStatusCode().value() + " " + truncateMessage(responseBody, 300)
-            );
-        } catch (ResourceAccessException exception) {
-            throw new BusinessException(
-                    500,
-                    "调用 AI 接口失败: 无法连接到 AI 服务，请检查接口地址、网络或 TLS 配置"
-                            + buildCauseSuffix(exception)
-            );
         } catch (Exception exception) {
-            throw new BusinessException(500, "调用 AI 接口失败: " + extractBestMessage(exception));
+            throw new BusinessException(500, "调用 AI 接口失败: 请求构建失败 - " + extractBestMessage(exception));
+        }
+    }
+
+    private URI buildChatUri(String baseUrl, String chatPath) {
+        if (!StringUtils.hasText(baseUrl)) {
+            throw new BusinessException("AI Base URL 未配置");
+        }
+        if (!StringUtils.hasText(chatPath)) {
+            throw new BusinessException("AI Chat Path 未配置");
+        }
+
+        String normalizedBaseUrl = baseUrl.trim();
+        String normalizedPath = chatPath.trim();
+        boolean baseEndsWithSlash = normalizedBaseUrl.endsWith("/");
+        boolean pathStartsWithSlash = normalizedPath.startsWith("/");
+
+        String fullUrl;
+        if (baseEndsWithSlash && pathStartsWithSlash) {
+            fullUrl = normalizedBaseUrl + normalizedPath.substring(1);
+        } else if (!baseEndsWithSlash && !pathStartsWithSlash) {
+            fullUrl = normalizedBaseUrl + "/" + normalizedPath;
+        } else {
+            fullUrl = normalizedBaseUrl + normalizedPath;
+        }
+        return URI.create(fullUrl);
+    }
+
+    private void ensureSuccessStatus(int statusCode, String responseBody) {
+        if (statusCode >= 200 && statusCode < 300) {
+            return;
+        }
+        throw new BusinessException(
+                500,
+                "调用 AI 接口失败: HTTP " + statusCode + " " + truncateMessage(responseBody, 300)
+        );
+    }
+
+    private void consumeEventPayload(List<String> dataLines, Consumer<String> onDelta) {
+        if (dataLines == null || dataLines.isEmpty()) {
+            return;
+        }
+        String payload = String.join("\n", dataLines).trim();
+        if (!StringUtils.hasText(payload) || "[DONE]".equals(payload)) {
+            return;
+        }
+        try {
+            JsonNode root = objectMapper.readTree(payload);
+            String deltaText = extractDeltaContent(root);
+            if (StringUtils.hasText(deltaText)) {
+                onDelta.accept(deltaText);
+            }
+        } catch (Exception ignored) {
+            // 某些中转站会插入非标准事件，这里忽略无法解析的分片，避免中断整条流。
+        }
+    }
+
+    private String extractChatContent(JsonNode root) {
+        JsonNode choices = root == null ? null : root.path("choices");
+        if (!choices.isArray() || choices.isEmpty()) {
+            throw new BusinessException("AI 返回结果为空");
+        }
+        JsonNode firstChoice = choices.get(0);
+        JsonNode messageNode = firstChoice.path("message");
+        if (messageNode.isMissingNode()) {
+            throw new BusinessException("AI 返回消息为空");
+        }
+        return extractContentNode(messageNode.path("content"));
+    }
+
+    private String extractDeltaContent(JsonNode root) {
+        JsonNode choices = root == null ? null : root.path("choices");
+        if (!choices.isArray() || choices.isEmpty()) {
+            return null;
+        }
+        JsonNode firstChoice = choices.get(0);
+        JsonNode deltaNode = firstChoice.path("delta");
+        if (!deltaNode.isMissingNode()) {
+            return extractContentNode(deltaNode.path("content"));
+        }
+        JsonNode messageNode = firstChoice.path("message");
+        if (!messageNode.isMissingNode()) {
+            return extractContentNode(messageNode.path("content"));
+        }
+        return null;
+    }
+
+    private String extractContentNode(JsonNode contentNode) {
+        if (contentNode == null || contentNode.isMissingNode() || contentNode.isNull()) {
+            return null;
+        }
+        if (contentNode.isTextual()) {
+            return contentNode.asText();
+        }
+        if (contentNode.isArray()) {
+            StringBuilder builder = new StringBuilder();
+            for (JsonNode node : contentNode) {
+                if (node == null || node.isNull()) {
+                    continue;
+                }
+                if (node.isTextual()) {
+                    builder.append(node.asText());
+                    continue;
+                }
+                JsonNode textNode = node.path("text");
+                if (textNode.isTextual()) {
+                    builder.append(textNode.asText());
+                }
+            }
+            return builder.toString();
+        }
+        return null;
+    }
+
+    private String readStreamBody(InputStream inputStream) {
+        if (inputStream == null) {
+            return "未知错误";
+        }
+        try (InputStream stream = inputStream) {
+            return new String(stream.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (Exception exception) {
+            return extractBestMessage(exception);
         }
     }
 

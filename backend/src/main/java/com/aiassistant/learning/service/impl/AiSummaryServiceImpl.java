@@ -17,10 +17,12 @@ import com.aiassistant.learning.service.StudyMaterialService;
 import com.aiassistant.learning.service.VectorStoreService.RetrievedSegment;
 import com.aiassistant.learning.vo.ai.SummaryHistoryVO;
 import com.aiassistant.learning.vo.ai.SummaryResultVO;
+import com.aiassistant.learning.vo.rag.RetrievedSegmentVO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -126,7 +128,7 @@ public class AiSummaryServiceImpl implements AiSummaryService {
             note.setTitle(material.getTitle() + " - AI总结");
             note.setNoteType("AI_SUMMARY");
             note.setContentText(summaryText);
-            note.setSourceSegmentIds(joinSegmentIds(segments));
+            note.setSourceSegmentIds(joinSegmentIds(contextSegments));
             note.setIsFavorite(0);
             note.setDeleted(0);
             studyNoteMapper.insert(note);
@@ -145,6 +147,7 @@ public class AiSummaryServiceImpl implements AiSummaryService {
                 .modelName(modelName)
                 .summaryType(summaryType)
                 .summaryText(summaryText)
+                .sourceSegments(toRetrievedSegmentVOList(contextSegments))
                 .createdAt(record.getCreatedAt())
                 .build();
     }
@@ -177,6 +180,7 @@ public class AiSummaryServiceImpl implements AiSummaryService {
                 .modelName(record.getModelName())
                 .summaryType(record.getSummaryType())
                 .summaryText(record.getOutputText())
+                .sourceSegments(resolveSummarySourceSegments(userId, material, record, loadSummaryNote(userId, record.getNoteId())))
                 .createdAt(record.getCreatedAt())
                 .build();
     }
@@ -191,13 +195,15 @@ public class AiSummaryServiceImpl implements AiSummaryService {
             throw new BusinessException(404, "资料不存在");
         }
 
-        return aiGenerationRecordMapper.selectList(new LambdaQueryWrapper<AiGenerationRecord>()
+        List<AiGenerationRecord> records = aiGenerationRecordMapper.selectList(new LambdaQueryWrapper<AiGenerationRecord>()
                         .eq(AiGenerationRecord::getUserId, userId)
                         .eq(AiGenerationRecord::getMaterialId, materialId)
                         .eq(AiGenerationRecord::getTaskType, "SUMMARY")
                         .eq(AiGenerationRecord::getStatus, "SUCCESS")
-                .orderByDesc(AiGenerationRecord::getCreatedAt))
-                .stream()
+                .orderByDesc(AiGenerationRecord::getCreatedAt));
+        Map<Long, StudyNote> noteMap = loadSummaryNoteMap(userId, records);
+
+        return records.stream()
                 .map(record -> SummaryHistoryVO.builder()
                         .recordId(record.getId())
                         .materialId(record.getMaterialId())
@@ -206,6 +212,12 @@ public class AiSummaryServiceImpl implements AiSummaryService {
                         .modelName(record.getModelName())
                         .summaryType(record.getSummaryType())
                         .summaryText(record.getOutputText())
+                        .sourceSegments(resolveSummarySourceSegments(
+                                userId,
+                                material,
+                                record,
+                                record.getNoteId() == null ? null : noteMap.get(record.getNoteId())
+                        ))
                         .createdAt(record.getCreatedAt())
                         .build())
                 .toList();
@@ -228,6 +240,7 @@ public class AiSummaryServiceImpl implements AiSummaryService {
                         .in(StudyMaterial::getId, records.stream().map(AiGenerationRecord::getMaterialId).distinct().toList()))
                 .stream()
                 .collect(Collectors.toMap(StudyMaterial::getId, Function.identity(), (left, right) -> left));
+        Map<Long, StudyNote> noteMap = loadSummaryNoteMap(userId, records);
 
         return records.stream()
                 .map(record -> {
@@ -240,6 +253,12 @@ public class AiSummaryServiceImpl implements AiSummaryService {
                             .modelName(record.getModelName())
                             .summaryType(record.getSummaryType())
                             .summaryText(record.getOutputText())
+                            .sourceSegments(resolveSummarySourceSegments(
+                                    userId,
+                                    material,
+                                    record,
+                                    record.getNoteId() == null ? null : noteMap.get(record.getNoteId())
+                            ))
                             .createdAt(record.getCreatedAt())
                             .build();
                 })
@@ -259,9 +278,24 @@ public class AiSummaryServiceImpl implements AiSummaryService {
 
     private String buildPrompt(String summaryType) {
         return switch (summaryType.toUpperCase()) {
-            case "EXAM" -> "你是一名学习辅导助手。请从用户提供的学习资料中提炼考试高频知识点、重点概念、易错点和简短复习建议，使用中文输出，结构清晰。";
-            case "OUTLINE" -> "你是一名学习辅导助手。请将用户提供的学习资料整理成分层大纲，突出主题、关键概念和章节关系，使用中文输出。";
-            default -> "你是一名学习辅导助手。请对用户提供的学习资料进行总结，输出核心知识点、重点概念、建议复习方向，使用中文，表达简洁清晰。";
+            case "EXAM" -> """
+                    你是一名学习辅导助手。
+                    请严格根据用户提供的资料摘录，总结考试高频知识点、重点概念、易错点和简短复习建议。
+                    不要编造资料中没有出现的事实；如果信息不足，请明确说明“资料未体现”。
+                    使用中文输出，结构清晰。
+                    """;
+            case "OUTLINE" -> """
+                    你是一名学习辅导助手。
+                    请严格根据用户提供的资料摘录整理分层大纲，突出主题、关键概念和章节关系。
+                    不要补充资料中没有出现的结论；如果层级信息不足，请保留为简明条目。
+                    使用中文输出。
+                    """;
+            default -> """
+                    你是一名学习辅导助手。
+                    请严格根据用户提供的资料摘录完成总结，输出核心知识点、重点概念和建议复习方向。
+                    不要编造资料外内容；如果资料不足以支撑某个结论，请明确说明。
+                    使用中文，表达简洁清晰。
+                    """;
         };
     }
 
@@ -269,9 +303,18 @@ public class AiSummaryServiceImpl implements AiSummaryService {
         StringBuilder builder = new StringBuilder();
         builder.append("资料标题：").append(material.getTitle()).append(System.lineSeparator());
         builder.append("资料类型：").append(material.getMaterialType()).append(System.lineSeparator());
-        builder.append("资料内容：").append(System.lineSeparator());
+        builder.append("以下是与总结任务最相关的资料摘录，请仅依据这些内容完成总结：").append(System.lineSeparator());
         for (MaterialSegment segment : segments) {
-            builder.append("[").append(segment.getSegmentNo()).append("] ");
+            builder.append("[片段#").append(segment.getSegmentNo() == null ? "--" : segment.getSegmentNo()).append("]");
+            if (segment.getPageNo() != null) {
+                builder.append("[第 ").append(segment.getPageNo()).append(" 页]");
+            }
+            if (StringUtils.hasText(segment.getSectionTitle())) {
+                builder.append("[")
+                        .append(segment.getSectionTitle().trim())
+                        .append("]");
+            }
+            builder.append(" ");
             builder.append(segment.getContentText()).append(System.lineSeparator());
         }
         return builder.toString();
@@ -353,6 +396,112 @@ public class AiSummaryServiceImpl implements AiSummaryService {
         builder.append("三、复习方向").append(System.lineSeparator());
         builder.append("建议优先复习资料中重复出现的概念、公式、流程和结论。");
         return builder.toString();
+    }
+
+    private StudyNote loadSummaryNote(Long userId, Long noteId) {
+        if (noteId == null) {
+            return null;
+        }
+        StudyNote note = studyNoteMapper.selectById(noteId);
+        if (note == null || !userId.equals(note.getUserId())) {
+            return null;
+        }
+        return note;
+    }
+
+    private Map<Long, StudyNote> loadSummaryNoteMap(Long userId, List<AiGenerationRecord> records) {
+        List<Long> noteIds = records.stream()
+                .map(AiGenerationRecord::getNoteId)
+                .filter(id -> id != null && id > 0)
+                .distinct()
+                .toList();
+        if (noteIds.isEmpty()) {
+            return Map.of();
+        }
+
+        return studyNoteMapper.selectBatchIds(noteIds).stream()
+                .filter(note -> note != null && userId.equals(note.getUserId()))
+                .collect(Collectors.toMap(StudyNote::getId, Function.identity(), (left, right) -> left));
+    }
+
+    private List<RetrievedSegmentVO> resolveSummarySourceSegments(
+            Long userId,
+            StudyMaterial material,
+            AiGenerationRecord record,
+            StudyNote note
+    ) {
+        List<RetrievedSegmentVO> noteSegments = loadSegmentsByIds(note == null ? null : note.getSourceSegmentIds());
+        if (!noteSegments.isEmpty()) {
+            return noteSegments;
+        }
+        if (material == null) {
+            return List.of();
+        }
+
+        List<MaterialSegment> allSegments = materialSegmentMapper.selectList(new LambdaQueryWrapper<MaterialSegment>()
+                .eq(MaterialSegment::getMaterialId, material.getId())
+                .orderByAsc(MaterialSegment::getSegmentNo));
+        if (allSegments.isEmpty()) {
+            return List.of();
+        }
+        return toRetrievedSegmentVOList(resolveSummaryContextSegments(userId, material, allSegments, record.getSummaryType()));
+    }
+
+    private List<RetrievedSegmentVO> loadSegmentsByIds(String sourceSegmentIds) {
+        List<Long> segmentIds = parseSegmentIds(sourceSegmentIds);
+        if (segmentIds.isEmpty()) {
+            return List.of();
+        }
+
+        Map<Long, MaterialSegment> segmentMap = materialSegmentMapper.selectBatchIds(segmentIds).stream()
+                .collect(Collectors.toMap(MaterialSegment::getId, Function.identity(), (left, right) -> left));
+
+        return segmentIds.stream()
+                .map(segmentMap::get)
+                .filter(segment -> segment != null)
+                .map(segment -> RetrievedSegmentVO.builder()
+                        .segmentId(segment.getId())
+                        .segmentNo(segment.getSegmentNo())
+                        .pageNo(segment.getPageNo())
+                        .sectionTitle(segment.getSectionTitle())
+                        .contentText(segment.getContentText())
+                        .keywords(segment.getKeywords())
+                        .build())
+                .toList();
+    }
+
+    private List<Long> parseSegmentIds(String sourceSegmentIds) {
+        if (!StringUtils.hasText(sourceSegmentIds)) {
+            return List.of();
+        }
+        return Arrays.stream(sourceSegmentIds.split(","))
+                .map(String::trim)
+                .filter(StringUtils::hasText)
+                .map(value -> {
+                    try {
+                        return Long.parseLong(value);
+                    } catch (NumberFormatException exception) {
+                        return null;
+                    }
+                })
+                .filter(id -> id != null && id > 0)
+                .toList();
+    }
+
+    private List<RetrievedSegmentVO> toRetrievedSegmentVOList(List<MaterialSegment> segments) {
+        if (segments == null || segments.isEmpty()) {
+            return List.of();
+        }
+        return segments.stream()
+                .map(segment -> RetrievedSegmentVO.builder()
+                        .segmentId(segment.getId())
+                        .segmentNo(segment.getSegmentNo())
+                        .pageNo(segment.getPageNo())
+                        .sectionTitle(segment.getSectionTitle())
+                        .contentText(segment.getContentText())
+                        .keywords(segment.getKeywords())
+                        .build())
+                .toList();
     }
 
     private Integer estimateTokens(String inputText, String outputText) {

@@ -147,10 +147,28 @@
           <el-form-item label="模型名称">
             <el-input v-model="form.modelName" placeholder="留空则使用当前默认模型" />
           </el-form-item>
-          <el-form-item label="题目数量">
-            <el-input-number v-model="form.questionCount" :min="1" :max="20" style="width: 100%" />
+          <el-form-item label="题目总数">
+            <el-input :model-value="`${totalQuestionCount} 道`" readonly />
           </el-form-item>
         </div>
+        <div class="workspace-form-grid workspace-form-grid--compact">
+          <el-form-item label="单选题">
+            <el-input-number v-model="form.singleCount" :min="0" :max="20" style="width: 100%" />
+          </el-form-item>
+          <el-form-item label="判断题">
+            <el-input-number v-model="form.judgeCount" :min="0" :max="20" style="width: 100%" />
+          </el-form-item>
+        </div>
+        <el-form-item label="简答题">
+          <el-input-number v-model="form.shortAnswerCount" :min="0" :max="20" style="width: 100%" />
+        </el-form-item>
+        <el-alert
+          :title="`默认组合是单选 3 道、判断 1 道、简答 1 道。当前共 ${totalQuestionCount} 道。`"
+          :type="totalQuestionCount > 20 || totalQuestionCount <= 0 ? 'warning' : 'info'"
+          :closable="false"
+          show-icon
+          style="margin-bottom: 18px"
+        />
         <el-form-item label="难度等级">
           <el-slider v-model="form.difficultyLevel" :min="1" :max="5" show-stops />
         </el-form-item>
@@ -185,6 +203,22 @@
           <div class="detail-meta-item">
             <span>状态</span>
             <strong>{{ questionSetDetail.status }}</strong>
+          </div>
+        </div>
+        <div v-if="questionSetDetail.sourceSegments?.length" class="summary-dialog__content" style="margin-top: 18px">
+          <div class="summary-dialog__content-title">本次出题引用资料</div>
+          <div class="rag-reference-list">
+            <div
+              v-for="segment in questionSetDetail.sourceSegments"
+              :key="`${segment.segmentId}-${segment.segmentNo || 0}`"
+              class="rag-reference-item"
+            >
+              <div class="rag-reference-item__title">
+                {{ segment.sectionTitle || `资料片段 #${segment.segmentNo || segment.segmentId}` }}
+              </div>
+              <div class="rag-reference-item__meta">{{ buildSegmentMeta(segment) }}</div>
+              <div class="summary-block">{{ segment.contentText }}</div>
+            </div>
           </div>
         </div>
         <div class="list-stack" style="margin-top: 18px">
@@ -248,7 +282,9 @@ const aiConfig = ref({
 const form = reactive({
   materialId: undefined as number | undefined,
   modelName: '',
-  questionCount: 5,
+  singleCount: 3,
+  judgeCount: 1,
+  shortAnswerCount: 1,
   difficultyLevel: 3
 })
 
@@ -261,6 +297,10 @@ const page = reactive({
   current: 1,
   size: 10
 })
+
+const totalQuestionCount = computed(
+  () => Number(form.singleCount || 0) + Number(form.judgeCount || 0) + Number(form.shortAnswerCount || 0)
+)
 
 const taskStatusText = computed(() => {
   if (!currentTask.value) {
@@ -281,6 +321,20 @@ const formatDateTime = (value?: string) => {
     return '未知时间'
   }
   return value.replace('T', ' ').slice(0, 19)
+}
+
+const buildSegmentMeta = (segment: any) => {
+  const parts: string[] = []
+  if (segment?.pageNo) {
+    parts.push(`第 ${segment.pageNo} 页`)
+  }
+  if (segment?.segmentNo) {
+    parts.push(`段落 #${segment.segmentNo}`)
+  }
+  if (segment?.score !== undefined && segment?.score !== null) {
+    parts.push(`相似度 ${Number(segment.score).toFixed(4)}`)
+  }
+  return parts.join(' · ') || '资料摘录'
 }
 
 const resetFilters = () => {
@@ -344,12 +398,23 @@ const generateQuestionSet = async () => {
     ElMessage.warning('请先选择资料')
     return
   }
+  if (totalQuestionCount.value <= 0) {
+    ElMessage.warning('请至少配置一种题型并设置数量')
+    return
+  }
+  if (totalQuestionCount.value > 20) {
+    ElMessage.warning('题目总数最多为 20 道')
+    return
+  }
 
   generating.value = true
   try {
     const submitRes = await submitQuestionGenerateTaskApi(form.materialId, {
       modelName: form.modelName.trim() || undefined,
-      questionCount: form.questionCount,
+      questionCount: totalQuestionCount.value,
+      singleCount: form.singleCount,
+      judgeCount: form.judgeCount,
+      shortAnswerCount: form.shortAnswerCount,
       difficultyLevel: form.difficultyLevel
     })
     const submittedTask = submitRes.data.data as AiTaskDetail

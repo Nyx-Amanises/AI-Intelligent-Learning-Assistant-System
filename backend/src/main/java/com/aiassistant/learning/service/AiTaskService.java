@@ -30,5 +30,7 @@ public interface AiTaskService {
 
     AiTaskDetailVO retryTask(Long userId, Long taskId);
 
+    void deleteTask(Long userId, Long taskId);
+
     void executeTask(Long taskId);
 }

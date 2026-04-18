@@ -1,5 +1,7 @@
 package com.aiassistant.learning.vo.practice;
 
+import com.aiassistant.learning.vo.rag.RetrievedSegmentVO;
+import java.util.List;
 import lombok.Builder;
 import lombok.Data;
 
@@ -40,4 +42,6 @@ public class PracticeAnswerVO {
     private String reviewComment;
 
     private String answerAnalysis;
+
+    private List<RetrievedSegmentVO> sourceSegments;
 }

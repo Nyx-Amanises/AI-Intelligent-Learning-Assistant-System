@@ -11,6 +11,7 @@ import com.aiassistant.learning.vo.ai.AiTaskDetailVO;
 import com.aiassistant.learning.vo.ai.AiTaskPageVO;
 import com.aiassistant.learning.vo.page.PageVO;
 import jakarta.validation.Valid;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -104,5 +105,12 @@ public class AiTaskController {
     public ApiResponse<AiTaskDetailVO> retry(@PathVariable Long taskId) {
         Long userId = UserContext.getCurrentUserId();
         return ApiResponse.success(aiTaskService.retryTask(userId, taskId));
+    }
+
+    @DeleteMapping("/{taskId}")
+    public ApiResponse<Void> delete(@PathVariable Long taskId) {
+        Long userId = UserContext.getCurrentUserId();
+        aiTaskService.deleteTask(userId, taskId);
+        return ApiResponse.success("任务记录已删除", null);
     }
 }

@@ -236,6 +236,25 @@
                         <strong>答案解析:</strong>
                         <span>{{ answer.answerAnalysis || '暂无解析' }}</span>
                       </div>
+                      <div
+                        v-if="isShortQuestion(answer) && answer.sourceSegments?.length"
+                        class="practice-paper-result__analysis-row practice-paper-result__analysis-row--block"
+                      >
+                        <strong>资料依据:</strong>
+                        <div class="rag-reference-list rag-reference-list--compact">
+                          <div
+                            v-for="segment in answer.sourceSegments"
+                            :key="`${segment.segmentId}-${segment.segmentNo || 0}`"
+                            class="rag-reference-item"
+                          >
+                            <div class="rag-reference-item__title">
+                              {{ segment.sectionTitle || `资料片段 #${segment.segmentNo || segment.segmentId}` }}
+                            </div>
+                            <div class="rag-reference-item__meta">{{ buildSegmentMeta(segment) }}</div>
+                            <div class="summary-block">{{ segment.contentText }}</div>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -476,6 +495,20 @@ const formatDateTime = (value?: string) => {
     return '未知时间'
   }
   return value.replace('T', ' ').slice(0, 19)
+}
+
+const buildSegmentMeta = (segment: any) => {
+  const parts: string[] = []
+  if (segment?.pageNo) {
+    parts.push(`第 ${segment.pageNo} 页`)
+  }
+  if (segment?.segmentNo) {
+    parts.push(`段落 #${segment.segmentNo}`)
+  }
+  if (segment?.score !== undefined && segment?.score !== null) {
+    parts.push(`相似度 ${Number(segment.score).toFixed(4)}`)
+  }
+  return parts.join(' · ') || '资料摘录'
 }
 
 const resetReviewTaskWaiting = () => {

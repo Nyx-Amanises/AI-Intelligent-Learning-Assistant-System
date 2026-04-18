@@ -11,5 +11,11 @@ public class QuestionGenerateTaskPayload {
 
     private Integer questionCount;
 
+    private Integer singleCount;
+
+    private Integer judgeCount;
+
+    private Integer shortAnswerCount;
+
     private Integer difficultyLevel;
 }

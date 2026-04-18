@@ -9,33 +9,44 @@ import com.aiassistant.learning.mapper.PracticeAnswerMapper;
 import com.aiassistant.learning.mapper.PracticeSessionMapper;
 import com.aiassistant.learning.mapper.QuestionItemMapper;
 import com.aiassistant.learning.service.QuestionSetService;
+import com.aiassistant.learning.service.RetrievalService;
+import com.aiassistant.learning.service.VectorStoreService.RetrievedSegment;
 import com.aiassistant.learning.vo.page.PageVO;
 import com.aiassistant.learning.vo.question.QuestionItemVO;
 import com.aiassistant.learning.vo.question.QuestionSetDetailVO;
 import com.aiassistant.learning.vo.question.QuestionSetPageVO;
+import com.aiassistant.learning.vo.rag.RetrievedSegmentVO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 @Service
 public class QuestionSetServiceImpl extends ServiceImpl<com.aiassistant.learning.mapper.QuestionSetMapper, QuestionSet>
         implements QuestionSetService {
 
+    private static final int QUESTION_SET_SOURCE_LIMIT = 6;
+
     private final QuestionItemMapper questionItemMapper;
     private final PracticeSessionMapper practiceSessionMapper;
     private final PracticeAnswerMapper practiceAnswerMapper;
+    private final RetrievalService retrievalService;
 
     public QuestionSetServiceImpl(
             QuestionItemMapper questionItemMapper,
             PracticeSessionMapper practiceSessionMapper,
-            PracticeAnswerMapper practiceAnswerMapper
+            PracticeAnswerMapper practiceAnswerMapper,
+            RetrievalService retrievalService
     ) {
         this.questionItemMapper = questionItemMapper;
         this.practiceSessionMapper = practiceSessionMapper;
         this.practiceAnswerMapper = practiceAnswerMapper;
+        this.retrievalService = retrievalService;
     }
 
     @Override
@@ -98,6 +109,7 @@ public class QuestionSetServiceImpl extends ServiceImpl<com.aiassistant.learning
                         .sortNo(item.getSortNo())
                         .build())
                 .toList();
+        List<RetrievedSegmentVO> sourceSegments = resolveQuestionSetSourceSegments(userId, questionSet, questions);
 
         return QuestionSetDetailVO.builder()
                 .id(questionSet.getId())
@@ -108,8 +120,67 @@ public class QuestionSetServiceImpl extends ServiceImpl<com.aiassistant.learning
                 .difficultyLevel(questionSet.getDifficultyLevel())
                 .status(questionSet.getStatus())
                 .createdAt(questionSet.getCreatedAt())
+                .sourceSegments(sourceSegments)
                 .questions(questions)
                 .build();
+    }
+
+    private List<RetrievedSegmentVO> resolveQuestionSetSourceSegments(
+            Long userId,
+            QuestionSet questionSet,
+            List<QuestionItemVO> questions
+    ) {
+        if (questionSet.getMaterialId() == null || questions == null || questions.isEmpty()) {
+            return List.of();
+        }
+
+        try {
+            List<RetrievedSegment> segments = retrievalService.retrieveMaterialSegments(
+                    userId,
+                    questionSet.getMaterialId(),
+                    buildQuestionSetRetrievalQuery(questionSet, questions),
+                    QUESTION_SET_SOURCE_LIMIT
+            );
+            return AiQuestionServiceImpl.toRetrievedSegmentVOList(segments);
+        } catch (Exception exception) {
+            return List.of();
+        }
+    }
+
+    private String buildQuestionSetRetrievalQuery(QuestionSet questionSet, List<QuestionItemVO> questions) {
+        StringBuilder builder = new StringBuilder();
+        builder.append(questionSet.getTitle()).append(" ");
+
+        Set<String> knowledgePoints = new LinkedHashSet<>();
+        for (QuestionItemVO question : questions) {
+            if (StringUtils.hasText(question.getKnowledgePoint())) {
+                knowledgePoints.add(question.getKnowledgePoint().trim());
+            }
+            if (knowledgePoints.size() >= 6) {
+                break;
+            }
+        }
+        if (!knowledgePoints.isEmpty()) {
+            builder.append("知识点 ");
+            builder.append(String.join(" ", knowledgePoints)).append(" ");
+        }
+
+        builder.append("题目主题 ");
+        questions.stream()
+                .map(QuestionItemVO::getStemText)
+                .filter(StringUtils::hasText)
+                .limit(4)
+                .forEach(stem -> builder.append(trimForQuery(stem, 42)).append(" "));
+        builder.append("出题依据 核心知识点 重点概念");
+        return builder.toString().trim();
+    }
+
+    private String trimForQuery(String value, int maxLength) {
+        if (!StringUtils.hasText(value)) {
+            return "";
+        }
+        String normalized = value.replaceAll("\\s+", " ").trim();
+        return normalized.length() <= maxLength ? normalized : normalized.substring(0, maxLength);
     }
 
     @Override

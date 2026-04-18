@@ -202,6 +202,24 @@
         <div class="summary-dialog__content-title">总结正文</div>
         <div class="summary-block">{{ activeSummary?.summaryText }}</div>
       </div>
+
+      <div class="summary-dialog__content" style="margin-top: 16px">
+        <div class="summary-dialog__content-title">引用资料</div>
+        <div v-if="activeSummary?.sourceSegments?.length" class="rag-reference-list">
+          <div
+            v-for="segment in activeSummary.sourceSegments"
+            :key="`${segment.segmentId}-${segment.segmentNo || 0}`"
+            class="rag-reference-item"
+          >
+            <div class="rag-reference-item__title">
+              {{ segment.sectionTitle || `资料片段 #${segment.segmentNo || segment.segmentId}` }}
+            </div>
+            <div class="rag-reference-item__meta">{{ buildSegmentMeta(segment) }}</div>
+            <div class="summary-block">{{ segment.contentText }}</div>
+          </div>
+        </div>
+        <div v-else class="state-block empty">当前总结暂无可展示的引用资料。</div>
+      </div>
     </el-dialog>
 
     <el-dialog
@@ -345,6 +363,20 @@ const buildExcerpt = (text?: string, length = 60) => {
   }
   const normalized = text.replace(/\s+/g, ' ').trim()
   return normalized.length > length ? `${normalized.slice(0, length)}...` : normalized
+}
+
+const buildSegmentMeta = (segment: any) => {
+  const parts: string[] = []
+  if (segment?.pageNo) {
+    parts.push(`第 ${segment.pageNo} 页`)
+  }
+  if (segment?.segmentNo) {
+    parts.push(`段落 #${segment.segmentNo}`)
+  }
+  if (segment?.score !== undefined && segment?.score !== null) {
+    parts.push(`相似度 ${Number(segment.score).toFixed(4)}`)
+  }
+  return parts.join(' · ') || '资料摘录'
 }
 
 const loadMaterials = async () => {
