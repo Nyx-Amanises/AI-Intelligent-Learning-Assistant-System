@@ -297,6 +297,7 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
             Long selectedMaterialId = taskIntentParser.resolveMaterialCandidateSelection(userMessage, payload.getMaterialCandidates());
             if (selectedMaterialId == null) {
                 if (shouldBypassPendingAction(userMessage, pendingActionType, payload)) {
+                    clearPendingAction(session);
                     return WorkflowResolution.notHandled();
                 }
                 String promptText = StringUtils.hasText(payload.getPromptText())
@@ -327,6 +328,7 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
                     taskIntentParser.resolveQuestionConfigReply(userMessage, pendingQuestionTask);
             if (!resolution.resolved()) {
                 if (shouldBypassPendingAction(userMessage, pendingActionType, payload)) {
+                    clearPendingAction(session);
                     return WorkflowResolution.notHandled();
                 }
                 String promptText = StringUtils.hasText(resolution.promptText())

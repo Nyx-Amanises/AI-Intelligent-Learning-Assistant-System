@@ -17,8 +17,10 @@ public class AssistantTaskIntentParser {
             "(?:用|使用|模型(?:名称)?|model)\\s*[:：]?\\s*([A-Za-z0-9._:-]+)",
             Pattern.CASE_INSENSITIVE
     );
-    private static final Pattern TOTAL_QUESTION_PATTERN = Pattern.compile(
-            "(?:共|总共|一共|合计|总计|来|给我|出|生成|做)?\\s*([0-9一二两三四五六七八九十百]+)\\s*道\\s*(?:题|题目|练习题|试题|题集)"
+    private static final List<Pattern> TOTAL_QUESTION_PATTERNS = List.of(
+            Pattern.compile("(?:共|总共|一共|合计|总计)\\s*([0-9一二两三四五六七八九十百]+)\\s*道(?:\\s*(?:题|题目|练习题|试题|题集))?"),
+            Pattern.compile("(?:来|给我|出|生成|做)\\s*([0-9一二两三四五六七八九十百]+)\\s*道\\s*(?:题|题目|练习题|试题|题集)"),
+            Pattern.compile("([0-9一二两三四五六七八九十百]+)\\s*道\\s*(?:题|题目|练习题|试题|题集)")
     );
     private static final Pattern DIFFICULTY_PATTERN = Pattern.compile("难度\\s*([1-5])");
     private static final Pattern TITLE_BRACKET_PATTERN = Pattern.compile("《([^》]{2,80})》");
@@ -764,8 +766,13 @@ public class AssistantTaskIntentParser {
         if (!StringUtils.hasText(text)) {
             return null;
         }
-        Matcher matcher = TOTAL_QUESTION_PATTERN.matcher(text);
-        return matcher.find() ? parseFlexibleInt(matcher.group(1)) : null;
+        for (Pattern pattern : TOTAL_QUESTION_PATTERNS) {
+            Matcher matcher = pattern.matcher(text);
+            if (matcher.find()) {
+                return parseFlexibleInt(matcher.group(1));
+            }
+        }
+        return null;
     }
 
     private Integer extractTypedCount(String text, String... aliases) {
