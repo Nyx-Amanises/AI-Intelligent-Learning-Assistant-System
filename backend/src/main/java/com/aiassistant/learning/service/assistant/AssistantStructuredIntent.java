@@ -13,6 +13,10 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class AssistantStructuredIntent {
 
+    private String interactionMode;
+
+    private String unsupportedFeature;
+
     @Builder.Default
     private List<String> requestedTaskTypes = new ArrayList<>();
 
@@ -53,6 +57,12 @@ public class AssistantStructuredIntent {
     private String exclusiveQuestionType;
 
     private Boolean defaultChoice;
+
+    private Boolean questionConfigReply;
+
+    private Boolean contextChallenge;
+
+    private Boolean materialDisambiguation;
 
     public static AssistantStructuredIntent empty() {
         return AssistantStructuredIntent.builder().build();

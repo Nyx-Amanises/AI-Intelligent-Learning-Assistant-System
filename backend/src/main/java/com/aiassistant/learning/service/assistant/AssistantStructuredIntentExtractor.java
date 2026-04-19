@@ -68,19 +68,31 @@ public class AssistantStructuredIntentExtractor {
                 只输出一个 JSON 对象。
 
                 规则：
-                1. requestedTaskTypes 仅允许：SUMMARY、QUESTION_GENERATE。
-                2. taskTypeFilter 仅允许：SUMMARY、QUESTION_GENERATE、PRACTICE_REVIEW、EMBEDDING。
-                3. taskStatusFilter 仅允许：PENDING、RUNNING、SUCCESS、FAILED、CANCELLED。
-                4. exclusiveQuestionType 仅允许：SINGLE、JUDGE、SHORT_ANSWER。
-                5. 如果用户是在查看资料列表，则 materialBrowse=true。
-                6. 如果用户明确要看“已生成 Embedding / 已向量化”的资料，则 embeddingReadyOnly=true。
-                7. 如果用户是在查看任务列表，则 taskList=true。
-                8. 如果用户是在查看题集列表，则 questionSetList=true。
-                9. 如果用户是在查看章节/目录/大纲，则 chapterBrowse=true。
-                10. 如果某字段无法确定，请返回 null；布尔字段默认 false；数组默认 []。
+                1. interactionMode 仅允许：TASK_CREATE、TASK_CONFIG_REPLY、MATERIAL_SELECTION、MATERIAL_BROWSE、TASK_BROWSE、QUESTION_SET_BROWSE、CHAPTER_BROWSE、CONTEXT_CHALLENGE、STUDY_QA、CHAT、UNSUPPORTED、UNKNOWN。
+                2. 如果用户是在正常聊天、问候、感谢、寒暄，interactionMode=CHAT。
+                3. 如果用户是在提问资料内容、让你讲解知识点、带学、解释概念、根据资料回答问题，interactionMode=STUDY_QA。
+                4. 如果用户是在明确要求“生成总结/出题”，interactionMode=TASK_CREATE。
+                5. 如果用户是在补充出题题型、题量、默认配置，interactionMode=TASK_CONFIG_REPLY。
+                6. 如果用户是在从候选资料中回复序号、资料ID、确认“这份/那份”，interactionMode=MATERIAL_SELECTION。
+                7. 如果用户是在查看资料列表，则 interactionMode=MATERIAL_BROWSE，materialBrowse=true。
+                8. 如果用户是在查看任务列表或任务进度，则 interactionMode=TASK_BROWSE，taskList=true。
+                9. 如果用户是在查看题集列表，则 interactionMode=QUESTION_SET_BROWSE，questionSetList=true。
+                10. 如果用户是在查看章节/目录/大纲，则 interactionMode=CHAPTER_BROWSE，chapterBrowse=true。
+                11. 如果用户是在质疑、追问、澄清上一条系统定位/选择/判断，则 interactionMode=CONTEXT_CHALLENGE。
+                12. 如果用户要求的是当前系统明显不支持的能力，则 interactionMode=UNSUPPORTED，并尽量填 unsupportedFeature。
+                13. requestedTaskTypes 仅允许：SUMMARY、QUESTION_GENERATE。
+                14. taskTypeFilter 仅允许：SUMMARY、QUESTION_GENERATE、PRACTICE_REVIEW、EMBEDDING。
+                15. taskStatusFilter 仅允许：PENDING、RUNNING、SUCCESS、FAILED、CANCELLED。
+                16. exclusiveQuestionType 仅允许：SINGLE、JUDGE、SHORT_ANSWER。
+                17. 如果用户明确要看“已生成 Embedding / 已向量化”的资料，则 embeddingReadyOnly=true。
+                18. 如果用户是在澄清“是哪一份资料 / id 6 还是 id 7 / 当前定位不明确”，则 materialDisambiguation=true。
+                19. 如果用户是在质疑、追问、澄清上一条系统定位/选择/判断，则 contextChallenge=true。
+                20. 如果某字段无法确定，请返回 null；布尔字段默认 false；数组默认 []。
 
                 输出 JSON schema：
                 {
+                  "interactionMode": "UNKNOWN",
+                  "unsupportedFeature": null,
                   "requestedTaskTypes": [],
                   "materialQuery": null,
                   "materialBrowse": false,
@@ -100,7 +112,10 @@ public class AssistantStructuredIntentExtractor {
                   "shortAnswerCount": null,
                   "difficultyLevel": null,
                   "exclusiveQuestionType": null,
-                  "defaultChoice": false
+                  "defaultChoice": false,
+                  "questionConfigReply": false,
+                  "contextChallenge": false,
+                  "materialDisambiguation": false
                 }
                 """;
     }
@@ -116,6 +131,8 @@ public class AssistantStructuredIntentExtractor {
         try {
             JsonNode root = objectMapper.readTree(extractJson(content));
             return AssistantStructuredIntent.builder()
+                    .interactionMode(normalizeUpper(readNullableText(root, "interactionMode")))
+                    .unsupportedFeature(readNullableText(root, "unsupportedFeature"))
                     .requestedTaskTypes(readStringList(root, "requestedTaskTypes"))
                     .materialQuery(readNullableText(root, "materialQuery"))
                     .materialBrowse(readNullableBoolean(root, "materialBrowse"))
@@ -136,6 +153,9 @@ public class AssistantStructuredIntentExtractor {
                     .difficultyLevel(readNullableInt(root, "difficultyLevel"))
                     .exclusiveQuestionType(normalizeUpper(readNullableText(root, "exclusiveQuestionType")))
                     .defaultChoice(readNullableBoolean(root, "defaultChoice"))
+                    .questionConfigReply(readNullableBoolean(root, "questionConfigReply"))
+                    .contextChallenge(readNullableBoolean(root, "contextChallenge"))
+                    .materialDisambiguation(readNullableBoolean(root, "materialDisambiguation"))
                     .build();
         } catch (Exception ignored) {
             return AssistantStructuredIntent.empty();

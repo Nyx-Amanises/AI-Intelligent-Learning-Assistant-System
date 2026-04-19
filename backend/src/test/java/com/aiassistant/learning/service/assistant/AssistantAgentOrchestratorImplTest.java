@@ -26,6 +26,7 @@ import com.aiassistant.learning.vo.material.MaterialPageVO;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
@@ -38,6 +39,7 @@ class AssistantAgentOrchestratorImplTest {
     private final StudyMaterialService studyMaterialService = Mockito.mock(StudyMaterialService.class);
     private final QuestionSetService questionSetService = Mockito.mock(QuestionSetService.class);
     private final AssistantStructuredIntentExtractor structuredIntentExtractor = Mockito.mock(AssistantStructuredIntentExtractor.class);
+    private final AssistantToolPlanner toolPlanner = Mockito.mock(AssistantToolPlanner.class);
     private final MaterialChapterOutlineAssistantTool materialChapterOutlineAssistantTool = Mockito.mock(MaterialChapterOutlineAssistantTool.class);
     private final SummaryTaskAssistantTool summaryTaskAssistantTool = Mockito.mock(SummaryTaskAssistantTool.class);
     private final QuestionGenerateTaskAssistantTool questionGenerateTaskAssistantTool = Mockito.mock(QuestionGenerateTaskAssistantTool.class);
@@ -278,6 +280,65 @@ class AssistantAgentOrchestratorImplTest {
         assertNull(session.getPendingActionType());
     }
 
+    @Test
+    void shouldExecutePlannerProvidedToolPlanBeforeRuleFallback() {
+        AssistantTool materialListTool = fakeSuccessTool("material.list", "我先帮你列出当前资料。");
+        MaterialSearchAssistantTool materialSearchAssistantTool = Mockito.mock(MaterialSearchAssistantTool.class);
+        AssistantAgentOrchestratorImpl orchestrator = newOrchestrator(
+                new AssistantToolRegistry(List.of(materialListTool)),
+                materialSearchAssistantTool
+        );
+
+        String userMessage = "查一下已经向量化的资料";
+        when(toolPlanner.plan(Mockito.any(), eq(userMessage), eq("gpt-test"), Mockito.any()))
+                .thenReturn(AssistantToolPlan.builder()
+                        .planned(true)
+                        .interactionMode("MATERIAL_BROWSE")
+                        .replyStrategy("EXECUTE_TOOLS")
+                        .toolCalls(List.of(AssistantToolPlan.ToolCall.builder()
+                                .toolName("material.list")
+                                .reason("用户要查看已向量化资料")
+                                .arguments(Map.of("embeddingReadyOnly", true))
+                                .build()))
+                        .build());
+
+        AssistantAgentOrchestrator.AssistantPreparedResult preparedResult =
+                orchestrator.prepare(1L, new AssistantSession(), userMessage, "gpt-test");
+
+        assertTrue(preparedResult.useModel());
+        assertEquals(1, preparedResult.toolExecutions().size());
+        assertEquals("material.list", preparedResult.toolExecutions().get(0).toolName());
+        assertTrue(preparedResult.toolPlanJson().contains("planner"));
+        verifyNoInteractions(structuredIntentExtractor);
+    }
+
+    @Test
+    void shouldReturnPlannerClarificationWhenRequiredSlotsAreMissing() {
+        MaterialSearchAssistantTool materialSearchAssistantTool = Mockito.mock(MaterialSearchAssistantTool.class);
+        AssistantAgentOrchestratorImpl orchestrator = newOrchestrator(
+                new AssistantToolRegistry(List.of(fakeRagTool())),
+                materialSearchAssistantTool
+        );
+
+        String userMessage = "帮我出一套题";
+        when(toolPlanner.plan(Mockito.any(), eq(userMessage), eq("gpt-test"), Mockito.any()))
+                .thenReturn(AssistantToolPlan.builder()
+                        .planned(true)
+                        .interactionMode("TASK_CREATE")
+                        .replyStrategy("ASK_CLARIFICATION")
+                        .missingSlots(List.of("materialQuery"))
+                        .clarificationPrompt("我需要先知道你想基于哪份资料出题。")
+                        .build());
+
+        AssistantAgentOrchestrator.AssistantPreparedResult preparedResult =
+                orchestrator.prepare(1L, new AssistantSession(), userMessage, "gpt-test");
+
+        assertFalse(preparedResult.useModel());
+        assertEquals("我需要先知道你想基于哪份资料出题。", preparedResult.fallbackReply());
+        assertTrue(preparedResult.toolExecutions().isEmpty());
+        verifyNoInteractions(structuredIntentExtractor);
+    }
+
     private AssistantAgentOrchestratorImpl newOrchestrator(
             AssistantToolRegistry toolRegistry,
             MaterialSearchAssistantTool materialSearchAssistantTool
@@ -290,6 +351,7 @@ class AssistantAgentOrchestratorImplTest {
                 studyMaterialService,
                 questionSetService,
                 structuredIntentExtractor,
+                toolPlanner,
                 taskIntentParser,
                 materialChapterOutlineAssistantTool,
                 materialSearchAssistantTool,
@@ -328,6 +390,35 @@ class AssistantAgentOrchestratorImplTest {
                         "{\"materialId\":" + context.session().getCurrentMaterialId() + "}",
                         "{\"segments\":[]}",
                         "检索到以下资料依据：1. 第 1 页 · 段落#1 · Java 是一门面向对象语言。",
+                        null,
+                        now,
+                        now
+                );
+            }
+        };
+    }
+
+    private AssistantTool fakeSuccessTool(String toolName, String summaryText) {
+        return new AssistantTool() {
+            @Override
+            public String name() {
+                return toolName;
+            }
+
+            @Override
+            public boolean supports(ToolContext context) {
+                return true;
+            }
+
+            @Override
+            public ToolExecutionResult execute(ToolContext context) {
+                LocalDateTime now = LocalDateTime.now();
+                return new ToolExecutionResult(
+                        toolName,
+                        "SUCCESS",
+                        "{}",
+                        "{}",
+                        summaryText,
                         null,
                         now,
                         now

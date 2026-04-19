@@ -202,6 +202,8 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
     @Override
     public MaterialDetailVO getMaterialDetail(Long userId, Long materialId) {
         StudyMaterial material = getUserOwnedMaterial(userId, materialId);
+        EmbeddingStats embeddingStats = buildEmbeddingStatsMap(List.of(materialId))
+                .getOrDefault(materialId, EmbeddingStats.empty());
         List<MaterialSegmentVO> segments = materialSegmentMapper.selectList(
                         new LambdaQueryWrapper<MaterialSegment>()
                                 .eq(MaterialSegment::getMaterialId, materialId)
@@ -229,6 +231,9 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
                 .tags(material.getTags())
                 .totalPages(material.getTotalPages())
                 .totalCharacters(material.getTotalCharacters())
+                .embeddingStatus(resolveEmbeddingStatus(material.getParseStatus(), embeddingStats))
+                .embeddedSegmentCount(embeddingStats.embeddedSegments())
+                .totalSegmentCount(embeddingStats.totalSegments())
                 .lastStudyTime(material.getLastStudyTime())
                 .createdAt(material.getCreatedAt())
                 .segments(segments)

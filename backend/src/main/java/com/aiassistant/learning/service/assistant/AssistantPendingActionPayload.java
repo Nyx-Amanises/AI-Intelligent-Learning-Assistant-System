@@ -21,6 +21,8 @@ public class AssistantPendingActionPayload {
 
     private String followUpActionType;
 
+    private String followUpUserMessage;
+
     private String chapterKeyword;
 
     @Builder.Default

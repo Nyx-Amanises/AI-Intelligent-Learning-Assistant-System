@@ -39,16 +39,39 @@ public class MaterialDetailAssistantTool extends AbstractAssistantTool {
             String summary = """
                     当前资料：%s
                     类型：%s，解析状态：%s，总页数：%s，总字符数：%s。
+                    Embedding：%s。
                     """.formatted(
                     detail.getTitle(),
                     detail.getMaterialType(),
                     detail.getParseStatus(),
                     detail.getTotalPages() == null ? "--" : detail.getTotalPages(),
-                    detail.getTotalCharacters() == null ? "--" : detail.getTotalCharacters()
+                    detail.getTotalCharacters() == null ? "--" : detail.getTotalCharacters(),
+                    formatEmbeddingSummary(detail)
             ).trim();
             return success(name(), args, detail, summary, startedAt);
         } catch (Exception exception) {
             return failure(name(), args, exception.getMessage(), startedAt);
         }
+    }
+
+    private String formatEmbeddingSummary(MaterialDetailVO detail) {
+        if (detail == null) {
+            return "未知";
+        }
+        String statusText = switch ((detail.getEmbeddingStatus() == null ? "" : detail.getEmbeddingStatus().trim().toUpperCase())) {
+            case "SUCCESS" -> "已完成";
+            case "PARTIAL" -> "部分完成";
+            case "PARTIAL_FAILED" -> "部分失败";
+            case "RUNNING" -> "生成中";
+            case "FAILED" -> "失败";
+            case "PENDING" -> "未生成";
+            case "PARSING" -> "资料解析中";
+            case "PARSE_FAILED" -> "资料解析失败";
+            case "NOT_READY" -> "资料未就绪";
+            default -> "待处理";
+        };
+        int embedded = detail.getEmbeddedSegmentCount() == null ? 0 : detail.getEmbeddedSegmentCount();
+        int total = detail.getTotalSegmentCount() == null ? 0 : detail.getTotalSegmentCount();
+        return total > 0 ? statusText + "（" + embedded + "/" + total + "）" : statusText;
     }
 }

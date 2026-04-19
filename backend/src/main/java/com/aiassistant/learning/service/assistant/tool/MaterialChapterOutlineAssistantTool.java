@@ -149,7 +149,7 @@ public class MaterialChapterOutlineAssistantTool extends AbstractAssistantTool {
         }
         int bestScore = computeMatchScore(candidates.get(0), materialQuery);
         int secondScore = computeMatchScore(candidates.get(1), materialQuery);
-        return bestScore >= 100 || bestScore - secondScore >= 18;
+        return (bestScore >= 100 && secondScore < 100) || bestScore - secondScore >= 18;
     }
 
     private String buildMaterialClarificationSummary(List<MaterialPageVO> candidates) {

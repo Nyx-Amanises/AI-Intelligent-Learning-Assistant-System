@@ -112,9 +112,11 @@ public class MaterialSearchAssistantTool extends AbstractAssistantTool {
         }
         AssistantMaterialCandidate bestCandidate = candidates.get(0);
         AssistantMaterialCandidate secondCandidate = candidates.size() > 1 ? candidates.get(1) : null;
+        int bestScore = bestCandidate.getMatchScore() == null ? 0 : bestCandidate.getMatchScore();
+        int secondScore = secondCandidate == null || secondCandidate.getMatchScore() == null ? 0 : secondCandidate.getMatchScore();
         boolean clearSelection = candidates.size() == 1
-                || bestCandidate.getMatchScore() >= 100
-                || (secondCandidate != null && bestCandidate.getMatchScore() - secondCandidate.getMatchScore() >= 18);
+                || (bestScore >= 100 && secondScore < 100)
+                || (secondCandidate != null && bestScore - secondScore >= 18);
         return AssistantMaterialSearchResult.builder()
                 .queryText(queryText)
                 .selectedMaterialId(clearSelection ? bestCandidate.getId() : null)
