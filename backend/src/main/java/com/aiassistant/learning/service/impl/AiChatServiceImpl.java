@@ -40,7 +40,7 @@ public class AiChatServiceImpl implements AiChatService {
     @Override
     public String chat(String systemPrompt, String userPrompt, String modelName, Double temperature) {
         AiConfigService.ResolvedAiConfig config = validateConfig();
-        Map<String, Object> requestBody = buildChatRequestBody(systemPrompt, userPrompt, modelName, temperature, false);
+        Map<String, Object> requestBody = buildChatRequestBody(config, systemPrompt, userPrompt, modelName, temperature, false);
         HttpRequest request = buildHttpRequest(config, requestBody);
 
         try {
@@ -79,7 +79,7 @@ public class AiChatServiceImpl implements AiChatService {
             Consumer<String> onDelta
     ) {
         AiConfigService.ResolvedAiConfig config = validateConfig();
-        Map<String, Object> requestBody = buildChatRequestBody(systemPrompt, userPrompt, modelName, temperature, true);
+        Map<String, Object> requestBody = buildChatRequestBody(config, systemPrompt, userPrompt, modelName, temperature, true);
         HttpRequest request = buildHttpRequest(config, requestBody);
 
         try {
@@ -143,6 +143,7 @@ public class AiChatServiceImpl implements AiChatService {
     }
 
     private Map<String, Object> buildChatRequestBody(
+            AiConfigService.ResolvedAiConfig config,
             String systemPrompt,
             String userPrompt,
             String modelName,
@@ -151,6 +152,9 @@ public class AiChatServiceImpl implements AiChatService {
     ) {
         if (!StringUtils.hasText(modelName)) {
             throw new BusinessException("AI 默认模型未配置");
+        }
+        if (isResponsesApi(config)) {
+            return buildResponsesRequestBody(systemPrompt, userPrompt, modelName, temperature, stream);
         }
         Map<String, Object> requestBody = new LinkedHashMap<>();
         requestBody.put("model", modelName.trim());
@@ -161,6 +165,48 @@ public class AiChatServiceImpl implements AiChatService {
                 Map.of("role", "user", "content", userPrompt)
         ));
         return requestBody;
+    }
+
+    private Map<String, Object> buildResponsesRequestBody(
+            String systemPrompt,
+            String userPrompt,
+            String modelName,
+            Double temperature,
+            boolean stream
+    ) {
+        Map<String, Object> requestBody = new LinkedHashMap<>();
+        requestBody.put("model", modelName.trim());
+        requestBody.put("temperature", temperature == null ? 0.7 : temperature);
+        if (stream) {
+            requestBody.put("stream", true);
+        }
+        requestBody.put("input", List.of(Map.of(
+                "role", "user",
+                "content", List.of(Map.of(
+                        "type", "input_text",
+                        "text", buildResponsesInputText(systemPrompt, userPrompt)
+                ))
+        )));
+        return requestBody;
+    }
+
+    private String buildResponsesInputText(String systemPrompt, String userPrompt) {
+        StringBuilder builder = new StringBuilder();
+        if (StringUtils.hasText(systemPrompt)) {
+            builder.append("系统指令：").append(System.lineSeparator())
+                    .append(systemPrompt.trim())
+                    .append(System.lineSeparator())
+                    .append(System.lineSeparator());
+        }
+        builder.append("用户消息：").append(System.lineSeparator())
+                .append(userPrompt == null ? "" : userPrompt.trim());
+        return builder.toString();
+    }
+
+    private boolean isResponsesApi(AiConfigService.ResolvedAiConfig config) {
+        return config != null
+                && StringUtils.hasText(config.chatPath())
+                && config.chatPath().trim().toLowerCase().contains("/responses");
     }
 
     private HttpRequest buildHttpRequest(AiConfigService.ResolvedAiConfig config, Map<String, Object> requestBody) {
@@ -233,18 +279,28 @@ public class AiChatServiceImpl implements AiChatService {
 
     private String extractChatContent(JsonNode root) {
         JsonNode choices = root == null ? null : root.path("choices");
-        if (!choices.isArray() || choices.isEmpty()) {
-            throw new BusinessException("AI 返回结果为空");
+        if (choices != null && choices.isArray() && !choices.isEmpty()) {
+            JsonNode firstChoice = choices.get(0);
+            JsonNode messageNode = firstChoice.path("message");
+            if (!messageNode.isMissingNode()) {
+                return extractContentNode(messageNode.path("content"));
+            }
         }
-        JsonNode firstChoice = choices.get(0);
-        JsonNode messageNode = firstChoice.path("message");
-        if (messageNode.isMissingNode()) {
-            throw new BusinessException("AI 返回消息为空");
+        String responsesContent = extractResponsesContent(root);
+        if (StringUtils.hasText(responsesContent)) {
+            return responsesContent;
         }
-        return extractContentNode(messageNode.path("content"));
+        throw new BusinessException("AI 返回结果为空");
     }
 
     private String extractDeltaContent(JsonNode root) {
+        if (root != null && StringUtils.hasText(root.path("type").asText())) {
+            String eventType = root.path("type").asText();
+            if ("response.output_text.delta".equals(eventType) || "response.refusal.delta".equals(eventType)) {
+                String delta = root.path("delta").asText();
+                return StringUtils.hasText(delta) ? delta : null;
+            }
+        }
         JsonNode choices = root == null ? null : root.path("choices");
         if (!choices.isArray() || choices.isEmpty()) {
             return null;
@@ -259,6 +315,44 @@ public class AiChatServiceImpl implements AiChatService {
             return extractContentNode(messageNode.path("content"));
         }
         return null;
+    }
+
+    private String extractResponsesContent(JsonNode root) {
+        if (root == null || root.isMissingNode() || root.isNull()) {
+            return null;
+        }
+        JsonNode outputTextNode = root.path("output_text");
+        if (outputTextNode.isTextual() && StringUtils.hasText(outputTextNode.asText())) {
+            return outputTextNode.asText();
+        }
+        JsonNode responseNode = root.path("response");
+        if (!responseNode.isMissingNode() && !responseNode.isNull()) {
+            String nested = extractResponsesContent(responseNode);
+            if (StringUtils.hasText(nested)) {
+                return nested;
+            }
+        }
+        JsonNode outputNode = root.path("output");
+        if (!outputNode.isArray()) {
+            return null;
+        }
+        StringBuilder builder = new StringBuilder();
+        for (JsonNode item : outputNode) {
+            JsonNode contentNode = item.path("content");
+            if (!contentNode.isArray()) {
+                continue;
+            }
+            for (JsonNode contentItem : contentNode) {
+                String text = extractContentNode(contentItem.path("text"));
+                if (!StringUtils.hasText(text)) {
+                    text = extractContentNode(contentItem.path("content"));
+                }
+                if (StringUtils.hasText(text)) {
+                    builder.append(text);
+                }
+            }
+        }
+        return builder.toString();
     }
 
     private String extractContentNode(JsonNode contentNode) {

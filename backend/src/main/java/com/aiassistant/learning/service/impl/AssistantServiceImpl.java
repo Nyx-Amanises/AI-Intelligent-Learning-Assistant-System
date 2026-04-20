@@ -269,7 +269,42 @@ public class AssistantServiceImpl implements AssistantService {
             sendStreamEvent(emitter, Map.of("type", "done", "reply", replyVO));
             emitter.complete();
         } catch (Exception exception) {
-            sendStreamError(emitter, resolveStreamErrorMessage(exception));
+            sendStreamFailureReply(
+                    emitter,
+                    userId,
+                    session,
+                    userMessage,
+                    request,
+                    preparedResult,
+                    resolveStreamErrorMessage(exception)
+            );
+        }
+    }
+
+    private void sendStreamFailureReply(
+            SseEmitter emitter,
+            Long userId,
+            AssistantSession session,
+            AssistantMessage userMessage,
+            AssistantMessageSendRequest request,
+            AssistantAgentOrchestrator.AssistantPreparedResult preparedResult,
+            String errorMessage
+    ) {
+        String assistantReply = "这次调用失败了：" + (StringUtils.hasText(errorMessage) ? errorMessage : "助手流式生成失败");
+        try {
+            AssistantChatReplyVO replyVO = persistStreamReply(
+                    userId,
+                    session,
+                    userMessage,
+                    request,
+                    preparedResult,
+                    assistantReply
+            );
+            sendStreamEvent(emitter, Map.of("type", "delta", "delta", assistantReply));
+            sendStreamEvent(emitter, Map.of("type", "done", "reply", replyVO));
+            emitter.complete();
+        } catch (Exception persistException) {
+            sendStreamError(emitter, assistantReply);
         }
     }
 

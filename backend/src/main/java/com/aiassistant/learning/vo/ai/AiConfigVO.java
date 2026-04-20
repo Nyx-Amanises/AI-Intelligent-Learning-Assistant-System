@@ -11,6 +11,8 @@ public class AiConfigVO {
 
     private Boolean mockMode;
 
+    private String chatProviderType;
+
     private String baseUrl;
 
     private String chatPath;

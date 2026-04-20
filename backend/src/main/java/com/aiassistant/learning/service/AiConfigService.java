@@ -14,6 +14,7 @@ public interface AiConfigService {
     record ResolvedAiConfig(
             Boolean enabled,
             Boolean mockMode,
+            String chatProviderType,
             String baseUrl,
             String chatPath,
             String embeddingProviderType,

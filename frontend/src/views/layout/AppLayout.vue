@@ -65,6 +65,7 @@ const navItems = [
   { path: '/dashboard', label: '首页', icon: '首' },
   { path: '/materials', label: '资料管理', icon: '资' },
   { path: '/ai-tasks', label: '任务中心', icon: '任' },
+  { path: '/rag-eval', label: 'RAG 评测', icon: '测' },
   { path: '/summary', label: 'AI 总结', icon: '总' },
   { path: '/quiz', label: 'AI 出题', icon: '题' },
   { path: '/practice', label: '练习记录', icon: '练' },

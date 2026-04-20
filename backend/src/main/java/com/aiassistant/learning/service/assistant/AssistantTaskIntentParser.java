@@ -18,12 +18,12 @@ public class AssistantTaskIntentParser {
             Pattern.CASE_INSENSITIVE
     );
     private static final List<Pattern> TOTAL_QUESTION_PATTERNS = List.of(
-            Pattern.compile("(?:共|总共|一共|合计|总计)\\s*([0-9一二两三四五六七八九十百]+)\\s*道(?:\\s*(?:题|题目|练习题|试题|题集))?"),
-            Pattern.compile("(?:来|给我|出|生成|做)\\s*([0-9一二两三四五六七八九十百]+)\\s*道\\s*(?:题|题目|练习题|试题|题集)"),
-            Pattern.compile("([0-9一二两三四五六七八九十百]+)\\s*道\\s*(?:题|题目|练习题|试题|题集)")
+            Pattern.compile("(?:共|总共|一共|合计|总计)\\s*([0-9一二两三四五六七八九十百]+)\\s*(?:道|个)?(?:\\s*(?:题|题目|练习题|试题|题集))?"),
+            Pattern.compile("(?:来|给我|出|生成|做)\\s*([0-9一二两三四五六七八九十百]+)\\s*(?:道|个)?\\s*(?:题|题目|练习题|试题|题集)"),
+            Pattern.compile("([0-9一二两三四五六七八九十百]+)\\s*(?:道|个)?\\s*(?:题|题目|练习题|试题|题集)")
     );
     private static final Pattern COMMAND_TOTAL_QUESTION_PATTERN = Pattern.compile(
-            "(?:来|给我|出|生成|做)\\s*([0-9一二两三四五六七八九十百]+)\\s*道"
+            "(?:来|给我|出|生成|做)\\s*([0-9一二两三四五六七八九十百]+)\\s*(?:道|个)?"
     );
     private static final Pattern DIFFICULTY_PATTERN = Pattern.compile("难度\\s*([1-5])");
     private static final Pattern TITLE_BRACKET_PATTERN = Pattern.compile("《([^》]{2,80})》");
@@ -76,8 +76,8 @@ public class AssistantTaskIntentParser {
     );
     private static final List<Pattern> QUESTION_INTENT_PATTERNS = List.of(
             Pattern.compile("(?:生成|出|来|给我|做|整理|再来).{0,8}(?:题|题目|练习题|题集|试题|卷子)"),
-            Pattern.compile("(?:单选题|单选|选择题|判断题|判断|简答题|简答)\\s*[0-9一二两三四五六七八九十百]+\\s*道?"),
-            Pattern.compile("[0-9一二两三四五六七八九十百]+\\s*道?\\s*(?:单选题|单选|选择题|判断题|判断|简答题|简答)")
+            Pattern.compile("(?:单选题|单选|选择题|判断题|判断|简答题|简答)\\s*[0-9一二两三四五六七八九十百]+\\s*(?:道|个)?"),
+            Pattern.compile("[0-9一二两三四五六七八九十百]+\\s*(?:道|个)?\\s*(?:单选题|单选|选择题|判断题|判断|简答题|简答)")
     );
 
     public boolean looksLikeSummaryRequest(String userMessage) {
@@ -865,13 +865,13 @@ public class AssistantTaskIntentParser {
             return null;
         }
         for (String alias : aliases) {
-            Pattern leadingPattern = Pattern.compile(Pattern.quote(alias) + "\\s*([0-9一二两三四五六七八九十百]+)\\s*道?");
+            Pattern leadingPattern = Pattern.compile(Pattern.quote(alias) + "\\s*([0-9一二两三四五六七八九十百]+)\\s*(?:道|个)?");
             Matcher leadingMatcher = leadingPattern.matcher(text);
             if (leadingMatcher.find()) {
                 return parseFlexibleInt(leadingMatcher.group(1));
             }
 
-            Pattern trailingPattern = Pattern.compile("([0-9一二两三四五六七八九十百]+)\\s*道?\\s*" + Pattern.quote(alias));
+            Pattern trailingPattern = Pattern.compile("([0-9一二两三四五六七八九十百]+)\\s*(?:道|个)?\\s*" + Pattern.quote(alias));
             Matcher trailingMatcher = trailingPattern.matcher(text);
             if (trailingMatcher.find()) {
                 return parseFlexibleInt(trailingMatcher.group(1));

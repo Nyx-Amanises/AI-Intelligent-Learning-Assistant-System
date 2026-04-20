@@ -32,7 +32,9 @@ import org.springframework.util.StringUtils;
 @Component
 public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrator {
 
-    private static final List<String> MATERIAL_DETAIL_KEYWORDS = List.of("资料信息", "资料详情", "这份资料", "页数", "标题", "难度", "字符数");
+    private static final List<String> MATERIAL_DETAIL_KEYWORDS = List.of(
+            "资料信息", "资料详情", "资料基本信息", "文件信息", "页数", "多少页", "总页数", "标题", "难度", "字符数", "解析状态", "PDF状态"
+    );
     private static final List<String> TASK_STATUS_KEYWORDS = List.of("任务", "进度", "执行到哪", "状态");
     private static final List<String> PRACTICE_KEYWORDS = List.of("练习", "错题", "判分", "这次练习", "为什么错");
     private static final List<String> QUESTION_SET_KEYWORDS = List.of("题集", "这套题", "题目分布", "题型");
@@ -47,7 +49,11 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
     );
     private static final List<String> STUDY_QA_HINT_KEYWORDS = List.of(
             "带我学习", "带我复习", "帮我学习", "帮我复习", "讲讲", "解释", "说明", "告诉我", "什么是", "为什么", "怎么", "如何",
-            "区别", "联系", "原理", "概念", "简介", "概述", "知识点", "重点", "难点", "考点", "学习"
+            "区别", "联系", "原理", "概念", "简介", "概述", "知识点", "重点", "难点", "考点", "学习", "核心", "要点", "重要内容"
+    );
+    private static final List<String> EXPLICIT_SUMMARY_TASK_KEYWORDS = List.of(
+            "生成总结", "生成AI总结", "生成ai总结", "AI总结", "ai总结", "总结任务", "创建总结", "保存到笔记", "保存笔记",
+            "存笔记", "帮我总结", "总结一下", "做个总结", "生成提纲", "生成大纲", "输出总结"
     );
 
     private final AssistantToolRegistry toolRegistry;
@@ -125,9 +131,6 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
                 interactionMode
         );
         if (!workflowResolution.handled()) {
-            workflowResolution = resolvePlannerDirectAction(toolPlan);
-        }
-        if (!workflowResolution.handled()) {
             workflowResolution = switch (interactionMode) {
                 case TASK_CREATE -> handleTaskCreationWorkflow(userId, session, userMessage, modelName, structuredIntent);
                 case STUDY_QA -> handleStudyQaWorkflow(userId, session, userMessage, modelName, structuredIntent);
@@ -135,6 +138,9 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
                 case UNSUPPORTED -> buildUnsupportedResolution(structuredIntent);
                 default -> WorkflowResolution.notHandled();
             };
+        }
+        if (!workflowResolution.handled()) {
+            workflowResolution = resolvePlannerDirectAction(toolPlan);
         }
         if (workflowResolution.handled()) {
             return buildPreparedResult(
@@ -449,7 +455,29 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
     }
 
     private boolean looksLikeExplicitTaskRequest(String userMessage, AssistantStructuredIntent structuredIntent) {
+        if (looksLikeKnowledgeAnswerRequest(userMessage) && !looksLikeExplicitTaskCommand(userMessage)) {
+            return false;
+        }
         return !taskIntentParser.resolveRequestedTaskTypes(userMessage, structuredIntent).isEmpty();
+    }
+
+    private boolean looksLikeExplicitTaskCommand(String userMessage) {
+        if (!StringUtils.hasText(userMessage)) {
+            return false;
+        }
+        return taskIntentParser.looksLikeQuestionRequest(userMessage)
+                || AssistantToolSupport.containsAnyIgnoreCase(userMessage, EXPLICIT_SUMMARY_TASK_KEYWORDS);
+    }
+
+    private boolean looksLikeKnowledgeAnswerRequest(String userMessage) {
+        if (!StringUtils.hasText(userMessage)) {
+            return false;
+        }
+        return AssistantToolSupport.containsAnyIgnoreCase(userMessage, STUDY_QA_HINT_KEYWORDS)
+                && AssistantToolSupport.containsAnyIgnoreCase(
+                userMessage,
+                List.of("哪些", "有什么", "告诉我", "梳理", "整理", "列出", "讲讲", "解释", "说明", "分析", "全量", "核心", "重要")
+        );
     }
 
     private boolean looksLikeStudyQaMessage(
@@ -642,11 +670,16 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
                     ));
                     planSnapshot.add(Map.of("toolName", "context.resolve_recent", "reason", "用户未显式指定资料，自动绑定最近学习内容"));
                 } else {
+                    String promptText = "我先需要知道你说的是哪份资料。你可以直接告诉我资料标题，或者说一个更明显的关键词，比如“Docker 入门”或“Java 核心”。";
+                    savePendingAction(session, "MATERIAL_SELECTION", AssistantPendingActionPayload.builder()
+                            .promptText(promptText)
+                            .tasks(plannedTasks)
+                            .build());
                     AssistantTool.ToolExecutionResult waitingExecution = waitingExecution(
                             "material.search",
                             Map.of(),
                             Map.of("reason", "material_query_missing"),
-                            "我先需要知道你说的是哪份资料。你可以直接告诉我资料标题，或者说一个更明显的关键词，比如“Docker 入门”或“Java 核心”。"
+                            promptText
                     );
                     executions.add(waitingExecution);
                     planSnapshot.add(Map.of("toolName", "material.search", "reason", "需要先定位资料"));
@@ -713,6 +746,52 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
                     structuredIntent
             );
             if (selectedMaterialId == null) {
+                String materialQuery = taskIntentParser.extractMaterialQueryText(userMessage, structuredIntent);
+                if (StringUtils.hasText(materialQuery)) {
+                    AssistantTool.ToolExecutionResult searchExecution = materialSearchAssistantTool.search(userId, materialQuery);
+                    executions.add(searchExecution);
+                    planSnapshot.add(Map.of("toolName", "material.search", "reason", "根据用户补充的资料标题继续定位"));
+                    if ("FAILED".equalsIgnoreCase(searchExecution.status())) {
+                        return new WorkflowResolution(true, false, executions, searchExecution.errorMessage(), planSnapshot);
+                    }
+
+                    AssistantMaterialSearchResult searchResult = readMaterialSearchResult(searchExecution.toolResultJson());
+                    if (searchResult != null && searchResult.getSelectedMaterialId() != null) {
+                        Long searchedMaterialId = searchResult.getSelectedMaterialId();
+                        bindMaterialContext(session, searchedMaterialId);
+                        String searchedMaterialTitle = searchResult.getSelectedMaterialTitle();
+                        String selectionSummary = StringUtils.hasText(searchedMaterialTitle)
+                                ? "已确认资料《%s》，后续我会按这份资料继续。".formatted(searchedMaterialTitle)
+                                : "已确认当前资料，后续我会按这份资料继续。";
+                        executions.add(infoExecution(
+                                "material.select",
+                                Map.of("materialId", searchedMaterialId),
+                                buildMaterialSelectionResult(searchedMaterialId, searchedMaterialTitle),
+                                selectionSummary
+                        ));
+                        clearPendingAction(session);
+                        WorkflowResolution followUpResolution = executePendingFollowUp(userId, session, payload, executions, planSnapshot);
+                        if (followUpResolution.handled()) {
+                            return followUpResolution;
+                        }
+                        if (payload.getTasks() == null || payload.getTasks().isEmpty()) {
+                            return new WorkflowResolution(true, false, executions, selectionSummary, planSnapshot);
+                        }
+                        return executePlannedTasks(userId, session, searchedMaterialId, payload.getTasks(), executions, planSnapshot);
+                    }
+
+                    AssistantPendingActionPayload updatedPayload = AssistantPendingActionPayload.builder()
+                            .promptText(searchExecution.summaryText())
+                            .materialQuery(materialQuery)
+                            .materialCandidates(searchResult == null ? List.of() : searchResult.getCandidates())
+                            .followUpActionType(payload.getFollowUpActionType())
+                            .followUpUserMessage(payload.getFollowUpUserMessage())
+                            .chapterKeyword(payload.getChapterKeyword())
+                            .tasks(payload.getTasks())
+                            .build();
+                    savePendingAction(session, "MATERIAL_SELECTION", updatedPayload);
+                    return new WorkflowResolution(true, false, executions, searchExecution.summaryText(), planSnapshot);
+                }
                 if (shouldBypassPendingAction(pendingActionType, interactionMode)) {
                     clearPendingAction(session);
                     return WorkflowResolution.notHandled();
@@ -1179,6 +1258,9 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
         boolean materialDisambiguation = Boolean.TRUE.equals(structuredIntent == null ? null : structuredIntent.getMaterialDisambiguation())
                 || taskIntentParser.looksLikeMaterialAmbiguityChallenge(userMessage);
         String materialQuery = taskIntentParser.extractMaterialQueryText(userMessage, structuredIntent);
+        if (payload.getMaterialId() == null && StringUtils.hasText(materialQuery)) {
+            materialDisambiguation = true;
+        }
         if (!materialDisambiguation || !StringUtils.hasText(materialQuery)) {
             return WorkflowResolution.notHandled();
         }
@@ -1296,7 +1378,7 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
 
     private RecentContextResolution resolveRecentContext(Long userId) {
         List<MaterialPageVO> recentMaterials = studyMaterialService.searchAssistantMaterials(userId, null, 1);
-        if (!recentMaterials.isEmpty()) {
+        if (recentMaterials != null && !recentMaterials.isEmpty()) {
             MaterialPageVO material = recentMaterials.get(0);
             LinkedHashMap<String, Object> args = new LinkedHashMap<>();
             args.put("strategy", "recent_material");
@@ -1504,7 +1586,8 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
     }
 
     private boolean isMaterialDetailQuestion(String userMessage) {
-        return AssistantToolSupport.containsAnyIgnoreCase(userMessage, MATERIAL_DETAIL_KEYWORDS);
+        return AssistantToolSupport.containsAnyIgnoreCase(userMessage, MATERIAL_DETAIL_KEYWORDS)
+                && !looksLikeKnowledgeAnswerRequest(userMessage);
     }
 
     private String buildSystemPrompt() {

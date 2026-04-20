@@ -55,6 +55,31 @@ class AssistantTaskIntentParserTest {
     }
 
     @Test
+    void shouldResolveSingleChoiceCountWithGeMeasureWordForDirectQuestionRequest() {
+        AssistantTaskIntentParser.QuestionTaskOptions options =
+                parser.parseQuestionRequest("根据 docker_practice-v1.7.5 这份资料出10个单选题", null);
+
+        assertEquals(10, options.questionCount());
+        assertEquals(10, options.singleCount());
+        assertEquals(0, options.judgeCount());
+        assertEquals(0, options.shortAnswerCount());
+        assertFalse(options.requiresQuestionTypeConfirmation());
+    }
+
+    @Test
+    void shouldResolveSingleChoiceCountWithGeMeasureWordForPendingQuestionConfig() {
+        AssistantTaskIntentParser.QuestionConfigResolution resolution =
+                parser.resolveQuestionConfigReply("我说过了啊，出10个单选题", buildPendingQuestionTask());
+
+        assertTrue(resolution.resolved());
+        assertNotNull(resolution.task());
+        assertEquals(10, resolution.task().getQuestionCount());
+        assertEquals(10, resolution.task().getSingleCount());
+        assertEquals(0, resolution.task().getJudgeCount());
+        assertEquals(0, resolution.task().getShortAnswerCount());
+    }
+
+    @Test
     void shouldPreferStructuredIntentForQuestionConfigReply() {
         AssistantPlannedTask pendingTask = buildPendingQuestionTask();
 

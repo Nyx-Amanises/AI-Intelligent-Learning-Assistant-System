@@ -25,9 +25,10 @@ class AssistantToolPlannerTest {
         when(aiConfigService.getResolvedConfig()).thenReturn(new AiConfigService.ResolvedAiConfig(
                 true,
                 false,
+                "OPENAI_COMPATIBLE",
                 "https://example.com",
                 "/v1/chat/completions",
-                "OPENAI",
+                "OPENAI_COMPATIBLE",
                 null,
                 null,
                 "test-key",

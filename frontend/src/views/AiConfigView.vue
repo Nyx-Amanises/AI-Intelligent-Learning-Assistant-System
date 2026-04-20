@@ -4,7 +4,7 @@
       <div>
         <h1 class="page-title">AI 配置</h1>
         <p class="page-desc">
-          聊天模型和向量模型分开配置。现在可以继续让 AI 总结 / AI 出题走现有中转站，再把 Embedding 单独切到豆包。
+          聊天模型和向量模型分开配置。聊天支持 OpenAI 兼容、DeepSeek、豆包 Ark，Embedding 可单独切到豆包。
         </p>
       </div>
       <div class="toolbar" style="margin-bottom: 0">
@@ -29,14 +29,24 @@
                 <el-switch v-model="form.mockMode" />
               </el-form-item>
             </div>
+            <el-form-item label="Chat Provider">
+              <div class="provider-row">
+                <el-select v-model="form.chatProviderType" style="width: 100%" @change="applyChatPreset">
+                  <el-option label="OpenAI 兼容接口" value="OPENAI_COMPATIBLE" />
+                  <el-option label="DeepSeek 官方接口" value="DEEPSEEK" />
+                  <el-option label="豆包 Ark 聊天接口" value="DOUBAO_ARK" />
+                </el-select>
+                <el-button plain @click="applyChatPreset">套用预设</el-button>
+              </div>
+            </el-form-item>
             <el-form-item label="Chat Base URL">
-              <el-input v-model="form.baseUrl" placeholder="例如：https://newapi.hjlyywp.com" />
+              <el-input v-model="form.baseUrl" :placeholder="chatBaseUrlPlaceholder" />
             </el-form-item>
             <el-form-item label="Chat Path">
-              <el-input v-model="form.chatPath" placeholder="例如：/v1/chat/completions" />
+              <el-input v-model="form.chatPath" :placeholder="chatPathPlaceholder" />
             </el-form-item>
             <el-form-item label="默认聊天模型">
-              <el-input v-model="form.defaultModel" placeholder="例如：gpt-5.4" />
+              <el-input v-model="form.defaultModel" :placeholder="chatModelPlaceholder" />
             </el-form-item>
             <el-form-item label="聊天 API Key">
               <el-input
@@ -108,7 +118,7 @@
             <div class="tip-card">
               <div class="tip-card__title">聊天接口</div>
               <div class="tip-card__desc">
-                继续保持你现有中转站即可，填 `Chat Base URL / Chat Path / 默认聊天模型 / 聊天 API Key`。
+                DeepSeek 和豆包 Ark 聊天都走 OpenAI 兼容格式，选择 Provider 后可以套用推荐 Base URL 和 Path。
               </div>
             </div>
             <div class="tip-card">
@@ -119,9 +129,9 @@
               </div>
             </div>
             <div class="tip-card">
-              <div class="tip-card__title">模型示例</div>
+              <div class="tip-card__title">聊天模型示例</div>
               <div class="tip-card__desc">
-                你截图里的模型可以直接填 `doubao-embedding-vision-250615`。
+                DeepSeek 可填 `deepseek-chat`。豆包 Ark 通常填写控制台里的推理接入点 ID 或模型名。
               </div>
             </div>
           </div>
@@ -172,6 +182,7 @@ const configInfo = ref({
 const form = reactive({
   enabled: true,
   mockMode: true,
+  chatProviderType: 'OPENAI_COMPATIBLE',
   baseUrl: '',
   chatPath: '',
   defaultModel: '',
@@ -182,6 +193,46 @@ const form = reactive({
   defaultEmbeddingModel: '',
   embeddingApiKey: ''
 })
+
+const chatProviderPresets: Record<
+  string,
+  { baseUrl: string; chatPath: string; defaultModel: string; basePlaceholder: string; pathPlaceholder: string; modelPlaceholder: string }
+> = {
+  OPENAI_COMPATIBLE: {
+    baseUrl: 'https://api.openai.com',
+    chatPath: '/v1/chat/completions',
+    defaultModel: '',
+    basePlaceholder: '例如：https://newapi.hjlyywp.com 或 https://api.openai.com',
+    pathPlaceholder: '例如：/v1/chat/completions',
+    modelPlaceholder: '例如：gpt-4o-mini，或你的中转站模型名'
+  },
+  DEEPSEEK: {
+    baseUrl: 'https://api.deepseek.com',
+    chatPath: '/chat/completions',
+    defaultModel: 'deepseek-chat',
+    basePlaceholder: '例如：https://api.deepseek.com',
+    pathPlaceholder: '例如：/chat/completions',
+    modelPlaceholder: '例如：deepseek-chat'
+  },
+  DOUBAO_ARK: {
+    baseUrl: 'https://ark.cn-beijing.volces.com',
+    chatPath: '/api/v3/responses',
+    defaultModel: '',
+    basePlaceholder: '例如：https://ark.cn-beijing.volces.com',
+    pathPlaceholder: '例如：/api/v3/responses',
+    modelPlaceholder: '填写火山方舟控制台中的推理接入点 ID 或模型名'
+  }
+}
+
+const activeChatPreset = computed(
+  () => chatProviderPresets[form.chatProviderType] || chatProviderPresets.OPENAI_COMPATIBLE
+)
+
+const chatBaseUrlPlaceholder = computed(() => activeChatPreset.value.basePlaceholder)
+
+const chatPathPlaceholder = computed(() => activeChatPreset.value.pathPlaceholder)
+
+const chatModelPlaceholder = computed(() => activeChatPreset.value.modelPlaceholder)
 
 const embeddingPathPlaceholder = computed(() =>
   form.embeddingProviderType === 'ARK_MULTIMODAL_TEXT'
@@ -195,6 +246,16 @@ const embeddingModelPlaceholder = computed(() =>
     : '例如：text-embedding-3-small'
 )
 
+const applyChatPreset = () => {
+  const preset = activeChatPreset.value
+  form.baseUrl = preset.baseUrl
+  form.chatPath = preset.chatPath
+  form.defaultModel = preset.defaultModel
+  if (form.chatProviderType === 'DOUBAO_ARK') {
+    ElMessage.info('豆包 Ark 的模型名通常需要填写你在火山方舟控制台创建的推理接入点 ID。')
+  }
+}
+
 const loadConfig = async () => {
   loading.value = true
   try {
@@ -202,6 +263,7 @@ const loadConfig = async () => {
     const data = res.data.data
     form.enabled = data.enabled
     form.mockMode = data.mockMode
+    form.chatProviderType = data.chatProviderType || 'OPENAI_COMPATIBLE'
     form.baseUrl = data.baseUrl || ''
     form.chatPath = data.chatPath || ''
     form.defaultModel = data.defaultModel || ''
@@ -230,6 +292,7 @@ const saveConfig = async () => {
     const res = await updateAiConfigApi({
       enabled: form.enabled,
       mockMode: form.mockMode,
+      chatProviderType: form.chatProviderType,
       baseUrl: form.baseUrl.trim(),
       chatPath: form.chatPath.trim(),
       defaultModel: form.defaultModel.trim(),
@@ -259,3 +322,18 @@ const saveConfig = async () => {
 
 loadConfig()
 </script>
+
+<style scoped>
+.provider-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  width: 100%;
+}
+
+@media (max-width: 720px) {
+  .provider-row {
+    grid-template-columns: 1fr;
+  }
+}
+</style>

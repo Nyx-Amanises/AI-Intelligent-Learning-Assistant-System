@@ -892,6 +892,19 @@ const appendAssistantDelta = (delta: string) => {
   void nextTick(scrollToBottom)
 }
 
+const renderAssistantError = (message: string) => {
+  const currentPendingTurn = pendingTurn.value
+  if (!currentPendingTurn) {
+    return
+  }
+  const errorText = `这次调用失败了：${message || '助手流式生成失败'}`
+  updateMessage(currentPendingTurn.assistantMessageId, (assistantMessage) => ({
+    ...assistantMessage,
+    contentText: errorText
+  }))
+  void nextTick(scrollToBottom)
+}
+
 const changeSessionPage = (page: number) => {
   if (sendingMessage.value) {
     ElMessage.warning('当前回复还在生成中，先等这一轮完成吧')
@@ -1102,13 +1115,16 @@ const sendMessage = async () => {
             break
           case 'error':
             streamErrorMessage = event.message || '助手流式生成失败'
+            renderAssistantError(streamErrorMessage)
             break
         }
       }
     })
 
     if (streamErrorMessage) {
-      throw new Error(streamErrorMessage)
+      pendingTurn.value = null
+      await loadSessionPage(false)
+      return
     }
     if (!finalReply) {
       throw new Error('助手没有返回完整结果')
@@ -1257,7 +1273,8 @@ onBeforeUnmount(() => {
 }
 
 .assistant-panel {
-  height: 100%;
+  height: 100dvh;
+  max-height: 100dvh;
   display: grid;
   grid-template-columns: 286px minmax(0, 1fr);
   overflow: hidden;
@@ -1269,9 +1286,11 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  min-height: 0;
   padding: 28px 18px 18px;
   background: #edf2fa;
   border-right: 1px solid rgba(221, 227, 237, 0.9);
+  overflow: hidden;
 }
 
 .assistant-sidebar__brand h2,
@@ -1446,8 +1465,32 @@ onBeforeUnmount(() => {
   gap: 2px;
   flex: 1;
   min-height: 0;
-  overflow: auto;
-  padding-right: 2px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 6px;
+  scrollbar-gutter: stable;
+}
+
+.assistant-session-list::-webkit-scrollbar,
+.assistant-thread::-webkit-scrollbar {
+  width: 8px;
+}
+
+.assistant-session-list::-webkit-scrollbar-track,
+.assistant-thread::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.assistant-session-list::-webkit-scrollbar-thumb,
+.assistant-thread::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(106, 122, 148, 0.28);
+}
+
+.assistant-session-list::-webkit-scrollbar-thumb:hover,
+.assistant-thread::-webkit-scrollbar-thumb:hover {
+  background: rgba(106, 122, 148, 0.46);
 }
 
 .assistant-session-card {
@@ -1509,7 +1552,10 @@ onBeforeUnmount(() => {
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  padding: 22px 28px 28px 28px;
+  height: 100dvh;
+  padding: 22px 28px 18px 28px;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 .assistant-main__topbar h1 {
@@ -1524,6 +1570,7 @@ onBeforeUnmount(() => {
   flex: 1;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .assistant-home {
@@ -1562,7 +1609,10 @@ onBeforeUnmount(() => {
 
 .assistant-composer--dock {
   width: min(690px, 100%);
-  margin: 16px auto 0;
+  flex: 0 0 auto;
+  margin: 10px auto 0;
+  padding: 12px 18px;
+  border-radius: 28px;
 }
 
 .assistant-textarea {
@@ -1579,8 +1629,10 @@ onBeforeUnmount(() => {
 }
 
 .assistant-textarea--compact {
-  min-height: 64px;
+  min-height: 46px;
+  max-height: 96px;
   font-size: 15px;
+  line-height: 1.55;
 }
 
 .assistant-textarea::placeholder {
@@ -1663,12 +1715,15 @@ onBeforeUnmount(() => {
 .assistant-thread {
   flex: 1;
   min-height: 0;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   margin-top: 14px;
-  padding: 0 0 8px;
+  padding: 0 0 16px;
   border: 0;
   border-radius: 0;
   background: transparent;
+  scrollbar-gutter: stable;
 }
 
 .assistant-thread__empty {

@@ -16,6 +16,10 @@ import org.springframework.util.StringUtils;
 @Service
 public class AiConfigServiceImpl implements AiConfigService {
 
+    private static final String CHAT_PROVIDER_OPENAI_COMPATIBLE = "OPENAI_COMPATIBLE";
+    private static final String CHAT_PROVIDER_DEEPSEEK = "DEEPSEEK";
+    private static final String CHAT_PROVIDER_DOUBAO_ARK = "DOUBAO_ARK";
+
     private final AiProperties aiProperties;
     private final ObjectMapper objectMapper;
 
@@ -39,6 +43,9 @@ public class AiConfigServiceImpl implements AiConfigService {
         PersistedAiConfig targetConfig = new PersistedAiConfig();
         targetConfig.setEnabled(request.getEnabled() == null ? currentConfig.enabled() : request.getEnabled());
         targetConfig.setMockMode(request.getMockMode() == null ? currentConfig.mockMode() : request.getMockMode());
+        targetConfig.setChatProviderType(hasText(request.getChatProviderType())
+                ? request.getChatProviderType().trim().toUpperCase()
+                : currentConfig.chatProviderType());
         targetConfig.setBaseUrl(hasText(request.getBaseUrl()) ? request.getBaseUrl().trim() : currentConfig.baseUrl());
         targetConfig.setChatPath(hasText(request.getChatPath()) ? request.getChatPath().trim() : currentConfig.chatPath());
         targetConfig.setEmbeddingProviderType(hasText(request.getEmbeddingProviderType())
@@ -74,14 +81,15 @@ public class AiConfigServiceImpl implements AiConfigService {
         return new ResolvedAiConfig(
                 persistedConfig.getEnabled() == null ? aiProperties.getEnabled() : persistedConfig.getEnabled(),
                 persistedConfig.getMockMode() == null ? aiProperties.getMockMode() : persistedConfig.getMockMode(),
-                hasText(persistedConfig.getBaseUrl()) ? persistedConfig.getBaseUrl().trim() : aiProperties.getBaseUrl(),
-                hasText(persistedConfig.getChatPath()) ? persistedConfig.getChatPath().trim() : aiProperties.getChatPath(),
+                resolveChatProviderType(persistedConfig),
+                resolveChatBaseUrl(persistedConfig),
+                resolveChatPath(persistedConfig),
                 resolveEmbeddingProviderType(persistedConfig),
                 resolveEmbeddingBaseUrl(persistedConfig),
                 resolveEmbeddingPath(persistedConfig),
                 hasText(persistedConfig.getApiKey()) ? persistedConfig.getApiKey().trim() : aiProperties.getApiKey(),
                 resolveEmbeddingApiKey(persistedConfig),
-                hasText(persistedConfig.getDefaultModel()) ? persistedConfig.getDefaultModel().trim() : aiProperties.getDefaultModel(),
+                resolveDefaultChatModel(persistedConfig),
                 hasText(persistedConfig.getDefaultEmbeddingModel())
                         ? persistedConfig.getDefaultEmbeddingModel().trim()
                         : resolveDefaultEmbeddingModel()
@@ -92,6 +100,7 @@ public class AiConfigServiceImpl implements AiConfigService {
         return AiConfigVO.builder()
                 .enabled(Boolean.TRUE.equals(resolvedConfig.enabled()))
                 .mockMode(Boolean.TRUE.equals(resolvedConfig.mockMode()))
+                .chatProviderType(resolvedConfig.chatProviderType())
                 .baseUrl(resolvedConfig.baseUrl())
                 .chatPath(resolvedConfig.chatPath())
                 .defaultModel(resolvedConfig.defaultModel())
@@ -135,6 +144,9 @@ public class AiConfigServiceImpl implements AiConfigService {
         if (Boolean.TRUE.equals(config.getMockMode())) {
             return;
         }
+        if (!isSupportedChatProvider(config.getChatProviderType())) {
+            throw new BusinessException("不支持的聊天模型 Provider: " + config.getChatProviderType());
+        }
         if (!hasText(config.getBaseUrl())) {
             throw new BusinessException("请填写 AI Base URL");
         }
@@ -158,6 +170,76 @@ public class AiConfigServiceImpl implements AiConfigService {
 
     private boolean hasText(String value) {
         return StringUtils.hasText(value);
+    }
+
+    private String resolveChatProviderType(PersistedAiConfig persistedConfig) {
+        if (hasText(persistedConfig.getChatProviderType())) {
+            return persistedConfig.getChatProviderType().trim().toUpperCase();
+        }
+        if (hasText(aiProperties.getChatProviderType())) {
+            return aiProperties.getChatProviderType().trim().toUpperCase();
+        }
+        return CHAT_PROVIDER_OPENAI_COMPATIBLE;
+    }
+
+    private String resolveChatBaseUrl(PersistedAiConfig persistedConfig) {
+        if (hasText(persistedConfig.getBaseUrl())) {
+            return persistedConfig.getBaseUrl().trim();
+        }
+        String providerType = resolveChatProviderType(persistedConfig);
+        if (!CHAT_PROVIDER_OPENAI_COMPATIBLE.equals(providerType)) {
+            return switch (providerType) {
+                case CHAT_PROVIDER_DEEPSEEK -> "https://api.deepseek.com";
+                case CHAT_PROVIDER_DOUBAO_ARK -> "https://ark.cn-beijing.volces.com";
+                default -> null;
+            };
+        }
+        if (hasText(aiProperties.getBaseUrl())) {
+            return aiProperties.getBaseUrl().trim();
+        }
+        return "https://api.openai.com";
+    }
+
+    private String resolveChatPath(PersistedAiConfig persistedConfig) {
+        if (hasText(persistedConfig.getChatPath())) {
+            return persistedConfig.getChatPath().trim();
+        }
+        String providerType = resolveChatProviderType(persistedConfig);
+        if (!CHAT_PROVIDER_OPENAI_COMPATIBLE.equals(providerType)) {
+            return switch (providerType) {
+                case CHAT_PROVIDER_DEEPSEEK -> "/chat/completions";
+                case CHAT_PROVIDER_DOUBAO_ARK -> "/api/v3/responses";
+                default -> null;
+            };
+        }
+        if (hasText(aiProperties.getChatPath())) {
+            return aiProperties.getChatPath().trim();
+        }
+        return "/v1/chat/completions";
+    }
+
+    private String resolveDefaultChatModel(PersistedAiConfig persistedConfig) {
+        if (hasText(persistedConfig.getDefaultModel())) {
+            return persistedConfig.getDefaultModel().trim();
+        }
+        String providerType = resolveChatProviderType(persistedConfig);
+        if (CHAT_PROVIDER_DEEPSEEK.equals(providerType)) {
+            return "deepseek-chat";
+        }
+        if (hasText(aiProperties.getDefaultModel())) {
+            return aiProperties.getDefaultModel().trim();
+        }
+        return null;
+    }
+
+    private boolean isSupportedChatProvider(String providerType) {
+        if (!hasText(providerType)) {
+            return true;
+        }
+        String normalized = providerType.trim().toUpperCase();
+        return CHAT_PROVIDER_OPENAI_COMPATIBLE.equals(normalized)
+                || CHAT_PROVIDER_DEEPSEEK.equals(normalized)
+                || CHAT_PROVIDER_DOUBAO_ARK.equals(normalized);
     }
 
     private String resolveEmbeddingPath(PersistedAiConfig persistedConfig) {
@@ -228,6 +310,7 @@ public class AiConfigServiceImpl implements AiConfigService {
 
         private Boolean enabled;
         private Boolean mockMode;
+        private String chatProviderType;
         private String baseUrl;
         private String chatPath;
         private String embeddingProviderType;
@@ -252,6 +335,14 @@ public class AiConfigServiceImpl implements AiConfigService {
 
         public void setMockMode(Boolean mockMode) {
             this.mockMode = mockMode;
+        }
+
+        public String getChatProviderType() {
+            return chatProviderType;
+        }
+
+        public void setChatProviderType(String chatProviderType) {
+            this.chatProviderType = chatProviderType;
         }
 
         public String getBaseUrl() {
