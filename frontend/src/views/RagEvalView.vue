@@ -9,6 +9,7 @@
       </div>
       <div class="toolbar" style="margin-bottom: 0">
         <el-button type="primary" @click="openDatasetDialog">新建评测集</el-button>
+        <el-button type="success" plain @click="openCmrcDialog">导入 CMRC2018</el-button>
         <el-button :loading="datasetLoading" @click="loadDatasets">刷新列表</el-button>
       </div>
     </div>
@@ -265,6 +266,59 @@
       </template>
     </el-dialog>
 
+    <el-dialog v-model="cmrcDialogVisible" title="导入 CMRC2018 公开评测集" width="720px" destroy-on-close>
+      <el-alert
+        title="支持 CMRC2018 原始 JSON，以及包含 context/question/answers 字段的 JSON 或 JSONL。导入后会自动创建资料、分段、评测集和样本。"
+        type="info"
+        :closable="false"
+        show-icon
+        style="margin-bottom: 16px"
+      />
+      <el-form label-position="top">
+        <el-form-item label="数据文件">
+          <el-upload
+            drag
+            :auto-upload="false"
+            :limit="1"
+            :show-file-list="true"
+            accept=".json,.jsonl,.txt"
+            :on-change="handleCmrcFileChange"
+            :on-remove="clearCmrcFile"
+          >
+            <div class="cmrc-upload-box">
+              <strong>{{ cmrcFile?.name || '点击或拖拽 CMRC2018 JSON 文件到这里' }}</strong>
+              <span>建议先用 dev/trial 小集，确认流程后再导入更大的 split。</span>
+            </div>
+          </el-upload>
+        </el-form-item>
+        <div class="workspace-form-grid workspace-form-grid--compact">
+          <el-form-item label="Split 名称">
+            <el-input v-model="cmrcForm.splitName" placeholder="dev / trial / train" />
+          </el-form-item>
+          <el-form-item label="最大样本数">
+            <el-input-number v-model="cmrcForm.maxSamples" :min="1" :max="5000" style="width: 100%" />
+          </el-form-item>
+        </div>
+        <el-form-item label="资料名称">
+          <el-input v-model="cmrcForm.materialTitle" maxlength="120" placeholder="留空则自动生成" />
+        </el-form-item>
+        <el-form-item label="评测集名称">
+          <el-input v-model="cmrcForm.datasetName" maxlength="120" placeholder="留空则自动生成" />
+        </el-form-item>
+        <el-form-item>
+          <el-checkbox v-model="cmrcForm.submitEmbeddingTask">
+            导入后自动提交 Embedding 任务
+          </el-checkbox>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <div class="toolbar" style="margin-bottom: 0; justify-content: flex-end">
+          <el-button @click="cmrcDialogVisible = false">取消</el-button>
+          <el-button type="primary" :loading="importingCmrc" @click="importCmrcDataset">开始导入</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
     <el-dialog v-model="sampleDialogVisible" :title="editingSampleId ? '编辑评测样本' : '新增评测样本'" width="760px" destroy-on-close>
       <el-form label-position="top">
         <el-form-item label="检索问题">
@@ -394,6 +448,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import type { UploadFile } from 'element-plus'
 import {
   getMaterialDetailApi,
   getMaterialPageApi,
@@ -407,8 +462,10 @@ import {
   getRagEvalDatasetPageApi,
   getRagEvalRunApi,
   getRagEvalSamplesApi,
+  importCmrc2018Api,
   runRagEvalDatasetApi,
   updateRagEvalSampleApi,
+  type CmrcImportResult,
   type RagEvalDataset,
   type RagEvalDatasetPagePayload,
   type RagEvalRun,
@@ -449,10 +506,13 @@ const sampleDialogVisible = ref(false)
 const batchDialogVisible = ref(false)
 const runDialogVisible = ref(false)
 const segmentDrawerVisible = ref(false)
+const cmrcDialogVisible = ref(false)
 const editingSampleId = ref<number | null>(null)
 const pendingRunDataset = ref<RagEvalDataset | null>(null)
 const batchJsonText = ref('')
+const cmrcFile = ref<File | null>(null)
 const datasetTotal = ref(0)
+const importingCmrc = ref(false)
 
 const filters = reactive({
   keyword: '',
@@ -482,6 +542,14 @@ const sampleForm = reactive({
 
 const runForm = reactive({
   limit: 5
+})
+
+const cmrcForm = reactive({
+  splitName: 'dev',
+  maxSamples: 500,
+  materialTitle: '',
+  datasetName: '',
+  submitEmbeddingTask: false
 })
 
 const batchPlaceholder = `[
@@ -657,6 +725,64 @@ const openDatasetDialog = () => {
   datasetDialogVisible.value = true
   if (!materials.value.length) {
     void loadMaterials()
+  }
+}
+
+const openCmrcDialog = () => {
+  cmrcFile.value = null
+  cmrcForm.splitName = 'dev'
+  cmrcForm.maxSamples = 500
+  cmrcForm.materialTitle = ''
+  cmrcForm.datasetName = ''
+  cmrcForm.submitEmbeddingTask = false
+  cmrcDialogVisible.value = true
+}
+
+const handleCmrcFileChange = (uploadFile: UploadFile) => {
+  cmrcFile.value = uploadFile.raw || null
+}
+
+const clearCmrcFile = () => {
+  cmrcFile.value = null
+}
+
+const importCmrcDataset = async () => {
+  if (!cmrcFile.value) {
+    ElMessage.warning('请先选择 CMRC2018 数据文件')
+    return
+  }
+  importingCmrc.value = true
+  try {
+    const res = await importCmrc2018Api({
+      file: cmrcFile.value,
+      materialTitle: cmrcForm.materialTitle.trim() || undefined,
+      datasetName: cmrcForm.datasetName.trim() || undefined,
+      splitName: cmrcForm.splitName.trim() || undefined,
+      maxSamples: cmrcForm.maxSamples,
+      submitEmbeddingTask: cmrcForm.submitEmbeddingTask
+    })
+    const result = res.data.data as CmrcImportResult
+    ElMessage.success(
+      `已导入 ${result.sampleCount} 条样本、${result.segmentCount} 个分段${result.embeddingTaskId ? `，Embedding 任务 #${result.embeddingTaskId}` : ''}`
+    )
+    cmrcDialogVisible.value = false
+    datasetPage.current = 1
+    await loadMaterials()
+    await loadDatasets()
+    selectedDataset.value = {
+      id: result.datasetId,
+      materialId: result.materialId,
+      materialTitle: result.materialTitle,
+      name: result.datasetName,
+      status: 'ACTIVE',
+      sampleCount: result.sampleCount
+    }
+    lastRun.value = null
+    await loadSamples()
+  } catch (error: any) {
+    ElMessage.error(error.message || '导入 CMRC2018 失败')
+  } finally {
+    importingCmrc.value = false
   }
 }
 

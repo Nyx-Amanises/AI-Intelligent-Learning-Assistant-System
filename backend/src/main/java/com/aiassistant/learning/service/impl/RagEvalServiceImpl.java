@@ -1,6 +1,7 @@
 package com.aiassistant.learning.service.impl;
 
 import com.aiassistant.learning.common.exception.BusinessException;
+import com.aiassistant.learning.dto.ai.EmbeddingTaskRequest;
 import com.aiassistant.learning.dto.rag.RagEvalDatasetCreateRequest;
 import com.aiassistant.learning.dto.rag.RagEvalDatasetPageQuery;
 import com.aiassistant.learning.dto.rag.RagEvalRunRequest;
@@ -18,10 +19,13 @@ import com.aiassistant.learning.mapper.RagEvalDatasetMapper;
 import com.aiassistant.learning.mapper.RagEvalRunItemMapper;
 import com.aiassistant.learning.mapper.RagEvalRunMapper;
 import com.aiassistant.learning.mapper.RagEvalSampleMapper;
+import com.aiassistant.learning.service.AiTaskService;
 import com.aiassistant.learning.service.RagEvalService;
 import com.aiassistant.learning.service.RetrievalService;
 import com.aiassistant.learning.service.StudyMaterialService;
 import com.aiassistant.learning.service.VectorStoreService.RetrievedSegment;
+import com.aiassistant.learning.vo.ai.AiTaskDetailVO;
+import com.aiassistant.learning.vo.rag.CmrcImportResultVO;
 import com.aiassistant.learning.vo.page.PageVO;
 import com.aiassistant.learning.vo.rag.RagEvalDatasetVO;
 import com.aiassistant.learning.vo.rag.RagEvalRunItemVO;
@@ -31,10 +35,15 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -44,6 +53,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
+import org.springframework.web.multipart.MultipartFile;
 
 @Service
 public class RagEvalServiceImpl implements RagEvalService {
@@ -57,6 +67,7 @@ public class RagEvalServiceImpl implements RagEvalService {
     private final MaterialSegmentMapper materialSegmentMapper;
     private final StudyMaterialService studyMaterialService;
     private final RetrievalService retrievalService;
+    private final AiTaskService aiTaskService;
     private final ObjectMapper objectMapper;
 
     public RagEvalServiceImpl(
@@ -67,6 +78,7 @@ public class RagEvalServiceImpl implements RagEvalService {
             MaterialSegmentMapper materialSegmentMapper,
             StudyMaterialService studyMaterialService,
             RetrievalService retrievalService,
+            AiTaskService aiTaskService,
             ObjectMapper objectMapper
     ) {
         this.datasetMapper = datasetMapper;
@@ -76,6 +88,7 @@ public class RagEvalServiceImpl implements RagEvalService {
         this.materialSegmentMapper = materialSegmentMapper;
         this.studyMaterialService = studyMaterialService;
         this.retrievalService = retrievalService;
+        this.aiTaskService = aiTaskService;
         this.objectMapper = objectMapper;
     }
 
@@ -234,6 +247,116 @@ public class RagEvalServiceImpl implements RagEvalService {
                 .eq(RagEvalRunItem::getUserId, userId)
                 .orderByAsc(RagEvalRunItem::getId));
         return toRunVO(run, items);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public CmrcImportResultVO importCmrc2018(
+            Long userId,
+            MultipartFile file,
+            String materialTitle,
+            String datasetName,
+            String splitName,
+            Integer maxSamples,
+            Boolean submitEmbeddingTask
+    ) {
+        if (file == null || file.isEmpty()) {
+            throw new BusinessException("CMRC2018 数据文件不能为空");
+        }
+
+        String normalizedSplitName = StringUtils.hasText(splitName) ? splitName.trim() : "dev";
+        int resolvedMaxSamples = resolveImportSampleLimit(maxSamples);
+        String content = readUploadText(file);
+        List<CmrcParagraph> paragraphs = parseCmrcParagraphs(content);
+        if (paragraphs.isEmpty()) {
+            throw new BusinessException("没有从文件中解析到 CMRC2018 段落");
+        }
+
+        LinkedHashMap<String, CmrcContextDraft> contextMap = new LinkedHashMap<>();
+        List<CmrcSampleDraft> sampleDrafts = buildCmrcSampleDrafts(paragraphs, contextMap, resolvedMaxSamples);
+        if (sampleDrafts.isEmpty()) {
+            throw new BusinessException("没有从文件中解析到可导入的问题样本");
+        }
+
+        String resolvedMaterialTitle = StringUtils.hasText(materialTitle)
+                ? materialTitle.trim()
+                : "CMRC2018 " + normalizedSplitName + " 阅读理解语料";
+        String resolvedDatasetName = StringUtils.hasText(datasetName)
+                ? datasetName.trim()
+                : "CMRC2018 " + normalizedSplitName + " RAG评测集";
+
+        StudyMaterial material = new StudyMaterial();
+        material.setUserId(userId);
+        material.setTitle(resolvedMaterialTitle);
+        material.setMaterialType("TEXT");
+        material.setSourceType("IMPORT");
+        material.setParseStatus("SUCCESS");
+        material.setSummaryStatus("PENDING");
+        material.setDifficultyLevel(3);
+        material.setTags("CMRC2018,RAG评测,中文阅读理解");
+        material.setTotalCharacters(contextMap.values().stream()
+                .map(CmrcContextDraft::context)
+                .mapToInt(String::length)
+                .sum());
+        material.setDeleted(0);
+        studyMaterialService.save(material);
+
+        int segmentNo = 1;
+        for (CmrcContextDraft contextDraft : contextMap.values()) {
+            MaterialSegment segment = new MaterialSegment();
+            segment.setMaterialId(material.getId());
+            segment.setSegmentNo(segmentNo);
+            segment.setSectionTitle(buildCmrcSectionTitle(normalizedSplitName, contextDraft, segmentNo));
+            segment.setContentText(contextDraft.context());
+            segment.setTokenEstimate(Math.max(1, contextDraft.context().length() / 4));
+            segment.setKeywords("CMRC2018");
+            segment.setEmbeddingStatus("PENDING");
+            materialSegmentMapper.insert(segment);
+            contextDraft.setSegmentId(segment.getId());
+            segmentNo++;
+        }
+
+        RagEvalDataset dataset = new RagEvalDataset();
+        dataset.setUserId(userId);
+        dataset.setMaterialId(material.getId());
+        dataset.setName(resolvedDatasetName);
+        dataset.setDescription("从 CMRC2018 " + normalizedSplitName + " 数据导入，样本自动标注到对应 context 分段。");
+        dataset.setStatus("ACTIVE");
+        dataset.setSampleCount(0);
+        datasetMapper.insert(dataset);
+
+        for (CmrcSampleDraft sampleDraft : sampleDrafts) {
+            RagEvalSample sample = new RagEvalSample();
+            sample.setDatasetId(dataset.getId());
+            sample.setUserId(userId);
+            sample.setMaterialId(material.getId());
+            sample.setQueryText(sampleDraft.question());
+            sample.setExpectedSegmentIds(writeJson(List.of(sampleDraft.context().segmentId())));
+            sample.setExpectedKeywords(joinAnswers(sampleDraft.answerTexts()));
+            sample.setTag("CMRC2018");
+            sample.setDifficulty(3);
+            sample.setSourceType("IMPORTED");
+            sample.setNote(buildCmrcSampleNote(normalizedSplitName, sampleDraft));
+            sampleMapper.insert(sample);
+        }
+        refreshSampleCount(dataset);
+
+        AiTaskDetailVO embeddingTask = null;
+        if (Boolean.TRUE.equals(submitEmbeddingTask)) {
+            EmbeddingTaskRequest embeddingTaskRequest = new EmbeddingTaskRequest();
+            embeddingTaskRequest.setForceRegenerate(false);
+            embeddingTask = aiTaskService.submitEmbeddingTask(userId, material.getId(), embeddingTaskRequest);
+        }
+
+        return CmrcImportResultVO.builder()
+                .materialId(material.getId())
+                .materialTitle(material.getTitle())
+                .datasetId(dataset.getId())
+                .datasetName(dataset.getName())
+                .segmentCount(contextMap.size())
+                .sampleCount(sampleDrafts.size())
+                .embeddingTaskId(embeddingTask == null ? null : embeddingTask.getId())
+                .build();
     }
 
     private RagEvalSample createSample(Long userId, RagEvalDataset dataset, RagEvalSampleCreateRequest request) {
@@ -586,6 +709,258 @@ public class RagEvalServiceImpl implements RagEvalService {
                 .build();
     }
 
+    private String readUploadText(MultipartFile file) {
+        try {
+            return new String(file.getBytes(), StandardCharsets.UTF_8);
+        } catch (IOException exception) {
+            throw new BusinessException(500, "读取 CMRC2018 文件失败");
+        }
+    }
+
+    private List<CmrcParagraph> parseCmrcParagraphs(String content) {
+        if (!StringUtils.hasText(content)) {
+            return List.of();
+        }
+        String normalizedContent = content.trim();
+        try {
+            if (looksLikeJsonLines(normalizedContent)) {
+                return parseCmrcJsonLines(normalizedContent);
+            }
+            JsonNode root = objectMapper.readTree(normalizedContent);
+            return parseCmrcJsonNode(root);
+        } catch (Exception exception) {
+            throw new BusinessException("解析 CMRC2018 JSON 失败: " + exception.getMessage());
+        }
+    }
+
+    private boolean looksLikeJsonLines(String content) {
+        if (content.startsWith("{") || content.startsWith("[")) {
+            return false;
+        }
+        return content.lines()
+                .map(String::trim)
+                .filter(StringUtils::hasText)
+                .findFirst()
+                .map(line -> line.startsWith("{"))
+                .orElse(false);
+    }
+
+    private List<CmrcParagraph> parseCmrcJsonLines(String content) throws JsonProcessingException {
+        List<CmrcParagraph> paragraphs = new ArrayList<>();
+        int index = 1;
+        for (String line : content.lines().map(String::trim).filter(StringUtils::hasText).toList()) {
+            JsonNode node = objectMapper.readTree(line);
+            CmrcParagraph paragraph = parseFlatCmrcItem(node, "JSONL-" + index);
+            if (paragraph != null) {
+                paragraphs.add(paragraph);
+            }
+            index++;
+        }
+        return paragraphs;
+    }
+
+    private List<CmrcParagraph> parseCmrcJsonNode(JsonNode root) {
+        if (root == null || root.isMissingNode() || root.isNull()) {
+            return List.of();
+        }
+        if (root.has("data") && root.path("data").isArray()) {
+            return parseOriginalCmrcData(root.path("data"));
+        }
+        if (root.isArray()) {
+            List<CmrcParagraph> paragraphs = new ArrayList<>();
+            int index = 1;
+            for (JsonNode item : root) {
+                CmrcParagraph paragraph = parseFlatCmrcItem(item, "ITEM-" + index);
+                if (paragraph != null) {
+                    paragraphs.add(paragraph);
+                }
+                index++;
+            }
+            return paragraphs;
+        }
+        CmrcParagraph paragraph = parseFlatCmrcItem(root, "ITEM-1");
+        return paragraph == null ? List.of() : List.of(paragraph);
+    }
+
+    private List<CmrcParagraph> parseOriginalCmrcData(JsonNode dataNode) {
+        List<CmrcParagraph> paragraphs = new ArrayList<>();
+        for (JsonNode articleNode : dataNode) {
+            String title = readText(articleNode, "title", "article_title");
+            JsonNode paragraphsNode = articleNode.path("paragraphs");
+            if (!paragraphsNode.isArray()) {
+                continue;
+            }
+            int paragraphIndex = 1;
+            for (JsonNode paragraphNode : paragraphsNode) {
+                String context = readText(paragraphNode, "context");
+                if (!StringUtils.hasText(context)) {
+                    continue;
+                }
+                List<CmrcQuestion> questions = new ArrayList<>();
+                JsonNode qasNode = paragraphNode.path("qas");
+                if (qasNode.isArray()) {
+                    for (JsonNode questionNode : qasNode) {
+                        String question = readText(questionNode, "question", "query", "query_text");
+                        if (!StringUtils.hasText(question)) {
+                            continue;
+                        }
+                        String questionId = readText(questionNode, "id", "qid", "query_id");
+                        questions.add(new CmrcQuestion(
+                                questionId,
+                                question.trim(),
+                                readAnswerTexts(questionNode.path("answers"))
+                        ));
+                    }
+                }
+                paragraphs.add(new CmrcParagraph(
+                        title,
+                        "P" + paragraphIndex,
+                        context.trim(),
+                        questions
+                ));
+                paragraphIndex++;
+            }
+        }
+        return paragraphs;
+    }
+
+    private CmrcParagraph parseFlatCmrcItem(JsonNode item, String fallbackId) {
+        String context = readText(item, "context", "context_text", "paragraph", "passage", "text");
+        if (!StringUtils.hasText(context)) {
+            return null;
+        }
+        String title = readText(item, "title", "article_title");
+        String paragraphId = readText(item, "context_id", "paragraph_id", "id");
+        JsonNode qasNode = item.path("qas");
+        if (qasNode.isArray()) {
+            List<CmrcQuestion> questions = new ArrayList<>();
+            for (JsonNode questionNode : qasNode) {
+                String nestedQuestion = readText(questionNode, "question", "query", "query_text");
+                if (!StringUtils.hasText(nestedQuestion)) {
+                    continue;
+                }
+                String nestedQuestionId = readText(questionNode, "id", "qid", "query_id");
+                questions.add(new CmrcQuestion(
+                        StringUtils.hasText(nestedQuestionId) ? nestedQuestionId : fallbackId + "_Q" + (questions.size() + 1),
+                        nestedQuestion.trim(),
+                        readAnswerTexts(questionNode.path("answers"))
+                ));
+            }
+            if (!questions.isEmpty()) {
+                return new CmrcParagraph(title, StringUtils.hasText(paragraphId) ? paragraphId : fallbackId, context.trim(), questions);
+            }
+        }
+
+        String question = readText(item, "question", "query", "query_text");
+        if (!StringUtils.hasText(question)) {
+            return null;
+        }
+        String questionId = readText(item, "id", "qid", "query_id");
+        CmrcQuestion cmrcQuestion = new CmrcQuestion(
+                StringUtils.hasText(questionId) ? questionId : fallbackId,
+                question.trim(),
+                readAnswerTexts(item.path("answers"))
+        );
+        return new CmrcParagraph(title, StringUtils.hasText(paragraphId) ? paragraphId : fallbackId, context.trim(), List.of(cmrcQuestion));
+    }
+
+    private List<String> readAnswerTexts(JsonNode answersNode) {
+        if (answersNode == null || answersNode.isMissingNode() || answersNode.isNull()) {
+            return List.of();
+        }
+        LinkedHashSet<String> answers = new LinkedHashSet<>();
+        if (answersNode.isArray()) {
+            for (JsonNode answerNode : answersNode) {
+                if (answerNode.isTextual()) {
+                    answers.add(answerNode.asText().trim());
+                    continue;
+                }
+                String text = readText(answerNode, "text", "answer");
+                if (StringUtils.hasText(text)) {
+                    answers.add(text.trim());
+                }
+            }
+        } else if (answersNode.isObject()) {
+            JsonNode textNode = answersNode.path("text");
+            if (textNode.isArray()) {
+                for (JsonNode item : textNode) {
+                    if (item.isTextual() && StringUtils.hasText(item.asText())) {
+                        answers.add(item.asText().trim());
+                    }
+                }
+            } else if (textNode.isTextual() && StringUtils.hasText(textNode.asText())) {
+                answers.add(textNode.asText().trim());
+            }
+        }
+        return answers.stream().filter(StringUtils::hasText).toList();
+    }
+
+    private String readText(JsonNode node, String... fieldNames) {
+        if (node == null || node.isMissingNode() || node.isNull()) {
+            return null;
+        }
+        for (String fieldName : fieldNames) {
+            JsonNode value = node.path(fieldName);
+            if (value.isTextual() && StringUtils.hasText(value.asText())) {
+                return value.asText();
+            }
+        }
+        return null;
+    }
+
+    private List<CmrcSampleDraft> buildCmrcSampleDrafts(
+            List<CmrcParagraph> paragraphs,
+            LinkedHashMap<String, CmrcContextDraft> contextMap,
+            int maxSamples
+    ) {
+        List<CmrcSampleDraft> sampleDrafts = new ArrayList<>();
+        for (CmrcParagraph paragraph : paragraphs) {
+            if (!StringUtils.hasText(paragraph.context()) || paragraph.questions().isEmpty()) {
+                continue;
+            }
+            CmrcContextDraft contextDraft = contextMap.computeIfAbsent(
+                    paragraph.context(),
+                    key -> new CmrcContextDraft(paragraph.title(), paragraph.paragraphId(), paragraph.context())
+            );
+            for (CmrcQuestion question : paragraph.questions()) {
+                if (sampleDrafts.size() >= maxSamples) {
+                    return sampleDrafts;
+                }
+                sampleDrafts.add(new CmrcSampleDraft(
+                        contextDraft,
+                        question.id(),
+                        question.question(),
+                        question.answerTexts()
+                ));
+            }
+        }
+        return sampleDrafts;
+    }
+
+    private int resolveImportSampleLimit(Integer maxSamples) {
+        if (maxSamples == null || maxSamples <= 0) {
+            return 500;
+        }
+        return Math.min(maxSamples, 5000);
+    }
+
+    private String buildCmrcSectionTitle(String splitName, CmrcContextDraft contextDraft, int segmentNo) {
+        String title = StringUtils.hasText(contextDraft.title()) ? contextDraft.title().trim() : "阅读材料";
+        return "CMRC2018 " + splitName + " · #" + segmentNo + " · " + truncate(title, 80);
+    }
+
+    private String joinAnswers(List<String> answerTexts) {
+        if (answerTexts == null || answerTexts.isEmpty()) {
+            return null;
+        }
+        return truncate(String.join(",", answerTexts), 500);
+    }
+
+    private String buildCmrcSampleNote(String splitName, CmrcSampleDraft sampleDraft) {
+        String idText = StringUtils.hasText(sampleDraft.questionId()) ? sampleDraft.questionId() : "无原始ID";
+        return truncate("CMRC2018 " + splitName + " · 原始问题ID: " + idText, 500);
+    }
+
     private String writeJson(Object value) {
         if (value == null) {
             return null;
@@ -634,5 +1009,61 @@ public class RagEvalServiceImpl implements RagEvalService {
             return value;
         }
         return value.substring(0, maxLength);
+    }
+
+    private record CmrcParagraph(
+            String title,
+            String paragraphId,
+            String context,
+            List<CmrcQuestion> questions
+    ) {
+    }
+
+    private record CmrcQuestion(
+            String id,
+            String question,
+            List<String> answerTexts
+    ) {
+    }
+
+    private record CmrcSampleDraft(
+            CmrcContextDraft context,
+            String questionId,
+            String question,
+            List<String> answerTexts
+    ) {
+    }
+
+    private static class CmrcContextDraft {
+        private final String title;
+        private final String paragraphId;
+        private final String context;
+        private Long segmentId;
+
+        private CmrcContextDraft(String title, String paragraphId, String context) {
+            this.title = title;
+            this.paragraphId = paragraphId;
+            this.context = context;
+        }
+
+        private String title() {
+            return title;
+        }
+
+        private String paragraphId() {
+            return paragraphId;
+        }
+
+        private String context() {
+            return context;
+        }
+
+        private Long segmentId() {
+            return segmentId;
+        }
+
+        private void setSegmentId(Long segmentId) {
+            this.segmentId = segmentId;
+        }
     }
 }

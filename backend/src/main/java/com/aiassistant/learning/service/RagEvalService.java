@@ -9,7 +9,9 @@ import com.aiassistant.learning.vo.page.PageVO;
 import com.aiassistant.learning.vo.rag.RagEvalDatasetVO;
 import com.aiassistant.learning.vo.rag.RagEvalRunVO;
 import com.aiassistant.learning.vo.rag.RagEvalSampleVO;
+import com.aiassistant.learning.vo.rag.CmrcImportResultVO;
 import java.util.List;
+import org.springframework.web.multipart.MultipartFile;
 
 public interface RagEvalService {
 
@@ -32,4 +34,14 @@ public interface RagEvalService {
     RagEvalRunVO runDataset(Long userId, Long datasetId, RagEvalRunRequest request);
 
     RagEvalRunVO getRun(Long userId, Long runId);
+
+    CmrcImportResultVO importCmrc2018(
+            Long userId,
+            MultipartFile file,
+            String materialTitle,
+            String datasetName,
+            String splitName,
+            Integer maxSamples,
+            Boolean submitEmbeddingTask
+    );
 }

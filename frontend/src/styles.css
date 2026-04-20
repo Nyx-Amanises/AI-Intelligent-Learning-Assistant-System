@@ -1893,6 +1893,22 @@ a {
   color: #e11d48;
 }
 
+.cmrc-upload-box {
+  display: grid;
+  gap: 8px;
+  padding: 10px 0;
+}
+
+.cmrc-upload-box strong {
+  color: #334155;
+  font-size: 14px;
+}
+
+.cmrc-upload-box span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .summary-side-panel {
   padding: 18px;
   border-radius: 16px;

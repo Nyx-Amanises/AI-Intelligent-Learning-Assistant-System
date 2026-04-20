@@ -47,6 +47,8 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
 
     private static final Logger log = LoggerFactory.getLogger(StudyMaterialServiceImpl.class);
     private static final int SEGMENT_CHAR_LIMIT = 900;
+    private static final int SEGMENT_OVERLAP_CHAR_LIMIT = 140;
+    private static final int HEADING_SPLIT_MIN_CHARS = 180;
 
     private final MaterialSegmentMapper materialSegmentMapper;
     private final FileStorageProperties fileStorageProperties;
@@ -518,37 +520,91 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
             throw new BusinessException("解析结果为空，无法生成分段");
         }
 
-        List<String> paragraphs = normalized.lines()
+        List<TextBlock> blocks = normalized.lines()
                 .map(String::trim)
                 .filter(StringUtils::hasText)
+                .map(line -> new TextBlock(line, detectHeading(line)))
                 .toList();
 
-        StringBuilder current = new StringBuilder();
         List<ParsedSegment> segments = new ArrayList<>();
+        List<TextBlock> currentBlocks = new ArrayList<>();
+        String currentSectionTitle = null;
         int segmentIndex = 1;
-        for (String paragraph : paragraphs) {
-            if (current.length() + paragraph.length() > SEGMENT_CHAR_LIMIT && current.length() > 0) {
-                segments.add(buildParsedSegment(current.toString().trim(), pageNo, segmentIndex++));
-                current.setLength(0);
+        for (TextBlock block : blocks) {
+            HeadingInfo heading = block.heading();
+            if (heading.isHeading()) {
+                if (shouldSplitBeforeHeading(currentBlocks)) {
+                    segments.add(buildParsedSegment(joinBlocks(currentBlocks), pageNo, segmentIndex++, currentSectionTitle));
+                    currentBlocks = new ArrayList<>();
+                }
+                currentSectionTitle = heading.title();
+                currentBlocks.add(block);
+                continue;
             }
-            current.append(paragraph).append(System.lineSeparator());
+
+            if (!currentBlocks.isEmpty()
+                    && estimateBlocksLength(currentBlocks) + block.text().length() > SEGMENT_CHAR_LIMIT) {
+                segments.add(buildParsedSegment(joinBlocks(currentBlocks), pageNo, segmentIndex++, currentSectionTitle));
+                currentBlocks = buildOverlapBlocks(currentBlocks);
+            }
+            currentBlocks.add(block);
         }
-        if (current.length() > 0) {
-            segments.add(buildParsedSegment(current.toString().trim(), pageNo, segmentIndex));
+        if (!currentBlocks.isEmpty()) {
+            segments.add(buildParsedSegment(joinBlocks(currentBlocks), pageNo, segmentIndex, currentSectionTitle));
         }
         return segments;
     }
 
-    private ParsedSegment buildParsedSegment(String contentText, Integer pageNo, int pageSegmentIndex) {
-        String sectionTitle = buildSectionTitle(contentText, pageNo, pageSegmentIndex);
+    private boolean shouldSplitBeforeHeading(List<TextBlock> currentBlocks) {
+        if (currentBlocks.isEmpty()) {
+            return false;
+        }
+        return estimateBlocksLength(currentBlocks) >= HEADING_SPLIT_MIN_CHARS || hasNonHeadingContent(currentBlocks);
+    }
+
+    private boolean hasNonHeadingContent(List<TextBlock> blocks) {
+        return blocks.stream().anyMatch(block -> !block.heading().isHeading());
+    }
+
+    private int estimateBlocksLength(List<TextBlock> blocks) {
+        return blocks.stream().map(TextBlock::text).mapToInt(String::length).sum() + blocks.size();
+    }
+
+    private List<TextBlock> buildOverlapBlocks(List<TextBlock> blocks) {
+        List<TextBlock> overlapBlocks = new ArrayList<>();
+        int length = 0;
+        for (int index = blocks.size() - 1; index >= 0; index--) {
+            TextBlock block = blocks.get(index);
+            if (block.heading().isHeading()) {
+                break;
+            }
+            if (length > 0 && length + block.text().length() > SEGMENT_OVERLAP_CHAR_LIMIT) {
+                break;
+            }
+            overlapBlocks.add(0, block);
+            length += block.text().length();
+        }
+        return overlapBlocks;
+    }
+
+    private String joinBlocks(List<TextBlock> blocks) {
+        return blocks.stream()
+                .map(TextBlock::text)
+                .reduce((left, right) -> left + System.lineSeparator() + right)
+                .orElse("")
+                .trim();
+    }
+
+    private ParsedSegment buildParsedSegment(String contentText, Integer pageNo, int pageSegmentIndex, String explicitSectionTitle) {
+        String sectionTitle = buildSectionTitle(contentText, pageNo, pageSegmentIndex, explicitSectionTitle);
         return new ParsedSegment(contentText, pageNo, sectionTitle);
     }
 
-    private String buildSectionTitle(String contentText, Integer pageNo, int pageSegmentIndex) {
+    private String buildSectionTitle(String contentText, Integer pageNo, int pageSegmentIndex, String explicitSectionTitle) {
         String locationPrefix = pageNo == null
                 ? "第" + pageSegmentIndex + "段"
                 : "第" + pageNo + "页 · 第" + pageSegmentIndex + "段";
-        String heading = extractHeading(contentText);
+        String heading = StringUtils.hasText(explicitSectionTitle) ? explicitSectionTitle : extractHeading(contentText);
         if (!StringUtils.hasText(heading)) {
             return locationPrefix;
         }
@@ -573,17 +629,30 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
     }
 
     private boolean looksLikeHeading(String line) {
+        return detectHeading(line).isHeading();
+    }
+
+    private HeadingInfo detectHeading(String line) {
         if (!StringUtils.hasText(line)) {
-            return false;
+            return HeadingInfo.none();
         }
         String trimmed = line.trim();
-        if (trimmed.length() < 4 || trimmed.length() > 36) {
-            return false;
+        if (trimmed.length() < 2 || trimmed.length() > 48) {
+            return HeadingInfo.none();
         }
-        if (trimmed.matches("^(第[一二三四五六七八九十0-9]+[章节部分篇]|[一二三四五六七八九十]+、|\\d+(\\.\\d+)+.*).*$")) {
-            return true;
+        if (trimmed.matches("^(第[一二三四五六七八九十0-9]+[章节部分篇]|[一二三四五六七八九十]+、|\\d+(\\.\\d+)+\\s*.*|\\d+\\.\\s*.+).*$")) {
+            return new HeadingInfo(true, trimTitle(trimmed));
         }
-        return !trimmed.contains("：") && !trimmed.contains(":") && trimmed.length() <= 18;
+        if (trimmed.matches("^[（(]?[一二三四五六七八九十0-9]+[）)]\\s*.+$")) {
+            return new HeadingInfo(true, trimTitle(trimmed));
+        }
+        if (trimmed.matches("^[A-Z][A-Za-z0-9\\s,-]{2,40}$")) {
+            return new HeadingInfo(true, trimTitle(trimmed));
+        }
+        if (trimmed.length() >= 4 && !trimmed.contains("：") && !trimmed.contains(":") && trimmed.length() <= 18) {
+            return new HeadingInfo(true, trimTitle(trimmed));
+        }
+        return HeadingInfo.none();
     }
 
     private String trimTitle(String title) {
@@ -653,5 +722,14 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
     }
 
     private record ParsedSegment(String contentText, Integer pageNo, String sectionTitle) {
+    }
+
+    private record TextBlock(String text, HeadingInfo heading) {
+    }
+
+    private record HeadingInfo(boolean isHeading, String title) {
+        private static HeadingInfo none() {
+            return new HeadingInfo(false, null);
+        }
     }
 }

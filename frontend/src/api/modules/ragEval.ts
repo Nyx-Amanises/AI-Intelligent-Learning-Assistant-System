@@ -90,6 +90,16 @@ export interface RagEvalRun {
   items: RagEvalRunItem[]
 }
 
+export interface CmrcImportResult {
+  materialId: number
+  materialTitle: string
+  datasetId: number
+  datasetName: string
+  segmentCount: number
+  sampleCount: number
+  embeddingTaskId?: number
+}
+
 export const getRagEvalDatasetPageApi = (params: Record<string, unknown>) =>
   http.get('/rag/eval/datasets', { params })
 
@@ -123,3 +133,33 @@ export const runRagEvalDatasetApi = (
 ) => http.post(`/rag/eval/datasets/${datasetId}/runs`, data)
 
 export const getRagEvalRunApi = (runId: number) => http.get(`/rag/eval/runs/${runId}`)
+
+export const importCmrc2018Api = (data: {
+  file: File
+  materialTitle?: string
+  datasetName?: string
+  splitName?: string
+  maxSamples?: number
+  submitEmbeddingTask?: boolean
+}) => {
+  const formData = new FormData()
+  formData.append('file', data.file)
+  if (data.materialTitle) {
+    formData.append('materialTitle', data.materialTitle)
+  }
+  if (data.datasetName) {
+    formData.append('datasetName', data.datasetName)
+  }
+  if (data.splitName) {
+    formData.append('splitName', data.splitName)
+  }
+  if (typeof data.maxSamples === 'number') {
+    formData.append('maxSamples', String(data.maxSamples))
+  }
+  formData.append('submitEmbeddingTask', String(Boolean(data.submitEmbeddingTask)))
+  return http.post('/rag/eval/cmrc2018/import', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    }
+  })
+}
