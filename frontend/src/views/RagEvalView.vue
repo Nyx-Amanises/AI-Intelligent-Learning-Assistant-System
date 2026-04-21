@@ -37,7 +37,6 @@
               :value="item.id"
             />
           </el-select>
-          <el-button type="primary" plain @click="searchDatasets">查询</el-button>
           <el-button @click="resetFilters">重置条件</el-button>
         </div>
 
@@ -472,6 +471,7 @@ import {
   type RagEvalSample,
   type RagEvalSampleForm
 } from '@/api/modules/ragEval'
+import { useAutoListQuery } from '@/composables/useAutoListQuery'
 
 interface MaterialSegment {
   id: number
@@ -523,6 +523,14 @@ const datasetPage = reactive({
   current: 1,
   size: 10
 })
+
+const autoQuery = useAutoListQuery(
+  [() => filters.keyword, () => filters.materialId],
+  () => {
+    datasetPage.current = 1
+    return loadDatasets()
+  }
+)
 
 const datasetForm = reactive({
   materialId: undefined as number | undefined,
@@ -706,16 +714,12 @@ const loadDatasets = async () => {
   }
 }
 
-const searchDatasets = () => {
-  datasetPage.current = 1
-  loadDatasets()
-}
-
 const resetFilters = () => {
-  filters.keyword = ''
-  filters.materialId = undefined
-  datasetPage.current = 1
-  loadDatasets()
+  autoQuery.runAfterMutation(() => {
+    filters.keyword = ''
+    filters.materialId = undefined
+    datasetPage.current = 1
+  })
 }
 
 const openDatasetDialog = () => {

@@ -17,6 +17,9 @@ const router = createRouter({
         { path: '/summary', name: 'summary', component: () => import('@/views/SummaryView.vue') },
         { path: '/quiz', name: 'quiz', component: () => import('@/views/QuizView.vue') },
         { path: '/practice', name: 'practice', component: () => import('@/views/PracticeView.vue') },
+        { path: '/wrong-questions', name: 'wrong-questions', component: () => import('@/views/WrongQuestionView.vue') },
+        { path: '/mastery', name: 'mastery', component: () => import('@/views/KnowledgeMasteryView.vue') },
+        { path: '/analytics', name: 'analytics', component: () => import('@/views/LearningAnalyticsView.vue') },
         { path: '/ai-config', name: 'ai-config', component: () => import('@/views/AiConfigView.vue') }
       ]
     }

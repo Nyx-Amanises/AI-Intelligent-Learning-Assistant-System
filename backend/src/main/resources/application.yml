@@ -1,20 +1,20 @@
 server:
-  port: 8083
+  port: ${SERVER_PORT:8083}
 
 spring:
   application:
     name: ai-learning-assistant-backend
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://127.0.0.1:3307/ai_learning_assistant?allowPublicKeyRetrieval=true&useSSL=false&useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai
-    username: root
-    password: 123456789
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://127.0.0.1:3307/ai_learning_assistant?allowPublicKeyRetrieval=true&useSSL=false&useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai}
+    username: ${SPRING_DATASOURCE_USERNAME:root}
+    password: ${SPRING_DATASOURCE_PASSWORD:123456789}
   data:
     redis:
-      host: 127.0.0.1
-      port: 6379
-      database: 0
-      timeout: 5s
+      host: ${SPRING_REDIS_HOST:127.0.0.1}
+      port: ${SPRING_REDIS_PORT:6379}
+      database: ${SPRING_REDIS_DATABASE:0}
+      timeout: ${SPRING_REDIS_TIMEOUT:5s}
   servlet:
     multipart:
       max-file-size: 20MB
@@ -32,29 +32,29 @@ mybatis-plus:
 
 app:
   ai:
-    enabled: true
-    mock-mode: true
-    chat-provider-type: OPENAI_COMPATIBLE
-    base-url: https://api.openai.com
-    chat-path: /v1/chat/completions
-    embedding-provider-type: OPENAI_COMPATIBLE
-    embedding-base-url:
-    embedding-path: /v1/embeddings
-    api-key: replace-with-your-api-key
-    embedding-api-key:
-    default-model: gpt-4o-mini
-    default-embedding-model: text-embedding-3-small
-    config-file: ./runtime/ai-config.json
+    enabled: ${APP_AI_ENABLED:true}
+    mock-mode: ${APP_AI_MOCK_MODE:true}
+    chat-provider-type: ${APP_AI_CHAT_PROVIDER_TYPE:OPENAI_COMPATIBLE}
+    base-url: ${APP_AI_BASE_URL:https://api.openai.com}
+    chat-path: ${APP_AI_CHAT_PATH:/v1/chat/completions}
+    embedding-provider-type: ${APP_AI_EMBEDDING_PROVIDER_TYPE:OPENAI_COMPATIBLE}
+    embedding-base-url: ${APP_AI_EMBEDDING_BASE_URL:}
+    embedding-path: ${APP_AI_EMBEDDING_PATH:/v1/embeddings}
+    api-key: ${APP_AI_API_KEY:replace-with-your-api-key}
+    embedding-api-key: ${APP_AI_EMBEDDING_API_KEY:}
+    default-model: ${APP_AI_DEFAULT_MODEL:gpt-4o-mini}
+    default-embedding-model: ${APP_AI_DEFAULT_EMBEDDING_MODEL:text-embedding-3-small}
+    config-file: ${APP_AI_CONFIG_FILE:./runtime/ai-config.json}
   qdrant:
-    enabled: true
-    base-url: http://127.0.0.1:6333
-    api-key:
-    collection-name: material_segment_vectors
-    distance: Cosine
-    upsert-batch-size: 16
-    retrieval-limit: 6
+    enabled: ${APP_QDRANT_ENABLED:true}
+    base-url: ${APP_QDRANT_BASE_URL:http://127.0.0.1:6333}
+    api-key: ${APP_QDRANT_API_KEY:}
+    collection-name: ${APP_QDRANT_COLLECTION_NAME:material_segment_vectors}
+    distance: ${APP_QDRANT_DISTANCE:Cosine}
+    upsert-batch-size: ${APP_QDRANT_UPSERT_BATCH_SIZE:16}
+    retrieval-limit: ${APP_QDRANT_RETRIEVAL_LIMIT:6}
   file:
-    upload-dir: C:/Users/雪/Desktop/AI-Intelligent-Learning-Assistant-System/backend/uploads
+    upload-dir: ${APP_FILE_UPLOAD_DIR:C:/Users/雪/Desktop/AI-Intelligent-Learning-Assistant-System/backend/uploads}
   jwt:
-    secret: replace-with-your-jwt-secret-please-change-32-bytes
-    expire-hours: 24
+    secret: ${APP_JWT_SECRET:replace-with-your-jwt-secret-please-change-32-bytes}
+    expire-hours: ${APP_JWT_EXPIRE_HOURS:24}

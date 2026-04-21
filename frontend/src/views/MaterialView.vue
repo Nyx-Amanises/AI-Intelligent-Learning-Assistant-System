@@ -3,7 +3,7 @@
     <div class="page-header">
       <div>
         <h1 class="page-title">资料管理</h1>
-        <p class="page-desc">资料页就按后台列表页来做，新增、查询、查看、删除都围绕列表展开。</p>
+        <p class="page-desc">资料页就按后台列表页来做，新增、筛选、查看、删除都围绕列表展开。</p>
       </div>
     </div>
 
@@ -40,7 +40,6 @@
               <el-option label="SUCCESS" value="SUCCESS" />
               <el-option label="FAILED" value="FAILED" />
             </el-select>
-            <el-button type="primary" plain @click="searchMaterials">查询</el-button>
             <el-button @click="resetFilters">重置条件</el-button>
           </div>
 
@@ -294,6 +293,7 @@ import { reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadRequestOptions } from 'element-plus'
 import { useRouter } from 'vue-router'
+import { useAutoListQuery } from '@/composables/useAutoListQuery'
 import {
   previewMaterialRetrievalApi,
   submitEmbeddingTaskApi,
@@ -351,6 +351,14 @@ const page = reactive({
   current: 1,
   size: 10
 })
+
+const autoQuery = useAutoListQuery(
+  [() => filters.keyword, () => filters.materialType, () => filters.parseStatus],
+  () => {
+    page.current = 1
+    return loadMaterials()
+  }
+)
 
 const retrievalForm = reactive({
   materialId: 0,
@@ -454,16 +462,12 @@ const resetForm = () => {
 }
 
 const resetFilters = () => {
-  filters.keyword = ''
-  filters.materialType = ''
-  filters.parseStatus = ''
-  page.current = 1
-  loadMaterials()
-}
-
-const searchMaterials = () => {
-  page.current = 1
-  loadMaterials()
+  autoQuery.runAfterMutation(() => {
+    filters.keyword = ''
+    filters.materialType = ''
+    filters.parseStatus = ''
+    page.current = 1
+  })
 }
 
 const loadMaterials = async () => {

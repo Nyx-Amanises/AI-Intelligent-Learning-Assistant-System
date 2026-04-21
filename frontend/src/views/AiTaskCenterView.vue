@@ -28,7 +28,6 @@
             <el-option label="失败" value="FAILED" />
             <el-option label="已取消" value="CANCELLED" />
           </el-select>
-          <el-button type="primary" plain @click="searchTasks">查询</el-button>
           <el-button @click="resetFilters">重置条件</el-button>
         </div>
 
@@ -245,6 +244,7 @@ import {
   type AiTaskPageItem,
   type AiTaskPagePayload
 } from '@/api/modules/ai'
+import { useAutoListQuery } from '@/composables/useAutoListQuery'
 
 const router = useRouter()
 const loading = ref(false)
@@ -266,6 +266,14 @@ const page = reactive({
   current: 1,
   size: 10
 })
+
+const autoQuery = useAutoListQuery(
+  [() => filters.taskType, () => filters.status],
+  () => {
+    page.current = 1
+    return loadTasks()
+  }
+)
 
 const activeCount = computed(
   () => tasks.value.filter((item) => ['PENDING', 'RUNNING'].includes(String(item.status).toUpperCase())).length
@@ -440,16 +448,12 @@ const loadTasks = async (silent = false) => {
   }
 }
 
-const searchTasks = () => {
-  page.current = 1
-  loadTasks()
-}
-
 const resetFilters = () => {
-  filters.taskType = ''
-  filters.status = ''
-  page.current = 1
-  loadTasks()
+  autoQuery.runAfterMutation(() => {
+    filters.taskType = ''
+    filters.status = ''
+    page.current = 1
+  })
 }
 
 const openTaskDetail = async (taskId: number, silent = false) => {

@@ -1,140 +1,22 @@
 # AI 智能学习助手系统
 
-一个面向大学生学习场景的全栈项目，围绕“资料整理 -> AI 总结 -> AI 出题 -> 在线练习 -> 简答题 AI 判分 -> RAG 检索 -> AI 学习助手”这条主线构建学习闭环。
+一个面向大学生学习场景的全栈项目，围绕“资料上传解析 -> AI 总结 -> AI 出题 -> 在线练习 -> 简答题 AI 判分 -> 错题本 -> 知识点掌握度 -> 学习分析可视化 -> RAG 检索问答”构建学习闭环。
 
-这个项目的定位不是单纯的聊天机器人，而是一个带明确业务流的学习平台：
+这个项目不是单纯的聊天机器人，而是一个带业务流程、异步任务中心、RAG 检索评测和学习效果分析的 AI 学习平台。它适合作为软件工程实习简历项目展示，也适合作为后续扩展 Agent、RAG、学习计划和推荐系统的基础。
 
-- 用户可以上传 PDF / DOCX / TXT 学习资料，系统会自动解析并分段。
-- 用户可以基于资料生成 AI 总结、AI 题集，并进入在线练习。
-- 简答题支持 AI 判分，同时展示人工参考答案、AI 评语和资料依据。
-- AI 能力统一接入任务中心，便于查看异步执行状态、失败重试和结果追踪。
-- 资料支持生成 Embedding，接入 Qdrant 后可做检索预览与后续 RAG。
-- 内置 AI 学习助手支持基于上下文发起“总结 / 出题 / 查资料 / 查任务 / 查题集 / 看章节 / 检索问答”等操作。
+## 项目亮点
 
-## 1. 项目亮点
+- 完整学习闭环：资料管理、AI 总结、AI 出题、在线练习、AI 判分、错题本、知识点掌握度、学习分析全部打通。
+- 异步任务中心：`SUMMARY`、`QUESTION_GENERATE`、`PRACTICE_REVIEW`、`EMBEDDING` 统一任务化，支持状态追踪、失败重试、重新派发和删除记录。
+- RAG 工程化能力：资料分段、Embedding、Qdrant 向量存储、检索预览、PDF 页码定位、RAG 评测集、CMRC2018 导入、Hit@K / Recall@K / MRR 指标。
+- AI 学习助手：支持会话、SSE 流式回复、上下文绑定、工具调用轨迹、记忆记录、LLM 结构化意图抽取和规则兜底。
+- 学习数据分析：基于练习记录自动生成错题本、知识点掌握度、题型表现、资料表现、薄弱知识点和趋势图表。
+- 前后端分离：后端 Spring Boot 3 + MyBatis Plus，前端 Vue 3 + TypeScript + Element Plus。
+- 支持 Docker Compose 一键启动 MySQL、Redis、Qdrant、后端和前端。
 
-- 业务闭环完整：资料管理、AI 总结、AI 出题、练习记录、AI 判分、任务中心、智能助手全部打通。
-- 任务中心化：`SUMMARY`、`QUESTION_GENERATE`、`PRACTICE_REVIEW`、`EMBEDDING` 已统一走任务调度。
-- RAG 预埋完整：资料分段、向量化状态、Qdrant 存储、检索预览接口都已接好。
-- 助手不只是聊天：支持带上下文进入，也支持自然语言找资料、查任务、查题集、看目录。
-- 参数提取升级：从纯正则升级为“LLM 结构化抽取 + 规则兜底”，更接近真实业务助手。
-- 前后端分离：前端 Vue 3 + Element Plus，后端 Spring Boot 3 + MyBatis Plus。
+## 技术栈
 
-## 2. 当前已实现能力
-
-### 2.1 用户与认证
-
-- 用户注册
-- 用户登录
-- JWT 鉴权
-- 获取当前用户信息
-
-### 2.2 资料管理
-
-- 新增文本资料
-- 上传 PDF / DOCX / TXT 文件资料
-- 资料分页查询
-- 资料详情查看
-- 删除资料
-- PDF / DOCX / TXT 解析
-- 自动切分 `material_segment`
-- 分段附带页码、段号、章节标题
-- 资料列表展示 Embedding 状态与已向量化段数
-
-### 2.3 AI 总结
-
-- 支持 `STANDARD / EXAM / OUTLINE` 三种总结类型
-- 可查看最新总结与历史总结
-- 可保存为学习笔记
-- 前端已改为走任务中心
-
-### 2.4 AI 出题
-
-- 基于资料生成题集
-- 支持单选、判断、简答组合出题
-- 支持题量、题型数量、难度控制
-- 前端已改为走任务中心
-- 对长资料已接入“任务化 + 后续可走检索增强”的架构
-
-### 2.5 在线练习与 AI 判分
-
-- 开始练习
-- 提交练习
-- 查看练习详情
-- 查看练习分页记录
-- 简答题支持 AI 判分
-- 同时展示人工参考答案
-- 支持查看 AI 评语、答案解析、资料依据
-- 支持等待 AI 评分结果接口
-
-### 2.6 任务中心
-
-- 创建任务
-- 提交总结任务
-- 提交出题任务
-- 提交简答题评分任务
-- 提交 Embedding 任务
-- 分页查询任务
-- 查看任务详情
-- 等待任务完成
-- 失败重试
-- 重新派发
-- 删除任务记录
-
-目前已接入的任务类型：
-
-- `SUMMARY`
-- `QUESTION_GENERATE`
-- `PRACTICE_REVIEW`
-- `EMBEDDING`
-
-### 2.7 Embedding / RAG / Qdrant
-
-- 资料分段支持 Embedding 字段和状态管理
-- Embedding 模型支持单独配置
-- 向量写入 Qdrant
-- 提供检索预览接口
-- 检索结果返回页码、段号、章节标题、相似度
-- 为后续 AI 助手 RAG、多轮问答、知识定位打好基础
-
-### 2.8 AI 学习助手
-
-已支持：
-
-- 创建通用会话
-- 创建带上下文会话
-- 普通消息回复
-- SSE 流式回复
-- 会话分页
-- 会话详情
-- 删除会话
-- 会话记忆记录
-- 工具调用轨迹记录
-
-当前助手工具体系：
-
-- `material.list`：查看资料列表
-- `material.search`：按标题关键词找资料
-- `material.detail`：查看当前资料详情
-- `material.chapter_outline`：查看章节 / 目录 / 某一章线索
-- `question_set.list`：查看题集列表
-- `question_set.detail`：查看当前题集详情
-- `task.list`：查看任务列表
-- `task.get_status`：查看任务状态
-- `practice.detail`：查看练习详情
-- `rag.retrieve`：基于当前资料做检索问答
-- `task.submit_summary`：自然语言触发 AI 总结任务
-- `task.submit_question_generate`：自然语言触发 AI 出题任务
-
-助手参数提取方式：
-
-- 第一层：LLM 结构化抽取
-- 第二层：规则兜底解析
-- 第三层：上下文绑定与待确认动作恢复
-
-## 3. 技术栈
-
-### 3.1 前端
+### 前端
 
 - Vue 3
 - TypeScript
@@ -143,8 +25,9 @@
 - Pinia
 - Axios
 - Vue Router
+- CSS / SVG 轻量图表
 
-### 3.2 后端
+### 后端
 
 - Spring Boot 3.3.4
 - MyBatis Plus 3.5.7
@@ -155,72 +38,293 @@
 - PDFBox
 - Apache POI
 
-### 3.3 AI / 向量检索
+### AI / RAG
 
 - OpenAI Compatible Chat API
+- 豆包 / DeepSeek 等兼容模型配置
 - 独立 Embedding Provider 配置
-- Qdrant
+- Qdrant 向量数据库
 - SSE 流式输出
 
-## 4. 系统架构
+## 功能模块
+
+### 用户与认证
+
+- 用户注册
+- 用户登录
+- JWT 鉴权
+- 获取当前用户信息
+
+### 资料管理
+
+- 新增文本资料
+- 上传 PDF / DOCX / TXT 文件资料
+- 资料分页、筛选、详情、改名、删除
+- PDF / DOCX / TXT 解析
+- 自动切分 `material_segment`
+- 分段记录页码、段号、章节标题、字符数
+- 资料列表展示 Embedding 状态和已向量化段数
+
+### AI 总结
+
+- 支持标准总结、考试复习、提纲总结
+- 支持最新总结和历史总结列表
+- 走任务中心异步执行
+- 可保存为学习笔记
+- 总结列表支持筛选和详情查看
+
+### AI 出题
+
+- 基于资料生成题集
+- 支持单选、判断、简答题数量配置
+- 支持难度配置和题集名称自定义
+- 长资料出题支持检索增强路线
+- 走任务中心异步执行
+
+### 在线练习与 AI 判分
+
+- 开始练习
+- 提交练习
+- 客观题即时判分
+- 简答题异步 AI 判分
+- 简答题双展示：AI 判分 + 人工参考答案
+- 支持 AI 评语、答案解析、资料依据
+- 支持练习记录改名、再次练习、删除
+
+### 错题本
+
+- 自动收集错误题目和低分简答题
+- 支持按资料、题型、关键词筛选
+- 支持查看解析、查看原练习
+- 支持移出错题本
+
+### 知识点掌握度
+
+- 按 `question_item.knowledge_point` 聚合练习记录
+- 统计作答次数、正确次数、错题次数、得分率
+- 自动划分已掌握、基本掌握、待巩固、薄弱
+- 支持按资料、题型、掌握状态、关键词筛选
+- 支持跳转查看相关错题
+
+### 学习分析可视化
+
+- 平均正确率、平均得分率、错题次数、薄弱知识点数
+- 掌握度分布环形图
+- 最近练习趋势折线图
+- 题型表现柱状图
+- 资料表现排行
+- 薄弱知识点卡片
+
+### 任务中心
+
+已接入任务类型：
+
+- `SUMMARY`
+- `QUESTION_GENERATE`
+- `PRACTICE_REVIEW`
+- `EMBEDDING`
+
+支持能力：
+
+- 分页查询任务
+- 查看任务详情
+- 等待任务完成
+- 失败重试
+- 重新派发
+- 删除任务记录
+- 任务结果跳转业务页面
+
+### Embedding / RAG / Qdrant
+
+- 资料分段向量化
+- Embedding 模型独立配置
+- 向量写入 Qdrant
+- 检索预览
+- 检索结果返回页码、段号、章节标题、相似度
+- 支持 RAG 评测集和批量评测
+
+### RAG 评测
+
+- 创建评测集
+- 手动维护评测样本
+- 导入 CMRC2018 数据集
+- 批量运行检索评测
+- 统计 Hit@1 / Hit@3 / Hit@5
+- 统计 Recall@1 / Recall@3 / Recall@5
+- 统计 MRR 和平均耗时
+
+### AI 学习助手
+
+助手支持：
+
+- 创建通用会话
+- 创建带资料、题集、练习、任务上下文的会话
+- 普通对话
+- SSE 流式回复
+- 会话分页、详情、删除
+- 记忆记录
+- 工具调用轨迹
+
+当前工具体系：
+
+- `material.list`：查看资料列表
+- `material.search`：按标题关键词找资料
+- `material.detail`：查看资料详情
+- `material.chapter_outline`：查看章节 / 目录线索
+- `question_set.list`：查看题集列表
+- `question_set.detail`：查看题集详情
+- `task.list`：查看任务列表
+- `task.get_status`：查看任务状态
+- `practice.detail`：查看练习详情
+- `rag.retrieve`：基于资料检索问答
+- `task.submit_summary`：自然语言触发 AI 总结任务
+- `task.submit_question_generate`：自然语言触发 AI 出题任务
+
+## 系统架构
 
 ```text
-Frontend (Vue 3 + Element Plus)
+Vue 3 Frontend
         |
         v
-Backend API (Spring Boot)
+Spring Boot Backend
         |
-        +-- MySQL：用户 / 资料 / 题集 / 练习 / 任务 / 助手会话
-        +-- Redis：缓存与扩展预留
-        +-- AI Chat API：总结 / 出题 / 判分 / 助手推理
-        +-- Embedding API：分段向量化
-        +-- Qdrant：向量存储与检索
+        +-- MySQL: 用户 / 资料 / 分段 / 题集 / 练习 / 任务 / 助手 / 评测
+        +-- Redis: 缓存和扩展预留
+        +-- Chat API: 总结 / 出题 / 判分 / 助手意图识别 / 对话
+        +-- Embedding API: 资料分段向量化
+        +-- Qdrant: 向量存储与语义检索
 ```
 
-## 5. 目录结构
+## 目录结构
 
 ```text
 AI-Intelligent-Learning-Assistant-System
 ├─ backend                      # Spring Boot 后端
 │  ├─ src/main/java             # 业务代码
 │  ├─ src/main/resources        # 配置文件
-│  └─ README.md                 # 后端单独说明
+│  ├─ Dockerfile                # 后端镜像构建
+│  └─ README.md                 # 后端说明
 ├─ frontend                     # Vue 3 前端
 │  ├─ src/api                   # 接口封装
 │  ├─ src/views                 # 页面视图
-│  ├─ src/components            # 组件
-│  └─ src/stores                # 状态管理
+│  ├─ src/components            # 通用组件
+│  ├─ Dockerfile                # 前端镜像构建
+│  └─ nginx.conf                # 前端 Nginx 配置
 ├─ db
-│  ├─ ai_learning_assistant.sql # 初始建表脚本
+│  ├─ ai_learning_assistant.sql # 基础建表脚本
 │  └─ migrations                # 增量迁移脚本
-├─ docs                         # 接口设计与数据库设计文档
-├─ runtime                      # 运行时配置
+├─ docker/mysql/init            # MySQL 容器初始化脚本
+├─ docs                         # 接口设计和数据库设计文档
+├─ runtime                      # AI 运行时配置，默认不提交
 ├─ output                       # 导出与调试产物
+├─ docker-compose.yml           # 一键启动编排
+├─ .env.example                 # Docker 环境变量示例
 └─ README.md                    # 项目总览
 ```
 
-## 6. 环境要求
+## 环境要求
+
+本地开发：
 
 - JDK 17
 - Maven 3.9+
 - Node.js 18+
 - MySQL 8.0+
-- Redis 6+
-- Qdrant 1.8+（如果要启用 Embedding / 检索 / RAG）
+- Redis
+- Qdrant
 
-## 7. 数据库初始化
+Docker 启动：
 
-### 7.1 第一步：执行基础脚本
+- Docker Desktop
+- Docker Compose V2
 
-先执行：
+你的 Windows 环境里：
+
+- Redis 本地目录：`D:\Redis-x64-3.0.504`
+- Docker Desktop 目录：`D:\Docker\DockerDesktop`
+
+说明：Docker Compose 不需要直接引用 Docker Desktop 的安装目录；只要 Docker Desktop 已启动，命令行能执行 `docker version` 和 `docker compose version` 即可。
+
+## Docker Compose 一键启动
+
+### 1. 准备环境变量
+
+在项目根目录执行：
+
+```powershell
+Copy-Item .env.example .env
+```
+
+如果只是本地演示，可以先保持 `APP_AI_MOCK_MODE=true`。如果要真实调用模型，把 `.env` 中的模型地址、模型名和 API Key 改成你的配置。
+
+### 2. 启动全部服务
+
+先确认 Docker Desktop 已启动。你的安装目录是 `D:\Docker\DockerDesktop`，如果没有启动，可以先手动打开 Docker Desktop，或在 PowerShell 中执行：
+
+```powershell
+Start-Process "D:\Docker\DockerDesktop\Docker Desktop.exe"
+```
+
+等 Docker Desktop 显示运行中后，再执行：
+
+```powershell
+docker compose up -d --build
+```
+
+启动后访问：
+
+- 前端：http://localhost:5173
+- 后端：http://localhost:8083
+- MySQL：`localhost:3307`
+- Redis：`localhost:6379`
+- Qdrant：http://localhost:6333
+
+### 3. 查看日志
+
+```powershell
+docker compose logs -f backend
+docker compose logs -f frontend
+```
+
+### 4. 停止服务
+
+```powershell
+docker compose down
+```
+
+如果想清空 MySQL、Redis、Qdrant 数据并重新执行初始化脚本：
+
+```powershell
+docker compose down -v
+docker compose up -d --build
+```
+
+### 5. 数据库初始化说明
+
+MySQL 容器首次启动时会自动执行：
+
+1. `db/ai_learning_assistant.sql`
+2. `db/migrations/*.sql`
+
+初始化脚本位置：
+
+```text
+docker/mysql/init/01-init-database.sh
+```
+
+注意：MySQL 官方镜像只会在数据卷为空时执行初始化脚本。如果你改了 SQL 后想重新初始化，需要先执行 `docker compose down -v`。
+
+## 本地手动启动
+
+### 1. 启动 MySQL
+
+创建数据库并执行：
 
 ```sql
 db/ai_learning_assistant.sql
 ```
 
-### 7.2 第二步：按时间顺序执行迁移脚本
-
-依次执行：
+然后按时间顺序执行：
 
 ```text
 db/migrations/2026-04-16_add_summary_type.sql
@@ -231,210 +335,121 @@ db/migrations/2026-04-17_create_ai_task_table.sql
 db/migrations/2026-04-17_create_assistant_tables.sql
 db/migrations/2026-04-17_expand_ai_generation_record_error_message.sql
 db/migrations/2026-04-18_add_assistant_pending_action_fields.sql
+db/migrations/2026-04-20_create_rag_eval_tables.sql
 ```
 
-说明：
+### 2. 启动本地 Redis
 
-- 基础脚本负责创建主业务表。
-- `migrations` 目录负责补增量字段、任务中心、助手会话、Embedding 字段等后续能力。
-- 如果数据库是旧版本，务必把迁移脚本补齐，否则容易出现字段缺失报错。
+如果使用你本机的 Redis：
 
-## 8. 后端启动
-
-### 8.1 默认配置位置
-
-配置文件：
-
-- `backend/src/main/resources/application.yml`
-- `backend/src/main/resources/application-dev.yml`
-
-当前默认端口：
-
-- 后端：`8083`
-
-### 8.2 关键配置项
-
-`application.yml` 中重点关注：
-
-```yaml
-spring:
-  datasource:
-    url: jdbc:mysql://127.0.0.1:3307/ai_learning_assistant...
-    username: root
-    password: 123456789
-
-  data:
-    redis:
-      host: 127.0.0.1
-      port: 6379
-
-app:
-  ai:
-    enabled: true
-    mock-mode: true
-    base-url: https://api.openai.com
-    chat-path: /v1/chat/completions
-    embedding-provider-type: OPENAI_COMPATIBLE
-    embedding-base-url:
-    embedding-path: /v1/embeddings
-    api-key: replace-with-your-api-key
-    embedding-api-key:
-    default-model: gpt-4o-mini
-    default-embedding-model: text-embedding-3-small
-    config-file: ./runtime/ai-config.json
-
-  qdrant:
-    enabled: true
-    base-url: http://127.0.0.1:6333
-    collection-name: material_segment_vectors
+```powershell
+Set-Location D:\Redis-x64-3.0.504
+.\redis-server.exe .\redis.windows.conf
 ```
 
-### 8.3 启动命令
+如果没有配置文件，也可以直接：
 
-在项目根目录执行：
+```powershell
+Set-Location D:\Redis-x64-3.0.504
+.\redis-server.exe
+```
 
-```bash
-cd backend
+### 3. 启动 Qdrant
+
+```powershell
+docker run -d --name qdrant -p 6333:6333 -p 6334:6334 -v qdrant_storage:/qdrant/storage qdrant/qdrant
+```
+
+### 4. 启动后端
+
+```powershell
+Set-Location backend
 mvn spring-boot:run
 ```
 
-或者：
+默认后端端口：`8083`。
 
-```bash
-cd backend
-mvn clean package
-java -jar target/ai-learning-assistant-backend-1.0.0.jar
-```
+### 5. 启动前端
 
-## 9. 前端启动
-
-当前默认端口：
-
-- 前端：`5173`
-
-代理配置：
-
-- `/api -> http://127.0.0.1:8083`
-
-启动命令：
-
-```bash
-cd frontend
+```powershell
+Set-Location frontend
 npm install
 npm run dev
 ```
 
-打包命令：
+默认前端端口：`5173`。
 
-```bash
-cd frontend
-npm run build
-```
+## 关键配置
 
-## 10. AI 配置说明
+后端配置文件：
 
-项目支持两套 AI 配置思路：
+- `backend/src/main/resources/application.yml`
+- `backend/src/main/resources/application-dev.yml`
 
-### 10.1 聊天模型
+Docker 和本地均支持通过环境变量覆盖配置，例如：
 
-用于：
+- `SPRING_DATASOURCE_URL`
+- `SPRING_DATASOURCE_USERNAME`
+- `SPRING_DATASOURCE_PASSWORD`
+- `SPRING_REDIS_HOST`
+- `SPRING_REDIS_PORT`
+- `APP_AI_BASE_URL`
+- `APP_AI_API_KEY`
+- `APP_AI_DEFAULT_MODEL`
+- `APP_AI_EMBEDDING_BASE_URL`
+- `APP_AI_EMBEDDING_API_KEY`
+- `APP_AI_DEFAULT_EMBEDDING_MODEL`
+- `APP_QDRANT_BASE_URL`
+- `APP_FILE_UPLOAD_DIR`
 
-- AI 总结
-- AI 出题
-- 简答题 AI 判分
-- AI 学习助手对话与结构化抽取
-
-### 10.2 Embedding 模型
-
-用于：
-
-- 资料分段向量化
-- 检索预览
-- 后续 RAG
-
-当前架构支持聊天模型和 Embedding 模型分开配置，因此可以：
-
-- 聊天走 OpenAI Compatible / 中转站
-- Embedding 单独走别的供应商
-
-运行时配置会写入：
+AI 配置页面保存的运行时配置默认写入：
 
 ```text
 runtime/ai-config.json
 ```
 
-前端也提供了 AI 配置页面用于调整这些参数。
+Docker 环境中映射到：
 
-## 11. Qdrant 使用说明
-
-如果你只想先体验基础资料管理、总结、出题、练习，可以暂时不开 Qdrant。
-
-如果你要启用下面这些功能，建议启动 Qdrant：
-
-- Embedding 任务
-- 检索预览
-- RAG 检索问答
-- 后续知识库助手
-
-### 11.1 Docker 启动示例
-
-```bash
-docker run -d ^
-  --name qdrant ^
-  -p 6333:6333 ^
-  -v qdrant_storage:/qdrant/storage ^
-  qdrant/qdrant
+```text
+/app/runtime/ai-config.json
 ```
 
-### 11.2 启用条件
+## 主要页面
 
-- `app.qdrant.enabled=true`
-- Qdrant 服务已启动
-- Embedding API 可用
+- 首页：学习概览
+- 资料管理：上传、解析、Embedding、检索预览
+- 任务中心：AI 总结、出题、评分、Embedding 任务管理
+- RAG 评测：评测集、样本、运行结果
+- AI 总结：总结列表和生成
+- AI 出题：题集列表和生成
+- 练习记录：答题记录、AI 判分、再次练习
+- 错题本：自动收集错题和低分简答题
+- 掌握度：知识点掌握度统计
+- 学习分析：可视化图表看板
+- AI 配置：聊天模型和 Embedding 模型配置
+- AI 学习助手：全局悬浮入口和对话抽屉
 
-## 12. 关键页面
+## 主要接口
 
-当前前端主要页面：
-
-- 首页：`DashboardView.vue`
-- 登录页：`LoginView.vue`
-- 资料管理：`MaterialView.vue`
-- AI 总结：`SummaryView.vue`
-- AI 出题 / 题集：`QuizView.vue`
-- 练习记录：`PracticeView.vue`
-- 任务中心：`AiTaskCenterView.vue`
-- AI 配置：`AiConfigView.vue`
-- 全局 AI 助手抽屉：`AssistantDrawer.vue`
-
-## 13. 主要接口模块
-
-### 13.1 认证
+### 认证
 
 - `POST /api/auth/register`
 - `POST /api/auth/login`
 
-### 13.2 资料
+### 资料
 
 - `POST /api/material/text`
 - `POST /api/material/upload`
 - `GET /api/material/page`
 - `GET /api/material/{id}`
+- `PUT /api/material/{id}/title`
 - `POST /api/material/{id}/parse`
 - `DELETE /api/material/{id}`
 
-### 13.3 AI 总结 / 出题
+### AI 与任务
 
 - `GET /api/ai/config`
 - `PUT /api/ai/config`
-- `POST /api/ai/material/{id}/summary`
-- `GET /api/ai/material/{id}/latest-summary`
-- `GET /api/ai/material/{id}/summary-history`
-- `GET /api/ai/summary-history`
-- `POST /api/ai/material/{id}/question-set`
-
-### 13.4 任务中心
-
-- `POST /api/ai/tasks`
 - `POST /api/ai/tasks/material/{materialId}/summary`
 - `POST /api/ai/tasks/material/{materialId}/question-set`
 - `POST /api/ai/tasks/practice/{sessionId}/review`
@@ -446,7 +461,7 @@ docker run -d ^
 - `POST /api/ai/tasks/{taskId}/retry`
 - `DELETE /api/ai/tasks/{taskId}`
 
-### 13.5 题集与练习
+### 题集与练习
 
 - `GET /api/question-set/page`
 - `GET /api/question-set/{id}`
@@ -455,14 +470,29 @@ docker run -d ^
 - `POST /api/practice/submit`
 - `GET /api/practice/page`
 - `GET /api/practice/{sessionId}`
+- `PUT /api/practice/{sessionId}/name`
 - `GET /api/practice/{sessionId}/review-status`
 - `DELETE /api/practice/{sessionId}`
 
-### 13.6 RAG
+### 错题与学习分析
+
+- `GET /api/wrong-questions/page`
+- `GET /api/wrong-questions/{answerId}`
+- `DELETE /api/wrong-questions/{answerId}`
+- `GET /api/knowledge-mastery/overview`
+- `GET /api/learning-analytics/overview`
+
+### RAG
 
 - `GET /api/rag/material/{materialId}/retrieve-preview`
+- `GET /api/rag-eval/datasets/page`
+- `POST /api/rag-eval/datasets`
+- `POST /api/rag-eval/datasets/{datasetId}/samples`
+- `POST /api/rag-eval/datasets/{datasetId}/run`
+- `GET /api/rag-eval/runs/{runId}`
+- `POST /api/rag-eval/import/cmrc2018`
 
-### 13.7 AI 学习助手
+### AI 学习助手
 
 - `POST /api/assistant/sessions`
 - `GET /api/assistant/sessions/page`
@@ -471,69 +501,64 @@ docker run -d ^
 - `POST /api/assistant/sessions/{sessionId}/messages/stream`
 - `DELETE /api/assistant/sessions/{sessionId}`
 
-## 14. 典型业务流程
+## 典型业务流程
 
-### 14.1 资料学习流程
+### 资料学习流程
 
 1. 注册并登录系统。
-2. 上传 PDF / DOCX / TXT，或直接新建文本资料。
-3. 执行资料解析，生成资料分段。
-4. 生成 AI 总结，提炼知识点。
-5. 生成 AI 题集，进入在线练习。
-6. 提交练习，客观题立即判分，简答题异步走 AI 判分。
-7. 在练习记录中查看 AI 评语、参考答案和资料依据。
+2. 上传 PDF / DOCX / TXT 或创建文本资料。
+3. 解析资料并生成分段。
+4. 生成 AI 总结。
+5. 生成 AI 题集。
+6. 在线练习并提交。
+7. 客观题立即判分，简答题异步 AI 判分。
+8. 查看练习解析、错题本、知识点掌握度和学习分析图表。
 
-### 14.2 RAG / 检索流程
+### RAG 流程
 
 1. 对资料执行 Embedding 任务。
 2. 分段向量写入 Qdrant。
-3. 调用检索预览接口检查命中质量。
-4. 后续在 AI 助手中将检索片段作为上下文回答问题。
+3. 使用检索预览检查召回效果。
+4. 建立 RAG 评测集，批量评估检索质量。
+5. 在 AI 助手中基于检索片段回答资料问题。
 
-### 14.3 AI 助手流程
+### AI 助手流程
 
-1. 从资料、题集、练习记录等页面进入助手，会自动带入上下文。
-2. 用户可直接说“帮我总结这份资料”“出 20 道单选”“查一下已生成 Embedding 的资料”。
-3. 助手先做结构化意图提取，再决定调用哪个业务工具。
-4. 对需要补充信息的场景，助手会进入待确认状态，并在用户下一句话中继续完成动作。
+1. 从资料、题集、练习、任务等页面进入助手。
+2. 助手自动携带当前页面上下文。
+3. 用户用自然语言提出请求。
+4. 后端先做 LLM 结构化意图抽取，再调用业务工具。
+5. 若参数不足，进入待确认状态，用户补充后继续原任务。
 
-## 15. 文档位置
+## 适合写进简历的描述
 
-项目内已有补充文档：
+可以写成：
 
+```text
+AI 智能学习助手系统 | Spring Boot + Vue3 + Qdrant + 大模型 API
+```
+
+简历要点示例：
+
+- 设计并实现资料解析、AI 总结、AI 出题、简答题 AI 判分等学习辅助功能，统一接入异步任务中心，支持任务状态追踪、失败重试和结果回溯。
+- 接入 Qdrant 向量数据库与 Embedding 服务，实现资料分段向量化、语义检索、检索预览和 PDF 页码定位。
+- 建设 RAG 检索评测模块，支持人工标注样本和 CMRC2018 数据导入，统计 Hit@K、Recall@K、MRR、平均耗时等指标。
+- 实现错题本、知识点掌握度和学习分析可视化，基于练习记录自动识别薄弱知识点并辅助复习决策。
+- 实现 AI 学习助手的会话、SSE 流式回复、工具调用轨迹、上下文绑定和 LLM 结构化意图抽取。
+
+## 后续扩展方向
+
+- 更完整的 Agent 工具规划层
+- LangChain4j 或自研 Tool Calling 编排升级
+- 混合检索、重排、检索效果 AB 对比
+- 学习计划和间隔复习
+- 错题推荐和薄弱点专项训练
+- 多模型成本统计和调用日志
+- 第三方登录
+- CI/CD 自动部署
+
+## 相关文档
+
+- [后端 README](./backend/README.md)
 - [后端接口设计](./docs/后端接口设计.md)
 - [数据库设计说明](./docs/数据库设计说明.md)
-- [后端 README](./backend/README.md)
-
-## 16. 适合写进简历的点
-
-如果你打算把这个项目写进简历，可以突出这些关键词：
-
-- AI 学习助手
-- Spring Boot + Vue 全栈项目
-- 任务中心化异步架构
-- Qdrant 向量检索 / RAG
-- 大模型结构化抽取
-- SSE 流式对话
-- AI 自动出题与简答题评分
-- PDF / DOCX 资料解析
-
-## 17. 后续可扩展方向
-
-- 更完整的 Agent 工具编排与多轮澄清
-- 基于检索结果的高价值知识点筛选
-- 学习计划 / 错题本 / 复习曲线
-- 资料标签、课程、章节树模型
-- 多模型切换与成本统计
-- 第三方登录
-- 更完整的部署方案与 CI/CD
-
-## 18. 说明
-
-当前仓库更适合作为“可持续扩展的简历项目”：
-
-- 业务链路完整
-- 代码结构清晰
-- 已从普通 CRUD 项目升级到 AI + 任务中心 + RAG + 助手协作架构
-
-后续继续补 Agent、RAG 问答、学习计划、多轮工具调用后，项目含金量会更高。

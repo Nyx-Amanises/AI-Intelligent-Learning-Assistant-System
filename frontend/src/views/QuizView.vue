@@ -49,7 +49,6 @@
             <el-select v-model="filters.difficultyLevel" clearable placeholder="难度等级">
               <el-option v-for="level in 5" :key="level" :label="`难度 ${level}`" :value="level" />
             </el-select>
-            <el-button type="primary" plain @click="searchQuestionSets">查询</el-button>
             <el-button @click="resetFilters">重置条件</el-button>
           </div>
 
@@ -267,6 +266,7 @@ import { getMaterialPageApi } from '@/api/modules/material'
 import { startPracticeApi } from '@/api/modules/practice'
 import { deleteQuestionSetApi, getQuestionSetDetailApi, getQuestionSetPageApi } from '@/api/modules/question'
 import { isAiTaskSuccess, isAiTaskTerminal, parseAiTaskResult, waitForAiTask } from '@/utils/aiTask'
+import { useAutoListQuery } from '@/composables/useAutoListQuery'
 
 const route = useRoute()
 const router = useRouter()
@@ -320,6 +320,14 @@ const page = reactive({
   current: 1,
   size: 10
 })
+
+const autoQuery = useAutoListQuery(
+  [() => filters.keyword, () => filters.status, () => filters.difficultyLevel],
+  () => {
+    page.current = 1
+    return loadQuestionSets()
+  }
+)
 
 const totalQuestionCount = computed(
   () => Number(form.singleCount || 0) + Number(form.judgeCount || 0) + Number(form.shortAnswerCount || 0)
@@ -460,16 +468,12 @@ async function syncAssistantQuestionContext(questionSetId?: number, materialId?:
 }
 
 const resetFilters = () => {
-  filters.keyword = ''
-  filters.status = ''
-  filters.difficultyLevel = undefined
-  page.current = 1
-  loadQuestionSets()
-}
-
-const searchQuestionSets = () => {
-  page.current = 1
-  loadQuestionSets()
+  autoQuery.runAfterMutation(() => {
+    filters.keyword = ''
+    filters.status = ''
+    filters.difficultyLevel = undefined
+    page.current = 1
+  })
 }
 
 const loadAiConfig = async () => {

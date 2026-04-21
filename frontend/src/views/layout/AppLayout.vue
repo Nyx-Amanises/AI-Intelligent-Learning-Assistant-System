@@ -69,6 +69,9 @@ const navItems = [
   { path: '/summary', label: 'AI 总结', icon: '总' },
   { path: '/quiz', label: 'AI 出题', icon: '题' },
   { path: '/practice', label: '练习记录', icon: '练' },
+  { path: '/wrong-questions', label: '错题本', icon: '错' },
+  { path: '/mastery', label: '掌握度', icon: '掌' },
+  { path: '/analytics', label: '学习分析', icon: '析' },
   { path: '/ai-config', label: 'AI 配置', icon: '配' }
 ]
 
