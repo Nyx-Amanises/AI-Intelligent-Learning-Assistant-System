@@ -28,9 +28,19 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+/**
+ * 错题本业务实现类。
+ *
+ * <p>错题本的核心思路是：先找到当前用户已提交的练习会话，
+ * 再从这些会话的答案中筛选 markedWrong = 1 的记录，
+ * 最后补充题目、题集和资料标题等展示信息。</p>
+ */
 @Service
 public class WrongQuestionServiceImpl implements WrongQuestionService {
 
+    /**
+     * 只统计已提交的练习，避免进行中的练习被提前加入错题本。
+     */
     private static final String SESSION_STATUS_SUBMITTED = "SUBMITTED";
 
     private final PracticeAnswerMapper practiceAnswerMapper;
@@ -39,6 +49,15 @@ public class WrongQuestionServiceImpl implements WrongQuestionService {
     private final QuestionSetMapper questionSetMapper;
     private final StudyMaterialService studyMaterialService;
 
+    /**
+     * 构造方法注入依赖。
+     *
+     * @param practiceAnswerMapper 练习答案 Mapper
+     * @param practiceSessionMapper 练习会话 Mapper
+     * @param questionItemMapper 题目 Mapper
+     * @param questionSetMapper 题集 Mapper
+     * @param studyMaterialService 学习资料服务，用于读取资料标题
+     */
     public WrongQuestionServiceImpl(
             PracticeAnswerMapper practiceAnswerMapper,
             PracticeSessionMapper practiceSessionMapper,
@@ -53,6 +72,16 @@ public class WrongQuestionServiceImpl implements WrongQuestionService {
         this.studyMaterialService = studyMaterialService;
     }
 
+    /**
+     * 分页查询错题本。
+     *
+     * <p>这里先按用户和资料筛选练习会话，再查这些会话下标记为错题的答案。
+     * 因为还需要按题型和关键词过滤拼装后的展示字段，所以最终分页在内存中完成。</p>
+     *
+     * @param userId 当前登录用户 ID
+     * @param query 分页和筛选条件
+     * @return 错题分页结果
+     */
     @Override
     public PageVO<WrongQuestionVO> pageWrongQuestions(Long userId, WrongQuestionPageQuery query) {
         List<PracticeSession> sessions = practiceSessionMapper.selectList(new LambdaQueryWrapper<PracticeSession>()
@@ -102,6 +131,13 @@ public class WrongQuestionServiceImpl implements WrongQuestionService {
                 .build();
     }
 
+    /**
+     * 查询单道错题详情。
+     *
+     * @param userId 当前登录用户 ID
+     * @param answerId 练习答案记录 ID
+     * @return 错题详情
+     */
     @Override
     public WrongQuestionVO getWrongQuestion(Long userId, Long answerId) {
         PracticeAnswer answer = getOwnedWrongAnswer(userId, answerId);
@@ -114,6 +150,14 @@ public class WrongQuestionServiceImpl implements WrongQuestionService {
         return vo;
     }
 
+    /**
+     * 将错题移出错题本。
+     *
+     * <p>只修改 markedWrong 标记，不删除原始练习答案记录。</p>
+     *
+     * @param userId 当前登录用户 ID
+     * @param answerId 练习答案记录 ID
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void removeFromWrongBook(Long userId, Long answerId) {
@@ -122,6 +166,13 @@ public class WrongQuestionServiceImpl implements WrongQuestionService {
         practiceAnswerMapper.updateById(answer);
     }
 
+    /**
+     * 查询并校验当前用户拥有的错题答案。
+     *
+     * @param userId 当前登录用户 ID
+     * @param answerId 练习答案记录 ID
+     * @return 练习答案记录
+     */
     private PracticeAnswer getOwnedWrongAnswer(Long userId, Long answerId) {
         PracticeAnswer answer = practiceAnswerMapper.selectById(answerId);
         if (answer == null || answer.getMarkedWrong() == null || answer.getMarkedWrong() != 1) {
@@ -137,6 +188,16 @@ public class WrongQuestionServiceImpl implements WrongQuestionService {
         return answer;
     }
 
+    /**
+     * 批量加载错题展示需要的关联数据。
+     *
+     * <p>错题展示需要题目内容、题集标题和资料标题。这里先收集 ID 再批量查询，
+     * 比循环一条条查数据库更高效。</p>
+     *
+     * @param sessions 练习会话列表
+     * @param answers 错题答案列表
+     * @return 关联数据集合
+     */
     private RelatedData loadRelatedData(List<PracticeSession> sessions, List<PracticeAnswer> answers) {
         Set<Long> questionIds = answers.stream()
                 .map(PracticeAnswer::getQuestionId)
@@ -171,6 +232,14 @@ public class WrongQuestionServiceImpl implements WrongQuestionService {
         return new RelatedData(questionMap, questionSetMap, materialMap);
     }
 
+    /**
+     * 把练习答案转换成错题本返回对象。
+     *
+     * @param answer 练习答案记录
+     * @param session 所属练习会话
+     * @param relatedData 批量加载好的关联数据
+     * @return 错题展示对象；必要关联数据不存在时返回 null
+     */
     private WrongQuestionVO toWrongQuestionVO(PracticeAnswer answer, PracticeSession session, RelatedData relatedData) {
         if (answer == null || session == null) {
             return null;
@@ -211,11 +280,27 @@ public class WrongQuestionServiceImpl implements WrongQuestionService {
                 .build();
     }
 
+    /**
+     * 判断错题是否匹配指定题型。
+     *
+     * @param item 错题展示对象
+     * @param questionType 题型筛选条件
+     * @return true 表示匹配
+     */
     private boolean matchesQuestionType(WrongQuestionVO item, String questionType) {
         return !StringUtils.hasText(questionType)
                 || questionType.trim().equalsIgnoreCase(item.getQuestionType());
     }
 
+    /**
+     * 判断错题是否匹配关键词。
+     *
+     * <p>关键词会匹配题干、知识点、资料标题、题集标题和练习名称。</p>
+     *
+     * @param item 错题展示对象
+     * @param keyword 关键词
+     * @return true 表示匹配
+     */
     private boolean matchesKeyword(WrongQuestionVO item, String keyword) {
         if (!StringUtils.hasText(keyword)) {
             return true;
@@ -228,10 +313,23 @@ public class WrongQuestionServiceImpl implements WrongQuestionService {
                 || containsIgnoreCase(item.getSessionName(), normalizedKeyword);
     }
 
+    /**
+     * 忽略大小写判断文本是否包含关键词。
+     *
+     * @param source 原始文本
+     * @param normalizedKeyword 已转小写的关键词
+     * @return true 表示包含
+     */
     private boolean containsIgnoreCase(String source, String normalizedKeyword) {
         return StringUtils.hasText(source) && source.toLowerCase(Locale.ROOT).contains(normalizedKeyword);
     }
 
+    /**
+     * 创建空分页结果。
+     *
+     * @param query 分页查询参数
+     * @return 没有记录的分页对象
+     */
     private PageVO<WrongQuestionVO> emptyPage(WrongQuestionPageQuery query) {
         return PageVO.<WrongQuestionVO>builder()
                 .current(query.getCurrent())
@@ -242,6 +340,13 @@ public class WrongQuestionServiceImpl implements WrongQuestionService {
                 .build();
     }
 
+    /**
+     * 错题展示所需的关联数据。
+     *
+     * @param questionMap key 为题目 ID
+     * @param questionSetMap key 为题集 ID
+     * @param materialMap key 为资料 ID
+     */
     private record RelatedData(
             Map<Long, QuestionItem> questionMap,
             Map<Long, QuestionSet> questionSetMap,

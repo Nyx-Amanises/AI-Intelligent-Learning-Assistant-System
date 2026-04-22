@@ -11,10 +11,15 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+/**
+ * 学习资料总结任务处理器。
+ */
 @Component
 public class SummaryTaskProcessor implements AiTaskProcessor {
 
+    /** 总结生成服务。 */
     private final AiSummaryService aiSummaryService;
+    /** JSON 序列化工具。 */
     private final ObjectMapper objectMapper;
 
     public SummaryTaskProcessor(AiSummaryService aiSummaryService, ObjectMapper objectMapper) {
@@ -22,11 +27,17 @@ public class SummaryTaskProcessor implements AiTaskProcessor {
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * 只处理 SUMMARY 类型的任务。
+     */
     @Override
     public boolean supports(String taskType) {
         return "SUMMARY".equalsIgnoreCase(taskType);
     }
 
+    /**
+     * 给任务参数补上默认值后，调用总结服务生成结果。
+     */
     @Override
     public TaskExecutionResult process(AiTask task) {
         SummaryTaskPayload payload = readPayload(task.getPayloadJson(), SummaryTaskPayload.class);
@@ -44,6 +55,9 @@ public class SummaryTaskProcessor implements AiTaskProcessor {
         return new TaskExecutionResult(writeJson(result), 100);
     }
 
+    /**
+     * 读取任务参数 JSON。
+     */
     private <T> T readPayload(String payloadJson, Class<T> payloadType) {
         try {
             return objectMapper.readValue(payloadJson, payloadType);
@@ -52,6 +66,9 @@ public class SummaryTaskProcessor implements AiTaskProcessor {
         }
     }
 
+    /**
+     * 写出任务结果 JSON。
+     */
     private String writeJson(Object result) {
         try {
             return objectMapper.writeValueAsString(result);

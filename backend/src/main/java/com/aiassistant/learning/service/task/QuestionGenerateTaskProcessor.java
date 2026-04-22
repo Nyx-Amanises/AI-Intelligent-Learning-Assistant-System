@@ -10,10 +10,15 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
 
+/**
+ * AI 题目生成任务处理器。
+ */
 @Component
 public class QuestionGenerateTaskProcessor implements AiTaskProcessor {
 
+    /** 题目生成服务。 */
     private final AiQuestionService aiQuestionService;
+    /** JSON 序列化工具。 */
     private final ObjectMapper objectMapper;
 
     public QuestionGenerateTaskProcessor(AiQuestionService aiQuestionService, ObjectMapper objectMapper) {
@@ -21,11 +26,17 @@ public class QuestionGenerateTaskProcessor implements AiTaskProcessor {
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * 只处理 QUESTION_GENERATE 类型的任务。
+     */
     @Override
     public boolean supports(String taskType) {
         return "QUESTION_GENERATE".equalsIgnoreCase(taskType);
     }
 
+    /**
+     * 从任务参数恢复生成题目的请求对象，并调用题目生成服务。
+     */
     @Override
     public TaskExecutionResult process(AiTask task) {
         QuestionGenerateTaskPayload payload = readPayload(task.getPayloadJson(), QuestionGenerateTaskPayload.class);
@@ -46,6 +57,9 @@ public class QuestionGenerateTaskProcessor implements AiTaskProcessor {
         return new TaskExecutionResult(writeJson(result), 100);
     }
 
+    /**
+     * 读取任务参数 JSON。
+     */
     private <T> T readPayload(String payloadJson, Class<T> payloadType) {
         try {
             return objectMapper.readValue(payloadJson, payloadType);
@@ -54,6 +68,9 @@ public class QuestionGenerateTaskProcessor implements AiTaskProcessor {
         }
     }
 
+    /**
+     * 写出任务结果 JSON。
+     */
     private String writeJson(Object result) {
         try {
             return objectMapper.writeValueAsString(result);

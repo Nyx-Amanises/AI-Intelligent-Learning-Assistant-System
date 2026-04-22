@@ -33,11 +33,28 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+/**
+ * 学习分析业务实现类。
+ *
+ * <p>它从已提交练习和答案记录中汇总多维度指标：
+ * 整体正确率、得分率、掌握度分布、题型表现、资料表现、练习趋势和薄弱知识点。</p>
+ */
 @Service
 public class LearningAnalyticsServiceImpl implements LearningAnalyticsService {
 
+    /**
+     * 只统计已提交的练习。
+     */
     private static final String SESSION_STATUS_SUBMITTED = "SUBMITTED";
+
+    /**
+     * 排除等待 AI 判分的答案，避免统计未完成结果。
+     */
     private static final String REVIEW_MODE_AI_PENDING = "AI_PENDING";
+
+    /**
+     * 题目没有知识点标注时使用的默认名称。
+     */
     private static final String DEFAULT_KNOWLEDGE_POINT = "未标注知识点";
 
     private final PracticeSessionMapper practiceSessionMapper;
@@ -45,6 +62,14 @@ public class LearningAnalyticsServiceImpl implements LearningAnalyticsService {
     private final QuestionItemMapper questionItemMapper;
     private final StudyMaterialService studyMaterialService;
 
+    /**
+     * 构造方法注入依赖。
+     *
+     * @param practiceSessionMapper 练习会话 Mapper
+     * @param practiceAnswerMapper 练习答案 Mapper
+     * @param questionItemMapper 题目 Mapper
+     * @param studyMaterialService 学习资料服务
+     */
     public LearningAnalyticsServiceImpl(
             PracticeSessionMapper practiceSessionMapper,
             PracticeAnswerMapper practiceAnswerMapper,
@@ -57,6 +82,16 @@ public class LearningAnalyticsServiceImpl implements LearningAnalyticsService {
         this.studyMaterialService = studyMaterialService;
     }
 
+    /**
+     * 获取学习分析总览。
+     *
+     * <p>主要流程：查询已提交练习，加载答案并排除待 AI 判分答案，
+     * 再分别构建趋势、题型、资料、知识点等维度的统计结果。</p>
+     *
+     * @param userId 当前登录用户 ID
+     * @param query 查询条件
+     * @return 学习分析总览
+     */
     @Override
     public LearningAnalyticsOverviewVO overview(Long userId, LearningAnalyticsQuery query) {
         List<PracticeSession> sessions = practiceSessionMapper.selectList(new LambdaQueryWrapper<PracticeSession>()
@@ -138,6 +173,12 @@ public class LearningAnalyticsServiceImpl implements LearningAnalyticsService {
                 .build();
     }
 
+    /**
+     * 批量加载答案对应的题目。
+     *
+     * @param answers 答案列表
+     * @return key 为题目 ID 的题目 Map
+     */
     private Map<Long, QuestionItem> loadQuestionMap(List<PracticeAnswer> answers) {
         Set<Long> questionIds = answers.stream()
                 .map(PracticeAnswer::getQuestionId)
@@ -152,6 +193,12 @@ public class LearningAnalyticsServiceImpl implements LearningAnalyticsService {
                 .collect(Collectors.toMap(QuestionItem::getId, Function.identity()));
     }
 
+    /**
+     * 批量加载练习会话关联的资料。
+     *
+     * @param sessions 练习会话列表
+     * @return key 为资料 ID 的资料 Map
+     */
     private Map<Long, StudyMaterial> loadMaterialMap(List<PracticeSession> sessions) {
         Set<Long> materialIds = sessions.stream()
                 .map(PracticeSession::getMaterialId)
@@ -164,6 +211,15 @@ public class LearningAnalyticsServiceImpl implements LearningAnalyticsService {
                 .collect(Collectors.toMap(StudyMaterial::getId, Function.identity()));
     }
 
+    /**
+     * 构建练习趋势数据。
+     *
+     * @param sessions 练习会话列表
+     * @param answers 答案列表
+     * @param materialMap 资料 Map
+     * @param trendLimit 趋势点数量上限
+     * @return 趋势点列表
+     */
     private List<PracticeTrendPointVO> buildPracticeTrend(
             List<PracticeSession> sessions,
             List<PracticeAnswer> answers,
@@ -201,6 +257,12 @@ public class LearningAnalyticsServiceImpl implements LearningAnalyticsService {
                 .toList();
     }
 
+    /**
+     * 构建题型表现统计。
+     *
+     * @param stats key 为题型编码的统计聚合器
+     * @return 题型表现列表
+     */
     private List<QuestionTypePerformanceVO> buildQuestionTypePerformance(Map<String, StatAccumulator> stats) {
         return stats.entrySet().stream()
                 .map(entry -> QuestionTypePerformanceVO.builder()
@@ -216,6 +278,13 @@ public class LearningAnalyticsServiceImpl implements LearningAnalyticsService {
                 .toList();
     }
 
+    /**
+     * 构建资料表现统计。
+     *
+     * @param stats key 为资料 ID 的统计聚合器
+     * @param materialMap 资料 Map
+     * @return 资料表现列表
+     */
     private List<MaterialPerformanceVO> buildMaterialPerformance(
             Map<Long, StatAccumulator> stats,
             Map<Long, StudyMaterial> materialMap
@@ -239,6 +308,12 @@ public class LearningAnalyticsServiceImpl implements LearningAnalyticsService {
                 .toList();
     }
 
+    /**
+     * 构建掌握度等级分布。
+     *
+     * @param knowledgeAccumulators 知识点聚合器列表
+     * @return 掌握度分布列表
+     */
     private List<MasteryDistributionVO> buildMasteryDistribution(List<KnowledgeAccumulator> knowledgeAccumulators) {
         Map<MasteryLevel, Integer> counter = new HashMap<>();
         for (MasteryLevel level : MasteryLevel.values()) {
@@ -262,6 +337,12 @@ public class LearningAnalyticsServiceImpl implements LearningAnalyticsService {
         return result;
     }
 
+    /**
+     * 拆分题目上的知识点字符串。
+     *
+     * @param raw 原始知识点字符串
+     * @return 知识点列表
+     */
     private List<String> splitKnowledgePoints(String raw) {
         if (!StringUtils.hasText(raw)) {
             return List.of(DEFAULT_KNOWLEDGE_POINT);
@@ -287,6 +368,11 @@ public class LearningAnalyticsServiceImpl implements LearningAnalyticsService {
         return points.stream().distinct().toList();
     }
 
+    /**
+     * 创建空的学习分析总览。
+     *
+     * @return 空总览对象
+     */
     private LearningAnalyticsOverviewVO emptyOverview() {
         return LearningAnalyticsOverviewVO.builder()
                 .totalPracticeCount(0)
@@ -304,6 +390,12 @@ public class LearningAnalyticsServiceImpl implements LearningAnalyticsService {
                 .build();
     }
 
+    /**
+     * 将题型编码转换成中文标签。
+     *
+     * @param questionType 题型编码
+     * @return 中文题型名称
+     */
     private String questionTypeLabel(String questionType) {
         return switch (nullToDefault(questionType, "UNKNOWN").toUpperCase()) {
             case "SINGLE" -> "单选题";
@@ -313,18 +405,44 @@ public class LearningAnalyticsServiceImpl implements LearningAnalyticsService {
         };
     }
 
+    /**
+     * null 转为空字符串。
+     *
+     * @param value 原始字符串
+     * @return 非 null 字符串
+     */
     private String nullToEmpty(String value) {
         return value == null ? "" : value;
     }
 
+    /**
+     * 空字符串使用默认值。
+     *
+     * @param value 原始字符串
+     * @param defaultValue 默认值
+     * @return 规范化后的字符串
+     */
     private String nullToDefault(String value, String defaultValue) {
         return StringUtils.hasText(value) ? value : defaultValue;
     }
 
+    /**
+     * 安全转换整数，空值按 0 处理。
+     *
+     * @param value 原始值
+     * @return 非空整数
+     */
     private static int safeInt(Integer value) {
         return value == null ? 0 : value;
     }
 
+    /**
+     * 计算百分比。
+     *
+     * @param numerator 分子
+     * @param denominator 分母
+     * @return 百分比，保留 1 位小数
+     */
     private static BigDecimal percent(int numerator, int denominator) {
         if (denominator <= 0) {
             return BigDecimal.ZERO.setScale(1, RoundingMode.HALF_UP);
@@ -334,6 +452,11 @@ public class LearningAnalyticsServiceImpl implements LearningAnalyticsService {
                 .divide(BigDecimal.valueOf(denominator), 1, RoundingMode.HALF_UP);
     }
 
+    /**
+     * 通用统计聚合器。
+     *
+     * <p>用于题型维度、资料维度和总览维度的作答统计。</p>
+     */
     private static final class StatAccumulator {
         private final Set<Long> sessionIds = new HashSet<>();
         private int attemptCount;
@@ -342,6 +465,13 @@ public class LearningAnalyticsServiceImpl implements LearningAnalyticsService {
         private int totalScore;
         private int obtainedScore;
 
+        /**
+         * 累加一次作答。
+         *
+         * @param answer 练习答案
+         * @param question 题目
+         * @param sessionId 练习会话 ID
+         */
         private void add(PracticeAnswer answer, QuestionItem question, Long sessionId) {
             attemptCount++;
             if (sessionId != null) {
@@ -358,15 +488,30 @@ public class LearningAnalyticsServiceImpl implements LearningAnalyticsService {
             obtainedScore += safeInt(answer.getObtainedScore());
         }
 
+        /**
+         * 计算正确率。
+         *
+         * @return 正确率百分比
+         */
         private BigDecimal accuracyRate() {
             return percent(correctCount, attemptCount);
         }
 
+        /**
+         * 计算得分率。
+         *
+         * @return 得分率百分比
+         */
         private BigDecimal scoreRate() {
             return percent(obtainedScore, totalScore);
         }
     }
 
+    /**
+     * 知识点统计聚合器。
+     *
+     * <p>用于找出薄弱知识点和计算掌握度分布。</p>
+     */
     private static final class KnowledgeAccumulator {
         private final String knowledgePoint;
         private final Long materialId;
@@ -377,12 +522,26 @@ public class LearningAnalyticsServiceImpl implements LearningAnalyticsService {
         private int obtainedScore;
         private LocalDateTime lastPracticeTime;
 
+        /**
+         * 创建知识点聚合器。
+         *
+         * @param knowledgePoint 知识点名称
+         * @param materialId 资料 ID
+         * @param materialTitle 资料标题
+         */
         private KnowledgeAccumulator(String knowledgePoint, Long materialId, String materialTitle) {
             this.knowledgePoint = knowledgePoint;
             this.materialId = materialId;
             this.materialTitle = materialTitle;
         }
 
+        /**
+         * 累加一次作答。
+         *
+         * @param answer 练习答案
+         * @param question 题目
+         * @param session 练习会话
+         */
         private void add(PracticeAnswer answer, QuestionItem question, PracticeSession session) {
             attemptCount++;
             if (answer.getMarkedWrong() != null && answer.getMarkedWrong() == 1
@@ -397,11 +556,21 @@ public class LearningAnalyticsServiceImpl implements LearningAnalyticsService {
             }
         }
 
+        /**
+         * 计算掌握度百分比。
+         *
+         * @return 掌握度百分比
+         */
         private int masteryPercent() {
             BigDecimal rate = totalScore > 0 ? percent(obtainedScore, totalScore) : percent(attemptCount - wrongCount, attemptCount);
             return rate.setScale(0, RoundingMode.HALF_UP).intValue();
         }
 
+        /**
+         * 转换成薄弱知识点展示对象。
+         *
+         * @return 薄弱知识点 VO
+         */
         private WeakKnowledgePointVO toWeakVO() {
             return WeakKnowledgePointVO.builder()
                     .knowledgePoint(knowledgePoint)
@@ -416,6 +585,9 @@ public class LearningAnalyticsServiceImpl implements LearningAnalyticsService {
         }
     }
 
+    /**
+     * 掌握度等级。
+     */
     private enum MasteryLevel {
         MASTERED("已掌握"),
         GOOD("基本掌握"),

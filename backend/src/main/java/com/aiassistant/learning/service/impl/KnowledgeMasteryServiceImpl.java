@@ -31,11 +31,28 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+/**
+ * 知识掌握度业务实现类。
+ *
+ * <p>它会读取用户已提交练习中的答案记录，按知识点聚合作答次数、正确次数、
+ * 错误次数、得分率，并计算掌握等级和学习建议。</p>
+ */
 @Service
 public class KnowledgeMasteryServiceImpl implements KnowledgeMasteryService {
 
+    /**
+     * 只统计已提交的练习。
+     */
     private static final String SESSION_STATUS_SUBMITTED = "SUBMITTED";
+
+    /**
+     * 排除仍在等待 AI 判分的答案，避免未完成评分影响掌握度。
+     */
     private static final String REVIEW_MODE_AI_PENDING = "AI_PENDING";
+
+    /**
+     * 题目没有标注知识点时使用的默认名称。
+     */
     private static final String DEFAULT_KNOWLEDGE_POINT = "未标注知识点";
 
     private final PracticeAnswerMapper practiceAnswerMapper;
@@ -43,6 +60,14 @@ public class KnowledgeMasteryServiceImpl implements KnowledgeMasteryService {
     private final QuestionItemMapper questionItemMapper;
     private final StudyMaterialService studyMaterialService;
 
+    /**
+     * 构造方法注入依赖。
+     *
+     * @param practiceAnswerMapper 练习答案 Mapper
+     * @param practiceSessionMapper 练习会话 Mapper
+     * @param questionItemMapper 题目 Mapper
+     * @param studyMaterialService 学习资料服务，用于读取资料标题
+     */
     public KnowledgeMasteryServiceImpl(
             PracticeAnswerMapper practiceAnswerMapper,
             PracticeSessionMapper practiceSessionMapper,
@@ -55,6 +80,16 @@ public class KnowledgeMasteryServiceImpl implements KnowledgeMasteryService {
         this.studyMaterialService = studyMaterialService;
     }
 
+    /**
+     * 获取知识掌握度总览。
+     *
+     * <p>主要流程：查练习会话、查答案、排除待 AI 判分答案、加载题目和资料，
+     * 按知识点聚合后再进行筛选、排序和分页。</p>
+     *
+     * @param userId 当前登录用户 ID
+     * @param query 查询条件
+     * @return 知识掌握度总览
+     */
     @Override
     public KnowledgeMasteryOverviewVO overview(Long userId, KnowledgeMasteryQuery query) {
         List<PracticeSession> sessions = practiceSessionMapper.selectList(new LambdaQueryWrapper<PracticeSession>()
@@ -92,6 +127,12 @@ public class KnowledgeMasteryServiceImpl implements KnowledgeMasteryService {
         return buildOverview(query, items);
     }
 
+    /**
+     * 批量加载答案对应的题目信息。
+     *
+     * @param answers 答案列表
+     * @return key 为题目 ID 的题目 Map
+     */
     private Map<Long, QuestionItem> loadQuestionMap(List<PracticeAnswer> answers) {
         Set<Long> questionIds = answers.stream()
                 .map(PracticeAnswer::getQuestionId)
@@ -106,6 +147,12 @@ public class KnowledgeMasteryServiceImpl implements KnowledgeMasteryService {
                 .collect(Collectors.toMap(QuestionItem::getId, Function.identity()));
     }
 
+    /**
+     * 批量加载练习会话关联的资料信息。
+     *
+     * @param sessions 练习会话列表
+     * @return key 为资料 ID 的资料 Map
+     */
     private Map<Long, StudyMaterial> loadMaterialMap(List<PracticeSession> sessions) {
         Set<Long> materialIds = sessions.stream()
                 .map(PracticeSession::getMaterialId)
@@ -118,6 +165,17 @@ public class KnowledgeMasteryServiceImpl implements KnowledgeMasteryService {
                 .collect(Collectors.toMap(StudyMaterial::getId, Function.identity()));
     }
 
+    /**
+     * 按知识点聚合作答数据。
+     *
+     * <p>同一道题如果标注了多个知识点，会同时计入多个知识点统计。</p>
+     *
+     * @param answers 答案列表
+     * @param sessionMap 练习会话 Map
+     * @param questionMap 题目 Map
+     * @param materialMap 资料 Map
+     * @return 聚合器列表
+     */
     private List<KnowledgeAccumulator> aggregate(
             List<PracticeAnswer> answers,
             Map<Long, PracticeSession> sessionMap,
@@ -145,6 +203,14 @@ public class KnowledgeMasteryServiceImpl implements KnowledgeMasteryService {
         return new ArrayList<>(accumulatorMap.values());
     }
 
+    /**
+     * 拆分题目上的知识点字符串。
+     *
+     * <p>兼容逗号、顿号、分号、竖线、斜杠等分隔符。</p>
+     *
+     * @param raw 原始知识点字符串
+     * @return 知识点列表
+     */
     private List<String> splitKnowledgePoints(String raw) {
         if (!StringUtils.hasText(raw)) {
             return List.of(DEFAULT_KNOWLEDGE_POINT);
@@ -170,6 +236,13 @@ public class KnowledgeMasteryServiceImpl implements KnowledgeMasteryService {
         return points.stream().distinct().toList();
     }
 
+    /**
+     * 根据聚合后的知识点列表构建总览返回对象。
+     *
+     * @param query 查询条件
+     * @param items 已筛选并排序的知识点列表
+     * @return 总览对象
+     */
     private KnowledgeMasteryOverviewVO buildOverview(KnowledgeMasteryQuery query, List<KnowledgeMasteryItemVO> items) {
         long total = items.size();
         long current = query.getCurrent();
@@ -205,23 +278,51 @@ public class KnowledgeMasteryServiceImpl implements KnowledgeMasteryService {
                 .build();
     }
 
+    /**
+     * 统计指定掌握等级的知识点数量。
+     *
+     * @param items 知识点列表
+     * @param level 掌握等级
+     * @return 数量
+     */
     private int countByLevel(List<KnowledgeMasteryItemVO> items, String level) {
         return (int) items.stream()
                 .filter(item -> level.equalsIgnoreCase(item.getMasteryLevel()))
                 .count();
     }
 
+    /**
+     * 判断知识点是否匹配题型筛选。
+     *
+     * @param item 知识点掌握度对象
+     * @param questionType 题型筛选条件
+     * @return true 表示匹配
+     */
     private boolean matchesQuestionType(KnowledgeMasteryItemVO item, String questionType) {
         return !StringUtils.hasText(questionType)
                 || item.getQuestionTypes() != null
                 && item.getQuestionTypes().toUpperCase(Locale.ROOT).contains(questionType.trim().toUpperCase(Locale.ROOT));
     }
 
+    /**
+     * 判断知识点是否匹配掌握等级筛选。
+     *
+     * @param item 知识点掌握度对象
+     * @param level 掌握等级筛选条件
+     * @return true 表示匹配
+     */
     private boolean matchesLevel(KnowledgeMasteryItemVO item, String level) {
         return !StringUtils.hasText(level)
                 || level.trim().equalsIgnoreCase(item.getMasteryLevel());
     }
 
+    /**
+     * 判断知识点是否匹配关键词筛选。
+     *
+     * @param item 知识点掌握度对象
+     * @param keyword 关键词
+     * @return true 表示匹配
+     */
     private boolean matchesKeyword(KnowledgeMasteryItemVO item, String keyword) {
         if (!StringUtils.hasText(keyword)) {
             return true;
@@ -232,10 +333,23 @@ public class KnowledgeMasteryServiceImpl implements KnowledgeMasteryService {
                 || containsIgnoreCase(item.getSuggestion(), normalizedKeyword);
     }
 
+    /**
+     * 忽略大小写判断文本是否包含关键词。
+     *
+     * @param source 原始文本
+     * @param normalizedKeyword 已转小写的关键词
+     * @return true 表示包含
+     */
     private boolean containsIgnoreCase(String source, String normalizedKeyword) {
         return StringUtils.hasText(source) && source.toLowerCase(Locale.ROOT).contains(normalizedKeyword);
     }
 
+    /**
+     * 创建空的知识掌握度总览。
+     *
+     * @param query 查询条件
+     * @return 空总览对象
+     */
     private KnowledgeMasteryOverviewVO emptyOverview(KnowledgeMasteryQuery query) {
         PageVO<KnowledgeMasteryItemVO> page = PageVO.<KnowledgeMasteryItemVO>builder()
                 .current(query.getCurrent())
@@ -258,10 +372,22 @@ public class KnowledgeMasteryServiceImpl implements KnowledgeMasteryService {
                 .build();
     }
 
+    /**
+     * null 转为空字符串，方便做忽略大小写比较。
+     *
+     * @param value 原始字符串
+     * @return 非 null 字符串
+     */
     private String nullToEmpty(String value) {
         return value == null ? "" : value;
     }
 
+    /**
+     * 知识点聚合器。
+     *
+     * <p>先把同一资料下同一知识点的作答数据累加起来，
+     * 最后再转换为 KnowledgeMasteryItemVO。</p>
+     */
     private static final class KnowledgeAccumulator {
 
         private final String knowledgePoint;
@@ -276,12 +402,26 @@ public class KnowledgeMasteryServiceImpl implements KnowledgeMasteryService {
         private int obtainedScore;
         private LocalDateTime lastPracticeTime;
 
+        /**
+         * 创建一个知识点聚合器。
+         *
+         * @param knowledgePoint 知识点名称
+         * @param materialId 资料 ID
+         * @param materialTitle 资料标题
+         */
         private KnowledgeAccumulator(String knowledgePoint, Long materialId, String materialTitle) {
             this.knowledgePoint = knowledgePoint;
             this.materialId = materialId;
             this.materialTitle = materialTitle;
         }
 
+        /**
+         * 累加一道题的一次作答。
+         *
+         * @param answer 练习答案
+         * @param question 题目
+         * @param session 练习会话
+         */
         private void add(PracticeAnswer answer, QuestionItem question, PracticeSession session) {
             attemptCount++;
             if (question.getId() != null) {
@@ -305,6 +445,11 @@ public class KnowledgeMasteryServiceImpl implements KnowledgeMasteryService {
             }
         }
 
+        /**
+         * 转换为前端展示对象。
+         *
+         * @return 知识点掌握度 VO
+         */
         private KnowledgeMasteryItemVO toVO() {
             BigDecimal accuracyRate = percent(correctCount, attemptCount);
             BigDecimal scoreRate = percent(obtainedScore, totalScore);
@@ -333,10 +478,23 @@ public class KnowledgeMasteryServiceImpl implements KnowledgeMasteryService {
                     .build();
         }
 
+        /**
+         * 安全转换整数，空值按 0 处理。
+         *
+         * @param value 原始值
+         * @return 非空整数
+         */
         private static int safeInt(Integer value) {
             return value == null ? 0 : value;
         }
 
+        /**
+         * 计算百分比。
+         *
+         * @param numerator 分子
+         * @param denominator 分母
+         * @return 百分比，保留 1 位小数
+         */
         private static BigDecimal percent(int numerator, int denominator) {
             if (denominator <= 0) {
                 return BigDecimal.ZERO.setScale(1, RoundingMode.HALF_UP);
@@ -346,6 +504,12 @@ public class KnowledgeMasteryServiceImpl implements KnowledgeMasteryService {
                     .divide(BigDecimal.valueOf(denominator), 1, RoundingMode.HALF_UP);
         }
 
+        /**
+         * 根据掌握度百分比判断掌握等级。
+         *
+         * @param masteryPercent 掌握度百分比
+         * @return 掌握等级
+         */
         private static MasteryLevel resolveLevel(int masteryPercent) {
             if (masteryPercent >= 85) {
                 return MasteryLevel.MASTERED;
@@ -359,6 +523,14 @@ public class KnowledgeMasteryServiceImpl implements KnowledgeMasteryService {
             return MasteryLevel.RISK;
         }
 
+        /**
+         * 生成学习建议。
+         *
+         * @param level 掌握等级
+         * @param attemptCount 作答次数
+         * @param wrongCount 错误次数
+         * @return 中文学习建议
+         */
         private static String suggestion(MasteryLevel level, int attemptCount, int wrongCount) {
             if (attemptCount < 2) {
                 return "样本还偏少，建议再做几道同知识点题目，让掌握度更稳定。";
@@ -374,6 +546,9 @@ public class KnowledgeMasteryServiceImpl implements KnowledgeMasteryService {
         }
     }
 
+    /**
+     * 知识点掌握等级。
+     */
     private enum MasteryLevel {
         MASTERED("已掌握"),
         GOOD("基本掌握"),

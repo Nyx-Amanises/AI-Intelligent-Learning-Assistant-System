@@ -30,18 +30,32 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
 
+/**
+ * AI 异步任务服务实现类。
+ *
+ * <p>它负责创建任务、查询任务、重试任务，并在事务提交后异步执行任务。</p>
+ */
 @Service
 public class AiTaskServiceImpl implements AiTaskService {
 
+    /** 等待执行。 */
     private static final String STATUS_PENDING = "PENDING";
+    /** 正在执行。 */
     private static final String STATUS_RUNNING = "RUNNING";
+    /** 执行成功。 */
     private static final String STATUS_SUCCESS = "SUCCESS";
+    /** 执行失败。 */
     private static final String STATUS_FAILED = "FAILED";
+    /** 已取消。 */
     private static final String STATUS_CANCELLED = "CANCELLED";
 
+    /** AI 任务表 Mapper。 */
     private final AiTaskMapper aiTaskMapper;
+    /** Spring 会自动注入所有 AiTaskProcessor 实现，用来按任务类型分发。 */
     private final List<AiTaskProcessor> taskProcessors;
+    /** 将任务参数对象转换成 JSON 保存。 */
     private final ObjectMapper objectMapper;
+    /** 注入自身代理，确保 @Async 在内部调用时也能生效。 */
     private final AiTaskService selfAiTaskService;
 
     public AiTaskServiceImpl(
@@ -56,6 +70,9 @@ public class AiTaskServiceImpl implements AiTaskService {
         this.selfAiTaskService = selfAiTaskService;
     }
 
+    /**
+     * 创建通用 AI 任务，不会自动执行，适合管理端或扩展场景使用。
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public AiTaskDetailVO createTask(Long userId, AiTaskCreateRequest request) {
@@ -70,6 +87,9 @@ public class AiTaskServiceImpl implements AiTaskService {
         ));
     }
 
+    /**
+     * 创建资料总结任务，并在事务提交后异步执行。
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public AiTaskDetailVO submitSummaryTask(Long userId, Long materialId, SummaryGenerateRequest request) {
@@ -93,6 +113,9 @@ public class AiTaskServiceImpl implements AiTaskService {
         return toDetailVO(task);
     }
 
+    /**
+     * 创建题目生成任务。
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public AiTaskDetailVO submitQuestionGenerateTask(Long userId, Long materialId, QuestionGenerateRequest request) {
@@ -119,6 +142,9 @@ public class AiTaskServiceImpl implements AiTaskService {
         return toDetailVO(task);
     }
 
+    /**
+     * 创建主观题批改任务；如果同一个练习已经有等待或运行中的任务，则直接复用。
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public AiTaskDetailVO submitPracticeReviewTask(Long userId, Long sessionId) {
@@ -143,6 +169,9 @@ public class AiTaskServiceImpl implements AiTaskService {
         return toDetailVO(task);
     }
 
+    /**
+     * 创建资料向量化任务。
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public AiTaskDetailVO submitEmbeddingTask(Long userId, Long materialId, EmbeddingTaskRequest request) {
@@ -164,6 +193,9 @@ public class AiTaskServiceImpl implements AiTaskService {
         return toDetailVO(task);
     }
 
+    /**
+     * 分页查询任务列表。
+     */
     @Override
     public PageVO<AiTaskPageVO> pageTasks(Long userId, Long current, Long size, String taskType, String status) {
         Page<AiTask> page = aiTaskMapper.selectPage(
@@ -188,11 +220,17 @@ public class AiTaskServiceImpl implements AiTaskService {
                 .build();
     }
 
+    /**
+     * 查询当前用户拥有的任务详情。
+     */
     @Override
     public AiTaskDetailVO getTaskDetail(Long userId, Long taskId) {
         return toDetailVO(getOwnedTask(userId, taskId));
     }
 
+    /**
+     * 短时间等待任务完成，避免前端刚提交任务就立刻拿不到结果。
+     */
     @Override
     public AiTaskDetailVO waitForTask(Long userId, Long taskId, Long timeoutMs) {
         AiTask task = getOwnedTask(userId, taskId);
@@ -210,6 +248,9 @@ public class AiTaskServiceImpl implements AiTaskService {
         return toDetailVO(task);
     }
 
+    /**
+     * 手动派发等待中的任务。
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public AiTaskDetailVO dispatchTask(Long userId, Long taskId) {
@@ -221,6 +262,9 @@ public class AiTaskServiceImpl implements AiTaskService {
         return toDetailVO(task);
     }
 
+    /**
+     * 重试失败任务：清空旧错误和旧结果，再重新派发。
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public AiTaskDetailVO retryTask(Long userId, Long taskId) {
@@ -242,6 +286,9 @@ public class AiTaskServiceImpl implements AiTaskService {
         return toDetailVO(task);
     }
 
+    /**
+     * 删除任务记录。
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteTask(Long userId, Long taskId) {
@@ -249,6 +296,11 @@ public class AiTaskServiceImpl implements AiTaskService {
         aiTaskMapper.deleteById(task.getId());
     }
 
+    /**
+     * 后台真正执行任务的方法。
+     *
+     * <p>@Async 表示这个方法会放到异步线程里执行，不阻塞用户请求。</p>
+     */
     @Override
     @Async
     public void executeTask(Long taskId) {
@@ -284,6 +336,9 @@ public class AiTaskServiceImpl implements AiTaskService {
         }
     }
 
+    /**
+     * 查询任务时同时校验用户归属，防止用户访问别人的任务。
+     */
     private AiTask getOwnedTask(Long userId, Long taskId) {
         AiTask task = aiTaskMapper.selectOne(new LambdaQueryWrapper<AiTask>()
                 .eq(AiTask::getId, taskId)
@@ -295,6 +350,9 @@ public class AiTaskServiceImpl implements AiTaskService {
         return task;
     }
 
+    /**
+     * 创建任务表记录，所有任务入口最终都会走到这里。
+     */
     private AiTask createTaskRecord(
             Long userId,
             String taskType,
@@ -319,6 +377,9 @@ public class AiTaskServiceImpl implements AiTaskService {
         return task;
     }
 
+    /**
+     * 等数据库事务提交成功后再派发任务，避免异步线程读到尚未提交的数据。
+     */
     private void scheduleExecuteAfterCommit(Long taskId) {
         if (taskId == null) {
             return;
@@ -335,6 +396,9 @@ public class AiTaskServiceImpl implements AiTaskService {
         selfAiTaskService.executeTask(taskId);
     }
 
+    /**
+     * 根据任务类型找到对应处理器。
+     */
     private AiTaskProcessor findProcessor(String taskType) {
         if (!StringUtils.hasText(taskType)) {
             return null;
@@ -345,6 +409,9 @@ public class AiTaskServiceImpl implements AiTaskService {
                 .orElse(null);
     }
 
+    /**
+     * 查找同一业务对象上尚未完成的任务，用于避免重复提交。
+     */
     private AiTask findActiveTask(Long userId, String taskType, String bizType, Long bizId) {
         return aiTaskMapper.selectOne(new LambdaQueryWrapper<AiTask>()
                 .eq(AiTask::getUserId, userId)
@@ -356,6 +423,9 @@ public class AiTaskServiceImpl implements AiTaskService {
                 .last("limit 1"));
     }
 
+    /**
+     * 将优先级限制在 1 到 9 之间。
+     */
     private Integer resolvePriority(Integer priority) {
         if (priority == null) {
             return 5;
@@ -363,6 +433,9 @@ public class AiTaskServiceImpl implements AiTaskService {
         return Math.max(1, Math.min(9, priority));
     }
 
+    /**
+     * 统一处理字符串空值、首尾空格和大小写。
+     */
     private String normalizeText(String value, boolean upperCase) {
         if (!StringUtils.hasText(value)) {
             return null;
@@ -371,6 +444,9 @@ public class AiTaskServiceImpl implements AiTaskService {
         return upperCase ? normalized.toUpperCase() : normalized;
     }
 
+    /**
+     * 错误信息可能很长，这里截断后再写入数据库。
+     */
     private String truncateErrorMessage(String errorMessage) {
         if (!StringUtils.hasText(errorMessage)) {
             return "任务执行失败";
@@ -379,6 +455,9 @@ public class AiTaskServiceImpl implements AiTaskService {
         return normalized.length() > 1000 ? normalized.substring(0, 1000) : normalized;
     }
 
+    /**
+     * 判断任务是否已经进入最终状态。
+     */
     private boolean isTerminalStatus(String status) {
         if (!StringUtils.hasText(status)) {
             return false;
@@ -389,6 +468,9 @@ public class AiTaskServiceImpl implements AiTaskService {
                 || STATUS_CANCELLED.equals(normalized);
     }
 
+    /**
+     * 将任务参数对象序列化为 JSON。
+     */
     private String toJson(Object payload) {
         if (payload == null) {
             return null;
@@ -400,6 +482,9 @@ public class AiTaskServiceImpl implements AiTaskService {
         }
     }
 
+    /**
+     * 转换成列表页展示对象。
+     */
     private AiTaskPageVO toPageVO(AiTask task) {
         return AiTaskPageVO.builder()
                 .id(task.getId())
@@ -418,6 +503,9 @@ public class AiTaskServiceImpl implements AiTaskService {
                 .build();
     }
 
+    /**
+     * 转换成详情页展示对象。
+     */
     private AiTaskDetailVO toDetailVO(AiTask task) {
         return AiTaskDetailVO.builder()
                 .id(task.getId())

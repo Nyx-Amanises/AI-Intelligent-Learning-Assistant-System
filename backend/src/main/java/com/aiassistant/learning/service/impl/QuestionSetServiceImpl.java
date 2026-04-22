@@ -26,10 +26,18 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+/**
+ * 题集业务实现类。
+ *
+ * <p>负责题集分页、题集详情、AI 助手浏览题集，以及删除题集时清理相关题目和练习记录。</p>
+ */
 @Service
 public class QuestionSetServiceImpl extends ServiceImpl<com.aiassistant.learning.mapper.QuestionSetMapper, QuestionSet>
         implements QuestionSetService {
 
+    /**
+     * 查询题集来源片段时的最大返回数量。
+     */
     private static final int QUESTION_SET_SOURCE_LIMIT = 6;
 
     private final QuestionItemMapper questionItemMapper;
@@ -37,6 +45,14 @@ public class QuestionSetServiceImpl extends ServiceImpl<com.aiassistant.learning
     private final PracticeAnswerMapper practiceAnswerMapper;
     private final RetrievalService retrievalService;
 
+    /**
+     * 构造方法注入依赖。
+     *
+     * @param questionItemMapper 题目 Mapper
+     * @param practiceSessionMapper 练习会话 Mapper
+     * @param practiceAnswerMapper 练习答案 Mapper
+     * @param retrievalService 资料片段检索服务
+     */
     public QuestionSetServiceImpl(
             QuestionItemMapper questionItemMapper,
             PracticeSessionMapper practiceSessionMapper,
@@ -49,6 +65,17 @@ public class QuestionSetServiceImpl extends ServiceImpl<com.aiassistant.learning
         this.retrievalService = retrievalService;
     }
 
+    /**
+     * 分页查询当前用户的题集。
+     *
+     * @param userId 当前登录用户 ID
+     * @param current 当前页码
+     * @param size 每页条数
+     * @param keyword 标题关键词
+     * @param status 题集状态
+     * @param difficultyLevel 难度等级
+     * @return 题集分页结果
+     */
     @Override
     public PageVO<QuestionSetPageVO> pageQuestionSets(
             Long userId,
@@ -92,6 +119,19 @@ public class QuestionSetServiceImpl extends ServiceImpl<com.aiassistant.learning
                 .build();
     }
 
+    /**
+     * 给 AI 助手使用的题集浏览查询。
+     *
+     * <p>和普通分页类似，但固定从第一页开始，并限制最多返回 10 条，避免助手上下文过长。</p>
+     *
+     * @param userId 当前登录用户 ID
+     * @param keyword 标题关键词
+     * @param status 题集状态
+     * @param difficultyLevel 难度等级
+     * @param materialId 关联资料 ID
+     * @param limit 最多返回条数
+     * @return 简化分页结果
+     */
     @Override
     public PageVO<QuestionSetPageVO> browseAssistantQuestionSets(
             Long userId,
@@ -137,6 +177,15 @@ public class QuestionSetServiceImpl extends ServiceImpl<com.aiassistant.learning
                 .build();
     }
 
+    /**
+     * 查询题集详情。
+     *
+     * <p>会校验题集归属，加载题目列表，并尝试根据题目内容检索资料片段作为出题依据。</p>
+     *
+     * @param userId 当前登录用户 ID
+     * @param questionSetId 题集 ID
+     * @return 题集详情
+     */
     @Override
     public QuestionSetDetailVO getQuestionSetDetail(Long userId, Long questionSetId) {
         QuestionSet questionSet = this.getOne(new LambdaQueryWrapper<QuestionSet>()
@@ -183,6 +232,16 @@ public class QuestionSetServiceImpl extends ServiceImpl<com.aiassistant.learning
                 .build();
     }
 
+    /**
+     * 获取题集相关的资料来源片段。
+     *
+     * <p>如果题集没有关联资料，或者检索服务失败，就返回空列表，不影响题集详情展示。</p>
+     *
+     * @param userId 当前登录用户 ID
+     * @param questionSet 题集实体
+     * @param questions 题目列表
+     * @return 检索到的资料片段
+     */
     private List<RetrievedSegmentVO> resolveQuestionSetSourceSegments(
             Long userId,
             QuestionSet questionSet,
@@ -205,6 +264,15 @@ public class QuestionSetServiceImpl extends ServiceImpl<com.aiassistant.learning
         }
     }
 
+    /**
+     * 根据题集和题目内容构造检索查询词。
+     *
+     * <p>查询词会包含题集标题、前几个知识点和部分题干，帮助 RAG 检索找到更贴近题目的资料片段。</p>
+     *
+     * @param questionSet 题集实体
+     * @param questions 题目列表
+     * @return 用于检索资料片段的查询文本
+     */
     private String buildQuestionSetRetrievalQuery(QuestionSet questionSet, List<QuestionItemVO> questions) {
         StringBuilder builder = new StringBuilder();
         builder.append(questionSet.getTitle()).append(" ");
@@ -233,6 +301,13 @@ public class QuestionSetServiceImpl extends ServiceImpl<com.aiassistant.learning
         return builder.toString().trim();
     }
 
+    /**
+     * 截断过长的查询文本。
+     *
+     * @param value 原始文本
+     * @param maxLength 最大长度
+     * @return 适合放入检索查询的文本
+     */
     private String trimForQuery(String value, int maxLength) {
         if (!StringUtils.hasText(value)) {
             return "";
@@ -241,6 +316,15 @@ public class QuestionSetServiceImpl extends ServiceImpl<com.aiassistant.learning
         return normalized.length() <= maxLength ? normalized : normalized.substring(0, maxLength);
     }
 
+    /**
+     * 删除题集及其相关数据。
+     *
+     * <p>删除顺序是：先找到相关练习会话，再删除练习答案和练习会话，
+     * 接着删除题目，最后删除题集本身。</p>
+     *
+     * @param userId 当前登录用户 ID
+     * @param questionSetId 题集 ID
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteQuestionSet(Long userId, Long questionSetId) {

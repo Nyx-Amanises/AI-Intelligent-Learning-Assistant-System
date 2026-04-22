@@ -14,15 +14,24 @@ import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 
+/**
+ * Qdrant 向量库服务实现类。
+ *
+ * <p>负责创建集合、写入资料片段向量、删除资料向量和按相似度检索片段。</p>
+ */
 @Service
 public class QdrantVectorStoreServiceImpl implements VectorStoreService {
 
+    /** Qdrant 连接配置。 */
     private final QdrantProperties qdrantProperties;
 
     public QdrantVectorStoreServiceImpl(QdrantProperties qdrantProperties) {
         this.qdrantProperties = qdrantProperties;
     }
 
+    /**
+     * 写入或更新资料片段向量。
+     */
     @Override
     public void upsertMaterialSegments(List<MaterialSegmentVector> segmentVectors) {
         if (segmentVectors == null || segmentVectors.isEmpty()) {
@@ -37,6 +46,7 @@ public class QdrantVectorStoreServiceImpl implements VectorStoreService {
                 .orElseThrow(() -> new BusinessException("向量数据不能为空"));
         ensureCollection(vectorSize);
 
+        // Qdrant 的 point 由 id、vector 和 payload 三部分组成。
         List<Map<String, Object>> points = new ArrayList<>(segmentVectors.size());
         for (MaterialSegmentVector item : segmentVectors) {
             Map<String, Object> payload = new HashMap<>();
@@ -82,6 +92,9 @@ public class QdrantVectorStoreServiceImpl implements VectorStoreService {
         }
     }
 
+    /**
+     * 删除某个用户某份资料的全部向量。
+     */
     @Override
     public void deleteMaterialSegments(Long userId, Long materialId) {
         if (!Boolean.TRUE.equals(qdrantProperties.getEnabled())) {
@@ -113,6 +126,9 @@ public class QdrantVectorStoreServiceImpl implements VectorStoreService {
         }
     }
 
+    /**
+     * 根据查询向量检索相似资料片段。
+     */
     @Override
     public List<RetrievedSegment> searchMaterialSegments(Long userId, Long materialId, List<Double> queryVector, int limit) {
         validateQdrantEnabled();
@@ -171,6 +187,9 @@ public class QdrantVectorStoreServiceImpl implements VectorStoreService {
         }
     }
 
+    /**
+     * 确保集合存在，并且向量维度与当前模型一致。
+     */
     private void ensureCollection(int vectorSize) {
         Integer existingSize = getExistingCollectionVectorSize();
         if (existingSize == null) {
@@ -186,6 +205,9 @@ public class QdrantVectorStoreServiceImpl implements VectorStoreService {
         }
     }
 
+    /**
+     * 读取已有集合的向量维度；集合不存在时返回 null。
+     */
     private Integer getExistingCollectionVectorSize() {
         try {
             Map<String, Object> response = buildRestClient().get()
@@ -220,6 +242,9 @@ public class QdrantVectorStoreServiceImpl implements VectorStoreService {
         }
     }
 
+    /**
+     * 创建 Qdrant 集合。
+     */
     private void createCollection(int vectorSize) {
         try {
             buildRestClient().put()
@@ -241,6 +266,9 @@ public class QdrantVectorStoreServiceImpl implements VectorStoreService {
         }
     }
 
+    /**
+     * 兼容 Qdrant 不同接口返回的 points 结构。
+     */
     private List<?> extractPoints(Object resultObj) {
         if (resultObj instanceof Map<?, ?> resultMap) {
             Object pointsObj = resultMap.get("points");
@@ -254,6 +282,9 @@ public class QdrantVectorStoreServiceImpl implements VectorStoreService {
         return List.of();
     }
 
+    /**
+     * 检查 Qdrant 是否启用且配置完整。
+     */
     private void validateQdrantEnabled() {
         if (!Boolean.TRUE.equals(qdrantProperties.getEnabled())) {
             throw new BusinessException("Qdrant 未启用，请先安装并启动 Qdrant，然后把 app.qdrant.enabled 改为 true");
@@ -263,18 +294,27 @@ public class QdrantVectorStoreServiceImpl implements VectorStoreService {
         }
     }
 
+    /**
+     * 根据配置创建 RestClient。
+     */
     private RestClient buildRestClient() {
         return RestClient.builder()
                 .baseUrl(qdrantProperties.getBaseUrl().trim())
                 .build();
     }
 
+    /**
+     * 如果配置了 API Key，就添加到 Qdrant 请求头。
+     */
     private void applyApiKey(org.springframework.http.HttpHeaders headers) {
         if (StringUtils.hasText(qdrantProperties.getApiKey())) {
             headers.set("api-key", qdrantProperties.getApiKey().trim());
         }
     }
 
+    /**
+     * 解析集合名称。
+     */
     private String resolveCollectionName() {
         if (!StringUtils.hasText(qdrantProperties.getCollectionName())) {
             throw new BusinessException("Qdrant collection-name 未配置");
@@ -282,12 +322,18 @@ public class QdrantVectorStoreServiceImpl implements VectorStoreService {
         return qdrantProperties.getCollectionName().trim();
     }
 
+    /**
+     * 解析向量距离算法，默认使用 Cosine。
+     */
     private String resolveDistance() {
         return StringUtils.hasText(qdrantProperties.getDistance())
                 ? qdrantProperties.getDistance().trim()
                 : "Cosine";
     }
 
+    /**
+     * 将 Qdrant HTTP 错误转换为业务异常。
+     */
     private BusinessException buildQdrantHttpException(String action, RestClientResponseException exception) {
         String responseBody = StringUtils.hasText(exception.getResponseBodyAsString())
                 ? exception.getResponseBodyAsString()
@@ -298,6 +344,9 @@ public class QdrantVectorStoreServiceImpl implements VectorStoreService {
         );
     }
 
+    /**
+     * 将 Qdrant 连接失败转换为业务异常。
+     */
     private BusinessException buildQdrantAccessException(String action, ResourceAccessException exception) {
         return new BusinessException(
                 500,
@@ -305,6 +354,9 @@ public class QdrantVectorStoreServiceImpl implements VectorStoreService {
         );
     }
 
+    /**
+     * 构造异常原因后缀。
+     */
     private String buildCauseSuffix(Throwable throwable) {
         Throwable current = throwable;
         while (current != null) {
@@ -316,6 +368,9 @@ public class QdrantVectorStoreServiceImpl implements VectorStoreService {
         return "";
     }
 
+    /**
+     * 截断过长错误信息。
+     */
     private String truncateMessage(String message, int maxLength) {
         if (!StringUtils.hasText(message)) {
             return "未知错误";
@@ -324,18 +379,22 @@ public class QdrantVectorStoreServiceImpl implements VectorStoreService {
         return normalized.length() > maxLength ? normalized.substring(0, maxLength) : normalized;
     }
 
+    /** 将数字对象转换成 Long。 */
     private Long toLong(Object value) {
         return value instanceof Number number ? number.longValue() : null;
     }
 
+    /** 将数字对象转换成 Integer。 */
     private Integer toInteger(Object value) {
         return value instanceof Number number ? number.intValue() : null;
     }
 
+    /** 将数字对象转换成 Double。 */
     private Double toDouble(Object value) {
         return value instanceof Number number ? number.doubleValue() : null;
     }
 
+    /** 将任意对象转换成字符串。 */
     private String toText(Object value) {
         return value == null ? null : String.valueOf(value);
     }

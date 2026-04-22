@@ -45,21 +45,72 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+/**
+ * 练习业务实现类。
+ *
+ * <p>这里处理一次练习的完整生命周期：开始练习、提交答案、客观题规则判分、
+ * 简答题异步 AI 判分、查询练习详情和删除练习记录。</p>
+ */
 @Service
 public class PracticeServiceImpl implements PracticeService {
 
+    /**
+     * 规则判分模式，主要用于选择题、判断题等客观题。
+     */
     private static final String REVIEW_MODE_RULE = "RULE";
+
+    /**
+     * AI 判分模式，主要用于简答题。
+     */
     private static final String REVIEW_MODE_AI = "AI";
+
+    /**
+     * AI 判分排队中，表示提交后尚未得到最终评分。
+     */
     private static final String REVIEW_MODE_AI_PENDING = "AI_PENDING";
+
+    /**
+     * 简答题题型编码。
+     */
     private static final String QUESTION_TYPE_SHORT = "SHORT";
+
+    /**
+     * 简答题题型的另一种编码，兼容不同生成逻辑。
+     */
     private static final String QUESTION_TYPE_SHORT_ANSWER = "SHORT_ANSWER";
+
+    /**
+     * 练习进行中状态。
+     */
     private static final String SESSION_STATUS_IN_PROGRESS = "IN_PROGRESS";
+
+    /**
+     * 练习已提交状态。
+     */
     private static final String SESSION_STATUS_SUBMITTED = "SUBMITTED";
+
+    /**
+     * 简答题判分时最终提供给 AI 的资料片段数量。
+     */
     private static final int SHORT_ANSWER_SOURCE_LIMIT = 2;
+
+    /**
+     * 简答题判分时先从向量库召回的候选片段数量。
+     */
     private static final int SHORT_ANSWER_SOURCE_CANDIDATE_LIMIT = 8;
+
+    /**
+     * 低价值资料片段标记。
+     *
+     * <p>如果检索结果像目录、附录、参考链接，判分参考价值通常较低，会在排序时降权。</p>
+     */
     private static final Set<String> SHORT_ANSWER_LOW_SIGNAL_MARKERS = Set.of(
             "参考文档", "参考链接", "参考资料", "附录", "目录", "模板", "资源", "官网", "官方文档", "mdpress"
     );
+
+    /**
+     * 提取简答题关键词时忽略的常见泛词。
+     */
     private static final Set<String> SHORT_ANSWER_KEYWORD_STOP_WORDS = Set.of(
             "根据", "资料", "材料", "内容", "简要", "说明", "概括", "写出", "列出", "任意", "其中",
             "一个", "两个", "三个", "四个", "答案", "学生", "题目", "示例", "即可", "作答", "回答"
@@ -75,6 +126,19 @@ public class PracticeServiceImpl implements PracticeService {
     private final ObjectMapper objectMapper;
     private final PracticeService selfPracticeService;
 
+    /**
+     * 构造方法注入依赖。
+     *
+     * @param practiceSessionMapper 练习会话 Mapper
+     * @param practiceAnswerMapper 练习答案 Mapper
+     * @param questionSetMapper 题集 Mapper
+     * @param questionItemMapper 题目 Mapper
+     * @param aiConfigService AI 配置服务
+     * @param aiChatService AI 聊天服务
+     * @param retrievalService 资料片段检索服务
+     * @param objectMapper JSON 解析器
+     * @param selfPracticeService 当前服务代理对象，用于让 @Async 方法通过 Spring 代理生效
+     */
     public PracticeServiceImpl(
             PracticeSessionMapper practiceSessionMapper,
             PracticeAnswerMapper practiceAnswerMapper,
@@ -97,6 +161,16 @@ public class PracticeServiceImpl implements PracticeService {
         this.selfPracticeService = selfPracticeService;
     }
 
+    /**
+     * 开始一次练习。
+     *
+     * <p>先校验题集是否属于当前用户，然后加载题目并创建练习会话。
+     * 此时还没有答案，返回给前端的是待作答状态。</p>
+     *
+     * @param userId 当前登录用户 ID
+     * @param request 开始练习请求
+     * @return 新建练习详情
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public PracticeDetailVO startPractice(Long userId, PracticeStartRequest request) {
@@ -123,6 +197,16 @@ public class PracticeServiceImpl implements PracticeService {
         return buildPracticeDetail(userId, session, questions, List.of());
     }
 
+    /**
+     * 提交练习答案。
+     *
+     * <p>客观题会立即按标准答案判分；简答题如果有作答，会先标记为 AI_PENDING，
+     * 后续通过异步任务完成 AI 判分。</p>
+     *
+     * @param userId 当前登录用户 ID
+     * @param request 提交答案请求
+     * @return 提交后的练习详情
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public PracticeDetailVO submitPractice(Long userId, PracticeSubmitRequest request) {
@@ -184,6 +268,14 @@ public class PracticeServiceImpl implements PracticeService {
         return buildPracticeDetail(userId, session, questions, answers);
     }
 
+    /**
+     * 分页查询练习记录。
+     *
+     * @param userId 当前登录用户 ID
+     * @param current 当前页码
+     * @param size 每页条数
+     * @return 练习记录分页结果
+     */
     @Override
     public PageVO<PracticeSessionPageVO> pagePracticeSessions(Long userId, Long current, Long size) {
         Page<PracticeSession> page = practiceSessionMapper.selectPage(
@@ -216,6 +308,13 @@ public class PracticeServiceImpl implements PracticeService {
                 .build();
     }
 
+    /**
+     * 查询练习详情。
+     *
+     * @param userId 当前登录用户 ID
+     * @param sessionId 练习会话 ID
+     * @return 练习详情
+     */
     @Override
     public PracticeDetailVO getPracticeDetail(Long userId, Long sessionId) {
         PracticeSession session = practiceSessionMapper.selectOne(new LambdaQueryWrapper<PracticeSession>()
@@ -233,6 +332,13 @@ public class PracticeServiceImpl implements PracticeService {
         return buildPracticeDetail(userId, session, questions, answers);
     }
 
+    /**
+     * 修改练习名称。
+     *
+     * @param userId 当前登录用户 ID
+     * @param sessionId 练习会话 ID
+     * @param sessionName 新练习名称
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void renamePracticeSession(Long userId, Long sessionId, String sessionName) {
@@ -247,6 +353,16 @@ public class PracticeServiceImpl implements PracticeService {
         practiceSessionMapper.updateById(session);
     }
 
+    /**
+     * 等待 AI 简答题判分完成。
+     *
+     * <p>这个方法会短时间轮询数据库，直到没有 AI_PENDING 答案或达到等待上限。</p>
+     *
+     * @param userId 当前登录用户 ID
+     * @param sessionId 练习会话 ID
+     * @param timeoutMs 最长等待毫秒数
+     * @return AI 判分状态
+     */
     @Override
     public PracticeReviewStatusVO waitForAiReview(Long userId, Long sessionId, Long timeoutMs) {
         PracticeSession session = practiceSessionMapper.selectOne(new LambdaQueryWrapper<PracticeSession>()
@@ -277,12 +393,27 @@ public class PracticeServiceImpl implements PracticeService {
                 .build();
     }
 
+    /**
+     * 异步触发简答题 AI 判分。
+     *
+     * <p>这里通过 selfPracticeService 调用真正的判分方法，是为了让 Spring 的 @Async 代理生效。</p>
+     *
+     * @param sessionId 练习会话 ID
+     */
     @Override
     @Async
     public void reviewPendingShortAnswers(Long sessionId) {
         selfPracticeService.reviewPendingShortAnswersNow(sessionId);
     }
 
+    /**
+     * 立即处理所有待 AI 判分的简答题。
+     *
+     * <p>查出当前会话中 reviewMode 为 AI_PENDING 的答案，逐题调用 AI 或规则兜底评分，
+     * 最后刷新整场练习的总分和正确率。</p>
+     *
+     * @param sessionId 练习会话 ID
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void reviewPendingShortAnswersNow(Long sessionId) {
@@ -328,6 +459,14 @@ public class PracticeServiceImpl implements PracticeService {
         }
     }
 
+    /**
+     * 删除练习记录。
+     *
+     * <p>先删除该练习下的所有答案，再删除练习会话本身。</p>
+     *
+     * @param userId 当前登录用户 ID
+     * @param sessionId 练习会话 ID
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deletePracticeSession(Long userId, Long sessionId) {
@@ -344,12 +483,25 @@ public class PracticeServiceImpl implements PracticeService {
         practiceSessionMapper.deleteById(sessionId);
     }
 
+    /**
+     * 判断练习会话中是否还有等待 AI 判分的答案。
+     *
+     * @param sessionId 练习会话 ID
+     * @return true 表示仍有待判分答案
+     */
     private boolean hasPendingAiReview(Long sessionId) {
         return practiceAnswerMapper.selectCount(new LambdaQueryWrapper<PracticeAnswer>()
                 .eq(PracticeAnswer::getSessionId, sessionId)
                 .eq(PracticeAnswer::getReviewMode, REVIEW_MODE_AI_PENDING)) > 0;
     }
 
+    /**
+     * 重新统计练习会话分数。
+     *
+     * <p>简答题异步判分完成后，原来的总分和正确率需要重新计算。</p>
+     *
+     * @param sessionId 练习会话 ID
+     */
     private void refreshSessionScore(Long sessionId) {
         PracticeSession session = practiceSessionMapper.selectById(sessionId);
         if (session == null) {
@@ -374,6 +526,13 @@ public class PracticeServiceImpl implements PracticeService {
         practiceSessionMapper.updateById(session);
     }
 
+    /**
+     * 查询当前用户拥有的题集。
+     *
+     * @param userId 当前登录用户 ID
+     * @param questionSetId 题集 ID
+     * @return 题集实体
+     */
     private QuestionSet getOwnedQuestionSet(Long userId, Long questionSetId) {
         QuestionSet questionSet = questionSetMapper.selectOne(new LambdaQueryWrapper<QuestionSet>()
                 .eq(QuestionSet::getId, questionSetId)
@@ -385,12 +544,27 @@ public class PracticeServiceImpl implements PracticeService {
         return questionSet;
     }
 
+    /**
+     * 查询题集下的题目，并按排序号升序排列。
+     *
+     * @param questionSetId 题集 ID
+     * @return 题目列表
+     */
     private List<QuestionItem> listQuestionItems(Long questionSetId) {
         return questionItemMapper.selectList(new LambdaQueryWrapper<QuestionItem>()
                 .eq(QuestionItem::getQuestionSetId, questionSetId)
                 .orderByAsc(QuestionItem::getSortNo));
     }
 
+    /**
+     * 客观题规则判分。
+     *
+     * <p>选择题、判断题等题型会直接比较用户答案和标准答案。</p>
+     *
+     * @param question 题目实体
+     * @param userAnswer 用户答案
+     * @return 判分结果
+     */
     private AnswerReview evaluateObjectiveAnswer(QuestionItem question, String userAnswer) {
         boolean correct = isCorrect(question, userAnswer);
         return new AnswerReview(
@@ -402,6 +576,15 @@ public class PracticeServiceImpl implements PracticeService {
         );
     }
 
+    /**
+     * 为简答题创建初始判分结果。
+     *
+     * <p>未作答会直接给 0 分；已作答则标记为 AI_PENDING，等待后续 AI 判分。</p>
+     *
+     * @param question 题目实体
+     * @param userAnswer 用户答案
+     * @return 初始判分结果
+     */
     private AnswerReview buildPendingShortAnswerReview(QuestionItem question, String userAnswer) {
         int fullScore = safeScore(question.getScore());
         if (!StringUtils.hasText(userAnswer)) {
@@ -422,6 +605,13 @@ public class PracticeServiceImpl implements PracticeService {
         );
     }
 
+    /**
+     * 判断客观题答案是否匹配。
+     *
+     * @param question 题目实体
+     * @param userAnswer 用户答案
+     * @return true 表示答案正确
+     */
     private boolean isCorrect(QuestionItem question, String userAnswer) {
         if (!StringUtils.hasText(userAnswer) || !StringUtils.hasText(question.getCorrectAnswer())) {
             return false;
@@ -429,6 +619,18 @@ public class PracticeServiceImpl implements PracticeService {
         return question.getCorrectAnswer().trim().equalsIgnoreCase(userAnswer.trim());
     }
 
+    /**
+     * 使用 AI 评阅简答题。
+     *
+     * <p>优先调用 AI 模型；如果 AI 配置不可用或调用失败，就使用规则兜底评分，
+     * 确保用户最终能看到一个可解释的结果。</p>
+     *
+     * @param userId 当前登录用户 ID
+     * @param materialId 关联资料 ID
+     * @param question 题目实体
+     * @param userAnswer 用户答案
+     * @return 判分结果
+     */
     private AnswerReview evaluateShortAnswerWithAi(
             Long userId,
             Long materialId,
@@ -505,6 +707,18 @@ public class PracticeServiceImpl implements PracticeService {
         }
     }
 
+    /**
+     * AI 不可用时的规则兜底评分。
+     *
+     * <p>它会从字符覆盖度、长度比例和关键词覆盖度三个角度估算相似度。</p>
+     *
+     * @param question 题目实体
+     * @param userAnswer 用户答案
+     * @param referenceAnswer 参考答案
+     * @param fullScore 满分
+     * @param prefixComment 评分说明前缀
+     * @return 规则评分结果
+     */
     private AnswerReview buildRuleFallbackReview(
             QuestionItem question,
             String userAnswer,
@@ -568,6 +782,13 @@ public class PracticeServiceImpl implements PracticeService {
         );
     }
 
+    /**
+     * 构建简答题 AI 判分的系统提示词。
+     *
+     * <p>系统提示词用于约束 AI 的角色、评分规则和输出格式。</p>
+     *
+     * @return 系统提示词
+     */
     private String buildShortAnswerSystemPrompt() {
         return """
                 你是一名严谨的中文主观题阅卷助手。
@@ -587,6 +808,16 @@ public class PracticeServiceImpl implements PracticeService {
                 """;
     }
 
+    /**
+     * 构建简答题 AI 判分的用户提示词。
+     *
+     * @param question 题目实体
+     * @param userAnswer 用户答案
+     * @param referenceAnswer 参考答案
+     * @param fullScore 满分
+     * @param sourceSegments 资料摘录
+     * @return 用户提示词
+     */
     private String buildShortAnswerUserPrompt(
             QuestionItem question,
             String userAnswer,
@@ -627,6 +858,16 @@ public class PracticeServiceImpl implements PracticeService {
         );
     }
 
+    /**
+     * 检索简答题判分时需要参考的资料片段。
+     *
+     * <p>先从向量库召回候选片段，再用关键词和片段质量重新排序，选出最相关的少量片段。</p>
+     *
+     * @param userId 当前登录用户 ID
+     * @param materialId 关联资料 ID
+     * @param question 题目实体
+     * @return 资料片段列表
+     */
     private List<RetrievedSegmentVO> resolvePracticeAnswerSourceSegments(
             Long userId,
             Long materialId,
@@ -649,6 +890,12 @@ public class PracticeServiceImpl implements PracticeService {
         }
     }
 
+    /**
+     * 构建练习判分的资料检索查询词。
+     *
+     * @param question 题目实体
+     * @return 用于向量检索的查询文本
+     */
     private String buildPracticeRetrievalQuery(QuestionItem question) {
         StringBuilder builder = new StringBuilder();
         builder.append(trimForQuery(question.getStemText(), 80)).append(" ");
@@ -665,6 +912,12 @@ public class PracticeServiceImpl implements PracticeService {
         return builder.toString().trim();
     }
 
+    /**
+     * 把资料片段格式化成 AI 提示词中的摘录文本。
+     *
+     * @param sourceSegments 资料片段列表
+     * @return 可放入提示词的摘录文本
+     */
     private String formatRagSegments(List<RetrievedSegmentVO> sourceSegments) {
         if (sourceSegments == null || sourceSegments.isEmpty()) {
             return "暂无命中的资料摘录，可仅结合参考答案与题目解析评分。";
@@ -690,6 +943,13 @@ public class PracticeServiceImpl implements PracticeService {
         return builder.toString().trim();
     }
 
+    /**
+     * 从候选资料片段中选择最适合判分的片段。
+     *
+     * @param question 题目实体
+     * @param candidates 候选片段
+     * @return 最终用于判分的片段
+     */
     private List<RetrievedSegmentVO> selectPracticeSourceSegments(
             QuestionItem question,
             List<RetrievedSegmentVO> candidates
@@ -720,6 +980,14 @@ public class PracticeServiceImpl implements PracticeService {
                 : selected;
     }
 
+    /**
+     * 提取简答题关注关键词。
+     *
+     * <p>关键词来自题干、知识点、参考答案和解析，用于给资料片段重新排序。</p>
+     *
+     * @param question 题目实体
+     * @return 关键词列表
+     */
     private List<String> buildPracticeFocusKeywords(QuestionItem question) {
         LinkedHashSet<String> keywords = new LinkedHashSet<>();
         if (question == null) {
@@ -738,6 +1006,16 @@ public class PracticeServiceImpl implements PracticeService {
         return keywords.stream().limit(10).toList();
     }
 
+    /**
+     * 给候选资料片段打分。
+     *
+     * <p>分数综合考虑向量相似度、关键词覆盖度、知识点命中和片段质量。</p>
+     *
+     * @param question 题目实体
+     * @param segment 候选片段
+     * @param focusKeywords 关注关键词
+     * @return 片段排序分数
+     */
     private double scorePracticeSourceSegment(
             QuestionItem question,
             RetrievedSegmentVO segment,
@@ -778,6 +1056,14 @@ public class PracticeServiceImpl implements PracticeService {
         return score;
     }
 
+    /**
+     * 计算关键词在标题和正文中的覆盖度。
+     *
+     * @param keywords 关键词列表
+     * @param normalizedTitle 规范化后的片段标题
+     * @param normalizedContent 规范化后的片段正文
+     * @return 覆盖度分数
+     */
     private double computePracticeKeywordCoverage(
             List<String> keywords,
             String normalizedTitle,
@@ -808,6 +1094,12 @@ public class PracticeServiceImpl implements PracticeService {
         return totalWeight <= 0 ? 0D : matchedWeight / totalWeight;
     }
 
+    /**
+     * 判断资料片段是否包含低价值标记。
+     *
+     * @param text 待检查文本
+     * @return true 表示片段可能是目录、附录或链接类内容
+     */
     private boolean containsLowSignalSourceMarker(String text) {
         if (!StringUtils.hasText(text)) {
             return false;
@@ -821,6 +1113,12 @@ public class PracticeServiceImpl implements PracticeService {
         return normalized.contains("http://") || normalized.contains("https://") || normalized.contains("www.");
     }
 
+    /**
+     * 裁剪资料摘录，避免提示词过长。
+     *
+     * @param content 原始片段正文
+     * @return 最多 260 字符的单行摘录
+     */
     private String trimSourceExcerpt(String content) {
         String normalized = trimToNull(content);
         if (!StringUtils.hasText(normalized)) {
@@ -830,6 +1128,13 @@ public class PracticeServiceImpl implements PracticeService {
         return singleLine.length() <= 260 ? singleLine : singleLine.substring(0, 260) + "...";
     }
 
+    /**
+     * 裁剪检索查询文本。
+     *
+     * @param value 原始文本
+     * @param maxLength 最大长度
+     * @return 裁剪后的文本
+     */
     private String trimForQuery(String value, int maxLength) {
         if (!StringUtils.hasText(value)) {
             return "";
@@ -838,6 +1143,12 @@ public class PracticeServiceImpl implements PracticeService {
         return normalized.length() <= maxLength ? normalized : normalized.substring(0, maxLength);
     }
 
+    /**
+     * 解析 AI 返回的简答题判分 JSON。
+     *
+     * @param content AI 原始返回内容
+     * @return 结构化判分结果
+     */
     private ShortAnswerAiReviewPayload parseShortAnswerReview(String content) {
         try {
             JsonNode root = objectMapper.readTree(normalizeJsonContent(content));
@@ -862,6 +1173,12 @@ public class PracticeServiceImpl implements PracticeService {
         }
     }
 
+    /**
+     * 清理 AI 返回内容中的 Markdown 代码块包裹。
+     *
+     * @param content AI 原始返回内容
+     * @return 纯 JSON 字符串
+     */
     private String normalizeJsonContent(String content) {
         String normalized = content == null ? "" : content.trim();
         if (normalized.startsWith("```json")) {
@@ -875,10 +1192,23 @@ public class PracticeServiceImpl implements PracticeService {
         return normalized;
     }
 
+    /**
+     * 去除字符串首尾空白，空字符串返回 null。
+     *
+     * @param value 原始字符串
+     * @return 规范化后的字符串或 null
+     */
     private String trimToNull(String value) {
         return StringUtils.hasText(value) ? value.trim() : null;
     }
 
+    /**
+     * 把 AI 分数限制在 0 到满分之间。
+     *
+     * @param score AI 返回分数
+     * @param fullScore 满分
+     * @return 合法分数
+     */
     private int clampScore(Integer score, int fullScore) {
         if (score == null) {
             return 0;
@@ -886,6 +1216,12 @@ public class PracticeServiceImpl implements PracticeService {
         return Math.max(0, Math.min(fullScore, score));
     }
 
+    /**
+     * 规范化文本，便于做相似度或包含关系判断。
+     *
+     * @param text 原始文本
+     * @return 小写并去掉标点空白后的文本
+     */
     private String normalizeText(String text) {
         if (!StringUtils.hasText(text)) {
             return "";
@@ -893,6 +1229,13 @@ public class PracticeServiceImpl implements PracticeService {
         return text.toLowerCase().replaceAll("[\\p{Punct}\\p{IsPunctuation}\\s]+", "");
     }
 
+    /**
+     * 计算参考答案字符被用户答案覆盖的比例。
+     *
+     * @param reference 规范化后的参考答案
+     * @param userAnswer 规范化后的用户答案
+     * @return 覆盖比例，范围 0 到 1
+     */
     private double calculateCoverage(String reference, String userAnswer) {
         if (!StringUtils.hasText(reference) || !StringUtils.hasText(userAnswer)) {
             return 0;
@@ -906,6 +1249,13 @@ public class PracticeServiceImpl implements PracticeService {
         return Math.min(1.0, matched * 1.0 / Math.max(1, reference.length()));
     }
 
+    /**
+     * 计算用户答案和参考答案的长度接近程度。
+     *
+     * @param reference 参考答案
+     * @param userAnswer 用户答案
+     * @return 长度比例，范围 0 到 1
+     */
     private double calculateLengthRatio(String reference, String userAnswer) {
         if (!StringUtils.hasText(reference) || !StringUtils.hasText(userAnswer)) {
             return 0;
@@ -915,6 +1265,13 @@ public class PracticeServiceImpl implements PracticeService {
         return longer == 0 ? 0 : shorter * 1.0 / longer;
     }
 
+    /**
+     * 计算参考答案关键词在用户答案中的覆盖度。
+     *
+     * @param referenceAnswer 参考答案
+     * @param userAnswer 用户答案
+     * @return 关键词覆盖度
+     */
     private double calculateKeywordCoverage(String referenceAnswer, String userAnswer) {
         Set<String> keywords = extractKeywords(referenceAnswer);
         if (keywords.isEmpty() || !StringUtils.hasText(userAnswer)) {
@@ -929,6 +1286,14 @@ public class PracticeServiceImpl implements PracticeService {
         return matched * 1.0 / keywords.size();
     }
 
+    /**
+     * 从文本中提取关键词。
+     *
+     * <p>当前实现是轻量级规则切分，适合初步兜底评分，不等同于专业分词器。</p>
+     *
+     * @param text 原始文本
+     * @return 关键词集合
+     */
     private Set<String> extractKeywords(String text) {
         if (!StringUtils.hasText(text)) {
             return Set.of();
@@ -946,10 +1311,23 @@ public class PracticeServiceImpl implements PracticeService {
         return keywords;
     }
 
+    /**
+     * 获取安全分值。
+     *
+     * @param score 原始分值
+     * @return 如果原始分值为空或小于等于 0，则返回 1
+     */
     private int safeScore(Integer score) {
         return score == null || score <= 0 ? 1 : score;
     }
 
+    /**
+     * 计算正确率百分比。
+     *
+     * @param correctCount 正确题数
+     * @param total 总题数
+     * @return 保留两位小数的正确率
+     */
     private BigDecimal calculateAccuracy(int correctCount, int total) {
         if (total <= 0) {
             return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
@@ -957,6 +1335,12 @@ public class PracticeServiceImpl implements PracticeService {
         return BigDecimal.valueOf(correctCount * 100.0 / total).setScale(2, RoundingMode.HALF_UP);
     }
 
+    /**
+     * 校验并规范化练习名称。
+     *
+     * @param sessionName 原始练习名称
+     * @return 去除首尾空白后的练习名称
+     */
     private String normalizeSessionName(String sessionName) {
         if (!StringUtils.hasText(sessionName)) {
             throw new BusinessException("练习名称不能为空");
@@ -968,6 +1352,17 @@ public class PracticeServiceImpl implements PracticeService {
         return normalized;
     }
 
+    /**
+     * 组装练习详情返回对象。
+     *
+     * <p>这个方法会把题目列表和答案列表合并成前端需要的一道题一条记录的结构。</p>
+     *
+     * @param userId 当前登录用户 ID
+     * @param session 练习会话
+     * @param questions 题目列表
+     * @param answers 答案列表
+     * @return 练习详情
+     */
     private PracticeDetailVO buildPracticeDetail(
             Long userId,
             PracticeSession session,
@@ -1027,6 +1422,15 @@ public class PracticeServiceImpl implements PracticeService {
                 .build();
     }
 
+    /**
+     * 判断是否需要为单题详情补充资料来源片段。
+     *
+     * <p>只有已提交的简答题才需要展示资料来源，作答前或客观题不需要。</p>
+     *
+     * @param session 练习会话
+     * @param question 题目实体
+     * @return true 表示需要检索资料来源片段
+     */
     private boolean shouldResolvePracticeAnswerSources(PracticeSession session, QuestionItem question) {
         return session != null
                 && SESSION_STATUS_SUBMITTED.equalsIgnoreCase(session.getSessionStatus())
@@ -1034,6 +1438,13 @@ public class PracticeServiceImpl implements PracticeService {
                 && isShortAnswer(question.getQuestionType());
     }
 
+    /**
+     * 为练习详情构建判分说明。
+     *
+     * @param question 题目实体
+     * @param answer 用户答案记录，未提交时可能为 null
+     * @return 判分结果
+     */
     private AnswerReview buildReviewForDetail(QuestionItem question, PracticeAnswer answer) {
         if (answer == null) {
             return buildPendingDetailReview(question);
@@ -1051,6 +1462,12 @@ public class PracticeServiceImpl implements PracticeService {
         );
     }
 
+    /**
+     * 构建未提交时的默认判分展示。
+     *
+     * @param question 题目实体
+     * @return 待提交状态的判分结果
+     */
     private AnswerReview buildPendingDetailReview(QuestionItem question) {
         if (isShortAnswer(question.getQuestionType())) {
             return new AnswerReview(
@@ -1070,6 +1487,13 @@ public class PracticeServiceImpl implements PracticeService {
         );
     }
 
+    /**
+     * 根据数据库中保存的简答题答案记录构建展示用判分结果。
+     *
+     * @param question 题目实体
+     * @param answer 用户答案记录
+     * @return 判分结果
+     */
     private AnswerReview buildStoredShortAnswerReview(QuestionItem question, PracticeAnswer answer) {
         int fullScore = safeScore(question.getScore());
         String mode = StringUtils.hasText(answer.getReviewMode()) ? answer.getReviewMode() : REVIEW_MODE_RULE;
@@ -1094,6 +1518,12 @@ public class PracticeServiceImpl implements PracticeService {
         return new AnswerReview(correct, score, mode, labelPrefix + score + "/" + fullScore, comment);
     }
 
+    /**
+     * 判断题型是否为简答题。
+     *
+     * @param questionType 题型编码
+     * @return true 表示是简答题
+     */
     private boolean isShortAnswer(String questionType) {
         if (!StringUtils.hasText(questionType)) {
             return false;
@@ -1102,6 +1532,15 @@ public class PracticeServiceImpl implements PracticeService {
                 || QUESTION_TYPE_SHORT_ANSWER.equalsIgnoreCase(questionType);
     }
 
+    /**
+     * 内部统一判分结果。
+     *
+     * @param correct 是否正确
+     * @param score 得分
+     * @param mode 判分模式
+     * @param label 判分标签
+     * @param comment 判分说明
+     */
     private record AnswerReview(
             boolean correct,
             int score,
@@ -1111,6 +1550,13 @@ public class PracticeServiceImpl implements PracticeService {
     ) {
     }
 
+    /**
+     * AI 简答题判分返回结果。
+     *
+     * @param score AI 返回分数
+     * @param correct 是否达到正确标准
+     * @param comment AI 评语
+     */
     private record ShortAnswerAiReviewPayload(
             Integer score,
             Boolean correct,
@@ -1118,6 +1564,13 @@ public class PracticeServiceImpl implements PracticeService {
     ) {
     }
 
+    /**
+     * 候选资料片段排序对象。
+     *
+     * @param segment 资料片段
+     * @param score 排序分数
+     * @param originalIndex 原始位置，用于分数相同时保持稳定排序
+     */
     private record RankedPracticeSource(
             RetrievedSegmentVO segment,
             double score,

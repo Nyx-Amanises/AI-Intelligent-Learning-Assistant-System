@@ -22,11 +22,19 @@ import java.util.function.Consumer;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+/**
+ * AI 聊天服务实现类。
+ *
+ * <p>负责把系统提示词和用户提示词组装成 HTTP 请求，并兼容普通 Chat Completions 与 Responses API。</p>
+ */
 @Service
 public class AiChatServiceImpl implements AiChatService {
 
+    /** AI 配置服务。 */
     private final AiConfigService aiConfigService;
+    /** JSON 解析工具。 */
     private final ObjectMapper objectMapper;
+    /** Java 标准 HTTP 客户端。 */
     private final HttpClient httpClient;
 
     public AiChatServiceImpl(AiConfigService aiConfigService, ObjectMapper objectMapper) {
@@ -37,6 +45,9 @@ public class AiChatServiceImpl implements AiChatService {
                 .build();
     }
 
+    /**
+     * 同步调用 AI 聊天接口，返回完整文本。
+     */
     @Override
     public String chat(String systemPrompt, String userPrompt, String modelName, Double temperature) {
         AiConfigService.ResolvedAiConfig config = validateConfig();
@@ -70,6 +81,9 @@ public class AiChatServiceImpl implements AiChatService {
         }
     }
 
+    /**
+     * 流式调用 AI 聊天接口，每收到一段文本就回调 onDelta。
+     */
     @Override
     public void streamChat(
             String systemPrompt,
@@ -128,6 +142,9 @@ public class AiChatServiceImpl implements AiChatService {
         }
     }
 
+    /**
+     * 校验真实 AI 调用所需配置。
+     */
     private AiConfigService.ResolvedAiConfig validateConfig() {
         AiConfigService.ResolvedAiConfig config = aiConfigService.getResolvedConfig();
         if (!Boolean.TRUE.equals(config.enabled())) {
@@ -142,6 +159,9 @@ public class AiChatServiceImpl implements AiChatService {
         return config;
     }
 
+    /**
+     * 按接口类型构建请求体。
+     */
     private Map<String, Object> buildChatRequestBody(
             AiConfigService.ResolvedAiConfig config,
             String systemPrompt,
@@ -167,6 +187,9 @@ public class AiChatServiceImpl implements AiChatService {
         return requestBody;
     }
 
+    /**
+     * 构建 Responses API 请求体。
+     */
     private Map<String, Object> buildResponsesRequestBody(
             String systemPrompt,
             String userPrompt,
@@ -190,6 +213,9 @@ public class AiChatServiceImpl implements AiChatService {
         return requestBody;
     }
 
+    /**
+     * Responses API 没有独立的 system 消息时，把系统提示词合并进 input_text。
+     */
     private String buildResponsesInputText(String systemPrompt, String userPrompt) {
         StringBuilder builder = new StringBuilder();
         if (StringUtils.hasText(systemPrompt)) {
@@ -203,12 +229,18 @@ public class AiChatServiceImpl implements AiChatService {
         return builder.toString();
     }
 
+    /**
+     * 判断当前配置是否使用 Responses API。
+     */
     private boolean isResponsesApi(AiConfigService.ResolvedAiConfig config) {
         return config != null
                 && StringUtils.hasText(config.chatPath())
                 && config.chatPath().trim().toLowerCase().contains("/responses");
     }
 
+    /**
+     * 构建带认证头的 HTTP 请求。
+     */
     private HttpRequest buildHttpRequest(AiConfigService.ResolvedAiConfig config, Map<String, Object> requestBody) {
         try {
             return HttpRequest.newBuilder(buildChatUri(config.baseUrl(), config.chatPath()))
@@ -224,6 +256,9 @@ public class AiChatServiceImpl implements AiChatService {
         }
     }
 
+    /**
+     * 拼接 Base URL 与接口路径。
+     */
     private URI buildChatUri(String baseUrl, String chatPath) {
         if (!StringUtils.hasText(baseUrl)) {
             throw new BusinessException("AI Base URL 未配置");
@@ -248,6 +283,9 @@ public class AiChatServiceImpl implements AiChatService {
         return URI.create(fullUrl);
     }
 
+    /**
+     * 检查 HTTP 状态码是否成功。
+     */
     private void ensureSuccessStatus(int statusCode, String responseBody) {
         if (statusCode >= 200 && statusCode < 300) {
             return;
@@ -258,6 +296,9 @@ public class AiChatServiceImpl implements AiChatService {
         );
     }
 
+    /**
+     * 消费 SSE 的 data 行，并提取其中的增量文本。
+     */
     private void consumeEventPayload(List<String> dataLines, Consumer<String> onDelta) {
         if (dataLines == null || dataLines.isEmpty()) {
             return;
@@ -277,6 +318,9 @@ public class AiChatServiceImpl implements AiChatService {
         }
     }
 
+    /**
+     * 从非流式响应中提取模型回复文本。
+     */
     private String extractChatContent(JsonNode root) {
         JsonNode choices = root == null ? null : root.path("choices");
         if (choices != null && choices.isArray() && !choices.isEmpty()) {
@@ -293,6 +337,9 @@ public class AiChatServiceImpl implements AiChatService {
         throw new BusinessException("AI 返回结果为空");
     }
 
+    /**
+     * 从流式响应片段中提取增量文本。
+     */
     private String extractDeltaContent(JsonNode root) {
         if (root != null && StringUtils.hasText(root.path("type").asText())) {
             String eventType = root.path("type").asText();
@@ -317,6 +364,9 @@ public class AiChatServiceImpl implements AiChatService {
         return null;
     }
 
+    /**
+     * 提取 Responses API 的输出文本。
+     */
     private String extractResponsesContent(JsonNode root) {
         if (root == null || root.isMissingNode() || root.isNull()) {
             return null;
@@ -355,6 +405,9 @@ public class AiChatServiceImpl implements AiChatService {
         return builder.toString();
     }
 
+    /**
+     * 兼容字符串和数组两种 content 结构。
+     */
     private String extractContentNode(JsonNode contentNode) {
         if (contentNode == null || contentNode.isMissingNode() || contentNode.isNull()) {
             return null;
@@ -382,6 +435,9 @@ public class AiChatServiceImpl implements AiChatService {
         return null;
     }
 
+    /**
+     * 读取错误响应体。
+     */
     private String readStreamBody(InputStream inputStream) {
         if (inputStream == null) {
             return "未知错误";
@@ -393,6 +449,9 @@ public class AiChatServiceImpl implements AiChatService {
         }
     }
 
+    /**
+     * 构造异常原因后缀，帮助用户定位网络或 TLS 问题。
+     */
     private String buildCauseSuffix(Throwable throwable) {
         Throwable rootCause = extractRootCause(throwable);
         if (rootCause == null) {
@@ -402,6 +461,9 @@ public class AiChatServiceImpl implements AiChatService {
         return StringUtils.hasText(message) ? "（" + truncateMessage(message, 180) + "）" : "";
     }
 
+    /**
+     * 从异常链中提取最有用的错误信息。
+     */
     private String extractBestMessage(Throwable throwable) {
         Throwable current = throwable;
         while (current != null) {
@@ -414,6 +476,9 @@ public class AiChatServiceImpl implements AiChatService {
         return rootCause == null ? "未知异常" : rootCause.getClass().getSimpleName();
     }
 
+    /**
+     * 获取最底层异常。
+     */
     private Throwable extractRootCause(Throwable throwable) {
         Throwable current = throwable;
         Throwable root = throwable;
@@ -424,6 +489,9 @@ public class AiChatServiceImpl implements AiChatService {
         return root;
     }
 
+    /**
+     * 生成异常类型和消息的短标签。
+     */
     private String buildThrowableLabel(Throwable throwable) {
         if (throwable == null) {
             return null;
@@ -435,6 +503,9 @@ public class AiChatServiceImpl implements AiChatService {
         return simpleName;
     }
 
+    /**
+     * 截断过长的错误信息。
+     */
     private String truncateMessage(String message, int maxLength) {
         if (!StringUtils.hasText(message)) {
             return "未知错误";

@@ -20,20 +20,36 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+/**
+ * 学习资料向量化服务实现类。
+ *
+ * <p>它会读取资料分段，调用 Embedding 模型生成向量，再写入向量库。</p>
+ */
 @Service
 public class AiEmbeddingServiceImpl implements AiEmbeddingService {
 
+    /** 只有解析成功的资料才能向量化。 */
     private static final String PARSE_STATUS_SUCCESS = "SUCCESS";
+    /** 分段已进入向量化队列。 */
     private static final String EMBEDDING_STATUS_QUEUED = "QUEUED";
+    /** 分段向量化成功。 */
     private static final String EMBEDDING_STATUS_SUCCESS = "SUCCESS";
+    /** 分段向量化失败。 */
     private static final String EMBEDDING_STATUS_FAILED = "FAILED";
 
+    /** 学习资料 Mapper。 */
     private final StudyMaterialMapper studyMaterialMapper;
+    /** 资料分段 Mapper。 */
     private final MaterialSegmentMapper materialSegmentMapper;
+    /** AI 配置服务，用于解析默认 Embedding 模型。 */
     private final AiConfigService aiConfigService;
+    /** 文本向量生成服务。 */
     private final TextEmbeddingService textEmbeddingService;
+    /** 向量库服务。 */
     private final VectorStoreService vectorStoreService;
+    /** Qdrant 配置。 */
     private final QdrantProperties qdrantProperties;
+    /** 用于检查数据库字段是否已经迁移。 */
     private final DataSource dataSource;
 
     public AiEmbeddingServiceImpl(
@@ -54,6 +70,9 @@ public class AiEmbeddingServiceImpl implements AiEmbeddingService {
         this.dataSource = dataSource;
     }
 
+    /**
+     * 执行资料向量化。
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public EmbeddingTaskResultVO prepareMaterialEmbedding(
@@ -110,6 +129,7 @@ public class AiEmbeddingServiceImpl implements AiEmbeddingService {
         try {
             int batchSize = resolveBatchSize();
             for (int start = 0; start < pendingSegments.size(); start += batchSize) {
+                // 分批向量化，避免一次请求内容过多导致模型接口超限。
                 int end = Math.min(start + batchSize, pendingSegments.size());
                 List<MaterialSegment> batch = pendingSegments.subList(start, end);
                 List<String> texts = batch.stream()
@@ -139,6 +159,7 @@ public class AiEmbeddingServiceImpl implements AiEmbeddingService {
                     ));
                 }
 
+                // 先写入向量库，再把数据库分段状态标记为 SUCCESS。
                 vectorStoreService.upsertMaterialSegments(vectorBatch);
 
                 LocalDateTime embeddedAt = LocalDateTime.now();
@@ -171,6 +192,9 @@ public class AiEmbeddingServiceImpl implements AiEmbeddingService {
                 .build();
     }
 
+    /**
+     * 如果某批向量化失败，把还没成功的分段标记为失败。
+     */
     private void markPendingSegmentsFailed(List<MaterialSegment> pendingSegments, String modelName, Long taskId) {
         for (MaterialSegment segment : pendingSegments) {
             if (EMBEDDING_STATUS_SUCCESS.equalsIgnoreCase(segment.getEmbeddingStatus())) {
@@ -183,6 +207,9 @@ public class AiEmbeddingServiceImpl implements AiEmbeddingService {
         }
     }
 
+    /**
+     * 解析本次要使用的 Embedding 模型名称。
+     */
     private String resolveEmbeddingModel(String modelName) {
         if (StringUtils.hasText(modelName)) {
             return modelName.trim();
@@ -194,11 +221,17 @@ public class AiEmbeddingServiceImpl implements AiEmbeddingService {
         return defaultEmbeddingModel.trim();
     }
 
+    /**
+     * 获取写入向量库时的批量大小。
+     */
     private int resolveBatchSize() {
         Integer batchSize = qdrantProperties.getUpsertBatchSize();
         return batchSize == null || batchSize <= 0 ? 16 : batchSize;
     }
 
+    /**
+     * 向量化依赖新增字段，这里提前检查数据库迁移是否已经执行。
+     */
     private void ensureEmbeddingColumnsReady() {
         try (java.sql.Connection connection = dataSource.getConnection()) {
             java.sql.DatabaseMetaData metaData = connection.getMetaData();
@@ -215,6 +248,9 @@ public class AiEmbeddingServiceImpl implements AiEmbeddingService {
         );
     }
 
+    /**
+     * 判断指定表字段是否存在。
+     */
     private boolean columnExists(
             java.sql.DatabaseMetaData metaData,
             String catalog,

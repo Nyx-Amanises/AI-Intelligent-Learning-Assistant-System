@@ -14,19 +14,31 @@ import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 
+/**
+ * 文本 Embedding 服务实现类。
+ *
+ * <p>负责调用外部 Embedding 接口，也支持 Mock 模式生成稳定的假向量。</p>
+ */
 @Service
 public class AiTextEmbeddingServiceImpl implements TextEmbeddingService {
 
+    /** Mock 模式下生成的向量维度。 */
     private static final int MOCK_VECTOR_SIZE = 1536;
+    /** OpenAI 兼容 Embedding 接口。 */
     private static final String PROVIDER_OPENAI_COMPATIBLE = "OPENAI_COMPATIBLE";
+    /** 火山 Ark 多模态文本 Embedding 接口。 */
     private static final String PROVIDER_ARK_MULTIMODAL_TEXT = "ARK_MULTIMODAL_TEXT";
 
+    /** AI 配置服务。 */
     private final AiConfigService aiConfigService;
 
     public AiTextEmbeddingServiceImpl(AiConfigService aiConfigService) {
         this.aiConfigService = aiConfigService;
     }
 
+    /**
+     * 批量生成文本向量。
+     */
     @Override
     public EmbeddingBatchResult embedTexts(List<String> texts, String modelName) {
         if (texts == null || texts.isEmpty()) {
@@ -45,6 +57,7 @@ public class AiTextEmbeddingServiceImpl implements TextEmbeddingService {
             throw new BusinessException("未配置默认 Embedding 模型");
         }
 
+        // Mock 模式下用文本 hash 生成稳定向量，方便本地开发验证检索流程。
         if (Boolean.TRUE.equals(config.mockMode())) {
             List<List<Double>> vectors = texts.stream()
                     .map(this::buildMockVector)
@@ -115,6 +128,9 @@ public class AiTextEmbeddingServiceImpl implements TextEmbeddingService {
         }
     }
 
+    /**
+     * 使用 OpenAI 兼容协议批量生成向量。
+     */
     private List<List<Double>> embedByOpenAiCompatible(
             RestClient restClient,
             String embeddingPath,
@@ -135,6 +151,9 @@ public class AiTextEmbeddingServiceImpl implements TextEmbeddingService {
         return extractVectorsFromResponse(response);
     }
 
+    /**
+     * 使用 Ark 多模态接口生成向量；该接口按文本逐条调用。
+     */
     private List<List<Double>> embedByArkMultimodal(
             RestClient restClient,
             String embeddingPath,
@@ -168,6 +187,9 @@ public class AiTextEmbeddingServiceImpl implements TextEmbeddingService {
         return vectors;
     }
 
+    /**
+     * 从不同供应商的响应结构中提取向量列表。
+     */
     private List<List<Double>> extractVectorsFromResponse(Map<String, Object> response) {
         Object dataObj = response == null ? null : response.get("data");
         List<?> dataList;
@@ -202,6 +224,9 @@ public class AiTextEmbeddingServiceImpl implements TextEmbeddingService {
         return vectors;
     }
 
+    /**
+     * 从单个响应条目中提取一个向量。
+     */
     private List<Double> extractSingleVector(Map<?, ?> itemMap) {
         Object embeddingObj = itemMap.get("embedding");
         if (!(embeddingObj instanceof List<?>)) {
@@ -223,6 +248,9 @@ public class AiTextEmbeddingServiceImpl implements TextEmbeddingService {
         return vector;
     }
 
+    /**
+     * 基于文本内容生成归一化的模拟向量。
+     */
     private List<Double> buildMockVector(String text) {
         long seed = text == null ? 0L : text.hashCode();
         double[] raw = new double[MOCK_VECTOR_SIZE];
@@ -240,6 +268,9 @@ public class AiTextEmbeddingServiceImpl implements TextEmbeddingService {
         return vector;
     }
 
+    /**
+     * 统一供应商类型大小写，并为空值提供默认值。
+     */
     private String normalizeProviderType(String providerType) {
         if (!StringUtils.hasText(providerType)) {
             return PROVIDER_OPENAI_COMPATIBLE;
@@ -247,11 +278,17 @@ public class AiTextEmbeddingServiceImpl implements TextEmbeddingService {
         return providerType.trim().toUpperCase();
     }
 
+    /**
+     * 构造网络异常的原因后缀。
+     */
     private String buildCauseSuffix(Throwable throwable) {
         String message = extractBestMessage(throwable);
         return StringUtils.hasText(message) ? "（" + truncateMessage(message, 180) + "）" : "";
     }
 
+    /**
+     * 从异常链中提取最有用的错误信息。
+     */
     private String extractBestMessage(Throwable throwable) {
         Throwable current = throwable;
         while (current != null) {
@@ -263,6 +300,9 @@ public class AiTextEmbeddingServiceImpl implements TextEmbeddingService {
         return "未知异常";
     }
 
+    /**
+     * 截断过长错误信息。
+     */
     private String truncateMessage(String message, int maxLength) {
         if (!StringUtils.hasText(message)) {
             return "未知错误";

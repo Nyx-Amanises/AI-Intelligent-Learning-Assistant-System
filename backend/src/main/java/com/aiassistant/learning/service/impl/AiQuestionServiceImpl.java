@@ -34,25 +34,37 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+/**
+ * AI 题目生成服务实现类。
+ *
+ * <p>它会从资料中挑选适合出题的片段，调用 AI 生成 JSON，再把题集和题目保存到数据库。</p>
+ */
 @Service
 public class AiQuestionServiceImpl implements AiQuestionService {
 
+    /** 语义检索最多召回的片段数。 */
     private static final int QUESTION_RETRIEVAL_LIMIT = 14;
+    /** 语义检索失败时，兜底最多选取的片段数。 */
     private static final int QUESTION_FALLBACK_SEGMENT_LIMIT = 14;
+    /** 发送给大模型的上下文最大字符数，避免提示词过长。 */
     private static final int QUESTION_MAX_CONTEXT_CHARS = 12000;
+    /** 能代表“高价值出题内容”的关键词。 */
     private static final List<String> QUESTION_PRIORITY_TERMS = List.of(
             "核心", "重点", "考点", "关键", "总结", "概念", "原理", "定义", "流程", "步骤", "区别", "对比",
             "结构", "架构", "特性", "特点", "作用", "用途", "应用场景", "最佳实践", "易错", "注意事项",
             "命令", "配置", "参数", "生命周期", "依赖关系", "安全", "性能", "优化"
     );
+    /** 低价值片段关键词，这类内容通常不适合拿来出题。 */
     private static final List<String> QUESTION_LOW_SIGNAL_TERMS = List.of(
             "参考文档", "参考链接", "参考资料", "附录", "模板", "目录", "索引", "版权", "鸣谢",
             "官方网址", "官网", "github", "http", "https", "www", "mdpress"
     );
+    /** 结构化表达关键词，通常说明片段适合作为题目考点。 */
     private static final List<String> QUESTION_STRUCTURE_TERMS = List.of(
             "包括", "分为", "特点", "优点", "缺点", "作用", "用途", "步骤", "流程",
             "分类", "原则", "区别", "对比", "注意", "实践", "命令", "配置", "参数"
     );
+    /** 题干中不希望出现的套话前缀。 */
     private static final List<String> STEM_FILLER_PREFIXES = List.of(
             "根据资料，", "根据资料", "根据学习资料，", "根据学习资料", "根据资料内容，", "根据资料内容",
             "根据材料，", "根据材料", "根据认证指南，", "根据认证指南", "根据学习阶段划分，", "根据学习阶段划分",
@@ -62,14 +74,23 @@ public class AiQuestionServiceImpl implements AiQuestionService {
             "依据资料，", "依据资料", "结合资料，", "结合资料"
     );
 
+    /** 学习资料服务。 */
     private final StudyMaterialService studyMaterialService;
+    /** 资料分段 Mapper。 */
     private final MaterialSegmentMapper materialSegmentMapper;
+    /** 题集 Mapper。 */
     private final QuestionSetMapper questionSetMapper;
+    /** 题目 Mapper。 */
     private final QuestionItemMapper questionItemMapper;
+    /** AI 生成记录 Mapper。 */
     private final AiGenerationRecordMapper aiGenerationRecordMapper;
+    /** AI 配置服务。 */
     private final AiConfigService aiConfigService;
+    /** AI 对话服务。 */
     private final AiChatService aiChatService;
+    /** 语义检索服务。 */
     private final RetrievalService retrievalService;
+    /** 解析 AI 返回 JSON 的工具。 */
     private final ObjectMapper objectMapper;
 
     public AiQuestionServiceImpl(
@@ -94,6 +115,9 @@ public class AiQuestionServiceImpl implements AiQuestionService {
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * 根据资料内容生成一套题，并写入题集表和题目表。
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public QuestionSetDetailVO generateQuestionSet(Long userId, Long materialId, QuestionGenerateRequest request) {
@@ -127,6 +151,7 @@ public class AiQuestionServiceImpl implements AiQuestionService {
         );
         String inputText = buildQuestionUserPrompt(material, contextSegments, questionPlan, difficultyLevel);
 
+        // AI 返回的题目会先转换为内部 GeneratedQuestion，再批量落库。
         LocalDateTime start = LocalDateTime.now();
         List<GeneratedQuestion> generatedQuestions = callAiOrMock(
                 material,
@@ -151,6 +176,7 @@ public class AiQuestionServiceImpl implements AiQuestionService {
         List<QuestionItemVO> questionItems = new ArrayList<>();
         int sortNo = 1;
         for (GeneratedQuestion generatedQuestion : generatedQuestions) {
+            // 每一道题单独保存，sortNo 用于保持题目顺序。
             QuestionItem item = new QuestionItem();
             item.setQuestionSetId(questionSet.getId());
             item.setQuestionType(generatedQuestion.questionType());
@@ -210,6 +236,9 @@ public class AiQuestionServiceImpl implements AiQuestionService {
                 .build();
     }
 
+    /**
+     * 根据 AI 配置决定使用真实模型还是 Mock 题目。
+     */
     private List<GeneratedQuestion> callAiOrMock(
             StudyMaterial material,
             List<MaterialSegment> segments,
@@ -230,6 +259,9 @@ public class AiQuestionServiceImpl implements AiQuestionService {
         return parseGeneratedQuestions(content, questionPlan);
     }
 
+    /**
+     * 为出题任务选择上下文片段。
+     */
     private List<MaterialSegment> resolveQuestionContextSegments(
             Long userId,
             StudyMaterial material,
@@ -253,6 +285,9 @@ public class AiQuestionServiceImpl implements AiQuestionService {
         }
     }
 
+    /**
+     * 构造语义检索查询词，让召回内容更偏向可出题的知识点。
+     */
     private String buildQuestionRetrievalQuery(StudyMaterial material, QuestionPlan questionPlan, int difficultyLevel) {
         return material.getTitle()
                 + " 生成练习题"
@@ -264,6 +299,9 @@ public class AiQuestionServiceImpl implements AiQuestionService {
                 + " 优先核心概念 重点 考点 定义 原理 区别 步骤 流程 应用场景 最佳实践 易错点";
     }
 
+    /**
+     * 构造系统提示词，要求模型严格输出 JSON。
+     */
     private String buildQuestionSystemPrompt() {
         return """
                 你是一个中文学习出题助手。
@@ -299,6 +337,9 @@ public class AiQuestionServiceImpl implements AiQuestionService {
                 """;
     }
 
+    /**
+     * 构造用户提示词，包含题型数量、难度和资料摘录。
+     */
     private String buildQuestionUserPrompt(
             StudyMaterial material,
             List<MaterialSegment> segments,
@@ -335,6 +376,9 @@ public class AiQuestionServiceImpl implements AiQuestionService {
         return builder.toString();
     }
 
+    /**
+     * 解析题型数量设置。
+     */
     private QuestionPlan resolveQuestionPlan(QuestionGenerateRequest request) {
         Integer singleCount = request.getSingleCount();
         Integer judgeCount = request.getJudgeCount();
@@ -359,6 +403,9 @@ public class AiQuestionServiceImpl implements AiQuestionService {
         return new QuestionPlan(resolvedSingle, resolvedJudge, resolvedShort, total);
     }
 
+    /**
+     * 当前端只传总题数时，按默认比例分配单选、判断和简答题。
+     */
     private QuestionPlan buildDefaultQuestionPlan(int total) {
         if (total <= 0) {
             throw new BusinessException("题目总数最少为1道");
@@ -391,6 +438,9 @@ public class AiQuestionServiceImpl implements AiQuestionService {
         return new QuestionPlan(singleCount, judgeCount, shortAnswerCount, total);
     }
 
+    /**
+     * 语义检索失败时，根据启发式分数从全部片段里选上下文。
+     */
     private List<MaterialSegment> buildFallbackQuestionContextSegments(List<MaterialSegment> allSegments, int questionCount) {
         if (allSegments == null || allSegments.isEmpty()) {
             return List.of();
@@ -410,6 +460,9 @@ public class AiQuestionServiceImpl implements AiQuestionService {
         return selectPriorityQuestionContextSegments(candidates, questionCount);
     }
 
+    /**
+     * 控制上下文片段数量和总长度，防止模型输入过长。
+     */
     private List<MaterialSegment> trimQuestionContextSegments(List<MaterialSegment> segments, int questionCount) {
         if (segments == null || segments.isEmpty()) {
             return List.of();
@@ -433,6 +486,9 @@ public class AiQuestionServiceImpl implements AiQuestionService {
         return trimmed.isEmpty() ? segments.stream().limit(Math.min(segmentLimit, segments.size())).toList() : trimmed;
     }
 
+    /**
+     * 将向量检索结果转换成候选片段并重新排序。
+     */
     private List<MaterialSegment> selectQuestionContextFromRetrievedSegments(
             List<RetrievedSegment> retrievedSegments,
             int questionCount
@@ -448,6 +504,9 @@ public class AiQuestionServiceImpl implements AiQuestionService {
         return selectPriorityQuestionContextSegments(candidates, questionCount);
     }
 
+    /**
+     * 从候选片段中优先选择高分、非重复、非相邻的内容。
+     */
     private List<MaterialSegment> selectPriorityQuestionContextSegments(
             List<QuestionContextCandidate> candidates,
             int questionCount
@@ -471,6 +530,9 @@ public class AiQuestionServiceImpl implements AiQuestionService {
         return trimQuestionContextSegments(sortQuestionContextSegments(selected), questionCount);
     }
 
+    /**
+     * 追加候选片段；strict=true 时会更严格地避免同章节重复。
+     */
     private void appendQuestionContextCandidates(
             List<MaterialSegment> selected,
             List<QuestionContextCandidate> sortedCandidates,
@@ -492,10 +554,16 @@ public class AiQuestionServiceImpl implements AiQuestionService {
         }
     }
 
+    /**
+     * 根据题目数量推导上下文片段上限。
+     */
     private int resolveQuestionContextSegmentLimit(int questionCount) {
         return Math.max(6, Math.min(QUESTION_FALLBACK_SEGMENT_LIMIT, Math.max(8, questionCount * 3)));
     }
 
+    /**
+     * 计算片段适合出题的分数。
+     */
     private double computeQuestionContextScore(MaterialSegment segment) {
         if (segment == null) {
             return 0D;
@@ -533,6 +601,9 @@ public class AiQuestionServiceImpl implements AiQuestionService {
         return score;
     }
 
+    /**
+     * 统计文本中命中关键词的得分。
+     */
     private double scoreSignalHits(String normalizedText, List<String> signals, double hitWeight, double maxScore) {
         if (!StringUtils.hasText(normalizedText) || signals == null || signals.isEmpty()) {
             return 0D;
@@ -550,6 +621,9 @@ public class AiQuestionServiceImpl implements AiQuestionService {
         return Math.min(score, maxScore);
     }
 
+    /**
+     * 根据列表、冒号和结构词判断片段是否具有清晰结构。
+     */
     private double computeQuestionStructureScore(String content) {
         if (!StringUtils.hasText(content)) {
             return 0D;
@@ -572,6 +646,9 @@ public class AiQuestionServiceImpl implements AiQuestionService {
         return Math.min(score, 0.42D);
     }
 
+    /**
+     * 判断片段是否像参考链接堆积内容。
+     */
     private boolean looksLikeDenseReference(String content) {
         if (!StringUtils.hasText(content)) {
             return false;
@@ -586,6 +663,9 @@ public class AiQuestionServiceImpl implements AiQuestionService {
         return urlHits >= 2;
     }
 
+    /**
+     * 判断候选片段是否和已选片段重复。
+     */
     private boolean isQuestionContextDuplicate(MaterialSegment candidate, List<MaterialSegment> selected, boolean strict) {
         String candidateKey = buildSegmentKey(candidate);
         String candidateSectionKey = normalizeSectionKey(candidate.getSectionTitle());
@@ -605,6 +685,9 @@ public class AiQuestionServiceImpl implements AiQuestionService {
         return false;
     }
 
+    /**
+     * 判断两个片段是否相邻，避免上下文被连续片段占满。
+     */
     private boolean isAdjacentQuestionSegment(MaterialSegment left, MaterialSegment right) {
         if (left == null || right == null) {
             return false;
@@ -618,6 +701,9 @@ public class AiQuestionServiceImpl implements AiQuestionService {
         return Math.abs(left.getSegmentNo() - right.getSegmentNo()) <= 1;
     }
 
+    /**
+     * 构造片段去重用的 key。
+     */
     private String buildSegmentKey(MaterialSegment segment) {
         if (segment == null) {
             return "";
@@ -632,6 +718,9 @@ public class AiQuestionServiceImpl implements AiQuestionService {
                 + normalizeSignalText(trimForComparison(segment.getContentText(), 48));
     }
 
+    /**
+     * 按页码和片段序号排序，保证展示顺序符合资料原文。
+     */
     private List<MaterialSegment> sortQuestionContextSegments(List<MaterialSegment> segments) {
         return segments.stream()
                 .sorted(Comparator
@@ -640,10 +729,16 @@ public class AiQuestionServiceImpl implements AiQuestionService {
                 .toList();
     }
 
+    /**
+     * 标题归一化，供同章节去重使用。
+     */
     private String normalizeSectionKey(String title) {
         return normalizeSignalText(title);
     }
 
+    /**
+     * 截取一小段文本用于比较。
+     */
     private String trimForComparison(String text, int maxLength) {
         String normalized = trimToNull(text);
         if (!StringUtils.hasText(normalized)) {
@@ -652,6 +747,9 @@ public class AiQuestionServiceImpl implements AiQuestionService {
         return normalized.length() <= maxLength ? normalized : normalized.substring(0, maxLength);
     }
 
+    /**
+     * 将文本转成适合关键词匹配的形式。
+     */
     private String normalizeSignalText(String text) {
         if (!StringUtils.hasText(text)) {
             return "";
@@ -660,6 +758,9 @@ public class AiQuestionServiceImpl implements AiQuestionService {
                 .replaceAll("[\\s\\p{Punct}，。！？；：、“”‘’（）()【】《》<>·—…-]+", "");
     }
 
+    /**
+     * 将向量检索结果转换成前端片段展示对象。
+     */
     public static List<RetrievedSegmentVO> toRetrievedSegmentVOList(List<RetrievedSegment> segments) {
         if (segments == null || segments.isEmpty()) {
             return List.of();
@@ -677,6 +778,9 @@ public class AiQuestionServiceImpl implements AiQuestionService {
                 .toList();
     }
 
+    /**
+     * 将资料片段转换成前端片段展示对象。
+     */
     private List<RetrievedSegmentVO> toRetrievedSegmentVOListFromMaterialSegments(List<MaterialSegment> segments) {
         if (segments == null || segments.isEmpty()) {
             return List.of();
@@ -693,6 +797,9 @@ public class AiQuestionServiceImpl implements AiQuestionService {
                 .toList();
     }
 
+    /**
+     * 按题型计划筛选 AI 返回结果，确保最终题型数量符合要求。
+     */
     private List<GeneratedQuestion> normalizeQuestionsByPlan(List<GeneratedQuestion> questions, QuestionPlan questionPlan) {
         Map<String, List<GeneratedQuestion>> grouped = new LinkedHashMap<>();
         grouped.put("SINGLE", new ArrayList<>());
@@ -725,6 +832,9 @@ public class AiQuestionServiceImpl implements AiQuestionService {
         return normalized;
     }
 
+    /**
+     * 按题型追加指定数量的题目。
+     */
     private void appendQuestionsByType(
             List<GeneratedQuestion> target,
             List<GeneratedQuestion> source,
@@ -740,6 +850,9 @@ public class AiQuestionServiceImpl implements AiQuestionService {
         target.addAll(source.subList(0, expectedCount));
     }
 
+    /**
+     * 统一题型名称，兼容模型返回 SHORT 这类简写。
+     */
     private String normalizeQuestionType(String questionType) {
         String normalized = StringUtils.hasText(questionType) ? questionType.trim().toUpperCase() : "";
         return switch (normalized) {
@@ -748,6 +861,9 @@ public class AiQuestionServiceImpl implements AiQuestionService {
         };
     }
 
+    /**
+     * 解析 AI 返回的 JSON，并转换成内部题目对象。
+     */
     private List<GeneratedQuestion> parseGeneratedQuestions(String content, QuestionPlan questionPlan) {
         try {
             String normalized = normalizeJsonContent(content);
@@ -790,6 +906,9 @@ public class AiQuestionServiceImpl implements AiQuestionService {
         }
     }
 
+    /**
+     * 去掉模型可能额外包裹的 Markdown 代码块。
+     */
     private String normalizeJsonContent(String content) {
         String normalized = content == null ? "" : content.trim();
         if (normalized.startsWith("```json")) {
@@ -803,10 +922,16 @@ public class AiQuestionServiceImpl implements AiQuestionService {
         return normalized;
     }
 
+    /**
+     * 去空格，空字符串统一转成 null。
+     */
     private String trimToNull(String value) {
         return StringUtils.hasText(value) ? value.trim() : null;
     }
 
+    /**
+     * 解析题集标题，前端未传时使用资料标题生成默认标题。
+     */
     private String resolveQuestionSetTitle(StudyMaterial material, QuestionGenerateRequest request) {
         String requestedTitle = request == null ? null : trimToNull(request.getTitle());
         if (!StringUtils.hasText(requestedTitle)) {
@@ -815,6 +940,9 @@ public class AiQuestionServiceImpl implements AiQuestionService {
         return requestedTitle.length() <= 200 ? requestedTitle : requestedTitle.substring(0, 200);
     }
 
+    /**
+     * 归一化正确答案格式。
+     */
     private String normalizeCorrectAnswer(String questionType, String value) {
         String normalized = trimToNull(value);
         if (!StringUtils.hasText(normalized)) {
@@ -852,6 +980,9 @@ public class AiQuestionServiceImpl implements AiQuestionService {
         return normalized.length() > 1000 ? normalized.substring(0, 1000) : normalized;
     }
 
+    /**
+     * 清理题干中的“根据资料”等套话，让题目更像正常练习题。
+     */
     private String sanitizeQuestionStem(String stemText, String questionType) {
         String sanitized = trimToNull(stemText);
         if (!StringUtils.hasText(sanitized)) {
@@ -879,6 +1010,9 @@ public class AiQuestionServiceImpl implements AiQuestionService {
         return sanitized;
     }
 
+    /**
+     * Mock 模式下生成固定结构的示例题目。
+     */
     private List<GeneratedQuestion> buildMockQuestions(
             StudyMaterial material,
             List<MaterialSegment> segments,
@@ -938,6 +1072,9 @@ public class AiQuestionServiceImpl implements AiQuestionService {
         return questions;
     }
 
+    /**
+     * 将检索片段转换成资料片段对象。
+     */
     private MaterialSegment toContextSegment(RetrievedSegment segment) {
         MaterialSegment materialSegment = new MaterialSegment();
         materialSegment.setId(segment.segmentId());
@@ -949,6 +1086,9 @@ public class AiQuestionServiceImpl implements AiQuestionService {
         return materialSegment;
     }
 
+    /**
+     * 内部题目数据结构。
+     */
     private record GeneratedQuestion(
             String questionType,
             String stemText,
@@ -963,6 +1103,9 @@ public class AiQuestionServiceImpl implements AiQuestionService {
     ) {
     }
 
+    /**
+     * 本次出题数量计划。
+     */
     private record QuestionPlan(
             int singleCount,
             int judgeCount,
@@ -971,6 +1114,9 @@ public class AiQuestionServiceImpl implements AiQuestionService {
     ) {
     }
 
+    /**
+     * 出题上下文候选片段。
+     */
     private record QuestionContextCandidate(
             MaterialSegment segment,
             double rankScore,
@@ -978,11 +1124,17 @@ public class AiQuestionServiceImpl implements AiQuestionService {
     ) {
     }
 
+    /**
+     * AI 返回 JSON 的外层结构。
+     */
     private static class GeneratedQuestionSetPayload {
         public String title;
         public List<GeneratedQuestionPayload> questions;
     }
 
+    /**
+     * AI 返回 JSON 中的单道题结构。
+     */
     private static class GeneratedQuestionPayload {
         public String questionType;
         public String stemText;

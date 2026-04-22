@@ -31,18 +31,32 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+/**
+ * AI 总结服务实现类。
+ *
+ * <p>主要流程：校验资料归属 -> 选择资料片段 -> 调用 AI 生成总结 -> 记录生成历史 -> 可选保存为笔记。</p>
+ */
 @Service
 public class AiSummaryServiceImpl implements AiSummaryService {
 
+    /** 生成失败时写入数据库的错误信息最大长度。 */
     private static final int MAX_ERROR_MESSAGE_LENGTH = 500;
+    /** 做总结前从向量库召回的片段数量。 */
     private static final int SUMMARY_RETRIEVAL_LIMIT = 8;
 
+    /** 学习资料服务，用于校验资料是否属于当前用户。 */
     private final StudyMaterialService studyMaterialService;
+    /** 资料分段 Mapper，用于读取资料内容。 */
     private final MaterialSegmentMapper materialSegmentMapper;
+    /** AI 生成记录 Mapper。 */
     private final AiGenerationRecordMapper aiGenerationRecordMapper;
+    /** 学习笔记 Mapper，总结可保存为笔记。 */
     private final StudyNoteMapper studyNoteMapper;
+    /** AI 配置服务。 */
     private final AiConfigService aiConfigService;
+    /** AI 对话服务，真正负责调用大模型。 */
     private final AiChatService aiChatService;
+    /** 语义检索服务，用于找出最适合总结的资料片段。 */
     private final RetrievalService retrievalService;
 
     public AiSummaryServiceImpl(
@@ -63,6 +77,9 @@ public class AiSummaryServiceImpl implements AiSummaryService {
         this.retrievalService = retrievalService;
     }
 
+    /**
+     * 生成某份资料的 AI 总结。
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public SummaryResultVO generateMaterialSummary(Long userId, Long materialId, SummaryGenerateRequest request) {
@@ -81,6 +98,7 @@ public class AiSummaryServiceImpl implements AiSummaryService {
             throw new BusinessException("请先解析资料，再生成 AI 总结");
         }
 
+        // 优先用语义检索得到更相关的片段，失败时回退到全部片段。
         String summaryType = StringUtils.hasText(request.getSummaryType()) ? request.getSummaryType() : "STANDARD";
         String defaultModel = aiConfigService.getResolvedConfig().defaultModel();
         String modelName = StringUtils.hasText(request.getModelName()) ? request.getModelName() : defaultModel;
@@ -101,6 +119,7 @@ public class AiSummaryServiceImpl implements AiSummaryService {
             summaryText = null;
         }
 
+        // 无论成功失败都写一条生成记录，便于排查 AI 调用问题。
         AiGenerationRecord record = new AiGenerationRecord();
         record.setUserId(userId);
         record.setMaterialId(materialId);
@@ -122,6 +141,7 @@ public class AiSummaryServiceImpl implements AiSummaryService {
 
         Long noteId = null;
         if (Boolean.TRUE.equals(request.getSaveAsNote())) {
+            // 用户勾选保存时，把总结内容同步保存成学习笔记。
             StudyNote note = new StudyNote();
             note.setUserId(userId);
             note.setMaterialId(materialId);
@@ -152,6 +172,9 @@ public class AiSummaryServiceImpl implements AiSummaryService {
                 .build();
     }
 
+    /**
+     * 查询某份资料最近一次成功生成的总结。
+     */
     @Override
     public SummaryResultVO getLatestMaterialSummary(Long userId, Long materialId) {
         StudyMaterial material = studyMaterialService.getOne(new LambdaQueryWrapper<StudyMaterial>()
@@ -185,6 +208,9 @@ public class AiSummaryServiceImpl implements AiSummaryService {
                 .build();
     }
 
+    /**
+     * 查询某份资料的所有总结历史。
+     */
     @Override
     public List<SummaryHistoryVO> listMaterialSummaries(Long userId, Long materialId) {
         StudyMaterial material = studyMaterialService.getOne(new LambdaQueryWrapper<StudyMaterial>()
@@ -223,6 +249,9 @@ public class AiSummaryServiceImpl implements AiSummaryService {
                 .toList();
     }
 
+    /**
+     * 查询当前用户全部资料的总结历史。
+     */
     @Override
     public List<SummaryHistoryVO> listAllSummaries(Long userId) {
         List<AiGenerationRecord> records = aiGenerationRecordMapper.selectList(new LambdaQueryWrapper<AiGenerationRecord>()
@@ -265,6 +294,9 @@ public class AiSummaryServiceImpl implements AiSummaryService {
                 .toList();
     }
 
+    /**
+     * 根据 AI 配置决定调用真实模型还是返回模拟总结。
+     */
     private String callAiOrMock(String promptText, String inputText, String modelName, Double temperature) {
         AiConfigService.ResolvedAiConfig config = aiConfigService.getResolvedConfig();
         if (!Boolean.TRUE.equals(config.enabled())) {
@@ -276,6 +308,9 @@ public class AiSummaryServiceImpl implements AiSummaryService {
         return aiChatService.chat(promptText, inputText, modelName, temperature);
     }
 
+    /**
+     * 不同总结类型对应不同提示词。
+     */
     private String buildPrompt(String summaryType) {
         return switch (summaryType.toUpperCase()) {
             case "EXAM" -> """
@@ -299,6 +334,9 @@ public class AiSummaryServiceImpl implements AiSummaryService {
         };
     }
 
+    /**
+     * 把资料标题、类型和片段内容拼成发给模型的用户输入。
+     */
     private String buildInputText(StudyMaterial material, List<MaterialSegment> segments) {
         StringBuilder builder = new StringBuilder();
         builder.append("资料标题：").append(material.getTitle()).append(System.lineSeparator());
@@ -320,6 +358,9 @@ public class AiSummaryServiceImpl implements AiSummaryService {
         return builder.toString();
     }
 
+    /**
+     * 为总结任务选择上下文片段。
+     */
     private List<MaterialSegment> resolveSummaryContextSegments(
             Long userId,
             StudyMaterial material,
@@ -344,6 +385,9 @@ public class AiSummaryServiceImpl implements AiSummaryService {
         }
     }
 
+    /**
+     * 根据总结类型构造语义检索查询词。
+     */
     private String buildSummaryRetrievalQuery(StudyMaterial material, String summaryType) {
         String mode = switch (String.valueOf(summaryType).toUpperCase()) {
             case "EXAM" -> "考试重点 高频考点 易错点 复习建议";
@@ -353,6 +397,9 @@ public class AiSummaryServiceImpl implements AiSummaryService {
         return material.getTitle() + " " + mode;
     }
 
+    /**
+     * 将向量检索结果转成 MaterialSegment，方便后续复用展示转换逻辑。
+     */
     private MaterialSegment toContextSegment(RetrievedSegment segment) {
         MaterialSegment materialSegment = new MaterialSegment();
         materialSegment.setId(segment.segmentId());
@@ -364,6 +411,9 @@ public class AiSummaryServiceImpl implements AiSummaryService {
         return materialSegment;
     }
 
+    /**
+     * Mock 模式下生成一个简单总结，方便没有配置真实模型时开发调试。
+     */
     private String buildMockSummary(String inputText) {
         List<String> paragraphs = inputText.lines()
                 .map(String::trim)
@@ -398,6 +448,9 @@ public class AiSummaryServiceImpl implements AiSummaryService {
         return builder.toString();
     }
 
+    /**
+     * 读取总结关联的笔记。
+     */
     private StudyNote loadSummaryNote(Long userId, Long noteId) {
         if (noteId == null) {
             return null;
@@ -409,6 +462,9 @@ public class AiSummaryServiceImpl implements AiSummaryService {
         return note;
     }
 
+    /**
+     * 批量读取总结关联的笔记，避免列表页一条条查询。
+     */
     private Map<Long, StudyNote> loadSummaryNoteMap(Long userId, List<AiGenerationRecord> records) {
         List<Long> noteIds = records.stream()
                 .map(AiGenerationRecord::getNoteId)
@@ -424,6 +480,9 @@ public class AiSummaryServiceImpl implements AiSummaryService {
                 .collect(Collectors.toMap(StudyNote::getId, Function.identity(), (left, right) -> left));
     }
 
+    /**
+     * 还原总结来源片段；优先使用笔记中记录的 sourceSegmentIds。
+     */
     private List<RetrievedSegmentVO> resolveSummarySourceSegments(
             Long userId,
             StudyMaterial material,
@@ -447,6 +506,9 @@ public class AiSummaryServiceImpl implements AiSummaryService {
         return toRetrievedSegmentVOList(resolveSummaryContextSegments(userId, material, allSegments, record.getSummaryType()));
     }
 
+    /**
+     * 根据逗号分隔的片段 ID 字符串读取片段。
+     */
     private List<RetrievedSegmentVO> loadSegmentsByIds(String sourceSegmentIds) {
         List<Long> segmentIds = parseSegmentIds(sourceSegmentIds);
         if (segmentIds.isEmpty()) {
@@ -470,6 +532,9 @@ public class AiSummaryServiceImpl implements AiSummaryService {
                 .toList();
     }
 
+    /**
+     * 将 "1,2,3" 这样的字符串解析成 ID 列表。
+     */
     private List<Long> parseSegmentIds(String sourceSegmentIds) {
         if (!StringUtils.hasText(sourceSegmentIds)) {
             return List.of();
@@ -488,6 +553,9 @@ public class AiSummaryServiceImpl implements AiSummaryService {
                 .toList();
     }
 
+    /**
+     * 将资料片段转换成前端展示对象。
+     */
     private List<RetrievedSegmentVO> toRetrievedSegmentVOList(List<MaterialSegment> segments) {
         if (segments == null || segments.isEmpty()) {
             return List.of();
@@ -504,12 +572,18 @@ public class AiSummaryServiceImpl implements AiSummaryService {
                 .toList();
     }
 
+    /**
+     * 粗略估算 token 数，用于生成记录统计。
+     */
     private Integer estimateTokens(String inputText, String outputText) {
         int input = inputText == null ? 0 : inputText.length() / 4;
         int output = outputText == null ? 0 : outputText.length() / 4;
         return Math.max(1, input + output);
     }
 
+    /**
+     * 将来源片段 ID 拼成逗号分隔字符串，保存到笔记里。
+     */
     private String joinSegmentIds(List<MaterialSegment> segments) {
         return segments.stream()
                 .map(MaterialSegment::getId)
@@ -518,6 +592,9 @@ public class AiSummaryServiceImpl implements AiSummaryService {
                 .orElse(null);
     }
 
+    /**
+     * 截断错误信息，避免数据库字段过长。
+     */
     private String truncateErrorMessage(String errorMessage) {
         if (!StringUtils.hasText(errorMessage)) {
             return "AI 总结生成失败";

@@ -13,14 +13,25 @@ import java.nio.file.Paths;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+/**
+ * AI 配置服务实现类。
+ *
+ * <p>这个类的核心思路是：优先读取运行时 JSON 配置，如果某个字段没有配置，
+ * 再回退到 application.yml 中的默认配置。</p>
+ */
 @Service
 public class AiConfigServiceImpl implements AiConfigService {
 
+    /** OpenAI 兼容接口，很多国产或本地模型也会提供这种协议。 */
     private static final String CHAT_PROVIDER_OPENAI_COMPATIBLE = "OPENAI_COMPATIBLE";
+    /** DeepSeek 官方接口。 */
     private static final String CHAT_PROVIDER_DEEPSEEK = "DEEPSEEK";
+    /** 火山引擎豆包 Ark 接口。 */
     private static final String CHAT_PROVIDER_DOUBAO_ARK = "DOUBAO_ARK";
 
+    /** yml 中注入的默认 AI 配置。 */
     private final AiProperties aiProperties;
+    /** 读写 runtime/ai-config.json 时使用的 JSON 工具。 */
     private final ObjectMapper objectMapper;
 
     public AiConfigServiceImpl(AiProperties aiProperties, ObjectMapper objectMapper) {
@@ -28,6 +39,9 @@ public class AiConfigServiceImpl implements AiConfigService {
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * 查询配置时返回的是“合并后”的结果，而不是只返回配置文件里的原始值。
+     */
     @Override
     public AiConfigVO getConfig() {
         PersistedAiConfig persistedConfig = loadPersistedConfig();
@@ -35,6 +49,9 @@ public class AiConfigServiceImpl implements AiConfigService {
         return buildConfigVO(resolvedConfig);
     }
 
+    /**
+     * 更新配置时，前端没有传的字段会沿用当前运行时配置。
+     */
     @Override
     public AiConfigVO updateConfig(AiConfigUpdateRequest request) {
         PersistedAiConfig persistedConfig = loadPersistedConfig();
@@ -72,11 +89,17 @@ public class AiConfigServiceImpl implements AiConfigService {
         return buildConfigVO(mergeConfig(targetConfig));
     }
 
+    /**
+     * 业务代码调用大模型前会通过这里拿到最终配置。
+     */
     @Override
     public ResolvedAiConfig getResolvedConfig() {
         return mergeConfig(loadPersistedConfig());
     }
 
+    /**
+     * 合并运行时配置和默认配置。
+     */
     private ResolvedAiConfig mergeConfig(PersistedAiConfig persistedConfig) {
         return new ResolvedAiConfig(
                 persistedConfig.getEnabled() == null ? aiProperties.getEnabled() : persistedConfig.getEnabled(),
@@ -96,6 +119,9 @@ public class AiConfigServiceImpl implements AiConfigService {
         );
     }
 
+    /**
+     * 把内部配置对象转换成前端展示对象，同时对 API Key 做脱敏。
+     */
     private AiConfigVO buildConfigVO(ResolvedAiConfig resolvedConfig) {
         return AiConfigVO.builder()
                 .enabled(Boolean.TRUE.equals(resolvedConfig.enabled()))
@@ -115,6 +141,9 @@ public class AiConfigServiceImpl implements AiConfigService {
                 .build();
     }
 
+    /**
+     * 从磁盘读取运行时配置；文件不存在时返回空配置。
+     */
     private PersistedAiConfig loadPersistedConfig() {
         Path configPath = resolveConfigPath();
         if (!Files.exists(configPath)) {
@@ -127,6 +156,9 @@ public class AiConfigServiceImpl implements AiConfigService {
         }
     }
 
+    /**
+     * 将配置保存到 runtime/ai-config.json 或自定义路径。
+     */
     private void savePersistedConfig(PersistedAiConfig config) {
         Path configPath = resolveConfigPath();
         try {
@@ -137,6 +169,9 @@ public class AiConfigServiceImpl implements AiConfigService {
         }
     }
 
+    /**
+     * 校验启用真实 AI 调用时必须填写的关键配置。
+     */
     private void validateConfig(PersistedAiConfig config) {
         if (!Boolean.TRUE.equals(config.getEnabled())) {
             return;
@@ -161,6 +196,9 @@ public class AiConfigServiceImpl implements AiConfigService {
         }
     }
 
+    /**
+     * 获取配置文件路径。
+     */
     private Path resolveConfigPath() {
         if (hasText(aiProperties.getConfigFile())) {
             return Paths.get(aiProperties.getConfigFile()).toAbsolutePath();
@@ -168,10 +206,16 @@ public class AiConfigServiceImpl implements AiConfigService {
         return Paths.get(System.getProperty("user.dir"), "runtime", "ai-config.json").toAbsolutePath();
     }
 
+    /**
+     * StringUtils.hasText 的简单包装，让下面代码读起来更短。
+     */
     private boolean hasText(String value) {
         return StringUtils.hasText(value);
     }
 
+    /**
+     * 解析聊天模型提供商类型。
+     */
     private String resolveChatProviderType(PersistedAiConfig persistedConfig) {
         if (hasText(persistedConfig.getChatProviderType())) {
             return persistedConfig.getChatProviderType().trim().toUpperCase();
@@ -182,6 +226,9 @@ public class AiConfigServiceImpl implements AiConfigService {
         return CHAT_PROVIDER_OPENAI_COMPATIBLE;
     }
 
+    /**
+     * 根据提供商推导默认聊天接口地址。
+     */
     private String resolveChatBaseUrl(PersistedAiConfig persistedConfig) {
         if (hasText(persistedConfig.getBaseUrl())) {
             return persistedConfig.getBaseUrl().trim();
@@ -200,6 +247,9 @@ public class AiConfigServiceImpl implements AiConfigService {
         return "https://api.openai.com";
     }
 
+    /**
+     * 根据提供商推导默认聊天接口路径。
+     */
     private String resolveChatPath(PersistedAiConfig persistedConfig) {
         if (hasText(persistedConfig.getChatPath())) {
             return persistedConfig.getChatPath().trim();
@@ -218,6 +268,9 @@ public class AiConfigServiceImpl implements AiConfigService {
         return "/v1/chat/completions";
     }
 
+    /**
+     * 解析默认聊天模型名。
+     */
     private String resolveDefaultChatModel(PersistedAiConfig persistedConfig) {
         if (hasText(persistedConfig.getDefaultModel())) {
             return persistedConfig.getDefaultModel().trim();
@@ -232,6 +285,9 @@ public class AiConfigServiceImpl implements AiConfigService {
         return null;
     }
 
+    /**
+     * 判断聊天模型提供商是否在当前系统支持范围内。
+     */
     private boolean isSupportedChatProvider(String providerType) {
         if (!hasText(providerType)) {
             return true;
@@ -242,6 +298,9 @@ public class AiConfigServiceImpl implements AiConfigService {
                 || CHAT_PROVIDER_DOUBAO_ARK.equals(normalized);
     }
 
+    /**
+     * 解析 Embedding 接口路径；OpenAI 兼容接口通常把 chat/completions 替换成 embeddings。
+     */
     private String resolveEmbeddingPath(PersistedAiConfig persistedConfig) {
         if (hasText(persistedConfig.getEmbeddingPath())) {
             return persistedConfig.getEmbeddingPath().trim();
@@ -258,6 +317,9 @@ public class AiConfigServiceImpl implements AiConfigService {
         return "/v1/embeddings";
     }
 
+    /**
+     * 解析 Embedding 提供商类型。
+     */
     private String resolveEmbeddingProviderType(PersistedAiConfig persistedConfig) {
         if (hasText(persistedConfig.getEmbeddingProviderType())) {
             return persistedConfig.getEmbeddingProviderType().trim().toUpperCase();
@@ -268,6 +330,9 @@ public class AiConfigServiceImpl implements AiConfigService {
         return "OPENAI_COMPATIBLE";
     }
 
+    /**
+     * 解析 Embedding 接口基础地址；默认复用聊天接口地址。
+     */
     private String resolveEmbeddingBaseUrl(PersistedAiConfig persistedConfig) {
         if (hasText(persistedConfig.getEmbeddingBaseUrl())) {
             return persistedConfig.getEmbeddingBaseUrl().trim();
@@ -278,6 +343,9 @@ public class AiConfigServiceImpl implements AiConfigService {
         return hasText(persistedConfig.getBaseUrl()) ? persistedConfig.getBaseUrl().trim() : aiProperties.getBaseUrl();
     }
 
+    /**
+     * 解析 Embedding API Key；没有单独配置时复用聊天模型 Key。
+     */
     private String resolveEmbeddingApiKey(PersistedAiConfig persistedConfig) {
         if (hasText(persistedConfig.getEmbeddingApiKey())) {
             return persistedConfig.getEmbeddingApiKey().trim();
@@ -288,6 +356,9 @@ public class AiConfigServiceImpl implements AiConfigService {
         return hasText(persistedConfig.getApiKey()) ? persistedConfig.getApiKey().trim() : aiProperties.getApiKey();
     }
 
+    /**
+     * 解析默认 Embedding 模型。
+     */
     private String resolveDefaultEmbeddingModel() {
         if (hasText(aiProperties.getDefaultEmbeddingModel())) {
             return aiProperties.getDefaultEmbeddingModel().trim();
@@ -295,6 +366,9 @@ public class AiConfigServiceImpl implements AiConfigService {
         return aiProperties.getDefaultModel();
     }
 
+    /**
+     * API Key 脱敏：只保留前后少量字符，避免完整密钥暴露到前端。
+     */
     private String maskApiKey(String apiKey) {
         if (!hasText(apiKey)) {
             return "";
@@ -306,6 +380,9 @@ public class AiConfigServiceImpl implements AiConfigService {
         return trimmed.substring(0, 4) + "****" + trimmed.substring(trimmed.length() - 4);
     }
 
+    /**
+     * 持久化到 JSON 文件中的配置结构。
+     */
     private static class PersistedAiConfig {
 
         private Boolean enabled;
