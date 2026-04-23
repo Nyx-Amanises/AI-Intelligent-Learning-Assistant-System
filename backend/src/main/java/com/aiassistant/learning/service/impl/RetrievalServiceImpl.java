@@ -18,15 +18,26 @@ import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+/**
+ * RAG 检索服务实现。
+ *
+ * <p>整体流程是：校验资料归属 -> 将查询文本转成向量 -> 从 Qdrant 召回候选分段 -> 用关键词匹配做一次轻量重排序。</p>
+ */
 @Service
 public class RetrievalServiceImpl implements RetrievalService {
 
+    /** 召回候选数量相对最终返回数量的放大倍数，候选多一些，后面重排序才有空间。 */
     private static final int OVERSAMPLE_FACTOR = 3;
+    /** 最小候选数量，避免用户只要 1 条时召回池过小。 */
     private static final int MIN_OVERSAMPLE_LIMIT = 12;
 
+    /** 学习资料服务，用于校验资料是否属于当前用户。 */
     private final StudyMaterialService studyMaterialService;
+    /** 文本向量化服务，用于把用户问题转换成 embedding。 */
     private final TextEmbeddingService textEmbeddingService;
+    /** 向量数据库服务，用于在 Qdrant 中检索资料分段。 */
     private final VectorStoreService vectorStoreService;
+    /** Qdrant 配置项，包含是否启用和默认检索数量。 */
     private final QdrantProperties qdrantProperties;
 
     public RetrievalServiceImpl(
@@ -41,6 +52,9 @@ public class RetrievalServiceImpl implements RetrievalService {
         this.qdrantProperties = qdrantProperties;
     }
 
+    /**
+     * 检索指定资料中与问题最相关的分段。
+     */
     @Override
     public List<RetrievedSegment> retrieveMaterialSegments(Long userId, Long materialId, String queryText, Integer limit) {
         ensureQdrantReady();
@@ -56,22 +70,30 @@ public class RetrievalServiceImpl implements RetrievalService {
             throw new BusinessException(404, "资料不存在");
         }
 
+        // RAG 的第一步是把问题转换成向量，后续才能和资料分段向量做相似度搜索。
         List<Double> queryVector = textEmbeddingService.embedTexts(List.of(queryText.trim()), null).vectors().stream()
                 .findFirst()
                 .orElseThrow(() -> new BusinessException("未生成检索向量"));
 
         int resolvedLimit = resolveLimit(limit);
+        // 先多召回一些候选，再用本地规则重排，能提升关键词型问题的命中率。
         int candidateLimit = Math.max(resolvedLimit * OVERSAMPLE_FACTOR, MIN_OVERSAMPLE_LIMIT);
         List<RetrievedSegment> candidates = vectorStoreService.searchMaterialSegments(userId, materialId, queryVector, candidateLimit);
         return rerankSegments(queryText, candidates, resolvedLimit);
     }
 
+    /**
+     * 确保向量数据库功能已开启。
+     */
     private void ensureQdrantReady() {
         if (!Boolean.TRUE.equals(qdrantProperties.getEnabled())) {
             throw new BusinessException("Qdrant 未启用");
         }
     }
 
+    /**
+     * 解析本次检索的返回数量。
+     */
     private int resolveLimit(Integer limit) {
         if (limit != null && limit > 0) {
             return limit;
@@ -80,6 +102,11 @@ public class RetrievalServiceImpl implements RetrievalService {
         return configuredLimit == null || configuredLimit <= 0 ? 6 : configuredLimit;
     }
 
+    /**
+     * 对向量召回结果做轻量重排序。
+     *
+     * <p>向量相似度擅长语义召回，关键词匹配擅长精确术语命中；这里把两种分数混合起来排序。</p>
+     */
     private List<RetrievedSegment> rerankSegments(String queryText, List<RetrievedSegment> candidates, int limit) {
         if (candidates == null || candidates.isEmpty()) {
             return List.of();
@@ -98,6 +125,7 @@ public class RetrievalServiceImpl implements RetrievalService {
             String normalizedTitle = normalizeForComparison(candidate.sectionTitle());
             double lexicalScore = computeLexicalScore(normalizedQuery, lexicalTerms, normalizedContent, normalizedTitle);
             double semanticScore = candidate.score() == null ? 0D : candidate.score();
+            // 标题或正文完整包含查询时，额外加一点分，帮助精确问题靠前。
             double titleBoost = normalizedTitle.contains(normalizedQuery) ? 0.12D : 0D;
             double exactBoost = normalizedContent.contains(normalizedQuery) ? 0.18D : 0D;
             double finalScore = semanticScore * 0.72D + lexicalScore * 0.90D + titleBoost + exactBoost;
@@ -113,6 +141,9 @@ public class RetrievalServiceImpl implements RetrievalService {
                 .toList();
     }
 
+    /**
+     * 计算查询词和候选分段之间的词面匹配分数。
+     */
     private double computeLexicalScore(
             String normalizedQuery,
             List<String> lexicalTerms,
@@ -144,6 +175,11 @@ public class RetrievalServiceImpl implements RetrievalService {
         return coverageScore;
     }
 
+    /**
+     * 从原始查询中拆出可用于关键词匹配的词项。
+     *
+     * <p>英文会按连续字母数字提取，中文会生成 2 到 5 字的短片段，适合简单匹配。</p>
+     */
     private List<String> buildLexicalTerms(String rawQuery, String normalizedQuery) {
         LinkedHashSet<String> terms = new LinkedHashSet<>();
         String lowerRaw = rawQuery == null ? "" : rawQuery.toLowerCase(Locale.ROOT);
@@ -167,6 +203,9 @@ public class RetrievalServiceImpl implements RetrievalService {
         return new ArrayList<>(terms);
     }
 
+    /**
+     * 判断一个短词项是否值得参与匹配。
+     */
     private boolean isUsefulLexicalTerm(String term) {
         if (!StringUtils.hasText(term)) {
             return false;
@@ -180,6 +219,9 @@ public class RetrievalServiceImpl implements RetrievalService {
         return !Set.of("什么", "如何", "一下", "这个", "那个", "以及", "我们", "你们").contains(term);
     }
 
+    /**
+     * 将文本统一成便于比较的形式：小写，并移除空白和常见标点。
+     */
     private String normalizeForComparison(String text) {
         if (!StringUtils.hasText(text)) {
             return "";
@@ -188,6 +230,9 @@ public class RetrievalServiceImpl implements RetrievalService {
                 .replaceAll("[\\s\\p{Punct}，。！？；：、“”‘’（）()【】《》<>·—…-]+", "");
     }
 
+    /**
+     * 重排序时的临时结构，保存原始分段、重排分数和原始顺序。
+     */
     private record RankedSegment(RetrievedSegment segment, double score, int originalIndex) {
     }
 }

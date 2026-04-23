@@ -41,17 +41,30 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+/**
+ * 智能助手会话服务实现类。
+ *
+ * <p>负责保存会话消息、调用 Agent 编排器、处理流式 SSE 推送，并记录工具调用。</p>
+ */
 @Service
 public class AssistantServiceImpl implements AssistantService {
 
+    /** 新建会话的默认标题。 */
     private static final String DEFAULT_SESSION_TITLE = "新对话";
 
+    /** 助手会话 Mapper。 */
     private final AssistantSessionMapper assistantSessionMapper;
+    /** 助手消息 Mapper。 */
     private final AssistantMessageMapper assistantMessageMapper;
+    /** 工具调用记录 Mapper。 */
     private final AssistantToolCallMapper assistantToolCallMapper;
+    /** AI 聊天服务，用于流式调用大模型。 */
     private final AiChatService aiChatService;
+    /** Agent 编排器，负责意图识别、工具调用和提示词构造。 */
     private final AssistantAgentOrchestrator assistantAgentOrchestrator;
+    /** JSON 解析工具。 */
     private final ObjectMapper objectMapper;
+    /** 流式回复使用独立线程池，避免阻塞 Web 请求线程。 */
     private final ExecutorService assistantStreamExecutor = Executors.newCachedThreadPool(new AssistantStreamThreadFactory());
 
     public AssistantServiceImpl(
@@ -70,11 +83,17 @@ public class AssistantServiceImpl implements AssistantService {
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * 应用关闭时释放流式回复线程池。
+     */
     @PreDestroy
     public void shutdownAssistantStreamExecutor() {
         assistantStreamExecutor.shutdownNow();
     }
 
+    /**
+     * 创建助手会话。
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public AssistantSessionDetailVO createSession(Long userId, AssistantSessionCreateRequest request) {
@@ -89,6 +108,9 @@ public class AssistantServiceImpl implements AssistantService {
         return buildSessionDetail(session, List.of(), List.of());
     }
 
+    /**
+     * 分页查询助手会话，并附带最近消息预览。
+     */
     @Override
     public PageVO<AssistantSessionPageVO> pageSessions(Long userId, Long current, Long size) {
         Page<AssistantSession> page = assistantSessionMapper.selectPage(
@@ -127,6 +149,9 @@ public class AssistantServiceImpl implements AssistantService {
                 .build();
     }
 
+    /**
+     * 查询会话详情。
+     */
     @Override
     public AssistantSessionDetailVO getSessionDetail(Long userId, Long sessionId, Integer messageLimit) {
         AssistantSession session = getOwnedSession(userId, sessionId);
@@ -135,6 +160,9 @@ public class AssistantServiceImpl implements AssistantService {
         return buildSessionDetail(session, messages, toolCalls);
     }
 
+    /**
+     * 非流式发送消息：先保存用户消息，再让编排器直接生成完整回复。
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public AssistantChatReplyVO sendMessage(Long userId, Long sessionId, AssistantMessageSendRequest request) {
@@ -169,6 +197,9 @@ public class AssistantServiceImpl implements AssistantService {
         return buildChatReplyVO(session, userMessage, assistantMessage, toolCalls, agentResult.usedMemories());
     }
 
+    /**
+     * 流式发送消息：先准备工具和提示词，再通过 SSE 持续推送回复。
+     */
     @Override
     public SseEmitter streamMessage(Long userId, Long sessionId, AssistantMessageSendRequest request) {
         AssistantSession session = getOwnedSession(userId, sessionId);
@@ -192,6 +223,9 @@ public class AssistantServiceImpl implements AssistantService {
         return emitter;
     }
 
+    /**
+     * 删除会话以及关联消息、工具调用记录。
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteSession(Long userId, Long sessionId) {
@@ -203,6 +237,9 @@ public class AssistantServiceImpl implements AssistantService {
         assistantSessionMapper.deleteById(session.getId());
     }
 
+    /**
+     * 保存用户消息，并同步本轮消息传入的上下文。
+     */
     private AssistantMessage persistUserMessage(Long userId, AssistantSession session, AssistantMessageSendRequest request) {
         applyContext(session, request.getContextType(), request.getContextId(), request.getMaterialId(),
                 request.getQuestionSetId(), request.getPracticeSessionId());
@@ -225,6 +262,9 @@ public class AssistantServiceImpl implements AssistantService {
         return userMessage;
     }
 
+    /**
+     * 在线程池中执行流式助手回复。
+     */
     private void streamAssistantReply(
             SseEmitter emitter,
             Long userId,
@@ -281,6 +321,9 @@ public class AssistantServiceImpl implements AssistantService {
         }
     }
 
+    /**
+     * 流式生成失败时，尽量保存一条失败说明，保证前端能收到完整结束事件。
+     */
     private void sendStreamFailureReply(
             SseEmitter emitter,
             Long userId,
@@ -308,6 +351,9 @@ public class AssistantServiceImpl implements AssistantService {
         }
     }
 
+    /**
+     * 追加一段模型增量文本并推送给前端。
+     */
     private void appendAssistantDelta(SseEmitter emitter, StringBuilder assistantReplyBuilder, String delta) {
         if (!StringUtils.hasText(delta)) {
             return;
@@ -316,6 +362,9 @@ public class AssistantServiceImpl implements AssistantService {
         sendStreamEvent(emitter, Map.of("type", "delta", "delta", delta));
     }
 
+    /**
+     * 不调用模型时，把兜底回复拆成小段模拟流式输出。
+     */
     private void emitFallbackReply(SseEmitter emitter, StringBuilder assistantReplyBuilder, String fallbackReply) {
         if (!StringUtils.hasText(fallbackReply)) {
             return;
@@ -330,6 +379,9 @@ public class AssistantServiceImpl implements AssistantService {
         }
     }
 
+    /**
+     * 保存流式回复完成后的助手消息和工具调用记录。
+     */
     private AssistantChatReplyVO persistStreamReply(
             Long userId,
             AssistantSession session,
@@ -360,6 +412,9 @@ public class AssistantServiceImpl implements AssistantService {
         return buildChatReplyVO(session, userMessage, assistantMessage, toolCalls, preparedResult.usedMemories());
     }
 
+    /**
+     * 构造 SSE 的会话事件。
+     */
     private Map<String, Object> buildSessionEventPayload(AssistantSession session, AssistantMessage userMessage) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("type", "session");
@@ -369,6 +424,9 @@ public class AssistantServiceImpl implements AssistantService {
         return payload;
     }
 
+    /**
+     * 构造 SSE 的追踪事件，包含工具调用、模型和记忆信息。
+     */
     private Map<String, Object> buildTraceEventPayload(AssistantAgentOrchestrator.AssistantPreparedResult preparedResult) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("type", "trace");
@@ -380,6 +438,9 @@ public class AssistantServiceImpl implements AssistantService {
         return payload;
     }
 
+    /**
+     * 推送一个 SSE 事件。
+     */
     private void sendStreamEvent(SseEmitter emitter, Object payload) {
         try {
             emitter.send(SseEmitter.event().data(payload, MediaType.APPLICATION_JSON));
@@ -388,6 +449,9 @@ public class AssistantServiceImpl implements AssistantService {
         }
     }
 
+    /**
+     * 推送 SSE 错误事件。
+     */
     private void sendStreamError(SseEmitter emitter, String message) {
         try {
             emitter.send(SseEmitter.event().data(Map.of("type", "error", "message", message), MediaType.APPLICATION_JSON));
@@ -397,6 +461,9 @@ public class AssistantServiceImpl implements AssistantService {
         }
     }
 
+    /**
+     * 提取适合展示给用户的流式错误信息。
+     */
     private String resolveStreamErrorMessage(Throwable throwable) {
         if (throwable instanceof BusinessException businessException) {
             return businessException.getMessage();
@@ -407,6 +474,9 @@ public class AssistantServiceImpl implements AssistantService {
         return "助手流式生成失败";
     }
 
+    /**
+     * 查询会话并校验归属。
+     */
     private AssistantSession getOwnedSession(Long userId, Long sessionId) {
         AssistantSession session = assistantSessionMapper.selectOne(new LambdaQueryWrapper<AssistantSession>()
                 .eq(AssistantSession::getId, sessionId)
@@ -418,6 +488,9 @@ public class AssistantServiceImpl implements AssistantService {
         return session;
     }
 
+    /**
+     * 将请求中的上下文写入会话。
+     */
     private void applyContext(
             AssistantSession session,
             String contextType,
@@ -458,6 +531,9 @@ public class AssistantServiceImpl implements AssistantService {
         }
     }
 
+    /**
+     * 读取最近消息，按时间正序返回。
+     */
     private List<AssistantMessage> loadMessages(Long sessionId, Integer messageLimit) {
         int limit = messageLimit == null || messageLimit <= 0 ? 30 : Math.min(messageLimit, 100);
         List<AssistantMessage> messages = assistantMessageMapper.selectList(new LambdaQueryWrapper<AssistantMessage>()
@@ -469,6 +545,9 @@ public class AssistantServiceImpl implements AssistantService {
                 .toList();
     }
 
+    /**
+     * 读取最近工具调用记录。
+     */
     private List<AssistantToolCall> loadRecentToolCalls(Long sessionId, int limit) {
         return assistantToolCallMapper.selectList(new LambdaQueryWrapper<AssistantToolCall>()
                 .eq(AssistantToolCall::getSessionId, sessionId)
@@ -479,6 +558,9 @@ public class AssistantServiceImpl implements AssistantService {
                 .toList();
     }
 
+    /**
+     * 批量加载每个会话的最近一条消息。
+     */
     private Map<Long, AssistantMessage> loadLatestMessages(List<Long> sessionIds) {
         if (sessionIds == null || sessionIds.isEmpty()) {
             return Map.of();
@@ -493,6 +575,9 @@ public class AssistantServiceImpl implements AssistantService {
         return latestMessageMap;
     }
 
+    /**
+     * 组装会话详情 VO。
+     */
     private AssistantSessionDetailVO buildSessionDetail(
             AssistantSession session,
             List<AssistantMessage> messages,
@@ -516,6 +601,9 @@ public class AssistantServiceImpl implements AssistantService {
                 .build();
     }
 
+    /**
+     * 消息实体转展示对象。
+     */
     private AssistantMessageVO toMessageVO(AssistantMessage message) {
         return AssistantMessageVO.builder()
                 .id(message.getId())
@@ -531,6 +619,9 @@ public class AssistantServiceImpl implements AssistantService {
                 .build();
     }
 
+    /**
+     * 工具调用实体转展示对象。
+     */
     private AssistantToolCallVO toToolCallVO(AssistantToolCall toolCall) {
         return AssistantToolCallVO.builder()
                 .id(toolCall.getId())
@@ -546,6 +637,9 @@ public class AssistantServiceImpl implements AssistantService {
                 .build();
     }
 
+    /**
+     * 将还未入库的工具执行结果转换成预览 VO。
+     */
     private AssistantToolCallVO toPreviewToolCallVO(AssistantTool.ToolExecutionResult execution) {
         return AssistantToolCallVO.builder()
                 .toolName(execution.toolName())
@@ -558,6 +652,9 @@ public class AssistantServiceImpl implements AssistantService {
                 .build();
     }
 
+    /**
+     * 将编排器使用的记忆转换成前端展示对象。
+     */
     private List<AssistantRelevantMemoryVO> toRelevantMemoryVOList(List<AssistantAgentOrchestrator.MemoryUsage> memoryUsages) {
         if (memoryUsages == null || memoryUsages.isEmpty()) {
             return List.of();
@@ -573,6 +670,9 @@ public class AssistantServiceImpl implements AssistantService {
                 .toList();
     }
 
+    /**
+     * 组装聊天回复 VO。
+     */
     private AssistantChatReplyVO buildChatReplyVO(
             AssistantSession session,
             AssistantMessage userMessage,
@@ -590,6 +690,9 @@ public class AssistantServiceImpl implements AssistantService {
                 .build();
     }
 
+    /**
+     * 保存本轮工具调用记录。
+     */
     private List<AssistantToolCall> saveToolCalls(
             Long sessionId,
             Long triggerMessageId,
@@ -616,6 +719,9 @@ public class AssistantServiceImpl implements AssistantService {
         return toolCalls;
     }
 
+    /**
+     * 如果工具提交了 AI 任务，就把会话上下文切换到该任务。
+     */
     private void syncSessionContextFromToolCalls(
             AssistantSession session,
             List<AssistantTool.ToolExecutionResult> executions
@@ -642,6 +748,9 @@ public class AssistantServiceImpl implements AssistantService {
         }
     }
 
+    /**
+     * 粗略估算 token。
+     */
     private int estimateTokens(String text) {
         if (!StringUtils.hasText(text)) {
             return 0;
@@ -649,6 +758,9 @@ public class AssistantServiceImpl implements AssistantService {
         return Math.max(1, text.trim().length() / 4);
     }
 
+    /**
+     * 根据第一条消息生成会话标题。
+     */
     private String buildSessionTitle(String firstMessage) {
         if (!StringUtils.hasText(firstMessage)) {
             return DEFAULT_SESSION_TITLE;
@@ -657,6 +769,9 @@ public class AssistantServiceImpl implements AssistantService {
         return normalized.length() <= 20 ? normalized : normalized.substring(0, 20);
     }
 
+    /**
+     * 生成消息预览文本。
+     */
     private String abbreviate(String text, int maxLength) {
         if (!StringUtils.hasText(text)) {
             return null;
@@ -665,10 +780,17 @@ public class AssistantServiceImpl implements AssistantService {
         return normalized.length() <= maxLength ? normalized : normalized.substring(0, maxLength) + "...";
     }
 
+    /**
+     * 流式助手回复线程工厂。
+     */
     private static final class AssistantStreamThreadFactory implements ThreadFactory {
 
+        /** 线程编号。 */
         private final AtomicInteger index = new AtomicInteger(1);
 
+        /**
+         * 创建守护线程，避免应用退出时被流式线程阻塞。
+         */
         @Override
         public Thread newThread(Runnable runnable) {
             Thread thread = new Thread(runnable, "assistant-stream-" + index.getAndIncrement());

@@ -18,13 +18,20 @@ import java.util.Map;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+/**
+ * 题集列表助手工具。
+ */
 @Component
 public class QuestionSetListAssistantTool extends AbstractAssistantTool {
 
+    /** 默认展示题集数量。 */
     private static final int DEFAULT_LIMIT = 6;
 
+    /** 题集服务。 */
     private final QuestionSetService questionSetService;
+    /** 学习资料服务，用于解析当前资料上下文。 */
     private final StudyMaterialService studyMaterialService;
+    /** 规则意图解析器。 */
     private final AssistantTaskIntentParser taskIntentParser;
 
     public QuestionSetListAssistantTool(
@@ -39,16 +46,25 @@ public class QuestionSetListAssistantTool extends AbstractAssistantTool {
         this.taskIntentParser = taskIntentParser;
     }
 
+    /**
+     * 工具名称。
+     */
     @Override
     public String name() {
         return "question_set.list";
     }
 
+    /**
+     * 用户想查看题集列表时支持该工具。
+     */
     @Override
     public boolean supports(ToolContext context) {
         return taskIntentParser.looksLikeQuestionSetListRequest(context.userMessage(), context.structuredIntent());
     }
 
+    /**
+     * 查询题集列表。
+     */
     @Override
     public ToolExecutionResult execute(ToolContext context) {
         LocalDateTime startedAt = LocalDateTime.now();
@@ -102,6 +118,9 @@ public class QuestionSetListAssistantTool extends AbstractAssistantTool {
         }
     }
 
+    /**
+     * 解析资料绑定关系。
+     */
     private MaterialBinding resolveMaterialBinding(Long userId, AssistantSession session, boolean currentMaterialOnly) {
         if (!currentMaterialOnly) {
             return new MaterialBinding(null, null, false);
@@ -121,6 +140,9 @@ public class QuestionSetListAssistantTool extends AbstractAssistantTool {
         return new MaterialBinding(material.getId(), material.getTitle(), true);
     }
 
+    /**
+     * 查询资料标题。
+     */
     private String resolveMaterialTitle(Long userId, Long materialId) {
         if (materialId == null) {
             return null;
@@ -133,6 +155,9 @@ public class QuestionSetListAssistantTool extends AbstractAssistantTool {
         }
     }
 
+    /**
+     * 将资料上下文绑定到会话。
+     */
     private void bindMaterialContext(AssistantSession session, Long materialId) {
         if (session == null || materialId == null) {
             return;
@@ -142,6 +167,9 @@ public class QuestionSetListAssistantTool extends AbstractAssistantTool {
         session.setCurrentContextId(materialId);
     }
 
+    /**
+     * 构造题集列表摘要。
+     */
     private String buildSummary(
             AssistantTaskIntentParser.QuestionSetBrowseOptions options,
             MaterialBinding materialBinding,
@@ -198,6 +226,9 @@ public class QuestionSetListAssistantTool extends AbstractAssistantTool {
         return builder.toString();
     }
 
+    /**
+     * 将题集状态转换成中文标签。
+     */
     private String formatStatus(String status) {
         if (!StringUtils.hasText(status)) {
             return "未知状态";
@@ -210,6 +241,9 @@ public class QuestionSetListAssistantTool extends AbstractAssistantTool {
         };
     }
 
+    /**
+     * 资料绑定结果。
+     */
     private record MaterialBinding(Long materialId, String materialTitle, boolean autoResolvedFromRecent) {
     }
 }

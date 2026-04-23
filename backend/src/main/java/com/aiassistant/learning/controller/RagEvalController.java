@@ -33,12 +33,16 @@ import org.springframework.web.multipart.MultipartFile;
 @RequestMapping("/api/rag/eval")
 public class RagEvalController {
 
+    /** RAG 检索评测业务服务。 */
     private final RagEvalService ragEvalService;
 
     public RagEvalController(RagEvalService ragEvalService) {
         this.ragEvalService = ragEvalService;
     }
 
+    /**
+     * 导入 CMRC2018 阅读理解数据，并自动生成资料、资料分段和 RAG 评测样本。
+     */
     @PostMapping(value = "/cmrc2018/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResponse<CmrcImportResultVO> importCmrc2018(
             @RequestParam MultipartFile file,
@@ -60,24 +64,36 @@ public class RagEvalController {
         ));
     }
 
+    /**
+     * 新建一个评测集。
+     */
     @PostMapping("/datasets")
     public ApiResponse<RagEvalDatasetVO> createDataset(@Valid @RequestBody RagEvalDatasetCreateRequest request) {
         Long userId = UserContext.getCurrentUserId();
         return ApiResponse.success("评测集已创建", ragEvalService.createDataset(userId, request));
     }
 
+    /**
+     * 分页查询当前用户的评测集。
+     */
     @GetMapping("/datasets")
     public ApiResponse<PageVO<RagEvalDatasetVO>> pageDatasets(@Valid RagEvalDatasetPageQuery query) {
         Long userId = UserContext.getCurrentUserId();
         return ApiResponse.success(ragEvalService.pageDatasets(userId, query));
     }
 
+    /**
+     * 查询单个评测集详情。
+     */
     @GetMapping("/datasets/{datasetId}")
     public ApiResponse<RagEvalDatasetVO> getDataset(@PathVariable Long datasetId) {
         Long userId = UserContext.getCurrentUserId();
         return ApiResponse.success(ragEvalService.getDataset(userId, datasetId));
     }
 
+    /**
+     * 删除评测集以及它下面的样本、运行记录和运行明细。
+     */
     @DeleteMapping("/datasets/{datasetId}")
     public ApiResponse<Void> deleteDataset(@PathVariable Long datasetId) {
         Long userId = UserContext.getCurrentUserId();
@@ -85,6 +101,9 @@ public class RagEvalController {
         return ApiResponse.success("评测集已删除", null);
     }
 
+    /**
+     * 批量添加评测样本。
+     */
     @PostMapping("/datasets/{datasetId}/samples")
     public ApiResponse<List<RagEvalSampleVO>> addSamples(
             @PathVariable Long datasetId,
@@ -94,12 +113,18 @@ public class RagEvalController {
         return ApiResponse.success("评测样本已添加", ragEvalService.addSamples(userId, datasetId, request));
     }
 
+    /**
+     * 查询某个评测集下的全部样本。
+     */
     @GetMapping("/datasets/{datasetId}/samples")
     public ApiResponse<List<RagEvalSampleVO>> listSamples(@PathVariable Long datasetId) {
         Long userId = UserContext.getCurrentUserId();
         return ApiResponse.success(ragEvalService.listSamples(userId, datasetId));
     }
 
+    /**
+     * 更新评测样本的查询文本、标注答案或元信息。
+     */
     @PutMapping("/datasets/{datasetId}/samples/{sampleId}")
     public ApiResponse<RagEvalSampleVO> updateSample(
             @PathVariable Long datasetId,
@@ -110,6 +135,9 @@ public class RagEvalController {
         return ApiResponse.success("评测样本已更新", ragEvalService.updateSample(userId, datasetId, sampleId, request));
     }
 
+    /**
+     * 删除某条评测样本，并刷新评测集样本数。
+     */
     @DeleteMapping("/datasets/{datasetId}/samples/{sampleId}")
     public ApiResponse<Void> deleteSample(@PathVariable Long datasetId, @PathVariable Long sampleId) {
         Long userId = UserContext.getCurrentUserId();
@@ -117,6 +145,9 @@ public class RagEvalController {
         return ApiResponse.success("评测样本已删除", null);
     }
 
+    /**
+     * 运行一次评测集，按样本逐条调用 RAG 检索并计算命中率、召回率、MRR 等指标。
+     */
     @PostMapping("/datasets/{datasetId}/runs")
     public ApiResponse<RagEvalRunVO> runDataset(
             @PathVariable Long datasetId,
@@ -127,6 +158,9 @@ public class RagEvalController {
         return ApiResponse.success("评测运行完成", ragEvalService.runDataset(userId, datasetId, resolvedRequest));
     }
 
+    /**
+     * 查询某次评测运行的汇总指标和样本级明细。
+     */
     @GetMapping("/runs/{runId}")
     public ApiResponse<RagEvalRunVO> getRun(@PathVariable Long runId) {
         Long userId = UserContext.getCurrentUserId();

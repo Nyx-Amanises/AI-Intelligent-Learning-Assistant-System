@@ -12,9 +12,13 @@ import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Component;
 
+/**
+ * 题集详情助手工具。
+ */
 @Component
 public class QuestionSetDetailAssistantTool extends AbstractAssistantTool {
 
+    /** 题集服务。 */
     private final QuestionSetService questionSetService;
 
     public QuestionSetDetailAssistantTool(QuestionSetService questionSetService, ObjectMapper objectMapper) {
@@ -22,16 +26,25 @@ public class QuestionSetDetailAssistantTool extends AbstractAssistantTool {
         this.questionSetService = questionSetService;
     }
 
+    /**
+     * 工具名称。
+     */
     @Override
     public String name() {
         return "question_set.detail";
     }
 
+    /**
+     * 当前会话绑定题集时支持该工具。
+     */
     @Override
     public boolean supports(ToolContext context) {
         return AssistantToolSupport.resolveQuestionSetId(context.session()) != null;
     }
 
+    /**
+     * 查询当前题集详情。
+     */
     @Override
     public ToolExecutionResult execute(ToolContext context) {
         LocalDateTime startedAt = LocalDateTime.now();

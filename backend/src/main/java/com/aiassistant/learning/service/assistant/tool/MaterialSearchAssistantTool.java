@@ -14,12 +14,18 @@ import java.util.Map;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+/**
+ * 资料搜索助手工具。
+ */
 @Component
 public class MaterialSearchAssistantTool extends AbstractAssistantTool {
 
+    /** 默认返回候选资料数量。 */
     private static final int DEFAULT_LIMIT = 5;
 
+    /** 学习资料服务。 */
     private final StudyMaterialService studyMaterialService;
+    /** 规则意图解析器。 */
     private final AssistantTaskIntentParser taskIntentParser;
 
     public MaterialSearchAssistantTool(
@@ -32,11 +38,17 @@ public class MaterialSearchAssistantTool extends AbstractAssistantTool {
         this.taskIntentParser = taskIntentParser;
     }
 
+    /**
+     * 工具名称。
+     */
     @Override
     public String name() {
         return "material.search";
     }
 
+    /**
+     * 用户消息中能提取出资料关键词时，支持执行搜索。
+     */
     @Override
     public boolean supports(ToolContext context) {
         return StringUtils.hasText(taskIntentParser.extractMaterialQueryText(
@@ -45,6 +57,9 @@ public class MaterialSearchAssistantTool extends AbstractAssistantTool {
         ));
     }
 
+    /**
+     * 执行资料搜索。
+     */
     @Override
     public ToolExecutionResult execute(ToolContext context) {
         String queryText = taskIntentParser.extractMaterialQueryText(
@@ -54,6 +69,9 @@ public class MaterialSearchAssistantTool extends AbstractAssistantTool {
         return search(context.userId(), queryText);
     }
 
+    /**
+     * 按关键词搜索资料，并判断是否能自动选中唯一资料。
+     */
     public ToolExecutionResult search(Long userId, String queryText) {
         LocalDateTime startedAt = LocalDateTime.now();
         Map<String, Object> args = new LinkedHashMap<>();
@@ -89,6 +107,9 @@ public class MaterialSearchAssistantTool extends AbstractAssistantTool {
         }
     }
 
+    /**
+     * 将资料列表项转换为助手候选资料。
+     */
     private AssistantMaterialCandidate toCandidate(MaterialPageVO item, String queryText) {
         return AssistantMaterialCandidate.builder()
                 .id(item.getId())
@@ -102,6 +123,9 @@ public class MaterialSearchAssistantTool extends AbstractAssistantTool {
                 .build();
     }
 
+    /**
+     * 根据匹配分判断是否需要用户确认。
+     */
     private AssistantMaterialSearchResult resolveSearchResult(String queryText, List<AssistantMaterialCandidate> candidates) {
         if (candidates.isEmpty()) {
             return AssistantMaterialSearchResult.builder()
@@ -126,6 +150,9 @@ public class MaterialSearchAssistantTool extends AbstractAssistantTool {
                 .build();
     }
 
+    /**
+     * 给资料标题和标签的匹配程度打分。
+     */
     private int computeMatchScore(MaterialPageVO material, String queryText) {
         if (!StringUtils.hasText(queryText)) {
             return 0;
@@ -148,6 +175,9 @@ public class MaterialSearchAssistantTool extends AbstractAssistantTool {
         return 50;
     }
 
+    /**
+     * 构造候选资料澄清提示。
+     */
     private String buildClarificationSummary(List<AssistantMaterialCandidate> candidates) {
         StringBuilder builder = new StringBuilder("我找到了几份可能相关的资料，你告诉我是下面哪一份：");
         for (int index = 0; index < candidates.size(); index++) {

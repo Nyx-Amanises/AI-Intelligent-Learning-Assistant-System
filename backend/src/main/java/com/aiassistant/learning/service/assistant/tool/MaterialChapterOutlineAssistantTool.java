@@ -21,12 +21,20 @@ import java.util.Set;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+/**
+ * 资料章节线索助手工具。
+ *
+ * <p>资料没有显式目录时，会从资料分段标题和内容里提取可展示的章节线索。</p>
+ */
 @Component
 public class MaterialChapterOutlineAssistantTool extends AbstractAssistantTool {
 
+    /** 最多展示的章节线索数量。 */
     private static final int MAX_ENTRY_COUNT = 12;
 
+    /** 学习资料服务。 */
     private final StudyMaterialService studyMaterialService;
+    /** 规则意图解析器。 */
     private final AssistantTaskIntentParser taskIntentParser;
 
     public MaterialChapterOutlineAssistantTool(
@@ -39,16 +47,25 @@ public class MaterialChapterOutlineAssistantTool extends AbstractAssistantTool {
         this.taskIntentParser = taskIntentParser;
     }
 
+    /**
+     * 工具名称。
+     */
     @Override
     public String name() {
         return "material.chapter_outline";
     }
 
+    /**
+     * 用户想看章节、目录或大纲时支持该工具。
+     */
     @Override
     public boolean supports(ToolContext context) {
         return taskIntentParser.looksLikeChapterBrowseRequest(context.userMessage(), context.structuredIntent());
     }
 
+    /**
+     * 查询资料章节线索。
+     */
     @Override
     public ToolExecutionResult execute(ToolContext context) {
         LocalDateTime startedAt = LocalDateTime.now();
@@ -100,6 +117,9 @@ public class MaterialChapterOutlineAssistantTool extends AbstractAssistantTool {
         }
     }
 
+    /**
+     * 解析要查看章节的资料。
+     */
     private MaterialResolution resolveMaterial(Long userId, AssistantSession session, String materialQuery) {
         Long sessionMaterialId = AssistantToolSupport.resolveMaterialId(session);
         if (sessionMaterialId != null && !StringUtils.hasText(materialQuery)) {
@@ -143,6 +163,9 @@ public class MaterialChapterOutlineAssistantTool extends AbstractAssistantTool {
         return new MaterialResolution(material.getId(), null, true, List.of(material));
     }
 
+    /**
+     * 判断候选资料第一项是否足够明确。
+     */
     private boolean isClearSelection(List<MaterialPageVO> candidates, String materialQuery) {
         if (candidates == null || candidates.size() <= 1 || !StringUtils.hasText(materialQuery)) {
             return false;
@@ -152,6 +175,9 @@ public class MaterialChapterOutlineAssistantTool extends AbstractAssistantTool {
         return (bestScore >= 100 && secondScore < 100) || bestScore - secondScore >= 18;
     }
 
+    /**
+     * 构造资料歧义时的澄清提示。
+     */
     private String buildMaterialClarificationSummary(List<MaterialPageVO> candidates) {
         StringBuilder builder = new StringBuilder("我找到了几份可能相关的资料，我先把候选项列给你：");
         for (int index = 0; index < candidates.size(); index++) {
@@ -167,6 +193,9 @@ public class MaterialChapterOutlineAssistantTool extends AbstractAssistantTool {
         return builder.toString();
     }
 
+    /**
+     * 从资料分段中构造章节线索。
+     */
     private List<OutlineEntry> buildOutlineEntries(List<MaterialSegmentVO> segments, String keyword) {
         if (segments == null || segments.isEmpty()) {
             return List.of();
@@ -198,6 +227,9 @@ public class MaterialChapterOutlineAssistantTool extends AbstractAssistantTool {
         return entries;
     }
 
+    /**
+     * 判断分段是否匹配章节关键词。
+     */
     private boolean matchesKeyword(MaterialSegmentVO segment, String normalizedKeyword) {
         if (!StringUtils.hasText(normalizedKeyword)) {
             return true;
@@ -206,6 +238,9 @@ public class MaterialChapterOutlineAssistantTool extends AbstractAssistantTool {
                 || normalize(segment.getContentText()).contains(normalizedKeyword);
     }
 
+    /**
+     * 构造分段位置文本。
+     */
     private String buildLocationText(MaterialSegmentVO segment) {
         if (segment == null) {
             return "位置未知";
@@ -222,6 +257,9 @@ public class MaterialChapterOutlineAssistantTool extends AbstractAssistantTool {
         return "位置未知";
     }
 
+    /**
+     * 解析章节标题；没有标题时使用正文预览。
+     */
     private String resolveHeading(MaterialSegmentVO segment) {
         if (segment == null) {
             return "未命名片段";
@@ -236,6 +274,9 @@ public class MaterialChapterOutlineAssistantTool extends AbstractAssistantTool {
         return AssistantToolSupport.abbreviate(segment.getContentText(), 28);
     }
 
+    /**
+     * 构造章节线索摘要。
+     */
     private String buildSummary(
             MaterialDetailVO detail,
             String chapterKeyword,
@@ -291,6 +332,9 @@ public class MaterialChapterOutlineAssistantTool extends AbstractAssistantTool {
         return builder.toString();
     }
 
+    /**
+     * 绑定资料上下文到会话。
+     */
     private void bindMaterialContext(AssistantSession session, Long materialId) {
         if (session == null || materialId == null) {
             return;
@@ -300,6 +344,9 @@ public class MaterialChapterOutlineAssistantTool extends AbstractAssistantTool {
         session.setCurrentContextId(materialId);
     }
 
+    /**
+     * 资料候选不明确时，把待选择动作存入会话。
+     */
     private void savePendingSelectionIfNeeded(
             AssistantSession session,
             String materialQuery,
@@ -323,6 +370,9 @@ public class MaterialChapterOutlineAssistantTool extends AbstractAssistantTool {
         session.setPendingActionPayloadJson(toJson(payload));
     }
 
+    /**
+     * 资料列表项转候选资料。
+     */
     private AssistantMaterialCandidate toCandidate(MaterialPageVO material) {
         return AssistantMaterialCandidate.builder()
                 .id(material.getId())
@@ -335,10 +385,16 @@ public class MaterialChapterOutlineAssistantTool extends AbstractAssistantTool {
                 .build();
     }
 
+    /**
+     * 归一化文本。
+     */
     private String normalize(String value) {
         return StringUtils.hasText(value) ? value.replaceAll("\\s+", " ").trim().toLowerCase() : "";
     }
 
+    /**
+     * 计算资料和查询词的匹配分数。
+     */
     private int computeMatchScore(MaterialPageVO material, String queryText) {
         if (material == null || !StringUtils.hasText(queryText)) {
             return 0;
@@ -361,6 +417,9 @@ public class MaterialChapterOutlineAssistantTool extends AbstractAssistantTool {
         return 50;
     }
 
+    /**
+     * 资料解析结果。
+     */
     private record MaterialResolution(
             Long materialId,
             String waitingSummary,
@@ -369,6 +428,9 @@ public class MaterialChapterOutlineAssistantTool extends AbstractAssistantTool {
     ) {
     }
 
+    /**
+     * 章节线索条目。
+     */
     private record OutlineEntry(
             Integer pageNo,
             Integer segmentNo,

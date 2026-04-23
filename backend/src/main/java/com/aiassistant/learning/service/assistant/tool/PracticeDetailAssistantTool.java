@@ -12,9 +12,13 @@ import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Component;
 
+/**
+ * 练习详情助手工具。
+ */
 @Component
 public class PracticeDetailAssistantTool extends AbstractAssistantTool {
 
+    /** 练习服务。 */
     private final PracticeService practiceService;
 
     public PracticeDetailAssistantTool(PracticeService practiceService, ObjectMapper objectMapper) {
@@ -22,16 +26,25 @@ public class PracticeDetailAssistantTool extends AbstractAssistantTool {
         this.practiceService = practiceService;
     }
 
+    /**
+     * 工具名称。
+     */
     @Override
     public String name() {
         return "practice.detail";
     }
 
+    /**
+     * 当前会话绑定练习会话时支持该工具。
+     */
     @Override
     public boolean supports(ToolContext context) {
         return AssistantToolSupport.resolvePracticeSessionId(context.session()) != null;
     }
 
+    /**
+     * 查询当前练习记录详情。
+     */
     @Override
     public ToolExecutionResult execute(ToolContext context) {
         LocalDateTime startedAt = LocalDateTime.now();

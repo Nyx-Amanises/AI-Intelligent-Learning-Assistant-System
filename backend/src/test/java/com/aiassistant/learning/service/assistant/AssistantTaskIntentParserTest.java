@@ -9,10 +9,19 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/**
+ * AssistantTaskIntentParser 的单元测试。
+ *
+ * <p>这个解析器负责从用户自然语言中提取“出几道题、出什么题型、选哪份资料”等规则型意图。</p>
+ */
 class AssistantTaskIntentParserTest {
 
+    /** 被测试的意图解析器。 */
     private final AssistantTaskIntentParser parser = new AssistantTaskIntentParser();
 
+    /**
+     * 验证“全出单选题，一共10道”能把总数和单选数量都解析成 10。
+     */
     @Test
     void shouldResolveExclusiveSingleChoiceWithStandaloneTotalCount() {
         AssistantPlannedTask pendingTask = buildPendingQuestionTask();
@@ -28,6 +37,9 @@ class AssistantTaskIntentParserTest {
         assertEquals(0, resolution.task().getShortAnswerCount());
     }
 
+    /**
+     * 验证命令式表达“出10道，全出选择题”也能正确解析。
+     */
     @Test
     void shouldResolveExclusiveSingleChoiceWithCommandStyleTotalCount() {
         AssistantPlannedTask pendingTask = buildPendingQuestionTask();
@@ -43,6 +55,9 @@ class AssistantTaskIntentParserTest {
         assertEquals(0, resolution.task().getShortAnswerCount());
     }
 
+    /**
+     * 验证直接请求出题时，命令式题量和题型能够同时被解析出来。
+     */
     @Test
     void shouldResolveCommandStyleTotalCountForDirectQuestionRequest() {
         AssistantTaskIntentParser.QuestionTaskOptions options =
@@ -54,6 +69,9 @@ class AssistantTaskIntentParserTest {
         assertEquals(0, options.shortAnswerCount());
     }
 
+    /**
+     * 验证中文量词“个”不会影响单选题数量识别。
+     */
     @Test
     void shouldResolveSingleChoiceCountWithGeMeasureWordForDirectQuestionRequest() {
         AssistantTaskIntentParser.QuestionTaskOptions options =
@@ -66,6 +84,9 @@ class AssistantTaskIntentParserTest {
         assertFalse(options.requiresQuestionTypeConfirmation());
     }
 
+    /**
+     * 验证用户在待确认状态下回复“10个单选题”时，能够补齐待办任务配置。
+     */
     @Test
     void shouldResolveSingleChoiceCountWithGeMeasureWordForPendingQuestionConfig() {
         AssistantTaskIntentParser.QuestionConfigResolution resolution =
@@ -79,6 +100,9 @@ class AssistantTaskIntentParserTest {
         assertEquals(0, resolution.task().getShortAnswerCount());
     }
 
+    /**
+     * 验证结构化意图优先级高于普通文本规则。
+     */
     @Test
     void shouldPreferStructuredIntentForQuestionConfigReply() {
         AssistantPlannedTask pendingTask = buildPendingQuestionTask();
@@ -101,6 +125,9 @@ class AssistantTaskIntentParserTest {
         assertEquals(0, resolution.task().getShortAnswerCount());
     }
 
+    /**
+     * 验证结构化意图可以帮助从多个资料候选中选中正确资料。
+     */
     @Test
     void shouldPreferStructuredIntentForMaterialCandidateSelection() {
         List<AssistantMaterialCandidate> candidates = List.of(
@@ -120,6 +147,9 @@ class AssistantTaskIntentParserTest {
         assertEquals(7L, selectedMaterialId);
     }
 
+    /**
+     * 验证结构化意图仍然无法消歧时，解析器会返回 null，交给上层继续追问。
+     */
     @Test
     void shouldReturnNullWhenStructuredIntentCannotDisambiguateMaterialSelection() {
         List<AssistantMaterialCandidate> candidates = List.of(
@@ -139,6 +169,9 @@ class AssistantTaskIntentParserTest {
         assertNull(selectedMaterialId);
     }
 
+    /**
+     * 验证“单选10道，判断2道”这种分题型数量不会被误判成单独总数。
+     */
     @Test
     void shouldNotTreatTypedCountAsStandaloneTotalCount() {
         AssistantPlannedTask pendingTask = buildPendingQuestionTask();
@@ -154,6 +187,9 @@ class AssistantTaskIntentParserTest {
         assertEquals(0, resolution.task().getShortAnswerCount());
     }
 
+    /**
+     * 验证用户质疑资料 ID 时，不会被误认为是在回复题型配置。
+     */
     @Test
     void shouldNotTreatMaterialChallengeWithIdsAsQuestionConfigReply() {
         String userMessage = "你怎么定位到的？我还没说是id为6还是id为7的那一份《Java核心知识全面梳理》呢";
@@ -162,6 +198,9 @@ class AssistantTaskIntentParserTest {
         assertTrue(parser.looksLikeMaterialAmbiguityChallenge(userMessage));
     }
 
+    /**
+     * 构造一个等待用户确认题型数量的出题任务。
+     */
     private AssistantPlannedTask buildPendingQuestionTask() {
         return AssistantPlannedTask.builder()
                 .taskType("QUESTION_GENERATE")

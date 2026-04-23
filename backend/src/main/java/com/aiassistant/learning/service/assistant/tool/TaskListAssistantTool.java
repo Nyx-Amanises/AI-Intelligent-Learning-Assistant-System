@@ -13,13 +13,20 @@ import java.util.Map;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+/**
+ * AI 任务列表助手工具。
+ */
 @Component
 public class TaskListAssistantTool extends AbstractAssistantTool {
 
+    /** 默认展示任务数量。 */
     private static final int DEFAULT_LIMIT = 6;
+    /** “最近任务”场景下展示数量。 */
     private static final int LATEST_LIMIT = 3;
 
+    /** AI 任务服务。 */
     private final AiTaskService aiTaskService;
+    /** 规则意图解析器。 */
     private final AssistantTaskIntentParser taskIntentParser;
 
     public TaskListAssistantTool(
@@ -32,16 +39,25 @@ public class TaskListAssistantTool extends AbstractAssistantTool {
         this.taskIntentParser = taskIntentParser;
     }
 
+    /**
+     * 工具名称。
+     */
     @Override
     public String name() {
         return "task.list";
     }
 
+    /**
+     * 用户想看任务列表时支持该工具。
+     */
     @Override
     public boolean supports(ToolContext context) {
         return taskIntentParser.looksLikeTaskListRequest(context.userMessage(), context.structuredIntent());
     }
 
+    /**
+     * 查询任务列表。
+     */
     @Override
     public ToolExecutionResult execute(ToolContext context) {
         LocalDateTime startedAt = LocalDateTime.now();
@@ -73,6 +89,9 @@ public class TaskListAssistantTool extends AbstractAssistantTool {
         }
     }
 
+    /**
+     * 构造任务列表摘要。
+     */
     private String buildSummary(AssistantTaskIntentParser.TaskBrowseOptions options, PageVO<AiTaskPageVO> page) {
         List<AiTaskPageVO> records = page == null ? List.of() : page.getRecords();
         long total = page == null || page.getTotal() == null ? 0L : page.getTotal();
@@ -126,6 +145,9 @@ public class TaskListAssistantTool extends AbstractAssistantTool {
         return builder.toString();
     }
 
+    /**
+     * 将任务类型转换成中文标签。
+     */
     private String formatTaskTypeLabel(String taskType) {
         if (!StringUtils.hasText(taskType)) {
             return "任务";
@@ -139,6 +161,9 @@ public class TaskListAssistantTool extends AbstractAssistantTool {
         };
     }
 
+    /**
+     * 将任务状态转换成中文标签。
+     */
     private String formatTaskStatusLabel(String status) {
         if (!StringUtils.hasText(status)) {
             return "未知状态";

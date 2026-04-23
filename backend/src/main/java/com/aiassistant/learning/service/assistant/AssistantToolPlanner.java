@@ -14,14 +14,24 @@ import java.util.Set;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+/**
+ * AI 工具规划器。
+ *
+ * <p>当规则解析不足以判断用户意图时，会调用大模型生成结构化工具计划。</p>
+ */
 @Component
 public class AssistantToolPlanner {
 
+    /** 单轮最多允许规划的工具调用数量。 */
     private static final int MAX_TOOL_CALLS = 4;
 
+    /** AI 聊天服务。 */
     private final AiChatService aiChatService;
+    /** AI 配置服务。 */
     private final AiConfigService aiConfigService;
+    /** 工具注册表。 */
     private final AssistantToolRegistry toolRegistry;
+    /** JSON 工具。 */
     private final ObjectMapper objectMapper;
 
     public AssistantToolPlanner(
@@ -36,6 +46,9 @@ public class AssistantToolPlanner {
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * 调用大模型生成工具计划。
+     */
     public AssistantToolPlan plan(
             AssistantSession session,
             String userMessage,
@@ -58,6 +71,9 @@ public class AssistantToolPlanner {
         }
     }
 
+    /**
+     * 判断当前环境是否允许使用模型规划器。
+     */
     private boolean shouldUsePlanner(String userMessage) {
         if (!StringUtils.hasText(userMessage)) {
             return false;
@@ -69,6 +85,9 @@ public class AssistantToolPlanner {
                 && StringUtils.hasText(config.defaultModel());
     }
 
+    /**
+     * 解析规划器使用的模型名称。
+     */
     private String resolveModelName(String modelName) {
         if (StringUtils.hasText(modelName)) {
             return modelName.trim();
@@ -76,6 +95,9 @@ public class AssistantToolPlanner {
         return aiConfigService.getResolvedConfig().defaultModel();
     }
 
+    /**
+     * 构造工具规划器的系统提示词。
+     */
     private String buildSystemPrompt() {
         return """
                 你是学习系统 Agent 的“工具规划器”。你的任务是把用户消息规划成可执行工具计划。
@@ -125,6 +147,9 @@ public class AssistantToolPlanner {
                 """;
     }
 
+    /**
+     * 构造工具规划器的用户提示词，包含当前会话上下文和已有规则解析结果。
+     */
     private String buildUserPrompt(
             AssistantSession session,
             String userMessage,
@@ -146,6 +171,9 @@ public class AssistantToolPlanner {
         return builder.toString();
     }
 
+    /**
+     * 将模型返回内容解析成工具计划。
+     */
     private AssistantToolPlan parseResponse(String content) {
         if (!StringUtils.hasText(content)) {
             return AssistantToolPlan.empty();
@@ -169,6 +197,9 @@ public class AssistantToolPlanner {
         }
     }
 
+    /**
+     * 解析工具调用数组，并过滤不存在的工具名称。
+     */
     private List<AssistantToolPlan.ToolCall> parseToolCalls(JsonNode node) {
         if (node == null || !node.isArray()) {
             return List.of();
@@ -193,6 +224,9 @@ public class AssistantToolPlanner {
         return calls;
     }
 
+    /**
+     * 读取工具参数。
+     */
     private Map<String, Object> readArguments(JsonNode node) {
         if (node == null || !node.isObject()) {
             return new LinkedHashMap<>();
@@ -201,6 +235,9 @@ public class AssistantToolPlanner {
         });
     }
 
+    /**
+     * 从模型输出中提取 JSON 对象。
+     */
     private String extractJson(String content) {
         String trimmed = content.trim();
         if (trimmed.startsWith("```")) {
@@ -215,6 +252,9 @@ public class AssistantToolPlanner {
         return trimmed;
     }
 
+    /**
+     * 读取字符串数组字段。
+     */
     private List<String> readStringList(JsonNode root, String fieldName) {
         JsonNode node = root == null ? null : root.get(fieldName);
         if (node == null || !node.isArray()) {
@@ -229,6 +269,9 @@ public class AssistantToolPlanner {
         return values;
     }
 
+    /**
+     * 读取可空字符串字段。
+     */
     private String readNullableText(JsonNode root, String fieldName) {
         JsonNode node = root == null ? null : root.get(fieldName);
         if (node == null || node.isNull() || !StringUtils.hasText(node.asText())) {
@@ -237,10 +280,16 @@ public class AssistantToolPlanner {
         return node.asText().trim();
     }
 
+    /**
+     * 将字符串转成大写。
+     */
     private String normalizeUpper(String value) {
         return StringUtils.hasText(value) ? value.trim().toUpperCase() : null;
     }
 
+    /**
+     * 安全序列化对象为 JSON。
+     */
     private String toJson(Object value) {
         try {
             return objectMapper.writeValueAsString(value);

@@ -31,21 +31,41 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
+/**
+ * AssistantAgentOrchestratorImpl 的单元测试。
+ *
+ * <p>编排器是智能助手的“大脑入口”：它决定当前消息要不要查资料、要不要创建任务、是否需要追问用户。</p>
+ */
 class AssistantAgentOrchestratorImplTest {
 
+    /** 模拟长期记忆服务。 */
     private final AssistantMemoryService assistantMemoryService = Mockito.mock(AssistantMemoryService.class);
+    /** 模拟 AI 配置服务，提供测试用模型配置。 */
     private final AiConfigService aiConfigService = Mockito.mock(AiConfigService.class);
+    /** 模拟 AI 聊天服务，避免真实调用模型。 */
     private final AiChatService aiChatService = Mockito.mock(AiChatService.class);
+    /** 模拟学习资料服务。 */
     private final StudyMaterialService studyMaterialService = Mockito.mock(StudyMaterialService.class);
+    /** 模拟题集服务。 */
     private final QuestionSetService questionSetService = Mockito.mock(QuestionSetService.class);
+    /** 模拟结构化意图抽取器。 */
     private final AssistantStructuredIntentExtractor structuredIntentExtractor = Mockito.mock(AssistantStructuredIntentExtractor.class);
+    /** 模拟工具规划器。 */
     private final AssistantToolPlanner toolPlanner = Mockito.mock(AssistantToolPlanner.class);
+    /** 模拟章节目录工具。 */
     private final MaterialChapterOutlineAssistantTool materialChapterOutlineAssistantTool = Mockito.mock(MaterialChapterOutlineAssistantTool.class);
+    /** 模拟总结任务工具。 */
     private final SummaryTaskAssistantTool summaryTaskAssistantTool = Mockito.mock(SummaryTaskAssistantTool.class);
+    /** 模拟出题任务工具。 */
     private final QuestionGenerateTaskAssistantTool questionGenerateTaskAssistantTool = Mockito.mock(QuestionGenerateTaskAssistantTool.class);
+    /** JSON 工具，用于构造和解析 pendingActionPayload。 */
     private final ObjectMapper objectMapper = new ObjectMapper();
+    /** 真实的任务意图解析器，用来覆盖规则解析逻辑。 */
     private final AssistantTaskIntentParser taskIntentParser = new AssistantTaskIntentParser();
 
+    /**
+     * 每个测试默认不返回相关记忆，并配置一个可用的测试模型。
+     */
     AssistantAgentOrchestratorImplTest() {
         when(assistantMemoryService.findRelevantMemories(Mockito.anyLong(), Mockito.anyString(), Mockito.anyInt()))
                 .thenReturn(List.of());
@@ -65,6 +85,9 @@ class AssistantAgentOrchestratorImplTest {
         ));
     }
 
+    /**
+     * 验证“带我学习资料”应被当成资料问答，而不是误创建总结任务。
+     */
     @Test
     void shouldTreatLearningRequestAsStudyQaInsteadOfCreatingSummaryTask() {
         MaterialSearchAssistantTool materialSearchAssistantTool = Mockito.mock(MaterialSearchAssistantTool.class);
@@ -90,6 +113,9 @@ class AssistantAgentOrchestratorImplTest {
         verifyNoInteractions(questionGenerateTaskAssistantTool);
     }
 
+    /**
+     * 验证用户问“核心要点”时，即使 planner 误判为总结任务，也会回到资料问答流程。
+     */
     @Test
     void shouldTreatCoreKnowledgeRequestAsStudyQaEvenWhenPlannerSuggestsSummaryTask() {
         MaterialSearchAssistantTool materialSearchAssistantTool = Mockito.mock(MaterialSearchAssistantTool.class);
@@ -122,6 +148,9 @@ class AssistantAgentOrchestratorImplTest {
         verifyNoInteractions(questionGenerateTaskAssistantTool);
     }
 
+    /**
+     * 验证普通打招呼不会触发资料检索。
+     */
     @Test
     void shouldNotRetrieveMaterialWhenUserIsJustGreeting() {
         MaterialSearchAssistantTool materialSearchAssistantTool = Mockito.mock(MaterialSearchAssistantTool.class);
@@ -143,6 +172,9 @@ class AssistantAgentOrchestratorImplTest {
         assertTrue(preparedResult.toolExecutions().isEmpty());
     }
 
+    /**
+     * 验证资料问答遇到多份同名资料时，会让用户选择具体资料。
+     */
     @Test
     void shouldRequireClarificationForDuplicateMaterialDuringStudyQa() throws Exception {
         MaterialSearchAssistantTool materialSearchAssistantTool = new MaterialSearchAssistantTool(
@@ -182,6 +214,9 @@ class AssistantAgentOrchestratorImplTest {
         assertEquals(userMessage, payload.getFollowUpUserMessage());
     }
 
+    /**
+     * 验证用户选择资料候选后，助手能继续之前的资料问答。
+     */
     @Test
     void shouldContinueStudyQaAfterUserSelectsMaterialCandidate() throws Exception {
         MaterialSearchAssistantTool materialSearchAssistantTool = Mockito.mock(MaterialSearchAssistantTool.class);
@@ -217,6 +252,9 @@ class AssistantAgentOrchestratorImplTest {
         assertNull(session.getPendingActionType());
     }
 
+    /**
+     * 验证用户用自然语言选择资料时，结构化意图也能帮助完成候选选择。
+     */
     @Test
     void shouldContinueStudyQaAfterUserSelectsMaterialCandidateViaStructuredIntent() throws Exception {
         MaterialSearchAssistantTool materialSearchAssistantTool = Mockito.mock(MaterialSearchAssistantTool.class);
@@ -254,6 +292,9 @@ class AssistantAgentOrchestratorImplTest {
         assertNull(session.getPendingActionType());
     }
 
+    /**
+     * 验证完成资料选择后，会继续回答原始知识问题，而不是只停在选择动作。
+     */
     @Test
     void shouldContinueOriginalKnowledgeQuestionAfterMaterialSelection() throws Exception {
         MaterialSearchAssistantTool materialSearchAssistantTool = Mockito.mock(MaterialSearchAssistantTool.class);
@@ -289,6 +330,9 @@ class AssistantAgentOrchestratorImplTest {
         assertNull(session.getPendingActionType());
     }
 
+    /**
+     * 验证等待题型配置时，结构化意图可以直接补齐出题数量并提交任务。
+     */
     @Test
     void shouldUseStructuredIntentForPendingQuestionConfigReply() throws Exception {
         MaterialSearchAssistantTool materialSearchAssistantTool = Mockito.mock(MaterialSearchAssistantTool.class);
@@ -348,6 +392,9 @@ class AssistantAgentOrchestratorImplTest {
         assertNull(session.getPendingActionType());
     }
 
+    /**
+     * 验证任务请求缺少明确资料时，资料消歧优先于 planner 的普通追问。
+     */
     @Test
     void shouldPreferTaskWorkflowOverPlannerClarificationWhenMaterialMustBeDisambiguated() throws Exception {
         MaterialSearchAssistantTool materialSearchAssistantTool = new MaterialSearchAssistantTool(
@@ -399,6 +446,9 @@ class AssistantAgentOrchestratorImplTest {
         assertTrue(Boolean.TRUE.equals(payload.getTasks().get(0).getRequiresQuestionTypeConfirmation()));
     }
 
+    /**
+     * 验证等待题型配置时，如果用户补充资料名但仍有重名资料，不会擅自猜测资料 ID。
+     */
     @Test
     void shouldResolveMaterialTitleWhileWaitingForQuestionConfigWithoutGuessingMaterialId() throws Exception {
         MaterialSearchAssistantTool materialSearchAssistantTool = new MaterialSearchAssistantTool(
@@ -452,6 +502,9 @@ class AssistantAgentOrchestratorImplTest {
         assertNull(session.getCurrentMaterialId());
     }
 
+    /**
+     * 验证 planner 已经给出可执行工具计划时，编排器会优先执行 planner 的结果。
+     */
     @Test
     void shouldExecutePlannerProvidedToolPlanBeforeRuleFallback() {
         AssistantTool materialListTool = fakeSuccessTool("material.list", "我先帮你列出当前资料。");
@@ -484,6 +537,9 @@ class AssistantAgentOrchestratorImplTest {
         verifyNoInteractions(structuredIntentExtractor);
     }
 
+    /**
+     * 验证用户只说“帮我出一套题”时，会保存待选择资料状态并提醒用户补充资料。
+     */
     @Test
     void shouldSavePendingMaterialSelectionWhenTaskRequestLacksMaterial() throws Exception {
         MaterialSearchAssistantTool materialSearchAssistantTool = Mockito.mock(MaterialSearchAssistantTool.class);
@@ -511,6 +567,9 @@ class AssistantAgentOrchestratorImplTest {
         verifyNoInteractions(structuredIntentExtractor);
     }
 
+    /**
+     * 构造一个测试用编排器。
+     */
     private AssistantAgentOrchestratorImpl newOrchestrator(
             AssistantToolRegistry toolRegistry,
             MaterialSearchAssistantTool materialSearchAssistantTool
@@ -533,6 +592,9 @@ class AssistantAgentOrchestratorImplTest {
         );
     }
 
+    /**
+     * 构造一个已经绑定当前资料的助手会话。
+     */
     private AssistantSession materialSession(Long materialId) {
         AssistantSession session = new AssistantSession();
         session.setCurrentMaterialId(materialId);
@@ -541,18 +603,30 @@ class AssistantAgentOrchestratorImplTest {
         return session;
     }
 
+    /**
+     * 构造一个假的 RAG 检索工具。
+     */
     private AssistantTool fakeRagTool() {
         return new AssistantTool() {
+            /**
+             * 返回工具名。
+             */
             @Override
             public String name() {
                 return "rag.retrieve";
             }
 
+            /**
+             * 只有会话已经绑定资料时，才允许执行 RAG 检索。
+             */
             @Override
             public boolean supports(ToolContext context) {
                 return context.session() != null && context.session().getCurrentMaterialId() != null;
             }
 
+            /**
+             * 返回固定的检索摘要，避免单元测试依赖真实向量库。
+             */
             @Override
             public ToolExecutionResult execute(ToolContext context) {
                 LocalDateTime now = LocalDateTime.now();
@@ -570,18 +644,30 @@ class AssistantAgentOrchestratorImplTest {
         };
     }
 
+    /**
+     * 构造一个始终执行成功的假工具。
+     */
     private AssistantTool fakeSuccessTool(String toolName, String summaryText) {
         return new AssistantTool() {
+            /**
+             * 返回工具名。
+             */
             @Override
             public String name() {
                 return toolName;
             }
 
+            /**
+             * 测试工具始终支持执行。
+             */
             @Override
             public boolean supports(ToolContext context) {
                 return true;
             }
 
+            /**
+             * 返回固定成功结果。
+             */
             @Override
             public ToolExecutionResult execute(ToolContext context) {
                 LocalDateTime now = LocalDateTime.now();
@@ -599,6 +685,9 @@ class AssistantAgentOrchestratorImplTest {
         };
     }
 
+    /**
+     * 构造测试用资料列表项。
+     */
     private MaterialPageVO material(Long id, String title) {
         return MaterialPageVO.builder()
                 .id(id)

@@ -12,10 +12,15 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.stereotype.Component;
 
+/**
+ * AI 出题任务助手工具。
+ */
 @Component
 public class QuestionGenerateTaskAssistantTool extends AbstractAssistantTool {
 
+    /** AI 任务服务。 */
     private final AiTaskService aiTaskService;
+    /** 规则意图解析器。 */
     private final AssistantTaskIntentParser taskIntentParser;
 
     public QuestionGenerateTaskAssistantTool(
@@ -28,16 +33,25 @@ public class QuestionGenerateTaskAssistantTool extends AbstractAssistantTool {
         this.taskIntentParser = taskIntentParser;
     }
 
+    /**
+     * 工具名称。
+     */
     @Override
     public String name() {
         return "task.submit_question_generate";
     }
 
+    /**
+     * 当前会话绑定资料时支持创建出题任务。
+     */
     @Override
     public boolean supports(ToolContext context) {
         return AssistantToolSupport.resolveMaterialId(context.session()) != null;
     }
 
+    /**
+     * 从用户消息中解析出题参数并提交任务。
+     */
     @Override
     public ToolExecutionResult execute(ToolContext context) {
         LocalDateTime startedAt = LocalDateTime.now();
@@ -57,10 +71,16 @@ public class QuestionGenerateTaskAssistantTool extends AbstractAssistantTool {
         return executeRequest(context.userId(), materialId, request, options.adjustmentNote(), startedAt);
     }
 
+    /**
+     * 直接提交出题任务，供编排器在已解析好参数时调用。
+     */
     public ToolExecutionResult executeRequest(Long userId, Long materialId, QuestionGenerateRequest request, String adjustmentNote) {
         return executeRequest(userId, materialId, request, adjustmentNote, LocalDateTime.now());
     }
 
+    /**
+     * 提交出题任务的内部实现。
+     */
     private ToolExecutionResult executeRequest(
             Long userId,
             Long materialId,

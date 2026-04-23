@@ -9,24 +9,36 @@ import java.util.regex.Pattern;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+/**
+ * 助手任务意图规则解析器。
+ *
+ * <p>它不用调用大模型，而是通过关键词、正则和简单规则识别“生成总结、生成题、查资料、看任务”等意图。</p>
+ */
 @Component
 public class AssistantTaskIntentParser {
 
+    /** 单次出题数量上限。 */
     private static final int QUESTION_LIMIT = 20;
+    /** 从用户消息中提取模型名。 */
     private static final Pattern MODEL_PATTERN = Pattern.compile(
             "(?:用|使用|模型(?:名称)?|model)\\s*[:：]?\\s*([A-Za-z0-9._:-]+)",
             Pattern.CASE_INSENSITIVE
     );
+    /** 识别总题量的常见表达。 */
     private static final List<Pattern> TOTAL_QUESTION_PATTERNS = List.of(
             Pattern.compile("(?:共|总共|一共|合计|总计)\\s*([0-9一二两三四五六七八九十百]+)\\s*(?:道|个)?(?:\\s*(?:题|题目|练习题|试题|题集))?"),
             Pattern.compile("(?:来|给我|出|生成|做)\\s*([0-9一二两三四五六七八九十百]+)\\s*(?:道|个)?\\s*(?:题|题目|练习题|试题|题集)"),
             Pattern.compile("([0-9一二两三四五六七八九十百]+)\\s*(?:道|个)?\\s*(?:题|题目|练习题|试题|题集)")
     );
+    /** 识别“来 10 道”这类命令式题量表达。 */
     private static final Pattern COMMAND_TOTAL_QUESTION_PATTERN = Pattern.compile(
             "(?:来|给我|出|生成|做)\\s*([0-9一二两三四五六七八九十百]+)\\s*(?:道|个)?"
     );
+    /** 识别难度等级。 */
     private static final Pattern DIFFICULTY_PATTERN = Pattern.compile("难度\\s*([1-5])");
+    /** 识别《资料标题》这种书名号里的标题。 */
     private static final Pattern TITLE_BRACKET_PATTERN = Pattern.compile("《([^》]{2,80})》");
+    /** 识别引号里的资料标题。 */
     private static final Pattern TITLE_QUOTE_PATTERN = Pattern.compile("[“\"]([^”\"]{2,80})[”\"]");
     private static final Pattern PREFIX_MATERIAL_PATTERN = Pattern.compile(
             "([A-Za-z0-9一-龥][A-Za-z0-9一-龥 ._+#-]{0,40})开头的资料",
@@ -74,12 +86,16 @@ public class AssistantTaskIntentParser {
             Pattern.compile("(?:总结|提纲|大纲|考点|考试重点).{0,6}(?:给我|生成|输出|整理|写一份|来一份|再来一份|重新生成)"),
             Pattern.compile("(?:帮我总结一下|帮我做个总结|总结成提纲|做成提纲)")
     );
+    /** 识别出题意图的正则。 */
     private static final List<Pattern> QUESTION_INTENT_PATTERNS = List.of(
             Pattern.compile("(?:生成|出|来|给我|做|整理|再来).{0,8}(?:题|题目|练习题|题集|试题|卷子)"),
             Pattern.compile("(?:单选题|单选|选择题|判断题|判断|简答题|简答)\\s*[0-9一二两三四五六七八九十百]+\\s*(?:道|个)?"),
             Pattern.compile("[0-9一二两三四五六七八九十百]+\\s*(?:道|个)?\\s*(?:单选题|单选|选择题|判断题|判断|简答题|简答)")
     );
 
+    /**
+     * 判断用户是否像是在请求生成总结。
+     */
     public boolean looksLikeSummaryRequest(String userMessage) {
         if (!StringUtils.hasText(userMessage)) {
             return false;
@@ -87,6 +103,9 @@ public class AssistantTaskIntentParser {
         return matchesAny(userMessage.trim(), SUMMARY_INTENT_PATTERNS);
     }
 
+    /**
+     * 判断用户是否像是在请求生成题目。
+     */
     public boolean looksLikeQuestionRequest(String userMessage) {
         if (!StringUtils.hasText(userMessage)) {
             return false;
@@ -94,10 +113,16 @@ public class AssistantTaskIntentParser {
         return matchesAny(userMessage.trim(), QUESTION_INTENT_PATTERNS);
     }
 
+    /**
+     * 从用户消息中解析请求的任务类型。
+     */
     public List<String> resolveRequestedTaskTypes(String userMessage) {
         return resolveRequestedTaskTypes(userMessage, null);
     }
 
+    /**
+     * 结合结构化意图和规则解析请求的任务类型。
+     */
     public List<String> resolveRequestedTaskTypes(String userMessage, AssistantStructuredIntent structuredIntent) {
         if (structuredIntent != null
                 && structuredIntent.getRequestedTaskTypes() != null
@@ -128,10 +153,16 @@ public class AssistantTaskIntentParser {
         return summaryIntent ? List.of("SUMMARY") : List.of("QUESTION_GENERATE");
     }
 
+    /**
+     * 解析总结任务参数。
+     */
     public SummaryTaskOptions parseSummaryRequest(String userMessage, String fallbackModelName) {
         return parseSummaryRequest(userMessage, fallbackModelName, null);
     }
 
+    /**
+     * 结合结构化意图解析总结任务参数。
+     */
     public SummaryTaskOptions parseSummaryRequest(
             String userMessage,
             String fallbackModelName,
@@ -146,10 +177,16 @@ public class AssistantTaskIntentParser {
         );
     }
 
+    /**
+     * 解析出题任务参数。
+     */
     public QuestionTaskOptions parseQuestionRequest(String userMessage, String fallbackModelName) {
         return parseQuestionRequest(userMessage, fallbackModelName, null);
     }
 
+    /**
+     * 结合结构化意图解析出题任务参数，包括题量、题型分布、难度和是否需要确认。
+     */
     public QuestionTaskOptions parseQuestionRequest(
             String userMessage,
             String fallbackModelName,
@@ -253,10 +290,16 @@ public class AssistantTaskIntentParser {
         );
     }
 
+    /**
+     * 从用户消息中提取资料查询关键词。
+     */
     public String extractMaterialQueryText(String userMessage) {
         return extractMaterialQueryText(userMessage, null);
     }
 
+    /**
+     * 结合结构化意图提取资料查询关键词。
+     */
     public String extractMaterialQueryText(String userMessage, AssistantStructuredIntent structuredIntent) {
         if (structuredIntent != null && StringUtils.hasText(structuredIntent.getMaterialQuery())) {
             return cleanMaterialQueryText(structuredIntent.getMaterialQuery());
@@ -284,10 +327,16 @@ public class AssistantTaskIntentParser {
         return null;
     }
 
+    /**
+     * 判断是否像是在查看资料列表。
+     */
     public boolean looksLikeMaterialBrowseRequest(String userMessage) {
         return looksLikeMaterialBrowseRequest(userMessage, null);
     }
 
+    /**
+     * 结合结构化意图判断是否查看资料列表。
+     */
     public boolean looksLikeMaterialBrowseRequest(String userMessage, AssistantStructuredIntent structuredIntent) {
         if (structuredIntent != null && Boolean.TRUE.equals(structuredIntent.getMaterialBrowse())) {
             return true;
@@ -308,14 +357,23 @@ public class AssistantTaskIntentParser {
                 || containsAny(text, "embedding 资料", "Embedding 资料", "向量资料", "已生成embedding", "已做embedding", "已向量化");
     }
 
+    /**
+     * 从资料列表请求中提取关键词。
+     */
     public String extractMaterialBrowseKeyword(String userMessage) {
         return parseMaterialBrowseRequest(userMessage, null).keyword();
     }
 
+    /**
+     * 解析资料列表浏览参数。
+     */
     public MaterialBrowseOptions parseMaterialBrowseRequest(String userMessage) {
         return parseMaterialBrowseRequest(userMessage, null);
     }
 
+    /**
+     * 结合结构化意图解析资料列表浏览参数。
+     */
     public MaterialBrowseOptions parseMaterialBrowseRequest(
             String userMessage,
             AssistantStructuredIntent structuredIntent
@@ -359,6 +417,9 @@ public class AssistantTaskIntentParser {
         return new MaterialBrowseOptions(null, embeddingReadyOnly, allMaterials);
     }
 
+    /**
+     * 判断是否像是在查看任务列表。
+     */
     public boolean looksLikeTaskListRequest(String userMessage, AssistantStructuredIntent structuredIntent) {
         if (structuredIntent != null && Boolean.TRUE.equals(structuredIntent.getTaskList())) {
             return true;
@@ -372,6 +433,9 @@ public class AssistantTaskIntentParser {
                 && containsAny(text, "列表", "全部", "所有", "最近", "最新", "有哪些", "什么", "失败", "处理中", "等待"));
     }
 
+    /**
+     * 解析任务列表过滤条件。
+     */
     public TaskBrowseOptions parseTaskBrowseRequest(String userMessage, AssistantStructuredIntent structuredIntent) {
         String text = userMessage == null ? "" : userMessage.trim();
         String taskTypeFilter = firstNonBlank(
@@ -386,6 +450,9 @@ public class AssistantTaskIntentParser {
         return new TaskBrowseOptions(taskTypeFilter, taskStatusFilter, latestOnly);
     }
 
+    /**
+     * 判断是否像是在查看题集列表。
+     */
     public boolean looksLikeQuestionSetListRequest(String userMessage, AssistantStructuredIntent structuredIntent) {
         if (structuredIntent != null && Boolean.TRUE.equals(structuredIntent.getQuestionSetList())) {
             return true;
@@ -399,6 +466,9 @@ public class AssistantTaskIntentParser {
                 && containsAny(text, "列表", "全部", "所有", "最近", "最新", "有哪些", "什么", "查看"));
     }
 
+    /**
+     * 解析题集列表过滤条件。
+     */
     public QuestionSetBrowseOptions parseQuestionSetBrowseRequest(String userMessage, AssistantStructuredIntent structuredIntent) {
         String text = userMessage == null ? "" : userMessage.trim();
         String keyword = firstNonBlank(
@@ -417,6 +487,9 @@ public class AssistantTaskIntentParser {
         return new QuestionSetBrowseOptions(keyword, status, difficultyLevel, currentMaterialOnly);
     }
 
+    /**
+     * 判断是否像是在查看资料章节或目录。
+     */
     public boolean looksLikeChapterBrowseRequest(String userMessage, AssistantStructuredIntent structuredIntent) {
         if (structuredIntent != null && Boolean.TRUE.equals(structuredIntent.getChapterBrowse())) {
             return true;
@@ -430,6 +503,9 @@ public class AssistantTaskIntentParser {
                 && containsAny(text, "查看", "列出", "看看", "哪些", "有什么", "目录", "结构", "内容"));
     }
 
+    /**
+     * 解析章节浏览参数。
+     */
     public ChapterBrowseOptions parseChapterBrowseRequest(String userMessage, AssistantStructuredIntent structuredIntent) {
         String text = userMessage == null ? "" : userMessage.trim();
         String keyword = firstNonBlank(
@@ -441,10 +517,16 @@ public class AssistantTaskIntentParser {
         return new ChapterBrowseOptions(keyword, outlineOnly);
     }
 
+    /**
+     * 从用户回复中解析候选资料选择。
+     */
     public Long resolveMaterialCandidateSelection(String userMessage, List<AssistantMaterialCandidate> candidates) {
         return resolveMaterialCandidateSelection(userMessage, candidates, null);
     }
 
+    /**
+     * 结合结构化意图解析候选资料选择。
+     */
     public Long resolveMaterialCandidateSelection(
             String userMessage,
             List<AssistantMaterialCandidate> candidates,
@@ -495,10 +577,16 @@ public class AssistantTaskIntentParser {
         return null;
     }
 
+    /**
+     * 解析用户对出题配置追问的回复。
+     */
     public QuestionConfigResolution resolveQuestionConfigReply(String userMessage, AssistantPlannedTask pendingTask) {
         return resolveQuestionConfigReply(userMessage, pendingTask, null);
     }
 
+    /**
+     * 结合结构化意图解析出题配置回复。
+     */
     public QuestionConfigResolution resolveQuestionConfigReply(
             String userMessage,
             AssistantPlannedTask pendingTask,
@@ -602,10 +690,16 @@ public class AssistantTaskIntentParser {
         return new QuestionConfigResolution(true, resolvedTask, null);
     }
 
+    /**
+     * 判断用户是否表达“默认就行”。
+     */
     public boolean isDefaultChoice(String userMessage) {
         return containsAny(userMessage, DEFAULT_CHOICE_KEYWORDS.toArray(String[]::new));
     }
 
+    /**
+     * 判断是否像是在回复出题配置。
+     */
     public boolean looksLikeQuestionConfigReply(String userMessage) {
         if (!StringUtils.hasText(userMessage)) {
             return false;
@@ -620,6 +714,9 @@ public class AssistantTaskIntentParser {
                 || containsAny(text, "题型", "题量", "数量");
     }
 
+    /**
+     * 判断用户是否在质疑资料定位结果。
+     */
     public boolean looksLikeMaterialAmbiguityChallenge(String userMessage) {
         if (!StringUtils.hasText(userMessage)) {
             return false;
@@ -634,6 +731,9 @@ public class AssistantTaskIntentParser {
         return mentionsMaterial && hasChallengeSignal;
     }
 
+    /**
+     * 构造出题配置追问文案。
+     */
     public String buildQuestionConfigPrompt(AssistantPlannedTask questionTask) {
         if (questionTask == null) {
             return "出题参数还不够完整。你可以直接说例如“单选 6、判断 2、简答 2”，或者回复“默认”。";
@@ -1167,6 +1267,9 @@ public class AssistantTaskIntentParser {
         return false;
     }
 
+    /**
+     * 总结任务解析结果。
+     */
     public record SummaryTaskOptions(
             String modelName,
             String summaryType,
@@ -1175,6 +1278,9 @@ public class AssistantTaskIntentParser {
     ) {
     }
 
+    /**
+     * 出题任务解析结果。
+     */
     public record QuestionTaskOptions(
             String modelName,
             Integer questionCount,
@@ -1189,6 +1295,9 @@ public class AssistantTaskIntentParser {
     ) {
     }
 
+    /**
+     * 出题配置追问解析结果。
+     */
     public record QuestionConfigResolution(
             boolean resolved,
             AssistantPlannedTask task,
@@ -1196,6 +1305,9 @@ public class AssistantTaskIntentParser {
     ) {
     }
 
+    /**
+     * 资料浏览参数。
+     */
     public record MaterialBrowseOptions(
             String keyword,
             boolean embeddingReadyOnly,
@@ -1203,6 +1315,9 @@ public class AssistantTaskIntentParser {
     ) {
     }
 
+    /**
+     * 任务浏览参数。
+     */
     public record TaskBrowseOptions(
             String taskTypeFilter,
             String taskStatusFilter,
@@ -1210,6 +1325,9 @@ public class AssistantTaskIntentParser {
     ) {
     }
 
+    /**
+     * 题集浏览参数。
+     */
     public record QuestionSetBrowseOptions(
             String keyword,
             String status,
@@ -1218,6 +1336,9 @@ public class AssistantTaskIntentParser {
     ) {
     }
 
+    /**
+     * 章节浏览参数。
+     */
     public record ChapterBrowseOptions(
             String keyword,
             boolean outlineOnly

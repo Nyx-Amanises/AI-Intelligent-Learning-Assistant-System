@@ -55,19 +55,34 @@ import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
+/**
+ * RAG 检索评测服务实现。
+ *
+ * <p>这个类负责三件事：维护评测集和样本、执行检索评测并计算指标、把 CMRC2018 数据导入成可评测资料。</p>
+ */
 @Service
 public class RagEvalServiceImpl implements RagEvalService {
 
+    /** 默认每个问题检索 5 条结果。 */
     private static final int DEFAULT_LIMIT = 5;
 
+    /** 评测集 Mapper。 */
     private final RagEvalDatasetMapper datasetMapper;
+    /** 评测样本 Mapper。 */
     private final RagEvalSampleMapper sampleMapper;
+    /** 评测运行 Mapper。 */
     private final RagEvalRunMapper runMapper;
+    /** 评测运行明细 Mapper。 */
     private final RagEvalRunItemMapper runItemMapper;
+    /** 资料分段 Mapper，导入 CMRC2018 和校验标注段落时会用到。 */
     private final MaterialSegmentMapper materialSegmentMapper;
+    /** 学习资料服务，用于校验资料归属和创建导入资料。 */
     private final StudyMaterialService studyMaterialService;
+    /** RAG 检索服务，评测时逐条调用它获取检索结果。 */
     private final RetrievalService retrievalService;
+    /** AI 任务服务，导入数据后可选提交向量化任务。 */
     private final AiTaskService aiTaskService;
+    /** JSON 工具，用于读写列表字段和解析 CMRC2018 文件。 */
     private final ObjectMapper objectMapper;
 
     public RagEvalServiceImpl(
@@ -92,6 +107,9 @@ public class RagEvalServiceImpl implements RagEvalService {
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * 创建一个评测集，并确认绑定资料属于当前用户。
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public RagEvalDatasetVO createDataset(Long userId, RagEvalDatasetCreateRequest request) {
@@ -108,6 +126,9 @@ public class RagEvalServiceImpl implements RagEvalService {
         return toDatasetVO(dataset, Map.of(material.getId(), material.getTitle()));
     }
 
+    /**
+     * 分页查询评测集，支持按资料 ID 和关键字过滤。
+     */
     @Override
     public PageVO<RagEvalDatasetVO> pageDatasets(Long userId, RagEvalDatasetPageQuery query) {
         Page<RagEvalDataset> page = new Page<>(query.getCurrent(), query.getSize());
@@ -131,6 +152,9 @@ public class RagEvalServiceImpl implements RagEvalService {
                 .build();
     }
 
+    /**
+     * 查询单个评测集详情。
+     */
     @Override
     public RagEvalDatasetVO getDataset(Long userId, Long datasetId) {
         RagEvalDataset dataset = getUserOwnedDataset(userId, datasetId);
@@ -138,6 +162,9 @@ public class RagEvalServiceImpl implements RagEvalService {
         return toDatasetVO(dataset, titleMap);
     }
 
+    /**
+     * 删除评测集，并级联删除样本、运行记录和运行明细。
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteDataset(Long userId, Long datasetId) {
@@ -157,6 +184,9 @@ public class RagEvalServiceImpl implements RagEvalService {
         datasetMapper.deleteById(dataset.getId());
     }
 
+    /**
+     * 批量添加评测样本，添加完成后刷新评测集样本数量。
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public List<RagEvalSampleVO> addSamples(Long userId, Long datasetId, RagEvalSampleBatchCreateRequest request) {
@@ -169,6 +199,9 @@ public class RagEvalServiceImpl implements RagEvalService {
         return created;
     }
 
+    /**
+     * 查询评测集下的全部样本。
+     */
     @Override
     public List<RagEvalSampleVO> listSamples(Long userId, Long datasetId) {
         RagEvalDataset dataset = getUserOwnedDataset(userId, datasetId);
@@ -181,6 +214,9 @@ public class RagEvalServiceImpl implements RagEvalService {
                 .toList();
     }
 
+    /**
+     * 更新样本的查询文本、标注答案和元信息。
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public RagEvalSampleVO updateSample(Long userId, Long datasetId, Long sampleId, RagEvalSampleUpdateRequest request) {
@@ -202,6 +238,9 @@ public class RagEvalServiceImpl implements RagEvalService {
         return toSampleVO(sample);
     }
 
+    /**
+     * 删除单条样本，并重新统计评测集样本数量。
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteSample(Long userId, Long datasetId, Long sampleId) {
@@ -211,6 +250,11 @@ public class RagEvalServiceImpl implements RagEvalService {
         refreshSampleCount(dataset);
     }
 
+    /**
+     * 执行一次评测运行。
+     *
+     * <p>每条样本都会调用一次 RAG 检索，然后记录样本级明细，最后汇总成整次运行指标。</p>
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public RagEvalRunVO runDataset(Long userId, Long datasetId, RagEvalRunRequest request) {
@@ -233,6 +277,9 @@ public class RagEvalServiceImpl implements RagEvalService {
         return toRunVO(run, runItems);
     }
 
+    /**
+     * 查询一次评测运行，以及它包含的所有样本明细。
+     */
     @Override
     public RagEvalRunVO getRun(Long userId, Long runId) {
         RagEvalRun run = runMapper.selectOne(new LambdaQueryWrapper<RagEvalRun>()
@@ -249,6 +296,11 @@ public class RagEvalServiceImpl implements RagEvalService {
         return toRunVO(run, items);
     }
 
+    /**
+     * 导入 CMRC2018 数据集。
+     *
+     * <p>导入时会创建一份学习资料，把 context 写入资料分段，再把 question 写入评测样本。</p>
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public CmrcImportResultVO importCmrc2018(
@@ -359,6 +411,9 @@ public class RagEvalServiceImpl implements RagEvalService {
                 .build();
     }
 
+    /**
+     * 根据请求创建单条评测样本。
+     */
     private RagEvalSample createSample(Long userId, RagEvalDataset dataset, RagEvalSampleCreateRequest request) {
         Long materialId = request.getMaterialId() == null ? dataset.getMaterialId() : request.getMaterialId();
         validateSampleTarget(userId, materialId, request.getExpectedSegmentIds(), request.getExpectedPageNos());
@@ -379,6 +434,11 @@ public class RagEvalServiceImpl implements RagEvalService {
         return sample;
     }
 
+    /**
+     * 校验样本标注是否有效。
+     *
+     * <p>每条样本至少要标注相关段落或相关页码；如果标注了段落 ID，还要确认这些段落属于当前资料。</p>
+     */
     private void validateSampleTarget(
             Long userId,
             Long materialId,
@@ -404,6 +464,9 @@ public class RagEvalServiceImpl implements RagEvalService {
         }
     }
 
+    /**
+     * 创建一条处于 RUNNING 状态的评测运行记录。
+     */
     private RagEvalRun createRunningRun(Long userId, RagEvalDataset dataset, int sampleCount, int retrievalLimit) {
         LocalDateTime now = LocalDateTime.now();
         RagEvalRun run = new RagEvalRun();
@@ -420,6 +483,11 @@ public class RagEvalServiceImpl implements RagEvalService {
         return run;
     }
 
+    /**
+     * 评测单条样本。
+     *
+     * <p>这里会执行真实检索，保存返回的段落和页码，并计算 hitRank、MRR 所需的 reciprocalRank 和 Recall@K。</p>
+     */
     private RagEvalRunItem evaluateSample(Long userId, RagEvalRun run, RagEvalSample sample, int retrievalLimit) {
         long startTime = System.currentTimeMillis();
         RagEvalRunItem item = new RagEvalRunItem();
@@ -433,6 +501,7 @@ public class RagEvalServiceImpl implements RagEvalService {
         item.setExpectedPageNos(sample.getExpectedPageNos());
 
         try {
+            // 调用 RAG 检索服务，得到按相关性排序后的候选分段。
             List<RetrievedSegment> retrieved = retrievalService.retrieveMaterialSegments(
                     userId,
                     sample.getMaterialId(),
@@ -444,6 +513,7 @@ public class RagEvalServiceImpl implements RagEvalService {
             List<Long> expectedSegmentIds = parseLongList(sample.getExpectedSegmentIds());
             List<Integer> expectedPageNos = parseIntList(sample.getExpectedPageNos());
 
+            // 将实际检索结果和样本级指标写入明细，方便后续定位哪些问题检索失败。
             item.setRetrievedSegmentIds(writeJson(retrievedSegmentIds));
             item.setRetrievedPageNos(writeJson(retrievedPageNos));
             item.setHitRank(findHitRank(retrieved, expectedSegmentIds, expectedPageNos));
@@ -464,6 +534,9 @@ public class RagEvalServiceImpl implements RagEvalService {
         return item;
     }
 
+    /**
+     * 汇总本次运行的整体指标，并把运行状态从 RUNNING 改成最终状态。
+     */
     private void finishRun(RagEvalRun run, List<RagEvalRunItem> runItems) {
         int total = runItems.size();
         int failed = (int) runItems.stream().filter(item -> StringUtils.hasText(item.getErrorMessage())).count();
@@ -490,6 +563,11 @@ public class RagEvalServiceImpl implements RagEvalService {
         runMapper.updateById(run);
     }
 
+    /**
+     * 选择本次要评测的样本。
+     *
+     * <p>如果请求指定了 sampleIds，就只评测这些样本；否则评测整个评测集。</p>
+     */
     private List<RagEvalSample> selectRunSamples(Long userId, Long datasetId, List<Long> sampleIds) {
         return sampleMapper.selectList(new LambdaQueryWrapper<RagEvalSample>()
                 .eq(RagEvalSample::getDatasetId, datasetId)
@@ -498,6 +576,11 @@ public class RagEvalServiceImpl implements RagEvalService {
                 .orderByAsc(RagEvalSample::getId));
     }
 
+    /**
+     * 找出第一次命中的排名。
+     *
+     * <p>命中规则有两种：检索结果分段 ID 在期望分段内，或者检索结果页码在期望页码内。</p>
+     */
     private Integer findHitRank(
             List<RetrievedSegment> retrieved,
             List<Long> expectedSegmentIds,
@@ -516,6 +599,11 @@ public class RagEvalServiceImpl implements RagEvalService {
         return null;
     }
 
+    /**
+     * 计算 Recall@K。
+     *
+     * <p>如果样本标注了分段 ID，就按分段 ID 召回比例计算；否则退化为页码是否命中。</p>
+     */
     private Double computeRecallAtK(
             List<RetrievedSegment> retrieved,
             List<Long> expectedSegmentIds,
@@ -544,6 +632,9 @@ public class RagEvalServiceImpl implements RagEvalService {
         return pageHit ? 1D : 0D;
     }
 
+    /**
+     * 计算 Hit@K，即命中排名不超过 K 的样本占比。
+     */
     private Double computeHitAtK(List<RagEvalRunItem> items, int k) {
         if (items.isEmpty()) {
             return 0D;
@@ -554,6 +645,9 @@ public class RagEvalServiceImpl implements RagEvalService {
         return (double) hitCount / items.size();
     }
 
+    /**
+     * 计算平均值，空列表返回 0。
+     */
     private Double average(List<Double> values) {
         List<Double> filtered = values.stream().filter(Objects::nonNull).toList();
         if (filtered.isEmpty()) {
@@ -562,6 +656,9 @@ public class RagEvalServiceImpl implements RagEvalService {
         return filtered.stream().mapToDouble(Double::doubleValue).average().orElse(0D);
     }
 
+    /**
+     * 解析检索数量，最大限制为 20，避免一次评测取回太多候选。
+     */
     private int resolveLimit(Integer limit) {
         if (limit == null || limit <= 0) {
             return DEFAULT_LIMIT;
@@ -569,6 +666,9 @@ public class RagEvalServiceImpl implements RagEvalService {
         return Math.min(limit, 20);
     }
 
+    /**
+     * 重新统计评测集样本数量，并写回评测集表。
+     */
     private void refreshSampleCount(RagEvalDataset dataset) {
         long count = sampleMapper.selectCount(new LambdaQueryWrapper<RagEvalSample>()
                 .eq(RagEvalSample::getDatasetId, dataset.getId())
@@ -577,6 +677,9 @@ public class RagEvalServiceImpl implements RagEvalService {
         datasetMapper.updateById(dataset);
     }
 
+    /**
+     * 查询当前用户拥有的评测集，不存在时抛出业务异常。
+     */
     private RagEvalDataset getUserOwnedDataset(Long userId, Long datasetId) {
         RagEvalDataset dataset = datasetMapper.selectOne(new LambdaQueryWrapper<RagEvalDataset>()
                 .eq(RagEvalDataset::getId, datasetId)
@@ -588,6 +691,9 @@ public class RagEvalServiceImpl implements RagEvalService {
         return dataset;
     }
 
+    /**
+     * 查询当前用户拥有的评测样本，不存在时抛出业务异常。
+     */
     private RagEvalSample getUserOwnedSample(Long userId, Long datasetId, Long sampleId) {
         RagEvalSample sample = sampleMapper.selectOne(new LambdaQueryWrapper<RagEvalSample>()
                 .eq(RagEvalSample::getId, sampleId)
@@ -600,6 +706,9 @@ public class RagEvalServiceImpl implements RagEvalService {
         return sample;
     }
 
+    /**
+     * 查询当前用户拥有的学习资料，不存在时抛出业务异常。
+     */
     private StudyMaterial getUserOwnedMaterial(Long userId, Long materialId) {
         StudyMaterial material = studyMaterialService.getOne(new LambdaQueryWrapper<StudyMaterial>()
                 .eq(StudyMaterial::getId, materialId)
@@ -611,6 +720,9 @@ public class RagEvalServiceImpl implements RagEvalService {
         return material;
     }
 
+    /**
+     * 批量构建资料 ID 到资料标题的映射，减少 VO 转换时的重复查询。
+     */
     private Map<Long, String> buildMaterialTitleMap(List<RagEvalDataset> datasets) {
         if (datasets == null || datasets.isEmpty()) {
             return Map.of();
@@ -630,6 +742,9 @@ public class RagEvalServiceImpl implements RagEvalService {
         return titleMap;
     }
 
+    /**
+     * 将评测集实体转换为前端展示对象。
+     */
     private RagEvalDatasetVO toDatasetVO(RagEvalDataset dataset, Map<Long, String> titleMap) {
         return RagEvalDatasetVO.builder()
                 .id(dataset.getId())
@@ -645,6 +760,9 @@ public class RagEvalServiceImpl implements RagEvalService {
                 .build();
     }
 
+    /**
+     * 将评测样本实体转换为前端展示对象。
+     */
     private RagEvalSampleVO toSampleVO(RagEvalSample sample) {
         StudyMaterial material = studyMaterialService.getById(sample.getMaterialId());
         return RagEvalSampleVO.builder()
@@ -664,6 +782,9 @@ public class RagEvalServiceImpl implements RagEvalService {
                 .build();
     }
 
+    /**
+     * 将评测运行实体和明细转换为前端展示对象。
+     */
     private RagEvalRunVO toRunVO(RagEvalRun run, List<RagEvalRunItem> items) {
         return RagEvalRunVO.builder()
                 .id(run.getId())
@@ -689,6 +810,9 @@ public class RagEvalServiceImpl implements RagEvalService {
                 .build();
     }
 
+    /**
+     * 将单条运行明细转换为前端展示对象。
+     */
     private RagEvalRunItemVO toRunItemVO(RagEvalRunItem item) {
         return RagEvalRunItemVO.builder()
                 .id(item.getId())
@@ -709,6 +833,9 @@ public class RagEvalServiceImpl implements RagEvalService {
                 .build();
     }
 
+    /**
+     * 读取上传文件内容，并按 UTF-8 解析成字符串。
+     */
     private String readUploadText(MultipartFile file) {
         try {
             return new String(file.getBytes(), StandardCharsets.UTF_8);
@@ -717,6 +844,9 @@ public class RagEvalServiceImpl implements RagEvalService {
         }
     }
 
+    /**
+     * 将上传的 CMRC2018 JSON 文本解析成统一的段落结构。
+     */
     private List<CmrcParagraph> parseCmrcParagraphs(String content) {
         if (!StringUtils.hasText(content)) {
             return List.of();
@@ -733,6 +863,11 @@ public class RagEvalServiceImpl implements RagEvalService {
         }
     }
 
+    /**
+     * 判断内容是否更像 JSON Lines。
+     *
+     * <p>JSON Lines 是“一行一个 JSON 对象”的格式，和普通 JSON 数组解析方式不同。</p>
+     */
     private boolean looksLikeJsonLines(String content) {
         if (content.startsWith("{") || content.startsWith("[")) {
             return false;
@@ -745,6 +880,9 @@ public class RagEvalServiceImpl implements RagEvalService {
                 .orElse(false);
     }
 
+    /**
+     * 解析 JSON Lines 形式的 CMRC 数据。
+     */
     private List<CmrcParagraph> parseCmrcJsonLines(String content) throws JsonProcessingException {
         List<CmrcParagraph> paragraphs = new ArrayList<>();
         int index = 1;
@@ -759,6 +897,11 @@ public class RagEvalServiceImpl implements RagEvalService {
         return paragraphs;
     }
 
+    /**
+     * 解析普通 JSON 形式的 CMRC 数据。
+     *
+     * <p>兼容原始 CMRC 格式、数组格式和单对象格式。</p>
+     */
     private List<CmrcParagraph> parseCmrcJsonNode(JsonNode root) {
         if (root == null || root.isMissingNode() || root.isNull()) {
             return List.of();
@@ -782,6 +925,9 @@ public class RagEvalServiceImpl implements RagEvalService {
         return paragraph == null ? List.of() : List.of(paragraph);
     }
 
+    /**
+     * 解析 CMRC 原始格式中的 data -> paragraphs -> qas 层级。
+     */
     private List<CmrcParagraph> parseOriginalCmrcData(JsonNode dataNode) {
         List<CmrcParagraph> paragraphs = new ArrayList<>();
         for (JsonNode articleNode : dataNode) {
@@ -824,6 +970,11 @@ public class RagEvalServiceImpl implements RagEvalService {
         return paragraphs;
     }
 
+    /**
+     * 解析扁平结构的 CMRC 条目。
+     *
+     * <p>有些数据集会把 context、question、answers 放在同一层，这个方法用来兼容这类格式。</p>
+     */
     private CmrcParagraph parseFlatCmrcItem(JsonNode item, String fallbackId) {
         String context = readText(item, "context", "context_text", "paragraph", "passage", "text");
         if (!StringUtils.hasText(context)) {
@@ -864,6 +1015,9 @@ public class RagEvalServiceImpl implements RagEvalService {
         return new CmrcParagraph(title, StringUtils.hasText(paragraphId) ? paragraphId : fallbackId, context.trim(), List.of(cmrcQuestion));
     }
 
+    /**
+     * 从 answers 节点中读取答案文本。
+     */
     private List<String> readAnswerTexts(JsonNode answersNode) {
         if (answersNode == null || answersNode.isMissingNode() || answersNode.isNull()) {
             return List.of();
@@ -895,6 +1049,9 @@ public class RagEvalServiceImpl implements RagEvalService {
         return answers.stream().filter(StringUtils::hasText).toList();
     }
 
+    /**
+     * 按多个可能字段名读取文本字段。
+     */
     private String readText(JsonNode node, String... fieldNames) {
         if (node == null || node.isMissingNode() || node.isNull()) {
             return null;
@@ -908,6 +1065,11 @@ public class RagEvalServiceImpl implements RagEvalService {
         return null;
     }
 
+    /**
+     * 根据解析出的 CMRC 段落生成待导入的样本草稿。
+     *
+     * <p>contextMap 会对相同正文去重，确保相同 context 只生成一个资料分段。</p>
+     */
     private List<CmrcSampleDraft> buildCmrcSampleDrafts(
             List<CmrcParagraph> paragraphs,
             LinkedHashMap<String, CmrcContextDraft> contextMap,
@@ -937,6 +1099,9 @@ public class RagEvalServiceImpl implements RagEvalService {
         return sampleDrafts;
     }
 
+    /**
+     * 解析导入样本数量上限，默认 500，最大 5000。
+     */
     private int resolveImportSampleLimit(Integer maxSamples) {
         if (maxSamples == null || maxSamples <= 0) {
             return 500;
@@ -944,11 +1109,17 @@ public class RagEvalServiceImpl implements RagEvalService {
         return Math.min(maxSamples, 5000);
     }
 
+    /**
+     * 为 CMRC context 分段生成章节标题。
+     */
     private String buildCmrcSectionTitle(String splitName, CmrcContextDraft contextDraft, int segmentNo) {
         String title = StringUtils.hasText(contextDraft.title()) ? contextDraft.title().trim() : "阅读材料";
         return "CMRC2018 " + splitName + " · #" + segmentNo + " · " + truncate(title, 80);
     }
 
+    /**
+     * 将多个参考答案拼成一个关键词字符串。
+     */
     private String joinAnswers(List<String> answerTexts) {
         if (answerTexts == null || answerTexts.isEmpty()) {
             return null;
@@ -956,11 +1127,17 @@ public class RagEvalServiceImpl implements RagEvalService {
         return truncate(String.join(",", answerTexts), 500);
     }
 
+    /**
+     * 生成导入样本备注，保留原始问题 ID，便于回溯数据来源。
+     */
     private String buildCmrcSampleNote(String splitName, CmrcSampleDraft sampleDraft) {
         String idText = StringUtils.hasText(sampleDraft.questionId()) ? sampleDraft.questionId() : "无原始ID";
         return truncate("CMRC2018 " + splitName + " · 原始问题ID: " + idText, 500);
     }
 
+    /**
+     * 将对象序列化成 JSON 字符串。
+     */
     private String writeJson(Object value) {
         if (value == null) {
             return null;
@@ -972,6 +1149,9 @@ public class RagEvalServiceImpl implements RagEvalService {
         }
     }
 
+    /**
+     * 把 JSON 字符串解析成 Long 列表，解析失败时返回空列表。
+     */
     private List<Long> parseLongList(String json) {
         if (!StringUtils.hasText(json)) {
             return List.of();
@@ -984,6 +1164,9 @@ public class RagEvalServiceImpl implements RagEvalService {
         }
     }
 
+    /**
+     * 把 JSON 字符串解析成 Integer 列表，解析失败时返回空列表。
+     */
     private List<Integer> parseIntList(String json) {
         if (!StringUtils.hasText(json)) {
             return List.of();
@@ -996,14 +1179,23 @@ public class RagEvalServiceImpl implements RagEvalService {
         }
     }
 
+    /**
+     * 规范化样本来源类型，默认使用 HUMAN。
+     */
     private String normalizeSourceType(String sourceType) {
         return StringUtils.hasText(sourceType) ? sourceType.trim().toUpperCase() : "HUMAN";
     }
 
+    /**
+     * 去掉字符串首尾空格，空白字符串统一转成 null。
+     */
     private String trimToNull(String value) {
         return StringUtils.hasText(value) ? value.trim() : null;
     }
 
+    /**
+     * 截断过长字符串，避免写入数据库字段时超长。
+     */
     private String truncate(String value, int maxLength) {
         if (value == null || value.length() <= maxLength) {
             return value;
@@ -1011,6 +1203,9 @@ public class RagEvalServiceImpl implements RagEvalService {
         return value.substring(0, maxLength);
     }
 
+    /**
+     * CMRC 段落的临时结构。
+     */
     private record CmrcParagraph(
             String title,
             String paragraphId,
@@ -1019,6 +1214,9 @@ public class RagEvalServiceImpl implements RagEvalService {
     ) {
     }
 
+    /**
+     * CMRC 问题的临时结构。
+     */
     private record CmrcQuestion(
             String id,
             String question,
@@ -1026,6 +1224,9 @@ public class RagEvalServiceImpl implements RagEvalService {
     ) {
     }
 
+    /**
+     * 准备写入数据库的 CMRC 样本草稿。
+     */
     private record CmrcSampleDraft(
             CmrcContextDraft context,
             String questionId,
@@ -1034,10 +1235,19 @@ public class RagEvalServiceImpl implements RagEvalService {
     ) {
     }
 
+    /**
+     * 准备写入资料分段表的 CMRC context 草稿。
+     *
+     * <p>segmentId 会在分段插入数据库后回填，后续样本就能标注到正确分段。</p>
+     */
     private static class CmrcContextDraft {
+        /** 原始文章标题。 */
         private final String title;
+        /** 原始段落 ID。 */
         private final String paragraphId;
+        /** 原始 context 正文。 */
         private final String context;
+        /** 写入 material_segment 表后的分段 ID。 */
         private Long segmentId;
 
         private CmrcContextDraft(String title, String paragraphId, String context) {
@@ -1046,22 +1256,37 @@ public class RagEvalServiceImpl implements RagEvalService {
             this.context = context;
         }
 
+        /**
+         * 获取原始标题。
+         */
         private String title() {
             return title;
         }
 
+        /**
+         * 获取原始段落 ID。
+         */
         private String paragraphId() {
             return paragraphId;
         }
 
+        /**
+         * 获取原始正文。
+         */
         private String context() {
             return context;
         }
 
+        /**
+         * 获取已写入数据库的资料分段 ID。
+         */
         private Long segmentId() {
             return segmentId;
         }
 
+        /**
+         * 回填资料分段 ID。
+         */
         private void setSegmentId(Long segmentId) {
             this.segmentId = segmentId;
         }

@@ -29,46 +29,74 @@ import java.util.function.Consumer;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+/**
+ * 助手 Agent 编排器实现类。
+ *
+ * <p>这是 assistant 模块最核心的类：它把用户消息转换成“识别意图 -> 处理待确认动作 -> 调用工具 -> 组织模型提示词 -> 生成回复”的完整链路。</p>
+ */
 @Component
 public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrator {
 
+    /** 用户询问资料详情时的关键词。 */
     private static final List<String> MATERIAL_DETAIL_KEYWORDS = List.of(
             "资料信息", "资料详情", "资料基本信息", "文件信息", "页数", "多少页", "总页数", "标题", "难度", "字符数", "解析状态", "PDF状态"
     );
+    /** 用户询问任务状态时的关键词。 */
     private static final List<String> TASK_STATUS_KEYWORDS = List.of("任务", "进度", "执行到哪", "状态");
+    /** 用户询问练习详情时的关键词。 */
     private static final List<String> PRACTICE_KEYWORDS = List.of("练习", "错题", "判分", "这次练习", "为什么错");
+    /** 用户询问题集详情时的关键词。 */
     private static final List<String> QUESTION_SET_KEYWORDS = List.of("题集", "这套题", "题目分布", "题型");
+    /** 普通寒暄关键词。 */
     private static final List<String> CASUAL_CHAT_KEYWORDS = List.of(
             "你好", "您好", "hi", "hello", "在吗", "谢谢", "多谢", "早上好", "下午好", "晚上好", "你是谁", "介绍一下你自己"
     );
+    /** 判断用户是否在回复出题配置的提示词。 */
     private static final List<String> QUESTION_CONFIG_REPLY_HINT_KEYWORDS = List.of(
             "单选", "选择题", "判断", "简答", "默认", "全部", "全都", "只出", "都出", "题量", "数量", "道题"
     );
+    /** 判断用户是否在选择候选资料的提示词。 */
     private static final List<String> MATERIAL_SELECTION_REPLY_HINT_KEYWORDS = List.of(
             "这个", "那个", "这份", "那份", "资料", "序号", "第", "id", "#"
     );
+    /** 学习问答类关键词。 */
     private static final List<String> STUDY_QA_HINT_KEYWORDS = List.of(
             "带我学习", "带我复习", "帮我学习", "帮我复习", "讲讲", "解释", "说明", "告诉我", "什么是", "为什么", "怎么", "如何",
             "区别", "联系", "原理", "概念", "简介", "概述", "知识点", "重点", "难点", "考点", "学习", "核心", "要点", "重要内容"
     );
+    /** 明确创建总结任务的关键词。 */
     private static final List<String> EXPLICIT_SUMMARY_TASK_KEYWORDS = List.of(
             "生成总结", "生成AI总结", "生成ai总结", "AI总结", "ai总结", "总结任务", "创建总结", "保存到笔记", "保存笔记",
             "存笔记", "帮我总结", "总结一下", "做个总结", "生成提纲", "生成大纲", "输出总结"
     );
 
+    /** 工具注册表。 */
     private final AssistantToolRegistry toolRegistry;
+    /** 助手记忆服务。 */
     private final AssistantMemoryService assistantMemoryService;
+    /** AI 配置服务。 */
     private final AiConfigService aiConfigService;
+    /** AI 聊天服务。 */
     private final AiChatService aiChatService;
+    /** 学习资料服务。 */
     private final StudyMaterialService studyMaterialService;
+    /** 题集服务。 */
     private final QuestionSetService questionSetService;
+    /** 大模型结构化意图提取器。 */
     private final AssistantStructuredIntentExtractor structuredIntentExtractor;
+    /** 大模型工具规划器。 */
     private final AssistantToolPlanner toolPlanner;
+    /** 规则意图解析器。 */
     private final AssistantTaskIntentParser taskIntentParser;
+    /** 章节目录工具。 */
     private final MaterialChapterOutlineAssistantTool materialChapterOutlineAssistantTool;
+    /** 资料搜索工具。 */
     private final MaterialSearchAssistantTool materialSearchAssistantTool;
+    /** 总结任务工具。 */
     private final SummaryTaskAssistantTool summaryTaskAssistantTool;
+    /** 出题任务工具。 */
     private final QuestionGenerateTaskAssistantTool questionGenerateTaskAssistantTool;
+    /** JSON 工具。 */
     private final ObjectMapper objectMapper;
 
     public AssistantAgentOrchestratorImpl(
@@ -103,6 +131,11 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * 准备一轮回复。
+     *
+     * <p>这个方法会先执行可确定的工具调用，再决定是否需要继续把上下文交给大模型生成最终回答。</p>
+     */
     @Override
     public AssistantPreparedResult prepare(Long userId, AssistantSession session, String userMessage, String modelName) {
         List<MemorySnippet> memories = assistantMemoryService.findRelevantMemories(userId, userMessage, 3);
@@ -197,6 +230,9 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
         );
     }
 
+    /**
+     * 非流式生成完整助手回复。
+     */
     @Override
     public AssistantAgentResult respond(Long userId, AssistantSession session, String userMessage, String modelName) {
         AssistantPreparedResult preparedResult = prepare(userId, session, userMessage, modelName);
@@ -224,11 +260,17 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
         );
     }
 
+    /**
+     * 将对话内容交给记忆服务做长期记忆沉淀。
+     */
     @Override
     public void captureConversationMemory(Long userId, AssistantSession session, String userMessage, String assistantReply) {
         assistantMemoryService.captureConversationMemory(userId, session, userMessage, assistantReply);
     }
 
+    /**
+     * 组装 Agent 预处理结果。
+     */
     private AssistantPreparedResult buildPreparedResult(
             AssistantSession session,
             String userMessage,
@@ -261,6 +303,9 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
         );
     }
 
+    /**
+     * 将工具规划器给出的参数合并到结构化意图中。
+     */
     private AssistantStructuredIntent mergePlanIntoStructuredIntent(
             AssistantStructuredIntent structuredIntent,
             AssistantToolPlan toolPlan
@@ -283,6 +328,9 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
         return effectiveIntent;
     }
 
+    /**
+     * 把单个工具调用参数写回意图对象。
+     */
     private void mergeToolCallArguments(AssistantStructuredIntent intent, AssistantToolPlan.ToolCall toolCall) {
         if (intent == null || toolCall == null || !StringUtils.hasText(toolCall.getToolName())) {
             return;
@@ -341,6 +389,9 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
         }
     }
 
+    /**
+     * 处理规划器直接给出的回复、追问或不支持能力。
+     */
     private WorkflowResolution resolvePlannerDirectAction(AssistantToolPlan toolPlan) {
         if (toolPlan == null || !toolPlan.hasUsablePlan()) {
             return WorkflowResolution.notHandled();
@@ -368,6 +419,9 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
         return WorkflowResolution.notHandled();
     }
 
+    /**
+     * 构造调试用的计划快照。
+     */
     private Object buildPlanSnapshot(Object executionPlan, AssistantToolPlan toolPlan) {
         if (toolPlan == null || !toolPlan.hasUsablePlan()) {
             return executionPlan;
@@ -378,6 +432,9 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
         return snapshot;
     }
 
+    /**
+     * 综合待确认动作、模型意图和规则意图，决定本轮交互模式。
+     */
     private InteractionMode resolveInteractionMode(
             AssistantSession session,
             String userMessage,
@@ -443,6 +500,9 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
         return InteractionMode.UNKNOWN;
     }
 
+    /**
+     * 将字符串交互模式转成枚举。
+     */
     private InteractionMode normalizeInteractionMode(String rawMode) {
         if (!StringUtils.hasText(rawMode)) {
             return InteractionMode.UNKNOWN;
@@ -454,6 +514,9 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
         }
     }
 
+    /**
+     * 判断用户是否明确在要求创建任务。
+     */
     private boolean looksLikeExplicitTaskRequest(String userMessage, AssistantStructuredIntent structuredIntent) {
         if (looksLikeKnowledgeAnswerRequest(userMessage) && !looksLikeExplicitTaskCommand(userMessage)) {
             return false;
@@ -461,6 +524,9 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
         return !taskIntentParser.resolveRequestedTaskTypes(userMessage, structuredIntent).isEmpty();
     }
 
+    /**
+     * 判断是否出现明确的任务创建动词。
+     */
     private boolean looksLikeExplicitTaskCommand(String userMessage) {
         if (!StringUtils.hasText(userMessage)) {
             return false;
@@ -469,6 +535,9 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
                 || AssistantToolSupport.containsAnyIgnoreCase(userMessage, EXPLICIT_SUMMARY_TASK_KEYWORDS);
     }
 
+    /**
+     * 判断用户是否更像在问知识问题，而不是创建任务。
+     */
     private boolean looksLikeKnowledgeAnswerRequest(String userMessage) {
         if (!StringUtils.hasText(userMessage)) {
             return false;
@@ -480,6 +549,9 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
         );
     }
 
+    /**
+     * 判断是否应进入资料问答模式。
+     */
     private boolean looksLikeStudyQaMessage(
             AssistantSession session,
             String userMessage,
@@ -508,6 +580,9 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
         return AssistantToolSupport.resolveMaterialId(session) != null;
     }
 
+    /**
+     * 构造“不支持该能力”的工作流结果。
+     */
     private WorkflowResolution buildUnsupportedResolution(AssistantStructuredIntent structuredIntent) {
         String unsupportedFeature = structuredIntent == null ? null : structuredIntent.getUnsupportedFeature();
         String replyText = StringUtils.hasText(unsupportedFeature)
@@ -516,6 +591,9 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
         return new WorkflowResolution(true, false, List.of(), replyText, List.of());
     }
 
+    /**
+     * 处理学习问答工作流。
+     */
     private WorkflowResolution handleStudyQaWorkflow(
             Long userId,
             AssistantSession session,
@@ -601,6 +679,9 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
         return new WorkflowResolution(true, shouldUseAiModel(), executions, null, planSnapshot);
     }
 
+    /**
+     * 处理用户质疑资料定位、上下文选择等情况。
+     */
     private WorkflowResolution handleContextChallengeWorkflow(
             Long userId,
             AssistantSession session,
@@ -635,6 +716,9 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
         return new WorkflowResolution(true, false, executions, searchExecution.summaryText(), planSnapshot);
     }
 
+    /**
+     * 处理总结或出题任务创建工作流。
+     */
     private WorkflowResolution handleTaskCreationWorkflow(
             Long userId,
             AssistantSession session,
@@ -719,6 +803,9 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
                 : new WorkflowResolution(true, false, executions, null, planSnapshot);
     }
 
+    /**
+     * 处理会话中等待用户确认的动作。
+     */
     private WorkflowResolution resolvePendingAction(
             Long userId,
             AssistantSession session,
@@ -879,6 +966,9 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
         return WorkflowResolution.notHandled();
     }
 
+    /**
+     * 执行已经规划好的任务列表。
+     */
     private WorkflowResolution executePlannedTasks(
             Long userId,
             AssistantSession session,
@@ -945,6 +1035,9 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
         return new WorkflowResolution(true, false, executions, null, planSnapshot);
     }
 
+    /**
+     * 用户完成确认后继续执行后续动作。
+     */
     private WorkflowResolution executePendingFollowUp(
             Long userId,
             AssistantSession session,
@@ -1039,6 +1132,9 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
         return tasks;
     }
 
+    /**
+     * 根据交互模式生成规则工具计划。
+     */
     private List<PlannedTool> planTools(
             AssistantSession session,
             String userMessage,
@@ -1082,6 +1178,9 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
         return plan.stream().limit(4).toList();
     }
 
+    /**
+     * 执行规则生成的工具计划。
+     */
     private List<AssistantTool.ToolExecutionResult> executeTools(
             Long userId,
             AssistantSession session,
@@ -1108,6 +1207,9 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
         return executions;
     }
 
+    /**
+     * 执行大模型规划器返回的工具计划。
+     */
     private WorkflowResolution executePlannerToolPlan(
             Long userId,
             AssistantSession session,
@@ -1246,6 +1348,9 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
         return tool.execute(toolContext);
     }
 
+    /**
+     * 在等待出题配置时，如果用户转而质疑资料选择，则优先处理资料歧义。
+     */
     private WorkflowResolution resolveMaterialDisambiguationDuringPendingQuestionConfig(
             Long userId,
             AssistantSession session,
@@ -1311,10 +1416,16 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
         return interactionMode == InteractionMode.CHAT;
     }
 
+    /**
+     * 判断是否是普通寒暄。
+     */
     private boolean looksLikeCasualChat(String userMessage) {
         return AssistantToolSupport.containsAnyIgnoreCase(userMessage, CASUAL_CHAT_KEYWORDS);
     }
 
+    /**
+     * 判断用户是否在回复出题配置追问。
+     */
     private boolean looksLikeQuestionConfigReply(String userMessage, AssistantStructuredIntent structuredIntent) {
         if (Boolean.TRUE.equals(structuredIntent == null ? null : structuredIntent.getQuestionConfigReply())) {
             return true;
@@ -1323,6 +1434,9 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
                 || AssistantToolSupport.containsAnyIgnoreCase(userMessage, QUESTION_CONFIG_REPLY_HINT_KEYWORDS);
     }
 
+    /**
+     * 判断用户是否在从候选资料中做选择。
+     */
     private boolean looksLikeMaterialSelectionReply(
             String userMessage,
             AssistantPendingActionPayload payload,
@@ -1357,6 +1471,9 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
         return userMessage.matches(".*[0-9一二两三四五六七八九十百].*");
     }
 
+    /**
+     * 从当前题集上下文反查对应资料 ID。
+     */
     private Long resolveMaterialIdFromQuestionSetContext(Long userId, AssistantSession session) {
         Long questionSetId = AssistantToolSupport.resolveQuestionSetId(session);
         if (questionSetId == null) {
@@ -1376,6 +1493,9 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
         }
     }
 
+    /**
+     * 查找用户最近使用过的资料或题集上下文。
+     */
     private RecentContextResolution resolveRecentContext(Long userId) {
         List<MaterialPageVO> recentMaterials = studyMaterialService.searchAssistantMaterials(userId, null, 1);
         if (recentMaterials != null && !recentMaterials.isEmpty()) {
@@ -1453,6 +1573,9 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
         );
     }
 
+    /**
+     * 判断当前 AI 配置是否允许调用真实模型。
+     */
     private boolean shouldUseAiModel() {
         AiConfigService.ResolvedAiConfig config = aiConfigService.getResolvedConfig();
         return Boolean.TRUE.equals(config.enabled())
@@ -1460,6 +1583,9 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
                 && StringUtils.hasText(config.apiKey());
     }
 
+    /**
+     * 根据交互模式判断是否需要调用大模型生成最终回复。
+     */
     private boolean shouldUseAiModelForMode(InteractionMode interactionMode) {
         return shouldUseAiModel() && interactionMode != InteractionMode.UNSUPPORTED;
     }
@@ -1590,6 +1716,9 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
                 && !looksLikeKnowledgeAnswerRequest(userMessage);
     }
 
+    /**
+     * 构造最终回复阶段的系统提示词。
+     */
     private String buildSystemPrompt() {
         return """
                 你是系统内置的 AI 学习助手。
@@ -1603,6 +1732,9 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
                 """;
     }
 
+    /**
+     * 构造最终回复阶段的用户提示词，包含工具结果和记忆。
+     */
     private String buildUserPrompt(
             AssistantSession session,
             String userMessage,
@@ -1649,6 +1781,9 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
         return builder.toString().trim();
     }
 
+    /**
+     * 当不能或不需要调用模型时，构造兜底回复。
+     */
     private String buildFallbackReply(
             AssistantSession session,
             List<MemorySnippet> memories,
@@ -1704,6 +1839,9 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
         }
     }
 
+    /**
+     * 将待确认动作保存到会话中。
+     */
     private void savePendingAction(AssistantSession session, String pendingActionType, AssistantPendingActionPayload payload) {
         if (session == null) {
             return;
@@ -1712,6 +1850,9 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
         session.setPendingActionPayloadJson(toJson(payload));
     }
 
+    /**
+     * 清除会话中的待确认动作。
+     */
     private void clearPendingAction(AssistantSession session) {
         if (session == null) {
             return;
@@ -1720,6 +1861,9 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
         session.setPendingActionPayloadJson(null);
     }
 
+    /**
+     * 读取会话中的待确认动作参数。
+     */
     private AssistantPendingActionPayload readPendingActionPayload(AssistantSession session) {
         if (session == null || !StringUtils.hasText(session.getPendingActionPayloadJson())) {
             return null;
@@ -1731,6 +1875,9 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
         }
     }
 
+    /**
+     * 从工具结果 JSON 中读取资料搜索结果。
+     */
     private AssistantMaterialSearchResult readMaterialSearchResult(String jsonText) {
         if (!StringUtils.hasText(jsonText)) {
             return null;

@@ -17,12 +17,18 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/rag")
 public class RagController {
 
+    /** RAG 检索业务服务，负责向量召回和重排序。 */
     private final RetrievalService retrievalService;
 
     public RagController(RetrievalService retrievalService) {
         this.retrievalService = retrievalService;
     }
 
+    /**
+     * 预览某份资料在指定问题下的 RAG 检索结果。
+     *
+     * <p>这个接口常用于调试：可以看到问题会命中哪些资料分段，以及每个分段的相似度分数。</p>
+     */
     @GetMapping("/material/{materialId}/retrieve-preview")
     public ApiResponse<RetrievalPreviewVO> retrievePreview(
             @PathVariable Long materialId,

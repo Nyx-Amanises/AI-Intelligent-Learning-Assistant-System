@@ -12,11 +12,18 @@ import java.util.Map;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+/**
+ * RAG 检索助手工具。
+ *
+ * <p>用于围绕当前资料召回相关片段，再让助手基于片段回答问题。</p>
+ */
 @Component
 public class RagRetrieveAssistantTool extends AbstractAssistantTool {
 
+    /** 默认召回片段数量。 */
     private static final int DEFAULT_LIMIT = 5;
 
+    /** 资料检索服务。 */
     private final RetrievalService retrievalService;
 
     public RagRetrieveAssistantTool(RetrievalService retrievalService, ObjectMapper objectMapper) {
@@ -24,17 +31,26 @@ public class RagRetrieveAssistantTool extends AbstractAssistantTool {
         this.retrievalService = retrievalService;
     }
 
+    /**
+     * 工具名称。
+     */
     @Override
     public String name() {
         return "rag.retrieve";
     }
 
+    /**
+     * 当前会话绑定资料且用户有问题文本时支持检索。
+     */
     @Override
     public boolean supports(ToolContext context) {
         return AssistantToolSupport.resolveMaterialId(context.session()) != null
                 && StringUtils.hasText(context.userMessage());
     }
 
+    /**
+     * 执行资料片段检索。
+     */
     @Override
     public ToolExecutionResult execute(ToolContext context) {
         LocalDateTime startedAt = LocalDateTime.now();

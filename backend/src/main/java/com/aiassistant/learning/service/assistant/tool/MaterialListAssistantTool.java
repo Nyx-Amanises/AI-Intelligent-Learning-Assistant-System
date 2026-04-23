@@ -13,12 +13,18 @@ import java.util.Map;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+/**
+ * 资料列表助手工具。
+ */
 @Component
 public class MaterialListAssistantTool extends AbstractAssistantTool {
 
+    /** 默认展示资料数量。 */
     private static final int DEFAULT_LIMIT = 6;
 
+    /** 学习资料服务。 */
     private final StudyMaterialService studyMaterialService;
+    /** 规则意图解析器。 */
     private final AssistantTaskIntentParser taskIntentParser;
 
     public MaterialListAssistantTool(
@@ -31,16 +37,25 @@ public class MaterialListAssistantTool extends AbstractAssistantTool {
         this.taskIntentParser = taskIntentParser;
     }
 
+    /**
+     * 工具名称。
+     */
     @Override
     public String name() {
         return "material.list";
     }
 
+    /**
+     * 用户想浏览资料列表时支持该工具。
+     */
     @Override
     public boolean supports(ToolContext context) {
         return taskIntentParser.looksLikeMaterialBrowseRequest(context.userMessage(), context.structuredIntent());
     }
 
+    /**
+     * 执行资料列表查询。
+     */
     @Override
     public ToolExecutionResult execute(ToolContext context) {
         AssistantTaskIntentParser.MaterialBrowseOptions options =
@@ -48,10 +63,16 @@ public class MaterialListAssistantTool extends AbstractAssistantTool {
         return browse(context.userId(), options.keyword(), options.embeddingReadyOnly());
     }
 
+    /**
+     * 按关键词浏览资料。
+     */
     public ToolExecutionResult browse(Long userId, String keyword) {
         return browse(userId, keyword, false);
     }
 
+    /**
+     * 按关键词和 Embedding 状态浏览资料。
+     */
     public ToolExecutionResult browse(Long userId, String keyword, boolean embeddingReadyOnly) {
         LocalDateTime startedAt = LocalDateTime.now();
         Map<String, Object> args = new LinkedHashMap<>();
@@ -79,6 +100,9 @@ public class MaterialListAssistantTool extends AbstractAssistantTool {
         }
     }
 
+    /**
+     * 构造资料列表摘要。
+     */
     private String buildSummary(String keyword, boolean embeddingReadyOnly, List<MaterialPageVO> records, long total) {
         if (records == null || records.isEmpty()) {
             if (embeddingReadyOnly) {
@@ -127,6 +151,9 @@ public class MaterialListAssistantTool extends AbstractAssistantTool {
         return builder.toString();
     }
 
+    /**
+     * 格式化 Embedding 状态摘要。
+     */
     private String formatEmbeddingSummary(MaterialPageVO item) {
         if (item == null) {
             return "Embedding 未知";

@@ -12,10 +12,15 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.stereotype.Component;
 
+/**
+ * AI 总结任务助手工具。
+ */
 @Component
 public class SummaryTaskAssistantTool extends AbstractAssistantTool {
 
+    /** AI 任务服务。 */
     private final AiTaskService aiTaskService;
+    /** 规则意图解析器。 */
     private final AssistantTaskIntentParser taskIntentParser;
 
     public SummaryTaskAssistantTool(
@@ -28,16 +33,25 @@ public class SummaryTaskAssistantTool extends AbstractAssistantTool {
         this.taskIntentParser = taskIntentParser;
     }
 
+    /**
+     * 工具名称。
+     */
     @Override
     public String name() {
         return "task.submit_summary";
     }
 
+    /**
+     * 当前会话绑定资料时才支持创建总结任务。
+     */
     @Override
     public boolean supports(ToolContext context) {
         return AssistantToolSupport.resolveMaterialId(context.session()) != null;
     }
 
+    /**
+     * 从用户消息中解析总结参数并提交任务。
+     */
     @Override
     public ToolExecutionResult execute(ToolContext context) {
         LocalDateTime startedAt = LocalDateTime.now();
@@ -55,10 +69,16 @@ public class SummaryTaskAssistantTool extends AbstractAssistantTool {
         return executeRequest(context.userId(), materialId, request, startedAt);
     }
 
+    /**
+     * 直接提交总结任务，供编排器在已解析好参数时调用。
+     */
     public ToolExecutionResult executeRequest(Long userId, Long materialId, SummaryGenerateRequest request) {
         return executeRequest(userId, materialId, request, LocalDateTime.now());
     }
 
+    /**
+     * 提交总结任务的内部实现。
+     */
     private ToolExecutionResult executeRequest(
             Long userId,
             Long materialId,
@@ -86,6 +106,9 @@ public class SummaryTaskAssistantTool extends AbstractAssistantTool {
         }
     }
 
+    /**
+     * 将总结类型转换成中文说明。
+     */
     private String formatSummaryType(String summaryType) {
         if ("EXAM".equalsIgnoreCase(summaryType)) {
             return "考试重点";

@@ -9,11 +9,20 @@ import java.util.List;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+/**
+ * 结构化意图提取器。
+ *
+ * <p>它使用大模型把用户自然语言转成 {@link AssistantStructuredIntent}，
+ * 供后续规则解析和工具规划使用。</p>
+ */
 @Component
 public class AssistantStructuredIntentExtractor {
 
+    /** AI 聊天服务。 */
     private final AiChatService aiChatService;
+    /** AI 配置服务。 */
     private final AiConfigService aiConfigService;
+    /** JSON 解析工具。 */
     private final ObjectMapper objectMapper;
 
     public AssistantStructuredIntentExtractor(
@@ -26,6 +35,9 @@ public class AssistantStructuredIntentExtractor {
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * 提取用户消息中的结构化意图。
+     */
     public AssistantStructuredIntent extract(String userMessage, String modelName) {
         if (!shouldUseExtraction(userMessage)) {
             return AssistantStructuredIntent.empty();
@@ -43,6 +55,9 @@ public class AssistantStructuredIntentExtractor {
         }
     }
 
+    /**
+     * 判断当前是否可以使用大模型做意图提取。
+     */
     private boolean shouldUseExtraction(String userMessage) {
         if (!StringUtils.hasText(userMessage)) {
             return false;
@@ -54,6 +69,9 @@ public class AssistantStructuredIntentExtractor {
                 && StringUtils.hasText(config.defaultModel());
     }
 
+    /**
+     * 解析用于意图提取的模型名称。
+     */
     private String resolveModelName(String modelName) {
         if (StringUtils.hasText(modelName)) {
             return modelName.trim();
@@ -61,6 +79,9 @@ public class AssistantStructuredIntentExtractor {
         return aiConfigService.getResolvedConfig().defaultModel();
     }
 
+    /**
+     * 构造意图提取器提示词。
+     */
     private String buildSystemPrompt() {
         return """
                 你是学习助手系统的“结构化意图提取器”。
@@ -120,10 +141,16 @@ public class AssistantStructuredIntentExtractor {
                 """;
     }
 
+    /**
+     * 构造用户提示词。
+     */
     private String buildUserPrompt(String userMessage) {
         return "用户消息：\n" + userMessage.trim();
     }
 
+    /**
+     * 解析模型返回的 JSON。
+     */
     private AssistantStructuredIntent parseResponse(String content) {
         if (!StringUtils.hasText(content)) {
             return AssistantStructuredIntent.empty();
@@ -162,6 +189,9 @@ public class AssistantStructuredIntentExtractor {
         }
     }
 
+    /**
+     * 从模型输出中提取 JSON 对象。
+     */
     private String extractJson(String content) {
         String trimmed = content.trim();
         if (trimmed.startsWith("```")) {
@@ -176,6 +206,9 @@ public class AssistantStructuredIntentExtractor {
         return trimmed;
     }
 
+    /**
+     * 读取字符串数组字段。
+     */
     private List<String> readStringList(JsonNode root, String fieldName) {
         JsonNode node = root == null ? null : root.get(fieldName);
         if (node == null || !node.isArray()) {
@@ -190,6 +223,9 @@ public class AssistantStructuredIntentExtractor {
         return values;
     }
 
+    /**
+     * 读取可空字符串字段。
+     */
     private String readNullableText(JsonNode root, String fieldName) {
         JsonNode node = root == null ? null : root.get(fieldName);
         if (node == null || node.isNull() || !StringUtils.hasText(node.asText())) {
@@ -198,6 +234,9 @@ public class AssistantStructuredIntentExtractor {
         return node.asText().trim();
     }
 
+    /**
+     * 读取可空布尔字段。
+     */
     private Boolean readNullableBoolean(JsonNode root, String fieldName) {
         JsonNode node = root == null ? null : root.get(fieldName);
         if (node == null || node.isNull()) {
@@ -218,6 +257,9 @@ public class AssistantStructuredIntentExtractor {
         return null;
     }
 
+    /**
+     * 读取可空整数字段。
+     */
     private Integer readNullableInt(JsonNode root, String fieldName) {
         JsonNode node = root == null ? null : root.get(fieldName);
         if (node == null || node.isNull()) {
@@ -236,6 +278,9 @@ public class AssistantStructuredIntentExtractor {
         return null;
     }
 
+    /**
+     * 将字符串转成大写。
+     */
     private String normalizeUpper(String value) {
         return StringUtils.hasText(value) ? value.trim().toUpperCase() : null;
     }

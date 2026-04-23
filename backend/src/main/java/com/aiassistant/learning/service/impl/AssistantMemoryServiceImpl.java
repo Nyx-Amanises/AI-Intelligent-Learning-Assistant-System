@@ -16,15 +16,24 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+/**
+ * 助手记忆服务实现类。
+ *
+ * <p>当前实现使用规则从对话中提取用户身份、学习目标、回复偏好和最近上下文。</p>
+ */
 @Service
 public class AssistantMemoryServiceImpl implements AssistantMemoryService {
 
+    /** 助手记忆表 Mapper。 */
     private final AssistantMemoryMapper assistantMemoryMapper;
 
     public AssistantMemoryServiceImpl(AssistantMemoryMapper assistantMemoryMapper) {
         this.assistantMemoryMapper = assistantMemoryMapper;
     }
 
+    /**
+     * 查询和用户当前问题最相关的记忆。
+     */
     @Override
     public List<MemorySnippet> findRelevantMemories(Long userId, String queryText, Integer limit) {
         int resolvedLimit = limit == null || limit <= 0 ? 3 : Math.min(limit, 10);
@@ -62,6 +71,9 @@ public class AssistantMemoryServiceImpl implements AssistantMemoryService {
                 .toList();
     }
 
+    /**
+     * 从一轮对话里提取可复用的长期记忆。
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void captureConversationMemory(Long userId, AssistantSession session, String userMessage, String assistantReply) {
@@ -71,6 +83,9 @@ public class AssistantMemoryServiceImpl implements AssistantMemoryService {
         captureContextMemory(userId, session, assistantReply);
     }
 
+    /**
+     * 捕获“我是...”这类用户身份信息。
+     */
     private void captureProfileMemory(Long userId, String userMessage) {
         if (StringUtils.hasText(userMessage) && userMessage.contains("我是")) {
             upsertMemory(
@@ -88,6 +103,9 @@ public class AssistantMemoryServiceImpl implements AssistantMemoryService {
         }
     }
 
+    /**
+     * 捕获学习目标、考试、面试等长期目标。
+     */
     private void captureGoalMemory(Long userId, String userMessage) {
         if (containsAny(userMessage, List.of("我准备", "我要", "目标", "复习", "考试", "简历", "面试"))) {
             upsertMemory(
@@ -105,6 +123,9 @@ public class AssistantMemoryServiceImpl implements AssistantMemoryService {
         }
     }
 
+    /**
+     * 捕获用户对回复风格的偏好。
+     */
     private void capturePreferenceMemory(Long userId, String userMessage) {
         if (containsAny(userMessage, List.of("希望你", "不要", "直接", "详细一点", "简洁一点", "一步一步"))) {
             upsertMemory(
@@ -122,6 +143,9 @@ public class AssistantMemoryServiceImpl implements AssistantMemoryService {
         }
     }
 
+    /**
+     * 保存最近会话上下文，方便后续对话继续承接。
+     */
     private void captureContextMemory(Long userId, AssistantSession session, String assistantReply) {
         if (session == null) {
             return;
@@ -144,6 +168,9 @@ public class AssistantMemoryServiceImpl implements AssistantMemoryService {
         );
     }
 
+    /**
+     * 新增或更新同主题的记忆。
+     */
     private void upsertMemory(
             Long userId,
             String memoryScope,
@@ -189,6 +216,9 @@ public class AssistantMemoryServiceImpl implements AssistantMemoryService {
         assistantMemoryMapper.updateById(existing);
     }
 
+    /**
+     * 记忆被使用后更新命中次数和最近命中时间。
+     */
     private void touchMemories(List<AssistantMemory> memories) {
         if (memories == null || memories.isEmpty()) {
             return;
@@ -201,6 +231,9 @@ public class AssistantMemoryServiceImpl implements AssistantMemoryService {
         }
     }
 
+    /**
+     * 根据重要性和关键词命中给记忆打分。
+     */
     private double scoreMemory(AssistantMemory memory, String queryText) {
         if (memory == null) {
             return 0D;
@@ -220,6 +253,9 @@ public class AssistantMemoryServiceImpl implements AssistantMemoryService {
         return score;
     }
 
+    /**
+     * 从文本中构造简单检索词。
+     */
     private List<String> buildTerms(String text) {
         if (!StringUtils.hasText(text)) {
             return List.of();
@@ -243,6 +279,9 @@ public class AssistantMemoryServiceImpl implements AssistantMemoryService {
         return terms.stream().limit(10).toList();
     }
 
+    /**
+     * 根据会话当前上下文生成摘要。
+     */
     private String buildContextSummary(AssistantSession session) {
         List<String> parts = new ArrayList<>();
         if (StringUtils.hasText(session.getCurrentContextType())) {
@@ -260,6 +299,9 @@ public class AssistantMemoryServiceImpl implements AssistantMemoryService {
         return parts.isEmpty() ? null : String.join("，", parts);
     }
 
+    /**
+     * 判断文本是否包含任意关键词。
+     */
     private boolean containsAny(String text, List<String> keywords) {
         if (!StringUtils.hasText(text) || keywords == null) {
             return false;
@@ -273,6 +315,9 @@ public class AssistantMemoryServiceImpl implements AssistantMemoryService {
         return false;
     }
 
+    /**
+     * 截断并清理要写入数据库的文本。
+     */
     private String trimForStorage(String value, int maxLength) {
         if (!StringUtils.hasText(value)) {
             return null;
@@ -281,6 +326,9 @@ public class AssistantMemoryServiceImpl implements AssistantMemoryService {
         return normalized.length() <= maxLength ? normalized : normalized.substring(0, maxLength);
     }
 
+    /**
+     * 归一化文本，便于关键词匹配。
+     */
     private String normalizeText(String text) {
         if (!StringUtils.hasText(text)) {
             return "";
@@ -289,6 +337,9 @@ public class AssistantMemoryServiceImpl implements AssistantMemoryService {
                 .replaceAll("[\\s\\p{Punct}，。！？；：、“”‘’（）()【】《》<>·—…-]+", "");
     }
 
+    /**
+     * 记忆和评分的临时组合。
+     */
     private record RankedMemory(AssistantMemory memory, double score) {
     }
 }

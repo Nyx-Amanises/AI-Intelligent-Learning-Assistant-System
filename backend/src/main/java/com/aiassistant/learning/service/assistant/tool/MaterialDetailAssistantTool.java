@@ -9,9 +9,13 @@ import java.time.LocalDateTime;
 import java.util.Map;
 import org.springframework.stereotype.Component;
 
+/**
+ * 资料详情助手工具。
+ */
 @Component
 public class MaterialDetailAssistantTool extends AbstractAssistantTool {
 
+    /** 学习资料服务。 */
     private final StudyMaterialService studyMaterialService;
 
     public MaterialDetailAssistantTool(StudyMaterialService studyMaterialService, ObjectMapper objectMapper) {
@@ -19,16 +23,25 @@ public class MaterialDetailAssistantTool extends AbstractAssistantTool {
         this.studyMaterialService = studyMaterialService;
     }
 
+    /**
+     * 工具名称。
+     */
     @Override
     public String name() {
         return "material.detail";
     }
 
+    /**
+     * 当前会话绑定了资料时支持查看详情。
+     */
     @Override
     public boolean supports(ToolContext context) {
         return AssistantToolSupport.resolveMaterialId(context.session()) != null;
     }
 
+    /**
+     * 查询当前资料详情。
+     */
     @Override
     public ToolExecutionResult execute(ToolContext context) {
         LocalDateTime startedAt = LocalDateTime.now();
@@ -54,6 +67,9 @@ public class MaterialDetailAssistantTool extends AbstractAssistantTool {
         }
     }
 
+    /**
+     * 格式化资料 Embedding 状态。
+     */
     private String formatEmbeddingSummary(MaterialDetailVO detail) {
         if (detail == null) {
             return "未知";
