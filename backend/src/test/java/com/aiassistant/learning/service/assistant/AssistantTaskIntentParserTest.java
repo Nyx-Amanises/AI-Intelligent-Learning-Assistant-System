@@ -70,6 +70,21 @@ class AssistantTaskIntentParserTest {
     }
 
     /**
+     * 验证资料标题里的“必修1”和“出一套题”不会被误解析成只出 1 道题。
+     */
+    @Test
+    void shouldNotTreatCourseTitleNumberOrYiTaoAsQuestionCount() {
+        AssistantTaskIntentParser.QuestionTaskOptions options =
+                parser.parseQuestionRequest("根据普通高中教科书·生物学必修1分子与细胞这份资料出一套题", null);
+
+        assertEquals(5, options.questionCount());
+        assertEquals(3, options.singleCount());
+        assertEquals(1, options.judgeCount());
+        assertEquals(1, options.shortAnswerCount());
+        assertTrue(options.requiresQuestionTypeConfirmation());
+    }
+
+    /**
      * 验证中文量词“个”不会影响单选题数量识别。
      */
     @Test
@@ -82,6 +97,26 @@ class AssistantTaskIntentParserTest {
         assertEquals(0, options.judgeCount());
         assertEquals(0, options.shortAnswerCount());
         assertFalse(options.requiresQuestionTypeConfirmation());
+    }
+
+    /**
+     * 验证“根据某份资料”这类表达能提取出资料标题。
+     */
+    @Test
+    void shouldExtractMaterialQueryFromAccordingToExpression() {
+        String queryText = parser.extractMaterialQueryText("根据普通高中教科书·生物学必修1分子与细胞这份资料出一套题");
+
+        assertEquals("普通高中教科书·生物学必修1分子与细胞", queryText);
+    }
+
+    /**
+     * 验证“根据资料名出题”即使没有写“资料”两个字，也能提取资料标题。
+     */
+    @Test
+    void shouldExtractMaterialQueryFromTaskExpressionWithoutMaterialWord() {
+        String queryText = parser.extractMaterialQueryText("根据docker_practice-v1.7.5出一套题");
+
+        assertEquals("docker_practice-v1.7.5", queryText);
     }
 
     /**

@@ -82,6 +82,29 @@ class MaterialSearchAssistantToolTest {
     }
 
     /**
+     * 验证标题中缺少空格这类展示差异不会影响自动定位资料。
+     */
+    @Test
+    void shouldAutoSelectWhenTitleOnlyDiffersByWhitespaceOrPunctuation() throws Exception {
+        when(studyMaterialService.searchAssistantMaterials(1L, "普通高中教科书·生物学必修1分子与细胞", 5))
+                .thenReturn(List.of(
+                        material(9L, "普通高中教科书·生物学必修1 分子与细胞"),
+                        material(10L, "CMRC2018 dev 阅读理解语料")
+                ));
+
+        var execution = tool.search(1L, "普通高中教科书·生物学必修1分子与细胞");
+        AssistantMaterialSearchResult result = objectMapper.readValue(
+                execution.toolResultJson(),
+                AssistantMaterialSearchResult.class
+        );
+
+        assertEquals("SUCCESS", execution.status());
+        assertNotNull(result);
+        assertEquals(9L, result.getSelectedMaterialId());
+        assertFalse(Boolean.TRUE.equals(result.getNeedsClarification()));
+    }
+
+    /**
      * 构造测试用资料列表项。
      */
     private MaterialPageVO material(Long id, String title) {

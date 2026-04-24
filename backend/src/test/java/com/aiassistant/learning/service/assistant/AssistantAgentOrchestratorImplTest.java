@@ -52,6 +52,8 @@ class AssistantAgentOrchestratorImplTest {
     private final AssistantStructuredIntentExtractor structuredIntentExtractor = Mockito.mock(AssistantStructuredIntentExtractor.class);
     /** 模拟工具规划器。 */
     private final AssistantToolPlanner toolPlanner = Mockito.mock(AssistantToolPlanner.class);
+    /** 模拟 pending 状态决策器。 */
+    private final AssistantPendingDecisionPlanner pendingDecisionPlanner = Mockito.mock(AssistantPendingDecisionPlanner.class);
     /** 模拟章节目录工具。 */
     private final MaterialChapterOutlineAssistantTool materialChapterOutlineAssistantTool = Mockito.mock(MaterialChapterOutlineAssistantTool.class);
     /** 模拟总结任务工具。 */
@@ -503,6 +505,66 @@ class AssistantAgentOrchestratorImplTest {
     }
 
     /**
+     * 验证等待出题配置时，用户切换到另一份资料出题会打断旧 pending 并重新进入新任务流程。
+     */
+    @Test
+    void shouldInterruptPendingQuestionConfigWhenUserStartsQuestionTaskForAnotherMaterial() throws Exception {
+        MaterialSearchAssistantTool materialSearchAssistantTool = new MaterialSearchAssistantTool(
+                studyMaterialService,
+                taskIntentParser,
+                objectMapper
+        );
+        AssistantAgentOrchestratorImpl orchestrator = newOrchestrator(
+                new AssistantToolRegistry(List.of(fakeRagTool())),
+                materialSearchAssistantTool
+        );
+
+        AssistantSession session = materialSession(8L);
+        session.setPendingActionType("QUESTION_CONFIG");
+        session.setPendingActionPayloadJson(objectMapper.writeValueAsString(AssistantPendingActionPayload.builder()
+                .promptText("题型数量我还需要你确认一下。")
+                .materialId(8L)
+                .tasks(List.of(AssistantPlannedTask.builder()
+                        .taskType("QUESTION_GENERATE")
+                        .questionCount(1)
+                        .singleCount(1)
+                        .judgeCount(0)
+                        .shortAnswerCount(0)
+                        .difficultyLevel(3)
+                        .requiresQuestionTypeConfirmation(true)
+                        .build()))
+                .build()));
+        String userMessage = "根据普通高中教科书·生物学必修1分子与细胞这份资料出一套题";
+        when(structuredIntentExtractor.extract(userMessage, "gpt-test")).thenReturn(AssistantStructuredIntent.builder()
+                .interactionMode("TASK_CREATE")
+                .requestedTaskTypes(List.of("QUESTION_GENERATE"))
+                .materialQuery("普通高中教科书·生物学必修1分子与细胞")
+                .build());
+        when(studyMaterialService.searchAssistantMaterials(1L, "普通高中教科书·生物学必修1分子与细胞", 5))
+                .thenReturn(List.of(material(9L, "普通高中教科书·生物学必修1 分子与细胞")));
+
+        AssistantAgentOrchestrator.AssistantPreparedResult preparedResult =
+                orchestrator.prepare(1L, session, userMessage, "gpt-test");
+
+        assertFalse(preparedResult.useModel());
+        assertEquals(2, preparedResult.toolExecutions().size());
+        assertEquals("material.search", preparedResult.toolExecutions().get(0).toolName());
+        assertEquals("task.submit_question_generate", preparedResult.toolExecutions().get(1).toolName());
+        assertEquals(9L, session.getCurrentMaterialId());
+        assertEquals("QUESTION_CONFIG", session.getPendingActionType());
+        AssistantPendingActionPayload payload = objectMapper.readValue(
+                session.getPendingActionPayloadJson(),
+                AssistantPendingActionPayload.class
+        );
+        assertEquals(9L, payload.getMaterialId());
+        assertEquals(5, payload.getTasks().get(0).getQuestionCount());
+        assertEquals(3, payload.getTasks().get(0).getSingleCount());
+        assertEquals(1, payload.getTasks().get(0).getJudgeCount());
+        assertEquals(1, payload.getTasks().get(0).getShortAnswerCount());
+        verifyNoInteractions(questionGenerateTaskAssistantTool);
+    }
+
+    /**
      * 验证 planner 已经给出可执行工具计划时，编排器会优先执行 planner 的结果。
      */
     @Test
@@ -583,6 +645,7 @@ class AssistantAgentOrchestratorImplTest {
                 questionSetService,
                 structuredIntentExtractor,
                 toolPlanner,
+                pendingDecisionPlanner,
                 taskIntentParser,
                 materialChapterOutlineAssistantTool,
                 materialSearchAssistantTool,

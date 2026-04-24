@@ -2,7 +2,9 @@
   <div class="login-page">
     <header class="top-nav">
       <div class="logo-container">
-        <div class="logo-badge">AI</div>
+        <div class="logo-badge">
+          <AppIcon name="brand" :size="22" />
+        </div>
         <span class="logo-text">AI LEARNING</span>
       </div>
       <div class="top-right-icon">Workspace</div>
@@ -75,19 +77,27 @@
           <div class="social-wrapper">
             <div class="social-login-title">第三方登录</div>
             <el-button class="social-btn" disabled>
-              <span class="social-btn__icon">G</span>
+              <span class="social-btn__icon social-btn__icon--google">
+                <AppIcon name="google" :size="20" />
+              </span>
               <span>使用 Google 登录</span>
             </el-button>
             <el-button class="social-btn" disabled>
-              <span class="social-btn__icon">GH</span>
+              <span class="social-btn__icon social-btn__icon--github">
+                <AppIcon name="github" :size="20" />
+              </span>
               <span>使用 GitHub 登录</span>
             </el-button>
             <el-button class="social-btn" disabled>
-              <span class="social-btn__icon">D</span>
+              <span class="social-btn__icon social-btn__icon--discord">
+                <AppIcon name="discord" :size="20" />
+              </span>
               <span>使用 Discord 登录</span>
             </el-button>
             <el-button class="social-btn" disabled>
-              <span class="social-btn__icon">QQ</span>
+              <span class="social-btn__icon social-btn__icon--qq">
+                <AppIcon name="qq" :size="20" />
+              </span>
               <span>使用 QQ 登录</span>
             </el-button>
           </div>
@@ -103,6 +113,7 @@ import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
 import { getProfileApi, loginApi, registerApi } from '@/api/modules/auth'
 import { useUserStore } from '@/stores/user'
+import AppIcon from '@/components/AppIcon.vue'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -171,7 +182,7 @@ const submit = async () => {
 <style scoped>
 .login-page {
   min-height: 100vh;
-  background: #fff;
+  background: var(--bg);
   overflow-x: hidden;
 }
 
@@ -181,7 +192,8 @@ const submit = async () => {
   justify-content: center;
   align-items: center;
   padding: 0 48px;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
   position: relative;
 }
 
@@ -192,39 +204,39 @@ const submit = async () => {
 }
 
 .logo-badge {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius);
   display: grid;
   place-items: center;
-  background: linear-gradient(135deg, #1677ff, #44b3ff);
+  background: linear-gradient(135deg, var(--brand), #16a34a);
   color: #fff;
-  font-weight: 700;
+  box-shadow: var(--shadow);
 }
 
 .logo-text {
   font-weight: 700;
-  font-size: 19px;
-  color: #333;
+  font-size: 18px;
+  color: var(--text);
 }
 
 .top-right-icon {
   position: absolute;
   right: 48px;
-  color: #9aa3af;
-  font-size: 15px;
+  color: var(--muted);
+  font-size: 14px;
 }
 
 .slogan-bar {
-  background-color: #e7f3ff;
-  color: #0070d2;
+  background: linear-gradient(135deg, var(--blue-soft), var(--brand-light));
+  color: var(--brand);
   padding: 14px 48px;
-  font-size: 16px;
-  border-bottom: 1px solid #d1e6f9;
+  font-size: 15px;
+  border-bottom: 1px solid var(--line);
 }
 
 .main-container {
-  padding: 96px 24px;
+  padding: 80px 24px;
   max-width: 1320px;
   margin: 0 auto;
 }
@@ -235,46 +247,51 @@ const submit = async () => {
 }
 
 .welcome-title {
-  font-size: 38px;
+  font-size: 36px;
   margin-bottom: 16px;
-  font-weight: 600;
+  font-weight: 700;
+  color: var(--text);
   text-align: left;
 }
 
 .login-subtitle {
   margin: 0 0 28px;
-  color: #6b7280;
+  color: var(--text-secondary);
   line-height: 1.7;
   font-size: 15px;
 }
 
 .custom-input :deep(.el-input__wrapper) {
-  background-color: #f4f6f8;
-  padding: 10px 14px;
+  background: var(--bg);
+  padding: 12px 16px;
   box-shadow: none;
-  border: 1px solid #e1e4e8;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  transition: all 0.2s ease;
 }
 
 .custom-input :deep(.el-input__wrapper.is-focus) {
-  border-color: #008cd1;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-soft);
 }
 
 .form-footer {
-  margin-bottom: 30px;
+  margin-bottom: 24px;
   text-align: left;
-  font-size: 17px;
+  font-size: 14px;
 }
 
 .action-btn {
   width: 100%;
-  height: 53px;
-  font-size: 18px;
-  font-weight: 700;
+  height: 48px;
+  font-size: 16px;
+  font-weight: 600;
   border: none;
+  border-radius: var(--radius-sm);
 }
 
 .social-section {
-  border-left: 1px solid #eee;
+  border-left: 1px solid var(--line);
   padding-left: 72px !important;
   margin-top: 120px;
 }
@@ -283,36 +300,60 @@ const submit = async () => {
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
 }
 
 .social-login-title {
-  font-size: 16px;
-  font-weight: 700;
-  color: #475569;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
 }
 
 .social-btn {
   width: 100%;
   margin: 0 !important;
-  height: 50px;
+  height: 48px;
   justify-content: flex-start;
-  border: 1px solid #e1e4e8;
-  color: #444;
-  background: #fff;
+  border: 1px solid var(--line);
+  color: var(--text);
+  background: var(--panel);
+  border-radius: var(--radius-sm);
+  transition: all 0.2s ease;
+}
+
+.social-btn:not(.is-disabled):hover {
+  border-color: var(--brand);
+  box-shadow: var(--shadow);
+  transform: translateY(-1px);
 }
 
 .social-btn__icon {
-  width: 26px;
-  height: 26px;
+  width: 32px;
+  height: 32px;
   display: inline-grid;
   place-items: center;
-  margin-right: 14px;
+  margin-right: 12px;
   border-radius: 50%;
-  background: #eef4ff;
-  color: #1677ff;
-  font-size: 12px;
-  font-weight: 700;
+  background: var(--bg);
+}
+
+.social-btn__icon--google {
+  background: #fff;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.social-btn__icon--github {
+  background: #111827;
+  color: #fff;
+}
+
+.social-btn__icon--discord {
+  background: rgba(88, 101, 242, 0.12);
+}
+
+.social-btn__icon--qq {
+  background: var(--bg-secondary);
 }
 
 @media (max-width: 768px) {
@@ -320,7 +361,7 @@ const submit = async () => {
     border-left: none;
     padding-left: 0 !important;
     margin-top: 48px;
-    border-top: 1px solid #eee;
+    border-top: 1px solid var(--line);
     padding-top: 36px;
   }
 }

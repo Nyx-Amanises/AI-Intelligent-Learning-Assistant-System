@@ -220,14 +220,23 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
         List<StudyMaterial> records = this.list(new LambdaQueryWrapper<StudyMaterial>()
                 .eq(StudyMaterial::getUserId, userId)
                 .eq(StudyMaterial::getParseStatus, "SUCCESS")
-                .and(StringUtils.hasText(normalizedKeyword), wrapper -> wrapper
-                        .like(StudyMaterial::getTitle, normalizedKeyword)
-                        .or()
-                        .like(StudyMaterial::getTags, normalizedKeyword))
                 .orderByDesc(StudyMaterial::getLastStudyTime)
-                .orderByDesc(StudyMaterial::getCreatedAt)
-                .last("limit " + resolvedLimit));
-        return buildMaterialPageRecords(records);
+                .orderByDesc(StudyMaterial::getCreatedAt));
+        if (!StringUtils.hasText(normalizedKeyword)) {
+            return buildMaterialPageRecords(records.stream()
+                    .limit(resolvedLimit)
+                    .toList());
+        }
+        String normalizedSearchText = normalizeMaterialSearchText(normalizedKeyword);
+        List<StudyMaterial> matchedRecords = records.stream()
+                .filter(material -> materialMatchesKeyword(material, normalizedKeyword, normalizedSearchText))
+                .sorted((left, right) -> Integer.compare(
+                        computeMaterialSearchScore(right, normalizedKeyword, normalizedSearchText),
+                        computeMaterialSearchScore(left, normalizedKeyword, normalizedSearchText)
+                ))
+                .limit(resolvedLimit)
+                .toList();
+        return buildMaterialPageRecords(matchedRecords);
     }
 
     /**
@@ -1080,6 +1089,95 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
             throw new BusinessException("标题长度不能超过200个字符");
         }
         return normalized;
+    }
+
+    /**
+     * 判断资料是否匹配助手搜索关键词。
+     *
+     * <p>助手里的资料标题经常来自自然语言，用户可能会省略空格、书名号或连接符，
+     * 所以这里会同时做原文匹配和规范化匹配。</p>
+     *
+     * @param material 资料实体
+     * @param keyword 原始关键词
+     * @param normalizedKeyword 规范化关键词
+     * @return true 表示匹配
+     */
+    private boolean materialMatchesKeyword(StudyMaterial material, String keyword, String normalizedKeyword) {
+        if (material == null || !StringUtils.hasText(keyword)) {
+            return false;
+        }
+        String title = material.getTitle();
+        String tags = material.getTags();
+        String normalizedTitle = normalizeMaterialSearchText(title);
+        String normalizedTags = normalizeMaterialSearchText(tags);
+        String lowerKeyword = keyword.toLowerCase(Locale.ROOT);
+        String lowerTitle = StringUtils.hasText(title) ? title.toLowerCase(Locale.ROOT) : "";
+        String lowerTags = StringUtils.hasText(tags) ? tags.toLowerCase(Locale.ROOT) : "";
+        return lowerTitle.contains(lowerKeyword)
+                || lowerTags.contains(lowerKeyword)
+                || (StringUtils.hasText(normalizedKeyword) && normalizedTitle.contains(normalizedKeyword))
+                || (StringUtils.hasText(normalizedKeyword) && normalizedKeyword.contains(normalizedTitle))
+                || (StringUtils.hasText(normalizedKeyword) && normalizedTags.contains(normalizedKeyword));
+    }
+
+    /**
+     * 给资料搜索结果打分，用于稳定排序。
+     *
+     * @param material 资料实体
+     * @param keyword 原始关键词
+     * @param normalizedKeyword 规范化关键词
+     * @return 匹配分
+     */
+    private int computeMaterialSearchScore(StudyMaterial material, String keyword, String normalizedKeyword) {
+        if (material == null || !StringUtils.hasText(keyword)) {
+            return 0;
+        }
+        String title = material.getTitle();
+        String tags = material.getTags();
+        String lowerKeyword = keyword.toLowerCase(Locale.ROOT);
+        String lowerTitle = StringUtils.hasText(title) ? title.toLowerCase(Locale.ROOT) : "";
+        String lowerTags = StringUtils.hasText(tags) ? tags.toLowerCase(Locale.ROOT) : "";
+        String normalizedTitle = normalizeMaterialSearchText(title);
+        String normalizedTags = normalizeMaterialSearchText(tags);
+        if (lowerTitle.equals(lowerKeyword)) {
+            return 100;
+        }
+        if (StringUtils.hasText(normalizedKeyword) && normalizedTitle.equals(normalizedKeyword)) {
+            return 98;
+        }
+        if (lowerTitle.contains(lowerKeyword)) {
+            return 92;
+        }
+        if (StringUtils.hasText(normalizedKeyword) && normalizedTitle.contains(normalizedKeyword)) {
+            return 88;
+        }
+        if (StringUtils.hasText(normalizedKeyword) && normalizedKeyword.contains(normalizedTitle)) {
+            return 84;
+        }
+        if (lowerTags.contains(lowerKeyword)) {
+            return 76;
+        }
+        if (StringUtils.hasText(normalizedKeyword) && normalizedTags.contains(normalizedKeyword)) {
+            return 72;
+        }
+        return 50;
+    }
+
+    /**
+     * 规范化资料搜索文本，忽略空格、书名号、连接符和中英文标点。
+     *
+     * @param text 原始文本
+     * @return 规范化后的搜索文本
+     */
+    private String normalizeMaterialSearchText(String text) {
+        if (!StringUtils.hasText(text)) {
+            return "";
+        }
+        StringBuilder builder = new StringBuilder();
+        text.trim().toLowerCase(Locale.ROOT).codePoints()
+                .filter(Character::isLetterOrDigit)
+                .forEach(builder::appendCodePoint);
+        return builder.toString();
     }
 
     /**

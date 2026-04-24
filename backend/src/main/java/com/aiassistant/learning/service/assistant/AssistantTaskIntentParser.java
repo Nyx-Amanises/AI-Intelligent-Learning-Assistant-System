@@ -32,7 +32,7 @@ public class AssistantTaskIntentParser {
     );
     /** 识别“来 10 道”这类命令式题量表达。 */
     private static final Pattern COMMAND_TOTAL_QUESTION_PATTERN = Pattern.compile(
-            "(?:来|给我|出|生成|做)\\s*([0-9一二两三四五六七八九十百]+)\\s*(?:道|个)?"
+            "(?:来|给我|出|生成|做)\\s*([0-9一二两三四五六七八九十百]+)\\s*(?:道|个)"
     );
     /** 识别难度等级。 */
     private static final Pattern DIFFICULTY_PATTERN = Pattern.compile("难度\\s*([1-5])");
@@ -44,8 +44,12 @@ public class AssistantTaskIntentParser {
             "([A-Za-z0-9一-龥][A-Za-z0-9一-龥 ._+#-]{0,40})开头的资料",
             Pattern.CASE_INSENSITIVE
     );
+    private static final Pattern CONTEXT_TASK_MATERIAL_PATTERN = Pattern.compile(
+            "(?:根据|基于|用|使用|依据|依照)\\s*([^，。！？,]{2,100}?)(?=(?:这份|该|这个)?(?:资料|文档|教材|笔记)?\\s*(?:出|生成|做|来|总结|讲|解释|告诉|整理|学习|复习))",
+            Pattern.CASE_INSENSITIVE
+    );
     private static final Pattern MATERIAL_PATTERN = Pattern.compile(
-            "(?:把|将|针对|关于|对)\\s*([^，。！？,.]{2,48}?)(?:这份|该|这个)?资料"
+            "(?:把|将|针对|关于|对|根据|基于|用|使用|依据|依照)\\s*([^，。！？,]{2,80}?)(?:这份|该|这个)?资料"
     );
     private static final Pattern MATERIAL_BROWSE_PATTERN = Pattern.compile(
             "(?:帮我查找|帮我查询|帮我查看|帮我搜索|查找|查询|查看|搜索|找|查|搜|筛|看看|列出|展示|返回|给我看|帮我找|帮我查|帮我搜)\\s*(?:一下|一波|下)?\\s*([^，。！？,.]{1,48}?)(?:相关|有关|方面)?(?:的)?资料"
@@ -54,7 +58,7 @@ public class AssistantTaskIntentParser {
             "(?:有哪些|有什么|哪些|什么)\\s*([^，。！？,.]{1,48}?)(?:相关|有关|方面)?(?:的)?资料"
     );
     private static final Pattern LEADING_MATERIAL_NOISE_PATTERN = Pattern.compile(
-            "^(?:(?:请|请你|麻烦|麻烦你|帮我|帮忙|给我|让我|我想|我想要|我想让你|我想请你|想让你|想请你|想要|我要|先|再|先帮我|再帮我|先给我|再给我|先把|再把|把|将|针对|关于)\\s*)+",
+            "^(?:(?:请|请你|麻烦|麻烦你|帮我|帮忙|给我|让我|我想|我想要|我想让你|我想请你|想让你|想请你|想要|我要|先|再|先帮我|再帮我|先给我|再给我|先把|再把|把|将|针对|关于|根据|基于|依据|依照|用|使用)\\s*)+",
             Pattern.CASE_INSENSITIVE
     );
     private static final Pattern TRAILING_MATERIAL_NOISE_PATTERN = Pattern.compile(
@@ -319,6 +323,10 @@ public class AssistantTaskIntentParser {
         Matcher prefixMatcher = PREFIX_MATERIAL_PATTERN.matcher(text);
         if (prefixMatcher.find()) {
             return cleanMaterialQueryText(prefixMatcher.group(1));
+        }
+        Matcher contextTaskMatcher = CONTEXT_TASK_MATERIAL_PATTERN.matcher(text);
+        if (contextTaskMatcher.find()) {
+            return cleanMaterialQueryText(contextTaskMatcher.group(1));
         }
         Matcher materialMatcher = MATERIAL_PATTERN.matcher(text);
         if (materialMatcher.find()) {

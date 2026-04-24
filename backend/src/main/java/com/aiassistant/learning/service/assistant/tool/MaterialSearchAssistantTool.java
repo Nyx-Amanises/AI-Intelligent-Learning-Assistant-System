@@ -160,8 +160,14 @@ public class MaterialSearchAssistantTool extends AbstractAssistantTool {
         String normalizedQuery = queryText.trim().toLowerCase();
         String normalizedTitle = StringUtils.hasText(material.getTitle()) ? material.getTitle().trim().toLowerCase() : "";
         String normalizedTags = StringUtils.hasText(material.getTags()) ? material.getTags().trim().toLowerCase() : "";
+        String compactQuery = compactSearchText(queryText);
+        String compactTitle = compactSearchText(material.getTitle());
+        String compactTags = compactSearchText(material.getTags());
         if (normalizedTitle.equals(normalizedQuery)) {
             return 100;
+        }
+        if (StringUtils.hasText(compactQuery) && compactTitle.equals(compactQuery)) {
+            return 98;
         }
         if (normalizedTitle.startsWith(normalizedQuery)) {
             return 96;
@@ -169,10 +175,33 @@ public class MaterialSearchAssistantTool extends AbstractAssistantTool {
         if (normalizedTitle.contains(normalizedQuery)) {
             return 84;
         }
+        if (StringUtils.hasText(compactQuery) && compactTitle.contains(compactQuery)) {
+            return 82;
+        }
+        if (StringUtils.hasText(compactQuery) && compactQuery.contains(compactTitle)) {
+            return 80;
+        }
         if (normalizedTags.contains(normalizedQuery)) {
             return 72;
         }
+        if (StringUtils.hasText(compactQuery) && compactTags.contains(compactQuery)) {
+            return 70;
+        }
         return 50;
+    }
+
+    /**
+     * 规范化资料标题搜索文本，忽略空格和中英文标点。
+     */
+    private String compactSearchText(String text) {
+        if (!StringUtils.hasText(text)) {
+            return "";
+        }
+        StringBuilder builder = new StringBuilder();
+        text.trim().toLowerCase().codePoints()
+                .filter(Character::isLetterOrDigit)
+                .forEach(builder::appendCodePoint);
+        return builder.toString();
     }
 
     /**

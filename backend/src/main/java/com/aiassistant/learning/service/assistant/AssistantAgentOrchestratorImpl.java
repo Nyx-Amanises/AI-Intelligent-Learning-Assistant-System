@@ -86,6 +86,8 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
     private final AssistantStructuredIntentExtractor structuredIntentExtractor;
     /** 大模型工具规划器。 */
     private final AssistantToolPlanner toolPlanner;
+    /** 大模型 pending 状态决策器。 */
+    private final AssistantPendingDecisionPlanner pendingDecisionPlanner;
     /** 规则意图解析器。 */
     private final AssistantTaskIntentParser taskIntentParser;
     /** 章节目录工具。 */
@@ -108,6 +110,7 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
             QuestionSetService questionSetService,
             AssistantStructuredIntentExtractor structuredIntentExtractor,
             AssistantToolPlanner toolPlanner,
+            AssistantPendingDecisionPlanner pendingDecisionPlanner,
             AssistantTaskIntentParser taskIntentParser,
             MaterialChapterOutlineAssistantTool materialChapterOutlineAssistantTool,
             MaterialSearchAssistantTool materialSearchAssistantTool,
@@ -123,6 +126,7 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
         this.questionSetService = questionSetService;
         this.structuredIntentExtractor = structuredIntentExtractor;
         this.toolPlanner = toolPlanner;
+        this.pendingDecisionPlanner = pendingDecisionPlanner;
         this.taskIntentParser = taskIntentParser;
         this.materialChapterOutlineAssistantTool = materialChapterOutlineAssistantTool;
         this.materialSearchAssistantTool = materialSearchAssistantTool;
@@ -145,7 +149,11 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
             structuredIntent = structuredIntentExtractor.extract(userMessage, modelName);
             toolPlan = AssistantToolPlan.empty();
         }
-        InteractionMode interactionMode = resolveInteractionMode(session, userMessage, structuredIntent, toolPlan);
+        AssistantPendingActionPayload pendingPayload = readPendingActionPayload(session);
+        AssistantPendingDecision pendingDecision = pendingDecisionPlanner == null
+                ? AssistantPendingDecision.unknown()
+                : pendingDecisionPlanner.decide(session, pendingPayload, userMessage, structuredIntent, toolPlan, modelName);
+        InteractionMode interactionMode = resolveInteractionMode(session, userMessage, structuredIntent, toolPlan, pendingDecision);
         List<MemoryUsage> usedMemories = memories.stream()
                 .map(memory -> new MemoryUsage(
                         memory.id(),
@@ -161,7 +169,8 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
                 session,
                 userMessage,
                 structuredIntent,
-                interactionMode
+                interactionMode,
+                pendingDecision
         );
         if (!workflowResolution.handled()) {
             workflowResolution = switch (interactionMode) {
@@ -439,23 +448,43 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
             AssistantSession session,
             String userMessage,
             AssistantStructuredIntent structuredIntent,
-            AssistantToolPlan toolPlan
+            AssistantToolPlan toolPlan,
+            AssistantPendingDecision pendingDecision
     ) {
         InteractionMode plannedMode = normalizeInteractionMode(toolPlan == null ? null : toolPlan.getInteractionMode());
         InteractionMode extractedMode = normalizeInteractionMode(structuredIntent == null ? null : structuredIntent.getInteractionMode());
+        InteractionMode pendingMode = normalizeInteractionMode(pendingDecision == null ? null : pendingDecision.getInteractionMode());
         AssistantPendingActionPayload pendingPayload = readPendingActionPayload(session);
         String pendingActionType = session == null ? null : session.getPendingActionType();
+        boolean pendingInterrupted = shouldInterruptPendingAction(
+                pendingActionType,
+                userMessage,
+                structuredIntent,
+                plannedMode,
+                extractedMode,
+                pendingDecision
+        );
 
+        if (isPendingContinueDecision(pendingDecision)) {
+            if ("QUESTION_CONFIG".equalsIgnoreCase(pendingActionType)) {
+                return pendingMode != InteractionMode.UNKNOWN ? pendingMode : InteractionMode.TASK_CONFIG_REPLY;
+            }
+            if ("MATERIAL_SELECTION".equalsIgnoreCase(pendingActionType)) {
+                return pendingMode != InteractionMode.UNKNOWN ? pendingMode : InteractionMode.MATERIAL_SELECTION;
+            }
+        }
         if (taskIntentParser.looksLikeMaterialAmbiguityChallenge(userMessage)
                 || Boolean.TRUE.equals(structuredIntent == null ? null : structuredIntent.getMaterialDisambiguation())
                 || Boolean.TRUE.equals(structuredIntent == null ? null : structuredIntent.getContextChallenge())) {
             return InteractionMode.CONTEXT_CHALLENGE;
         }
-        if ("QUESTION_CONFIG".equalsIgnoreCase(pendingActionType)
+        if (!pendingInterrupted
+                && "QUESTION_CONFIG".equalsIgnoreCase(pendingActionType)
                 && looksLikeQuestionConfigReply(userMessage, structuredIntent)) {
             return InteractionMode.TASK_CONFIG_REPLY;
         }
-        if ("MATERIAL_SELECTION".equalsIgnoreCase(pendingActionType)
+        if (!pendingInterrupted
+                && "MATERIAL_SELECTION".equalsIgnoreCase(pendingActionType)
                 && looksLikeMaterialSelectionReply(userMessage, pendingPayload, structuredIntent)) {
             return InteractionMode.MATERIAL_SELECTION;
         }
@@ -735,12 +764,16 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
         List<AssistantTool.ToolExecutionResult> executions = new ArrayList<>();
         List<Map<String, Object>> planSnapshot = new ArrayList<>();
 
-        Long materialId = AssistantToolSupport.resolveMaterialId(session);
+        String explicitMaterialQuery = taskIntentParser.extractMaterialQueryText(userMessage, structuredIntent);
+        Long materialId = null;
+        if (!StringUtils.hasText(explicitMaterialQuery)) {
+            materialId = AssistantToolSupport.resolveMaterialId(session);
+        }
         if (materialId == null) {
             materialId = resolveMaterialIdFromQuestionSetContext(userId, session);
         }
         if (materialId == null) {
-            String materialQuery = taskIntentParser.extractMaterialQueryText(userMessage, structuredIntent);
+            String materialQuery = explicitMaterialQuery;
             if (!StringUtils.hasText(materialQuery)) {
                 RecentContextResolution recentContext = resolveRecentContext(userId);
                 if (recentContext != null) {
@@ -811,7 +844,8 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
             AssistantSession session,
             String userMessage,
             AssistantStructuredIntent structuredIntent,
-            InteractionMode interactionMode
+            InteractionMode interactionMode,
+            AssistantPendingDecision pendingDecision
     ) {
         if (session == null || !StringUtils.hasText(session.getPendingActionType())) {
             return WorkflowResolution.notHandled();
@@ -825,6 +859,17 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
         String pendingActionType = session.getPendingActionType().trim().toUpperCase();
         List<AssistantTool.ToolExecutionResult> executions = new ArrayList<>();
         List<Map<String, Object>> planSnapshot = new ArrayList<>();
+        if (shouldInterruptPendingAction(
+                pendingActionType,
+                userMessage,
+                structuredIntent,
+                null,
+                interactionMode,
+                pendingDecision
+        )) {
+            clearPendingAction(session);
+            return WorkflowResolution.notHandled();
+        }
 
         if ("MATERIAL_SELECTION".equals(pendingActionType)) {
             Long selectedMaterialId = taskIntentParser.resolveMaterialCandidateSelection(
@@ -1414,6 +1459,142 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
             return interactionMode != InteractionMode.MATERIAL_SELECTION;
         }
         return interactionMode == InteractionMode.CHAT;
+    }
+
+    /**
+     * 判断用户是否已经离开当前待确认动作。
+     */
+    private boolean shouldInterruptPendingAction(
+            String pendingActionType,
+            String userMessage,
+            AssistantStructuredIntent structuredIntent,
+            InteractionMode plannedMode,
+            InteractionMode extractedMode,
+            AssistantPendingDecision pendingDecision
+    ) {
+        if (!StringUtils.hasText(pendingActionType) || !StringUtils.hasText(userMessage)) {
+            return false;
+        }
+        if (isPendingInterruptDecision(pendingDecision) || isPendingCancelDecision(pendingDecision)) {
+            return true;
+        }
+        if (isPendingContinueDecision(pendingDecision) || isPendingClarifyDecision(pendingDecision)) {
+            return false;
+        }
+        if (looksLikePendingCancelMessage(userMessage)) {
+            return true;
+        }
+        String normalizedPendingType = pendingActionType.trim().toUpperCase();
+        if ("QUESTION_CONFIG".equals(normalizedPendingType)) {
+            return shouldInterruptQuestionConfigPending(userMessage, structuredIntent, plannedMode, extractedMode);
+        }
+        if ("MATERIAL_SELECTION".equals(normalizedPendingType)) {
+            return shouldInterruptMaterialSelectionPending(userMessage, structuredIntent, plannedMode, extractedMode);
+        }
+        return false;
+    }
+
+    /**
+     * 判断模型是否明确要求继续 pending。
+     */
+    private boolean isPendingContinueDecision(AssistantPendingDecision pendingDecision) {
+        return isPendingDecision(pendingDecision, "CONTINUE");
+    }
+
+    /**
+     * 判断模型是否明确要求打断 pending。
+     */
+    private boolean isPendingInterruptDecision(AssistantPendingDecision pendingDecision) {
+        return isPendingDecision(pendingDecision, "INTERRUPT");
+    }
+
+    /**
+     * 判断模型是否明确要求取消 pending。
+     */
+    private boolean isPendingCancelDecision(AssistantPendingDecision pendingDecision) {
+        return isPendingDecision(pendingDecision, "CANCEL");
+    }
+
+    /**
+     * 判断模型是否认为需要继续澄清 pending。
+     */
+    private boolean isPendingClarifyDecision(AssistantPendingDecision pendingDecision) {
+        return isPendingDecision(pendingDecision, "CLARIFY");
+    }
+
+    /**
+     * 比较 pending 决策。
+     */
+    private boolean isPendingDecision(AssistantPendingDecision pendingDecision, String expectedDecision) {
+        return pendingDecision != null
+                && StringUtils.hasText(pendingDecision.getDecision())
+                && pendingDecision.getDecision().trim().equalsIgnoreCase(expectedDecision);
+    }
+
+    /**
+     * 等待题型配置时，只有纯题型/数量回复会继续原任务。
+     */
+    private boolean shouldInterruptQuestionConfigPending(
+            String userMessage,
+            AssistantStructuredIntent structuredIntent,
+            InteractionMode plannedMode,
+            InteractionMode extractedMode
+    ) {
+        if (plannedMode == InteractionMode.MATERIAL_SELECTION || extractedMode == InteractionMode.MATERIAL_SELECTION) {
+            return false;
+        }
+        if (StringUtils.hasText(taskIntentParser.extractMaterialQueryText(userMessage, structuredIntent))
+                && looksLikeExplicitTaskRequest(userMessage, structuredIntent)) {
+            return true;
+        }
+        if (plannedMode == InteractionMode.STUDY_QA || extractedMode == InteractionMode.STUDY_QA) {
+            return true;
+        }
+        if (plannedMode == InteractionMode.CHAT || extractedMode == InteractionMode.CHAT) {
+            return true;
+        }
+        return looksLikeNonPendingTopic(userMessage, structuredIntent);
+    }
+
+    /**
+     * 等待资料选择时，列表查询、任务查询、普通问答等会打断旧选择。
+     */
+    private boolean shouldInterruptMaterialSelectionPending(
+            String userMessage,
+            AssistantStructuredIntent structuredIntent,
+            InteractionMode plannedMode,
+            InteractionMode extractedMode
+    ) {
+        if (plannedMode == InteractionMode.CHAT || extractedMode == InteractionMode.CHAT) {
+            return true;
+        }
+        if (plannedMode == InteractionMode.STUDY_QA || extractedMode == InteractionMode.STUDY_QA) {
+            return true;
+        }
+        return looksLikeNonPendingTopic(userMessage, structuredIntent);
+    }
+
+    /**
+     * 判断用户消息是否明显是另一个话题。
+     */
+    private boolean looksLikeNonPendingTopic(String userMessage, AssistantStructuredIntent structuredIntent) {
+        return looksLikeCasualChat(userMessage)
+                || taskIntentParser.looksLikeMaterialBrowseRequest(userMessage, structuredIntent)
+                || taskIntentParser.looksLikeTaskListRequest(userMessage, structuredIntent)
+                || taskIntentParser.looksLikeQuestionSetListRequest(userMessage, structuredIntent)
+                || taskIntentParser.looksLikeChapterBrowseRequest(userMessage, structuredIntent)
+                || taskIntentParser.looksLikeMaterialAmbiguityChallenge(userMessage)
+                || AssistantToolSupport.containsAnyIgnoreCase(userMessage, STUDY_QA_HINT_KEYWORDS);
+    }
+
+    /**
+     * 判断用户是否明确取消当前待确认动作。
+     */
+    private boolean looksLikePendingCancelMessage(String userMessage) {
+        return AssistantToolSupport.containsAnyIgnoreCase(
+                userMessage,
+                List.of("算了", "取消", "不出了", "不做了", "先不", "不用了", "换一个", "重新来", "别继续")
+        );
     }
 
     /**

@@ -6,6 +6,9 @@
     @click="openPanel"
   >
     <span class="assistant-fab__glow" />
+    <span class="assistant-fab__icon">
+      <AppIcon name="assistant" :size="24" />
+    </span>
     <span class="assistant-fab__label">AI 学习助手</span>
     <span class="assistant-fab__hint">Agent</span>
   </button>
@@ -15,8 +18,15 @@
       <div class="assistant-panel">
         <aside class="assistant-sidebar">
           <div class="assistant-sidebar__brand">
-            <div class="assistant-sidebar__kicker">Built-in Agent</div>
-            <h2>Study Copilot</h2>
+            <div class="assistant-sidebar__brand-row">
+              <span class="assistant-sidebar__logo">
+                <AppIcon name="copilot" :size="25" />
+              </span>
+              <div>
+                <div class="assistant-sidebar__kicker">Built-in Agent</div>
+                <h2>Study Copilot</h2>
+              </div>
+            </div>
             <p>{{ currentBinding.helperText }}</p>
           </div>
 
@@ -196,7 +206,15 @@
                 }"
               >
                 <div class="assistant-turn__meta">
-                  <span class="assistant-turn__avatar">{{ isUserMessage(message.role) ? '我' : 'AI' }}</span>
+                  <span
+                    class="assistant-turn__avatar"
+                    :class="{
+                      'assistant-turn__avatar--user': isUserMessage(message.role),
+                      'assistant-turn__avatar--assistant': !isUserMessage(message.role)
+                    }"
+                  >
+                    <AppIcon :name="isUserMessage(message.role) ? 'user' : 'assistant'" :size="16" />
+                  </span>
                   <span class="assistant-turn__name">{{ isUserMessage(message.role) ? '你' : '学习助手' }}</span>
                   <span class="assistant-turn__time">{{ formatDateTime(message.createdAt) }}</span>
                 </div>
@@ -326,6 +344,7 @@ import {
   streamAssistantMessageApi
 } from '@/api/modules/assistant'
 import { useUserStore } from '@/stores/user'
+import AppIcon from '@/components/AppIcon.vue'
 
 interface CurrentPageBinding {
   bindable: boolean
@@ -1244,9 +1263,20 @@ onBeforeUnmount(() => {
 }
 
 .assistant-fab__label,
-.assistant-fab__hint {
+.assistant-fab__hint,
+.assistant-fab__icon {
   position: relative;
   z-index: 1;
+}
+
+.assistant-fab__icon {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.16);
+  color: #dbeafe;
 }
 
 .assistant-fab__label {
@@ -1298,6 +1328,23 @@ onBeforeUnmount(() => {
 .assistant-home__hero h2 {
   margin: 0;
   color: #1f2937;
+}
+
+.assistant-sidebar__brand-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.assistant-sidebar__logo {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #1f7a5a, #48c78e);
+  color: #fff;
+  box-shadow: 0 14px 28px rgba(31, 122, 90, 0.18);
 }
 
 .assistant-sidebar__kicker,
@@ -1765,13 +1812,19 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #adc5ff, #c6efe4);
-  color: #24324a;
-  font-size: 12px;
-  font-weight: 800;
+}
+
+.assistant-turn__avatar--assistant {
+  background: linear-gradient(135deg, #c7f2df, #dbeafe);
+  color: #1f7a5a;
+}
+
+.assistant-turn__avatar--user {
+  background: linear-gradient(135deg, #dbeafe, #f1f5f9);
+  color: #31517a;
 }
 
 .assistant-turn__content {
