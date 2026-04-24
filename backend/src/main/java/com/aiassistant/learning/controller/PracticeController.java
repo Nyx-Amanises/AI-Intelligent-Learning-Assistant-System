@@ -70,7 +70,7 @@ public class PracticeController {
      * 分页查询当前用户的练习记录。
      *
      * @param current 当前页码
-     * @param size 每页条数
+     * @param size    每页条数
      * @return 练习记录分页结果
      */
     @GetMapping("/page")
@@ -98,7 +98,7 @@ public class PracticeController {
      * 修改练习名称。
      *
      * @param sessionId 练习会话 ID
-     * @param request 新练习名称
+     * @param request   新练习名称
      * @return 修改成功提示
      */
     @PutMapping("/{sessionId}/name")
