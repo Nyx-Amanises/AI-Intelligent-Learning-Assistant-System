@@ -36,6 +36,8 @@ public class AiTaskDetailVO {
      */
     private Long bizId;
 
+    private String bizTitle;
+
     /**
      * 任务状态。
      */

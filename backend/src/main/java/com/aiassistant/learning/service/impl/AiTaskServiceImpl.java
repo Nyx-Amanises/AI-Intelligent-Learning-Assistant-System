@@ -10,7 +10,13 @@ import com.aiassistant.learning.dto.ai.QuestionGenerateTaskPayload;
 import com.aiassistant.learning.dto.ai.SummaryGenerateRequest;
 import com.aiassistant.learning.dto.ai.SummaryTaskPayload;
 import com.aiassistant.learning.entity.AiTask;
+import com.aiassistant.learning.entity.PracticeSession;
+import com.aiassistant.learning.entity.QuestionSet;
+import com.aiassistant.learning.entity.StudyMaterial;
 import com.aiassistant.learning.mapper.AiTaskMapper;
+import com.aiassistant.learning.mapper.PracticeSessionMapper;
+import com.aiassistant.learning.mapper.QuestionSetMapper;
+import com.aiassistant.learning.mapper.StudyMaterialMapper;
 import com.aiassistant.learning.service.AiTaskService;
 import com.aiassistant.learning.service.task.AiTaskProcessor;
 import com.aiassistant.learning.vo.ai.AiTaskDetailVO;
@@ -51,6 +57,9 @@ public class AiTaskServiceImpl implements AiTaskService {
 
     /** AI 任务表 Mapper。 */
     private final AiTaskMapper aiTaskMapper;
+    private final StudyMaterialMapper studyMaterialMapper;
+    private final PracticeSessionMapper practiceSessionMapper;
+    private final QuestionSetMapper questionSetMapper;
     /** Spring 会自动注入所有 AiTaskProcessor 实现，用来按任务类型分发。 */
     private final List<AiTaskProcessor> taskProcessors;
     /** 将任务参数对象转换成 JSON 保存。 */
@@ -60,11 +69,17 @@ public class AiTaskServiceImpl implements AiTaskService {
 
     public AiTaskServiceImpl(
             AiTaskMapper aiTaskMapper,
+            StudyMaterialMapper studyMaterialMapper,
+            PracticeSessionMapper practiceSessionMapper,
+            QuestionSetMapper questionSetMapper,
             List<AiTaskProcessor> taskProcessors,
             ObjectMapper objectMapper,
             @Lazy AiTaskService selfAiTaskService
     ) {
         this.aiTaskMapper = aiTaskMapper;
+        this.studyMaterialMapper = studyMaterialMapper;
+        this.practiceSessionMapper = practiceSessionMapper;
+        this.questionSetMapper = questionSetMapper;
         this.taskProcessors = taskProcessors;
         this.objectMapper = objectMapper;
         this.selfAiTaskService = selfAiTaskService;
@@ -468,6 +483,35 @@ public class AiTaskServiceImpl implements AiTaskService {
                 || STATUS_CANCELLED.equals(normalized);
     }
 
+    private String resolveBizTitle(AiTask task) {
+        if (task == null || task.getBizId() == null || !StringUtils.hasText(task.getBizType())) {
+            return null;
+        }
+        String bizType = task.getBizType().trim().toUpperCase();
+        if ("MATERIAL".equals(bizType)) {
+            StudyMaterial material = studyMaterialMapper.selectOne(new LambdaQueryWrapper<StudyMaterial>()
+                    .eq(StudyMaterial::getId, task.getBizId())
+                    .eq(StudyMaterial::getUserId, task.getUserId())
+                    .last("limit 1"));
+            return material == null ? null : material.getTitle();
+        }
+        if ("PRACTICE_SESSION".equals(bizType)) {
+            PracticeSession session = practiceSessionMapper.selectOne(new LambdaQueryWrapper<PracticeSession>()
+                    .eq(PracticeSession::getId, task.getBizId())
+                    .eq(PracticeSession::getUserId, task.getUserId())
+                    .last("limit 1"));
+            return session == null ? null : session.getSessionName();
+        }
+        if ("QUESTION_SET".equals(bizType)) {
+            QuestionSet questionSet = questionSetMapper.selectOne(new LambdaQueryWrapper<QuestionSet>()
+                    .eq(QuestionSet::getId, task.getBizId())
+                    .eq(QuestionSet::getUserId, task.getUserId())
+                    .last("limit 1"));
+            return questionSet == null ? null : questionSet.getTitle();
+        }
+        return null;
+    }
+
     /**
      * 将任务参数对象序列化为 JSON。
      */
@@ -491,6 +535,7 @@ public class AiTaskServiceImpl implements AiTaskService {
                 .taskType(task.getTaskType())
                 .bizType(task.getBizType())
                 .bizId(task.getBizId())
+                .bizTitle(resolveBizTitle(task))
                 .status(task.getStatus())
                 .progressRate(task.getProgressRate())
                 .retryCount(task.getRetryCount())
@@ -513,6 +558,7 @@ public class AiTaskServiceImpl implements AiTaskService {
                 .taskType(task.getTaskType())
                 .bizType(task.getBizType())
                 .bizId(task.getBizId())
+                .bizTitle(resolveBizTitle(task))
                 .status(task.getStatus())
                 .progressRate(task.getProgressRate())
                 .retryCount(task.getRetryCount())

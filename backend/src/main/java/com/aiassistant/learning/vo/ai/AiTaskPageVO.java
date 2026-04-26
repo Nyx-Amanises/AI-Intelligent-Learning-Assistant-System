@@ -31,6 +31,8 @@ public class AiTaskPageVO {
      */
     private Long bizId;
 
+    private String bizTitle;
+
     /**
      * 任务状态。
      */

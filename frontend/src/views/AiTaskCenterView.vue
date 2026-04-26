@@ -359,7 +359,13 @@ const buildTaskStatusHint = (task: AiTaskPageItem) => {
   return '状态未知'
 }
 
-const formatBizLabel = (task: Pick<AiTaskPageItem, 'bizType' | 'bizId'>) => {
+const formatBizLabel = (task: Pick<AiTaskPageItem, 'bizType' | 'bizId' | 'bizTitle'>) => {
+  const title = task.bizTitle?.trim()
+  const idText = task.bizId ? ` #${task.bizId}` : ''
+  if (title) {
+    return `${title}${idText}`
+  }
+
   const type = String(task.bizType || '').toUpperCase()
   if (type === 'MATERIAL') {
     return `资料 #${task.bizId || '--'}`

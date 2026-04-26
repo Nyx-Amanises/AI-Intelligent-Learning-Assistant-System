@@ -134,6 +134,11 @@
             </div>
           </header>
 
+          <div v-if="aiMockMode" class="assistant-mock-notice">
+            <strong>{{ mockModeNoticeTitle }}</strong>
+            <span>{{ mockModeNoticeText }}</span>
+          </div>
+
           <section v-if="!sessionDetail" class="assistant-home">
             <div class="assistant-home__hero">
               <div class="assistant-home__greeting">Hi {{ greetingName }}</div>
@@ -354,6 +359,7 @@ import {
   getAssistantSessionPageApi,
   streamAssistantMessageApi
 } from '@/api/modules/assistant'
+import { getAiConfigApi } from '@/api/modules/ai'
 import { useUserStore } from '@/stores/user'
 import AppIcon from '@/components/AppIcon.vue'
 
@@ -408,6 +414,10 @@ const messageStreamRef = ref<HTMLElement | null>(null)
 const toolCallMap = ref<Record<number, AssistantToolCall[]>>({})
 const memoryMap = ref<Record<number, AssistantRelevantMemory[]>>({})
 const pendingTurn = ref<PendingTurnState | null>(null)
+const aiMockMode = ref(false)
+const aiConfigChecking = ref(false)
+const mockModeNoticeTitle = '\u5f53\u524d AI \u914d\u7f6e\u5904\u4e8e Mock \u6a21\u5f0f'
+const mockModeNoticeText = '\u6b64\u65f6 Agent \u4e0d\u4f1a\u8c03\u7528\u771f\u5b9e\u6a21\u578b\u63a5\u53e3\uff1b\u5982\u9700\u771f\u5b9e AI \u56de\u590d\uff0c\u8bf7\u5230 AI \u914d\u7f6e\u4e2d\u5173\u95ed Mock \u6a21\u5f0f\u3002'
 const draftCount = computed(() => draftMessage.value.length)
 const totalSessionPages = computed(() =>
   Math.max(1, Math.ceil((sessionPage.total || 0) / Math.max(1, sessionPage.size || 1)))
@@ -519,6 +529,7 @@ watch(visible, (value) => {
     document.body.style.overflow = 'hidden'
     if (!sendingMessage.value) {
       resetToFreshSession()
+      void loadAiConfigNotice()
       void loadSessionPage(false)
     }
   } else {
@@ -565,6 +576,21 @@ const openMobileSidebar = () => {
 
 const closeMobileSidebar = () => {
   mobileSidebarOpen.value = false
+}
+
+const loadAiConfigNotice = async () => {
+  if (aiConfigChecking.value) {
+    return
+  }
+  aiConfigChecking.value = true
+  try {
+    const res = await getAiConfigApi()
+    aiMockMode.value = Boolean(res.data?.data?.mockMode)
+  } catch {
+    aiMockMode.value = false
+  } finally {
+    aiConfigChecking.value = false
+  }
 }
 
 const formatDateTime = (value?: string) => {
@@ -1611,6 +1637,29 @@ onBeforeUnmount(() => {
   letter-spacing: -0.03em;
 }
 
+.assistant-mock-notice {
+  width: min(920px, 100%);
+  margin: 0 auto 12px;
+  padding: 10px 14px;
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  border-left: 3px solid #f59e0b;
+  border-radius: 8px;
+  background: #fffbeb;
+  color: #7c4a03;
+  line-height: 1.6;
+}
+
+.assistant-mock-notice strong {
+  display: block;
+  font-size: 13px;
+}
+
+.assistant-mock-notice span {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+}
+
 .assistant-home,
 .assistant-conversation {
   min-height: 0;
@@ -2133,6 +2182,12 @@ onBeforeUnmount(() => {
     font-size: 21px;
     line-height: 1.2;
     letter-spacing: 0;
+  }
+
+  .assistant-mock-notice {
+    width: 100%;
+    margin: 0 0 10px;
+    padding: 9px 12px;
   }
 
   .assistant-mobile-menu-button {

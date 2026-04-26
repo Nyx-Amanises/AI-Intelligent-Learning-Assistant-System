@@ -38,6 +38,7 @@ export interface AiTaskDetail {
   taskType: string
   bizType?: string
   bizId?: number
+  bizTitle?: string
   status: string
   progressRate: number
   retryCount: number
@@ -57,6 +58,7 @@ export interface AiTaskPageItem {
   taskType: string
   bizType?: string
   bizId?: number
+  bizTitle?: string
   status: string
   progressRate: number
   retryCount: number
