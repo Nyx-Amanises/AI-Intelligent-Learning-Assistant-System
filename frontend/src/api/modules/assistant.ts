@@ -1,4 +1,4 @@
-import http, { resolveApiUrl } from '@/api/http'
+import http, { handleAuthExpired, resolveApiUrl } from '@/api/http'
 import { useUserStore } from '@/stores/user'
 
 export interface AssistantSessionCreatePayload {
@@ -167,6 +167,20 @@ export const streamAssistantMessageApi = async (options: AssistantStreamOptions)
     body: JSON.stringify(options.data),
     signal: options.signal
   })
+
+  if (!response.ok && response.status === 401) {
+    const rawText = await response.text()
+    let message = '\u6d41\u5f0f\u8bf7\u6c42\u5931\u8d25'
+
+    try {
+      const parsed = JSON.parse(rawText)
+      message = parsed.message || message
+    } catch {
+      message = rawText || message
+    }
+
+    throw handleAuthExpired(message)
+  }
 
   if (!response.ok) {
     const rawText = await response.text()

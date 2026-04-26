@@ -131,12 +131,13 @@
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { loginApi, registerApi } from '@/api/modules/auth'
 import { useUserStore } from '@/stores/user'
 import AppIcon from '@/components/AppIcon.vue'
 
 const router = useRouter()
+const route = useRoute()
 const userStore = useUserStore()
 const isRegister = ref(false)
 const submitting = ref(false)
@@ -197,7 +198,13 @@ const submit = async () => {
     })
 
     ElMessage.success('登录成功')
-    router.push('/dashboard')
+    const redirect =
+      typeof route.query.redirect === 'string' &&
+      route.query.redirect.startsWith('/') &&
+      route.query.redirect !== '/login'
+        ? route.query.redirect
+        : '/dashboard'
+    router.push(redirect)
   } catch (error) {
     const message = error instanceof Error ? error.message : '操作失败，请稍后重试'
     ElMessage.error(message)
