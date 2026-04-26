@@ -5,8 +5,14 @@
 
 ![AI 智能学习助手系统 Social Preview](docs/images/social-preview.png)
 
-## 在线体验
 
+## 联系方式
+如有对本项目有问题，建议，可发送邮件至：`3111471949@qq.com`
+> 注：广告、推广信息恕不回复，邮件请备注「AI学习系统+来意」
+
+
+## 在线体验
+  注意:中国用户需要使用vpn以访问
 - 前端 Demo：[https://ai-intelligent-learning-assistant-s.vercel.app](https://ai-intelligent-learning-assistant-s.vercel.app)
 - 后端健康检查：[https://backend-production-d1f3.up.railway.app/api/health](https://backend-production-d1f3.up.railway.app/api/health)
 - GitHub 仓库：[https://github.com/Nyx-Amanises/AI-Intelligent-Learning-Assistant-System](https://github.com/Nyx-Amanises/AI-Intelligent-Learning-Assistant-System)
@@ -72,28 +78,6 @@
 | AI | OpenAI-compatible Chat API, SSE 流式输出, Mock 模式 |
 | 部署 | Docker Compose, Vercel, Railway |
 
-## GitHub Topics 建议
-
-如果你在 GitHub 仓库右侧 `About` 区域添加 Topics，推荐使用这些关键词，方便别人搜索到项目：
-
-```text
-ai
-rag
-llm
-agent
-learning-assistant
-ai-education
-vue3
-spring-boot
-qdrant
-mysql
-vercel
-railway
-full-stack
-graduation-project
-course-design
-portfolio-project
-```
 
 ## 目录结构
 
