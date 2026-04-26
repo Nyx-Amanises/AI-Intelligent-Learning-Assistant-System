@@ -117,7 +117,7 @@
             </el-button>
             <el-button class="social-btn" disabled>
               <span class="social-btn__icon social-btn__icon--qq">
-                <AppIcon name="qq" :size="20" />
+                <img class="social-btn__qq-image" :src="qqLoginIcon" alt="" aria-hidden="true">
               </span>
               <span>使用 QQ 登录</span>
             </el-button>
@@ -135,6 +135,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { loginApi, registerApi } from '@/api/modules/auth'
 import { useUserStore } from '@/stores/user'
 import AppIcon from '@/components/AppIcon.vue'
+import qqLoginIcon from '@/assets/qq-login.png'
 
 const router = useRouter()
 const route = useRoute()
@@ -392,7 +393,14 @@ const submit = async () => {
 }
 
 .social-btn__icon--qq {
-  background: var(--bg-secondary);
+  background: transparent;
+}
+
+.social-btn__qq-image {
+  width: 28px;
+  height: 28px;
+  display: block;
+  object-fit: contain;
 }
 
 @media (max-width: 768px) {
