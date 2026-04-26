@@ -5,14 +5,6 @@
 
 ![AI 智能学习助手系统 Social Preview](docs/images/social-preview.png)
 
-<p>
-  <a href="https://ai-intelligent-learning-assistant-s.vercel.app"><img src="https://img.shields.io/badge/Online%20Demo-Vercel-12895B?style=for-the-badge" alt="Online Demo"></a>
-  <img src="https://img.shields.io/badge/Frontend-Vue%203%20%2B%20TypeScript-42b883?style=for-the-badge" alt="Vue 3">
-  <img src="https://img.shields.io/badge/Backend-Spring%20Boot%203-6DB33F?style=for-the-badge" alt="Spring Boot">
-  <img src="https://img.shields.io/badge/RAG-Qdrant%20%2B%20Embedding-2563EB?style=for-the-badge" alt="RAG">
-  <img src="https://img.shields.io/badge/Deploy-Vercel%20%2B%20Railway-111827?style=for-the-badge" alt="Deploy">
-</p>
-
 ## 在线体验
 
 - 前端 Demo：[https://ai-intelligent-learning-assistant-s.vercel.app](https://ai-intelligent-learning-assistant-s.vercel.app)
@@ -21,12 +13,6 @@
 
 > 线上环境使用 Vercel + Railway 部署。首次访问时，如果后端处于冷启动状态，接口可能需要等待几秒。
 
-## 为什么值得收藏
-
-- **不是单页 Demo**：包含登录、资料管理、AI 总结、AI 出题、在线练习、错题本、掌握度、学习分析、RAG 评测、任务中心和 Agent 聊天。
-- **覆盖 AI 应用常见工程问题**：异步任务、SSE 流式输出、OpenAI-compatible API、Embedding、Qdrant 向量检索、RAG 评测、Mock 模式、前后端部署。
-- **适合学习和二次开发**：既能作为毕业设计/课程设计，也能作为简历项目展示“AI + 教育 + 全栈工程化”能力。
-- **有真实线上部署**：前端部署到 Vercel，后端部署到 Railway，可以直接打开体验。
 
 ## 项目截图
 
@@ -266,18 +252,6 @@ Vercel 使用根目录的 `vercel.json`：
 ```
 
 Railway 后端部署时，需要确保服务根目录指向 `backend`，并配置好 MySQL、Redis、Qdrant、AI Provider 和 JWT 相关环境变量。
-
-## 简历描述参考
-
-```text
-AI 智能学习助手系统 | Spring Boot + Vue 3 + Qdrant + 大模型 API
-```
-
-- 设计并实现资料解析、AI 总结、AI 出题、在线练习、简答题 AI 判分等学习辅助功能，统一接入异步任务中心，支持任务状态追踪、失败重试和结果回流。
-- 接入 Qdrant 向量数据库与 Embedding 服务，实现资料分段向量化、语义检索、检索预览和 PDF 页码定位。
-- 建设 RAG 检索评测模块，支持人工样本和 CMRC2018 数据导入，统计 Hit@K、Recall@K、MRR 和平均耗时。
-- 实现错题本、知识点掌握度和学习分析可视化，基于练习记录自动识别薄弱知识点并辅助复习决策。
-- 实现 AI 学习助手的会话管理、SSE 流式回复、工具调用轨迹、任务联动和 Mock 模式提示。
 
 ## 后续规划
 
