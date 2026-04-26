@@ -1,5 +1,5 @@
 server:
-  port: ${SERVER_PORT:8083}
+  port: ${PORT:${SERVER_PORT:8083}}
 
 spring:
   application:
@@ -13,6 +13,7 @@ spring:
     redis:
       host: ${SPRING_REDIS_HOST:127.0.0.1}
       port: ${SPRING_REDIS_PORT:6379}
+      password: ${SPRING_REDIS_PASSWORD:}
       database: ${SPRING_REDIS_DATABASE:0}
       timeout: ${SPRING_REDIS_TIMEOUT:5s}
   servlet:
@@ -31,6 +32,8 @@ mybatis-plus:
       logic-not-delete-value: 0
 
 app:
+  cors:
+    allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173,https://ai-intelligent-learning-assistant-s.vercel.app,https://ai-intelligent-learning-assistant-system-8ur2sob6j.vercel.app}
   ai:
     enabled: ${APP_AI_ENABLED:true}
     mock-mode: ${APP_AI_MOCK_MODE:true}

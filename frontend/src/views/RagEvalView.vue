@@ -135,25 +135,39 @@
           <div v-else-if="!samples.length" class="state-block empty">
             还没有样本。建议先打开“资料分段参考”，选 20-50 个问题做第一版评测集。
           </div>
-          <div v-else class="rag-sample-list">
-            <article v-for="sample in samples" :key="sample.id" class="rag-sample-card">
-              <div class="rag-sample-card__head">
-                <div>
-                  <strong>{{ sample.queryText }}</strong>
-                  <span>#{{ sample.id }} · {{ sample.tag || '未分类' }} · 难度 {{ sample.difficulty || 3 }}</span>
+          <div v-else>
+            <div class="rag-sample-list">
+              <article v-for="sample in visibleSamples" :key="sample.id" class="rag-sample-card">
+                <div class="rag-sample-card__head">
+                  <div>
+                    <strong>{{ sample.queryText }}</strong>
+                    <span>#{{ sample.id }} · {{ sample.tag || '未分类' }} · 难度 {{ sample.difficulty || 3 }}</span>
+                  </div>
+                  <div class="workspace-action-row workspace-action-row--fit">
+                    <el-button link type="primary" @click="openSampleDialog(sample)">编辑</el-button>
+                    <el-button link type="danger" @click="removeSample(sample)">删除</el-button>
+                  </div>
                 </div>
-                <div class="workspace-action-row workspace-action-row--fit">
-                  <el-button link type="primary" @click="openSampleDialog(sample)">编辑</el-button>
-                  <el-button link type="danger" @click="removeSample(sample)">删除</el-button>
+                <div class="rag-sample-card__meta">
+                  <span>标准段落：{{ formatNumberList(sample.expectedSegmentIds) }}</span>
+                  <span>标准页码：{{ formatNumberList(sample.expectedPageNos) }}</span>
+                  <span>关键词：{{ sample.expectedKeywords || '未填写' }}</span>
                 </div>
+                <p v-if="sample.note" class="rag-sample-card__note">{{ sample.note }}</p>
+              </article>
+            </div>
+
+            <div v-if="samples.length > INITIAL_SAMPLE_VISIBLE_COUNT" class="rag-sample-more">
+              <span>已显示 {{ visibleSamples.length }} / {{ samples.length }} 条样本</span>
+              <div class="rag-sample-more__actions">
+                <el-button v-if="hasMoreSamples" type="primary" plain @click="expandSamples">
+                  再展开 {{ nextSampleExpandCount }} 条
+                </el-button>
+                <el-button v-if="sampleVisibleCount > INITIAL_SAMPLE_VISIBLE_COUNT" @click="collapseSamples">
+                  收起
+                </el-button>
               </div>
-              <div class="rag-sample-card__meta">
-                <span>标准段落：{{ formatNumberList(sample.expectedSegmentIds) }}</span>
-                <span>标准页码：{{ formatNumberList(sample.expectedPageNos) }}</span>
-                <span>关键词：{{ sample.expectedKeywords || '未填写' }}</span>
-              </div>
-              <p v-if="sample.note" class="rag-sample-card__note">{{ sample.note }}</p>
-            </article>
+            </div>
           </div>
         </div>
       </div>
@@ -514,6 +528,10 @@ const cmrcFile = ref<File | null>(null)
 const datasetTotal = ref(0)
 const importingCmrc = ref(false)
 
+const INITIAL_SAMPLE_VISIBLE_COUNT = 6
+const SAMPLE_VISIBLE_STEP = 6
+const sampleVisibleCount = ref(INITIAL_SAMPLE_VISIBLE_COUNT)
+
 const filters = reactive({
   keyword: '',
   materialId: undefined as number | undefined
@@ -574,6 +592,33 @@ const batchPlaceholder = `[
 const selectedMaterial = computed(() =>
   materials.value.find((item) => item.id === datasetForm.materialId)
 )
+
+const visibleSamples = computed(() =>
+  samples.value.slice(0, sampleVisibleCount.value)
+)
+
+const hasMoreSamples = computed(() =>
+  sampleVisibleCount.value < samples.value.length
+)
+
+const nextSampleExpandCount = computed(() =>
+  Math.min(SAMPLE_VISIBLE_STEP, Math.max(0, samples.value.length - sampleVisibleCount.value))
+)
+
+const resetSampleVisibleCount = () => {
+  sampleVisibleCount.value = INITIAL_SAMPLE_VISIBLE_COUNT
+}
+
+const expandSamples = () => {
+  sampleVisibleCount.value = Math.min(
+    samples.value.length,
+    sampleVisibleCount.value + SAMPLE_VISIBLE_STEP
+  )
+}
+
+const collapseSamples = () => {
+  resetSampleVisibleCount()
+}
 
 const formatDateTime = (value?: string) => {
   if (!value) {
@@ -862,6 +907,7 @@ const loadSamples = async () => {
   try {
     const res = await getRagEvalSamplesApi(selectedDataset.value.id)
     samples.value = res.data.data || []
+    resetSampleVisibleCount()
   } catch (error: any) {
     ElMessage.error(error.message || '加载评测样本失败')
   } finally {

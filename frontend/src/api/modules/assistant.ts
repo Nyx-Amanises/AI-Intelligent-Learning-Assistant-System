@@ -1,4 +1,4 @@
-import http from '@/api/http'
+import http, { resolveApiUrl } from '@/api/http'
 import { useUserStore } from '@/stores/user'
 
 export interface AssistantSessionCreatePayload {
@@ -157,7 +157,7 @@ export const deleteAssistantSessionApi = (sessionId: number) =>
 
 export const streamAssistantMessageApi = async (options: AssistantStreamOptions) => {
   const userStore = useUserStore()
-  const response = await fetch(`/api/assistant/sessions/${options.sessionId}/messages/stream`, {
+  const response = await fetch(resolveApiUrl(`/assistant/sessions/${options.sessionId}/messages/stream`), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

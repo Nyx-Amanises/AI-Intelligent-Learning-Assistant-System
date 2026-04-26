@@ -1,5 +1,22 @@
 <template>
   <section class="dashboard-container">
+    <div class="dashboard-mobile-hero">
+      <div class="dashboard-mobile-hero__copy">
+        <p>{{ greetingName }}，你好</p>
+        <h1>今天想学点什么？</h1>
+      </div>
+      <div class="dashboard-mobile-hero__questions">
+        <button type="button" @click="router.push('/materials')">上传一份资料并整理重点</button>
+        <button type="button" @click="router.push('/summary')">帮我生成今天的复习总结</button>
+      </div>
+      <div class="dashboard-mobile-hero__chips">
+        <button type="button" @click="router.push('/materials')">资料管理</button>
+        <button type="button" @click="router.push('/summary')">AI 总结</button>
+        <button type="button" @click="router.push('/quiz')">AI 出题</button>
+        <button type="button" @click="router.push('/practice')">练习记录</button>
+      </div>
+    </div>
+
     <div class="dashboard-header">
       <div class="dashboard-header__content">
         <h1 class="dashboard-title">学习概览</h1>
@@ -138,12 +155,18 @@ import AppIcon from '@/components/AppIcon.vue'
 import { getMaterialPageApi } from '@/api/modules/material'
 import { getPracticePageApi } from '@/api/modules/practice'
 import { getQuestionSetPageApi } from '@/api/modules/question'
+import { useUserStore } from '@/stores/user'
 
 const router = useRouter()
+const userStore = useUserStore()
 const loading = ref(false)
 const materialRecords = ref<any[]>([])
 const questionSetRecords = ref<any[]>([])
 const practiceRecords = ref<any[]>([])
+
+const greetingName = computed(() =>
+  userStore.profile?.nickname || userStore.profile?.username || '同学'
+)
 
 const statCards = computed(() => {
   const parsedCount = materialRecords.value.filter((item) => item.parseStatus === 'SUCCESS').length

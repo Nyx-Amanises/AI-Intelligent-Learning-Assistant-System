@@ -8,3 +8,5 @@ runtime/
 .env
 *.log
 Thumbs.db
+
+.vercel

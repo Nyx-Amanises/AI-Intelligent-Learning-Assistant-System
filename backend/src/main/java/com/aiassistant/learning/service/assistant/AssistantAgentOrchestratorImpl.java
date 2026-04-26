@@ -664,21 +664,6 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
         }
 
         if (materialId == null) {
-            RecentContextResolution recentContext = resolveRecentContext(userId);
-            if (recentContext != null) {
-                materialId = recentContext.materialId();
-                bindRecentContext(session, recentContext);
-                executions.add(infoExecution(
-                        "context.resolve_recent",
-                        recentContext.args(),
-                        recentContext.result(),
-                        recentContext.summaryText()
-                ));
-                planSnapshot.add(Map.of("toolName", "context.resolve_recent", "reason", "学习问答未显式指定资料，自动绑定最近学习内容"));
-            }
-        }
-
-        if (materialId == null) {
             String replyText = "我可以先带你学，不过还需要先知道你想基于哪份资料。你可以直接告诉我资料标题，或者从某份资料页进入后再继续问我。";
             executions.add(waitingExecution(
                     "material.search",
@@ -775,33 +760,20 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
         if (materialId == null) {
             String materialQuery = explicitMaterialQuery;
             if (!StringUtils.hasText(materialQuery)) {
-                RecentContextResolution recentContext = resolveRecentContext(userId);
-                if (recentContext != null) {
-                    materialId = recentContext.materialId();
-                    bindRecentContext(session, recentContext);
-                    executions.add(infoExecution(
-                            "context.resolve_recent",
-                            recentContext.args(),
-                            recentContext.result(),
-                            recentContext.summaryText()
-                    ));
-                    planSnapshot.add(Map.of("toolName", "context.resolve_recent", "reason", "用户未显式指定资料，自动绑定最近学习内容"));
-                } else {
-                    String promptText = "我先需要知道你说的是哪份资料。你可以直接告诉我资料标题，或者说一个更明显的关键词，比如“Docker 入门”或“Java 核心”。";
-                    savePendingAction(session, "MATERIAL_SELECTION", AssistantPendingActionPayload.builder()
-                            .promptText(promptText)
-                            .tasks(plannedTasks)
-                            .build());
-                    AssistantTool.ToolExecutionResult waitingExecution = waitingExecution(
-                            "material.search",
-                            Map.of(),
-                            Map.of("reason", "material_query_missing"),
-                            promptText
-                    );
-                    executions.add(waitingExecution);
-                    planSnapshot.add(Map.of("toolName", "material.search", "reason", "需要先定位资料"));
-                    return new WorkflowResolution(true, false, executions, null, planSnapshot);
-                }
+                String promptText = "请先告诉我资料标题、资料 ID，或者一个更明确的关键词，我再帮你继续处理。";
+                savePendingAction(session, "MATERIAL_SELECTION", AssistantPendingActionPayload.builder()
+                        .promptText(promptText)
+                        .tasks(plannedTasks)
+                        .build());
+                AssistantTool.ToolExecutionResult waitingExecution = waitingExecution(
+                        "material.search",
+                        Map.of(),
+                        Map.of("reason", "material_query_missing"),
+                        promptText
+                );
+                executions.add(waitingExecution);
+                planSnapshot.add(Map.of("toolName", "material.search", "reason", "需要先定位资料"));
+                return new WorkflowResolution(true, false, executions, null, planSnapshot);
             }
 
             if (materialId == null) {
@@ -1990,7 +1962,7 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
         if (session != null && AssistantToolSupport.resolveMaterialId(session) != null) {
             return "当前会话已经绑定资料。你可以继续直接问知识点，或者明确说“生成总结”“出题”“看任务进度”。";
         }
-        return "我已经收到你的问题。当前会话还没有固定上下文，但你也可以直接说要总结或出题，我会优先尝试用最近学习内容继续处理。";
+        return "我已经收到你的问题。当前会话还没有固定上下文；如果需要基于资料回答，请直接告诉我资料标题或资料 ID。";
     }
 
     private String resolveModelName(String modelName) {

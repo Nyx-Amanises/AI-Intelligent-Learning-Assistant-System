@@ -1,8 +1,15 @@
 import axios from 'axios'
 import { useUserStore } from '@/stores/user'
 
+export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/+$/, '')
+
+export const resolveApiUrl = (path: string) => {
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`
+  return `${API_BASE_URL}${normalizedPath}`
+}
+
 const http = axios.create({
-  baseURL: '/api',
+  baseURL: API_BASE_URL,
   timeout: 160000
 })
 

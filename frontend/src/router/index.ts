@@ -26,6 +26,18 @@ const router = createRouter({
   ]
 })
 
+const DYNAMIC_IMPORT_RELOAD_KEY = 'ai-learning-assistant:dynamic-import-reload'
+
+const isDynamicImportError = (error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error)
+  return [
+    'Failed to fetch dynamically imported module',
+    'error loading dynamically imported module',
+    'Importing a module script failed',
+    'Failed to load module script'
+  ].some((text) => message.includes(text))
+}
+
 router.beforeEach((to) => {
   const userStore = useUserStore()
   if (to.path !== '/login' && !userStore.token) {
@@ -35,6 +47,26 @@ router.beforeEach((to) => {
     return '/dashboard'
   }
   return true
+})
+
+router.afterEach(() => {
+  sessionStorage.removeItem(DYNAMIC_IMPORT_RELOAD_KEY)
+})
+
+router.onError((error, to) => {
+  if (!isDynamicImportError(error)) {
+    return
+  }
+
+  const targetPath = to?.fullPath || window.location.pathname
+  const previousTarget = sessionStorage.getItem(DYNAMIC_IMPORT_RELOAD_KEY)
+  if (previousTarget === targetPath) {
+    sessionStorage.removeItem(DYNAMIC_IMPORT_RELOAD_KEY)
+    return
+  }
+
+  sessionStorage.setItem(DYNAMIC_IMPORT_RELOAD_KEY, targetPath)
+  window.location.assign(targetPath)
 })
 
 export default router

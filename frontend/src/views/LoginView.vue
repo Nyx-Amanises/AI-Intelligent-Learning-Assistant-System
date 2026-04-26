@@ -10,6 +10,27 @@
       <div class="top-right-icon">Workspace</div>
     </header>
 
+    <section class="mobile-login-hero">
+      <div class="mobile-login-hero__top">
+        <span class="mobile-login-hero__menu" aria-hidden="true">
+          <span />
+          <span />
+          <span />
+        </span>
+        <strong>AI Learning</strong>
+        <div class="mobile-login-hero__avatar">AI</div>
+      </div>
+      <div class="mobile-login-hero__copy">
+        <p>{{ isRegister ? '创建你的学习空间' : '同学，你好' }}</p>
+        <h1>{{ isRegister ? '注册后继续学习' : '今天想学点什么？' }}</h1>
+      </div>
+      <div class="mobile-login-hero__prompts">
+        <span>整理学习资料</span>
+        <span>生成复习总结</span>
+        <span>开始练习刷题</span>
+      </div>
+    </section>
+
     <div class="slogan-bar">
       <span>上传资料、生成总结、完成练习，把学习闭环做成一条顺手的工作流。</span>
       <el-link type="primary" :underline="false" style="font-size: 16px; margin-left: 6px;">
@@ -39,7 +60,7 @@
               <div class="form-footer">
                 <el-link type="primary" :underline="false" @click="toggleMode(true)">还没有账户？点击注册</el-link>
               </div>
-              <el-button type="primary" class="action-btn" @click="submit">登录</el-button>
+              <el-button type="primary" class="action-btn" :loading="submitting" @click="submit">登录</el-button>
             </el-form>
           </div>
 
@@ -68,7 +89,7 @@
               <div class="form-footer">
                 <el-link type="primary" :underline="false" @click="toggleMode(false)">已有账户？立即登录</el-link>
               </div>
-              <el-button type="success" class="action-btn" @click="submit">注册</el-button>
+              <el-button type="success" class="action-btn" :loading="submitting" @click="submit">注册</el-button>
             </el-form>
           </div>
         </el-col>
@@ -111,13 +132,14 @@
 import { reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
-import { getProfileApi, loginApi, registerApi } from '@/api/modules/auth'
+import { loginApi, registerApi } from '@/api/modules/auth'
 import { useUserStore } from '@/stores/user'
 import AppIcon from '@/components/AppIcon.vue'
 
 const router = useRouter()
 const userStore = useUserStore()
 const isRegister = ref(false)
+const submitting = ref(false)
 
 const form = reactive({
   username: '',
@@ -131,11 +153,17 @@ const toggleMode = (value: boolean) => {
 }
 
 const submit = async () => {
+  if (submitting.value) {
+    return
+  }
+
   try {
     if (!form.username || !form.password) {
       ElMessage.warning('请先填写用户名和密码')
       return
     }
+
+    submitting.value = true
 
     if (isRegister.value) {
       if (!form.nickname) {
@@ -168,13 +196,13 @@ const submit = async () => {
       nickname: loginData.nickname
     })
 
-    const profileRes = await getProfileApi()
-    userStore.setLogin(loginData.token, profileRes.data.data)
     ElMessage.success('登录成功')
     router.push('/dashboard')
   } catch (error) {
     const message = error instanceof Error ? error.message : '操作失败，请稍后重试'
     ElMessage.error(message)
+  } finally {
+    submitting.value = false
   }
 }
 </script>
@@ -225,6 +253,10 @@ const submit = async () => {
   right: 48px;
   color: var(--muted);
   font-size: 14px;
+}
+
+.mobile-login-hero {
+  display: none;
 }
 
 .slogan-bar {
@@ -357,12 +389,164 @@ const submit = async () => {
 }
 
 @media (max-width: 768px) {
+  .login-page {
+    min-height: 100svh;
+    background: #eef3f9;
+  }
+
+  .top-nav,
+  .slogan-bar {
+    display: none;
+  }
+
+  .mobile-login-hero {
+    display: block;
+    padding: 18px 22px 8px;
+  }
+
+  .mobile-login-hero__top {
+    display: grid;
+    grid-template-columns: 44px 1fr 48px;
+    align-items: center;
+    min-height: 54px;
+  }
+
+  .mobile-login-hero__top strong {
+    justify-self: center;
+    color: #111827;
+    font-size: 20px;
+    letter-spacing: 0;
+  }
+
+  .mobile-login-hero__menu {
+    display: inline-grid;
+    gap: 5px;
+    width: 42px;
+    height: 42px;
+    padding: 9px;
+    border: 0;
+    border-radius: 14px;
+    background: transparent;
+  }
+
+  .mobile-login-hero__menu span {
+    display: block;
+    height: 3px;
+    border-radius: 999px;
+    background: #111827;
+  }
+
+  .mobile-login-hero__avatar {
+    justify-self: end;
+    width: 46px;
+    height: 46px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background:
+      linear-gradient(#0f8f73, #0f8f73) padding-box,
+      conic-gradient(#4285f4, #34a853, #fbbc05, #ea4335, #4285f4) border-box;
+    border: 4px solid transparent;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 800;
+  }
+
+  .mobile-login-hero__copy {
+    margin-top: 68px;
+  }
+
+  .mobile-login-hero__copy p {
+    margin: 0 0 6px;
+    color: #111827;
+    font-size: 26px;
+    line-height: 1.25;
+  }
+
+  .mobile-login-hero__copy h1 {
+    margin: 0;
+    color: #111827;
+    font-size: 38px;
+    line-height: 1.14;
+    font-weight: 700;
+    letter-spacing: 0;
+  }
+
+  .mobile-login-hero__prompts {
+    display: grid;
+    gap: 18px;
+    margin-top: 44px;
+    color: #3f4857;
+    font-size: 20px;
+    line-height: 1.45;
+  }
+
+  .mobile-login-hero__prompts span {
+    position: relative;
+    display: block;
+    padding-left: 42px;
+  }
+
+  .mobile-login-hero__prompts span::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 4px;
+    width: 22px;
+    height: 52px;
+    border-radius: 999px;
+    background: #c8d0ff;
+  }
+
+  .main-container {
+    position: relative;
+    z-index: 1;
+    padding: 22px 0 0;
+    max-width: none;
+  }
+
+  .content-row {
+    display: block;
+    margin: 0 !important;
+  }
+
+  .form-section {
+    width: 100% !important;
+    max-width: none !important;
+    padding: 24px 24px calc(28px + env(safe-area-inset-bottom)) !important;
+    border-radius: 30px 30px 0 0;
+    background: #fff;
+    box-shadow: 0 -18px 38px rgba(15, 23, 42, 0.1);
+  }
+
+  .welcome-title {
+    display: none;
+  }
+
+  .login-subtitle {
+    margin-bottom: 18px;
+    color: #667085;
+    font-size: 14px;
+  }
+
+  .custom-input :deep(.el-input__wrapper) {
+    min-height: 50px;
+    border-radius: 18px;
+    background: #f8fafc;
+  }
+
+  .form-footer {
+    margin-bottom: 18px;
+  }
+
+  .action-btn {
+    height: 52px;
+    border-radius: 999px;
+    font-size: 16px;
+  }
+
   .social-section {
-    border-left: none;
-    padding-left: 0 !important;
-    margin-top: 48px;
-    border-top: 1px solid var(--line);
-    padding-top: 36px;
+    display: none;
   }
 }
 </style>

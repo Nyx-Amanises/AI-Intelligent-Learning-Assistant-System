@@ -2,7 +2,9 @@ package com.aiassistant.learning.service.impl;
 
 import com.aiassistant.learning.common.exception.BusinessException;
 import com.aiassistant.learning.config.QdrantProperties;
+import com.aiassistant.learning.entity.MaterialSegment;
 import com.aiassistant.learning.entity.StudyMaterial;
+import com.aiassistant.learning.mapper.MaterialSegmentMapper;
 import com.aiassistant.learning.service.RetrievalService;
 import com.aiassistant.learning.service.StudyMaterialService;
 import com.aiassistant.learning.service.TextEmbeddingService;
@@ -33,6 +35,7 @@ public class RetrievalServiceImpl implements RetrievalService {
 
     /** 学习资料服务，用于校验资料是否属于当前用户。 */
     private final StudyMaterialService studyMaterialService;
+    private final MaterialSegmentMapper materialSegmentMapper;
     /** 文本向量化服务，用于把用户问题转换成 embedding。 */
     private final TextEmbeddingService textEmbeddingService;
     /** 向量数据库服务，用于在 Qdrant 中检索资料分段。 */
@@ -42,11 +45,13 @@ public class RetrievalServiceImpl implements RetrievalService {
 
     public RetrievalServiceImpl(
             StudyMaterialService studyMaterialService,
+            MaterialSegmentMapper materialSegmentMapper,
             TextEmbeddingService textEmbeddingService,
             VectorStoreService vectorStoreService,
             QdrantProperties qdrantProperties
     ) {
         this.studyMaterialService = studyMaterialService;
+        this.materialSegmentMapper = materialSegmentMapper;
         this.textEmbeddingService = textEmbeddingService;
         this.vectorStoreService = vectorStoreService;
         this.qdrantProperties = qdrantProperties;
@@ -57,7 +62,6 @@ public class RetrievalServiceImpl implements RetrievalService {
      */
     @Override
     public List<RetrievedSegment> retrieveMaterialSegments(Long userId, Long materialId, String queryText, Integer limit) {
-        ensureQdrantReady();
         if (!StringUtils.hasText(queryText)) {
             throw new BusinessException("检索语句不能为空");
         }
@@ -71,29 +75,61 @@ public class RetrievalServiceImpl implements RetrievalService {
         }
 
         // RAG 的第一步是把问题转换成向量，后续才能和资料分段向量做相似度搜索。
+        int resolvedLimit = resolveLimit(limit);
+        if (!isQdrantReady()) {
+            return retrieveDatabaseFallbackSegments(materialId, queryText, resolvedLimit);
+        }
+
         List<Double> queryVector = textEmbeddingService.embedTexts(List.of(queryText.trim()), null).vectors().stream()
                 .findFirst()
                 .orElseThrow(() -> new BusinessException("未生成检索向量"));
 
-        int resolvedLimit = resolveLimit(limit);
         // 先多召回一些候选，再用本地规则重排，能提升关键词型问题的命中率。
         int candidateLimit = Math.max(resolvedLimit * OVERSAMPLE_FACTOR, MIN_OVERSAMPLE_LIMIT);
-        List<RetrievedSegment> candidates = vectorStoreService.searchMaterialSegments(userId, materialId, queryVector, candidateLimit);
-        return rerankSegments(queryText, candidates, resolvedLimit);
+        List<RetrievedSegment> candidates;
+        try {
+            candidates = vectorStoreService.searchMaterialSegments(userId, materialId, queryVector, candidateLimit);
+        } catch (RuntimeException exception) {
+            candidates = List.of();
+        }
+        if (!candidates.isEmpty()) {
+            return rerankSegments(queryText, candidates, resolvedLimit);
+        }
+        return retrieveDatabaseFallbackSegments(materialId, queryText, resolvedLimit);
     }
 
     /**
      * 确保向量数据库功能已开启。
      */
-    private void ensureQdrantReady() {
-        if (!Boolean.TRUE.equals(qdrantProperties.getEnabled())) {
-            throw new BusinessException("Qdrant 未启用");
-        }
+    private boolean isQdrantReady() {
+        return Boolean.TRUE.equals(qdrantProperties.getEnabled())
+                && StringUtils.hasText(qdrantProperties.getBaseUrl());
     }
 
     /**
      * 解析本次检索的返回数量。
      */
+    private List<RetrievedSegment> retrieveDatabaseFallbackSegments(Long materialId, String queryText, int limit) {
+        List<MaterialSegment> segments = materialSegmentMapper.selectList(new LambdaQueryWrapper<MaterialSegment>()
+                .eq(MaterialSegment::getMaterialId, materialId)
+                .orderByAsc(MaterialSegment::getSegmentNo));
+        if (segments.isEmpty()) {
+            return List.of();
+        }
+        List<RetrievedSegment> candidates = segments.stream()
+                .map(segment -> new RetrievedSegment(
+                        segment.getId(),
+                        segment.getSegmentNo(),
+                        segment.getPageNo(),
+                        segment.getSectionTitle(),
+                        segment.getContentText(),
+                        segment.getKeywords(),
+                        0D
+                ))
+                .toList();
+        return rerankSegments(queryText, candidates, limit);
+    }
+
     private int resolveLimit(Integer limit) {
         if (limit != null && limit > 0) {
             return limit;
