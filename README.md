@@ -3,7 +3,7 @@
 **语言 / Language**：中文 | [English](README.en.md)
 
 > 一个围绕“资料管理 -> RAG 检索 -> AI 总结/出题 -> 在线练习 -> 错题复盘 -> 学习分析 -> Agent 学习助手”构建的全栈 AI 学习闭环项目。  
-> 适合作为 **AI 应用实战、RAG 工程化、Agent 工具调用、毕业设计、课程设计、简历项目** 的参考案例。
+> 适合作为 **AI 应用实战、RAG 工程化、Agent 工具调用、课程设计、简历项目** 的参考案例。
 
 ![AI 智能学习助手系统 Social Preview](docs/images/social-preview.png)
 
