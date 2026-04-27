@@ -28,6 +28,11 @@ public class LearningAnalyticsOverviewVO {
     private Integer wrongAttemptCount;
 
     /**
+     * 累计练习耗时，单位秒。
+     */
+    private Long totalStudySeconds;
+
+    /**
      * 涉及知识点总数。
      */
     private Integer totalKnowledgePoints;

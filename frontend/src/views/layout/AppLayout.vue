@@ -1,70 +1,99 @@
 <template>
-  <div class="shell-app">
-    <header class="app-header">
-      <div class="app-header__brand">
+  <div class="shell-app shell-app--workspace">
+    <aside class="shell-side shell-side--crm">
+      <div class="app-header__brand app-header__brand--sidebar">
         <div class="app-header__logo">
           <AppIcon name="brand" :size="23" />
         </div>
         <div class="app-header__brand-text">
           <strong>AI 智能学习助手</strong>
-          <span>Learning Workspace</span>
         </div>
       </div>
 
+      <div class="nav-card nav-card--crm">
+        <RouterLink
+          v-for="item in navItems"
+          :key="item.path"
+          class="nav-link nav-link--crm"
+          :to="item.path"
+        >
+          <span class="nav-link__icon">
+            <AppIcon :name="item.icon" :size="18" />
+          </span>
+          <span>{{ item.label }}</span>
+        </RouterLink>
+      </div>
+
+      <div class="side-footer side-footer--crm">
+        <RouterLink class="side-settings-link" to="/ai-config">
+          <span class="side-settings-link__icon">
+            <AppIcon name="config" :size="18" />
+          </span>
+          <span>系统设置</span>
+          <AppIcon name="chevron-right" :size="15" />
+        </RouterLink>
+      </div>
+    </aside>
+
+    <div class="shell-content">
+    <header class="app-header">
+      <button type="button" class="app-header__menu" aria-label="切换导航">
+        <AppIcon name="menu" :size="20" />
+      </button>
+
       <div class="app-header__actions">
-        <div class="app-header__user-badge">
-          <span class="app-header__user-label">当前用户</span>
-          <strong>{{ displayName }}</strong>
-        </div>
+        <button type="button" class="app-header__tool" aria-label="搜索">
+          <AppIcon name="search" :size="18" />
+        </button>
+        <button type="button" class="app-header__tool app-header__tool--notice" aria-label="通知">
+          <AppIcon name="bell" :size="18" />
+          <span>3</span>
+        </button>
+        <el-dropdown trigger="click" @command="handleUserCommand">
+          <button type="button" class="app-header__user-badge">
+            <span class="app-header__avatar">{{ avatarText }}</span>
+            <strong>{{ displayName }}</strong>
+            <AppIcon name="chevron-down" :size="15" />
+          </button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="logout">退出登录</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
       </div>
     </header>
 
-    <div class="shell-layout shell-layout--crm">
-      <aside class="shell-side shell-side--crm">
-        <div class="nav-card nav-card--crm">
-          <div class="nav-section-title">功能导航</div>
-          <RouterLink
-            v-for="item in navItems"
-            :key="item.path"
-            class="nav-link nav-link--crm"
-            :to="item.path"
-          >
-            <span class="nav-link__icon">
-              <AppIcon :name="item.icon" :size="18" />
-            </span>
-            <span>{{ item.label }}</span>
-          </RouterLink>
-        </div>
-
-        <div class="side-profile side-profile--crm">
-          <div class="side-profile__label">当前账号</div>
-          <div class="side-profile__name">{{ displayName }}</div>
-          <div class="side-profile__meta">{{ userStore.profile?.username || '未命名用户' }}</div>
-          <el-button style="margin-top: 16px; width: 100%" @click="logout">退出登录</el-button>
-        </div>
-      </aside>
-
-      <main class="shell-main shell-main--crm">
-        <RouterView />
-      </main>
+    <main class="shell-main shell-main--crm">
+      <RouterView />
+    </main>
     </div>
 
-    <AssistantDrawer v-model="assistantVisible" />
+    <AssistantDrawer v-if="showAssistantDrawer" v-model="assistantVisible" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { RouterLink, RouterView, useRouter } from 'vue-router'
+import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import AssistantDrawer from '@/components/AssistantDrawer.vue'
 import AppIcon from '@/components/AppIcon.vue'
 import { useUserStore } from '@/stores/user'
 
 const userStore = useUserStore()
 const router = useRouter()
+const route = useRoute()
 const assistantVisible = ref(false)
 
 const displayName = computed(() => userStore.profile?.nickname || userStore.profile?.username || '学习者')
+const avatarText = computed(() => displayName.value.slice(0, 1).toUpperCase())
+const showAssistantDrawer = computed(() => route.path !== '/dashboard')
+
+const handleUserCommand = (command: string) => {
+  if (command === 'logout') {
+    logout()
+  }
+}
 
 const navItems = [
   { path: '/dashboard', label: '首页', icon: 'home' },
@@ -89,9 +118,14 @@ const logout = () => {
 <style scoped>
 .app-header__user-badge {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
+  align-items: center;
+  gap: 9px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 14px;
+  cursor: pointer;
 }
 
 .app-header__user-label {

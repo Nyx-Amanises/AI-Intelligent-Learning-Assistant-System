@@ -34,6 +34,25 @@
       <path fill="#EF4444" d="M8.75 13.65h6.5c.12.58.18 1.13.18 1.64H8.57c0-.51.06-1.06.18-1.64Z" />
     </template>
 
+    <template v-else-if="fileIcon">
+      <path :fill="fileIcon.paper" d="M5.2 2.8h8.1l5.5 5.5v12.9H5.2V2.8Z" />
+      <path :fill="fileIcon.fold" d="M13.3 2.8v5.5h5.5L13.3 2.8Z" />
+      <path :fill="fileIcon.accent" d="M5.2 2.8h8.1l5.5 5.5v12.9H5.2V2.8Z" fill-opacity="0.09" />
+      <path :stroke="fileIcon.accent" d="M5.2 2.8h8.1l5.5 5.5v12.9H5.2V2.8Z" stroke-width="1.25" stroke-linejoin="round" />
+      <path :stroke="fileIcon.accent" d="M13.3 2.8v5.5h5.5" stroke-width="1.25" stroke-linejoin="round" />
+      <rect x="7.05" y="12.3" width="9.9" height="5.35" rx="1.35" :fill="fileIcon.accent" />
+      <text
+        x="12"
+        y="15.95"
+        fill="#fff"
+        font-family="Arial, Helvetica, sans-serif"
+        font-size="3.2"
+        font-weight="800"
+        text-anchor="middle"
+        letter-spacing="0"
+      >{{ fileIcon.label }}</text>
+    </template>
+
     <template v-else>
       <path
         v-for="path in iconPaths"
@@ -62,6 +81,20 @@ const sizeValue = computed(() =>
   typeof props.size === 'number' ? `${props.size}px` : props.size
 )
 
+const fileIconMap: Record<string, { label: string; accent: string; paper: string; fold: string }> = {
+  'file-pdf': { label: 'PDF', accent: '#dc2626', paper: '#fff7f7', fold: '#fecaca' },
+  'file-word': { label: 'DOC', accent: '#2563eb', paper: '#f7fbff', fold: '#bfdbfe' },
+  'file-excel': { label: 'XLS', accent: '#16a34a', paper: '#f6fff9', fold: '#bbf7d0' },
+  'file-ppt': { label: 'PPT', accent: '#ea580c', paper: '#fff8f2', fold: '#fed7aa' },
+  'file-text': { label: 'TXT', accent: '#64748b', paper: '#f8fafc', fold: '#e2e8f0' },
+  'file-image': { label: 'IMG', accent: '#0891b2', paper: '#f3fcff', fold: '#a5f3fc' },
+  'file-video': { label: 'VID', accent: '#7c3aed', paper: '#fbf7ff', fold: '#ddd6fe' },
+  'file-zip': { label: 'ZIP', accent: '#b45309', paper: '#fffaf0', fold: '#fde68a' },
+  'file-unknown': { label: 'FILE', accent: '#475569', paper: '#f8fafc', fold: '#e2e8f0' }
+}
+
+const fileIcon = computed(() => fileIconMap[props.name])
+
 const pathMap: Record<string, string[]> = {
   brand: [
     'M12 3.2 20.4 7.8 12 12.4 3.6 7.8 12 3.2Z',
@@ -80,6 +113,11 @@ const pathMap: Record<string, string[]> = {
     'M9.1 14.8c.75.58 1.72.87 2.9.87s2.15-.29 2.9-.87',
     'M12 2.6v1.6'
   ],
+  menu: ['M4.5 6.5h15', 'M4.5 12h15', 'M4.5 17.5h15'],
+  search: ['M10.8 18.1a7.3 7.3 0 1 0 0-14.6 7.3 7.3 0 0 0 0 14.6Z', 'M16.2 16.2l4.3 4.3'],
+  bell: ['M6.7 10.2a5.3 5.3 0 0 1 10.6 0c0 4 1.7 5.1 2.2 6.1H4.5c.5-1 2.2-2.1 2.2-6.1Z', 'M10 19.1c.4.9 1.1 1.4 2 1.4s1.6-.5 2-1.4'],
+  'chevron-down': ['M6.8 9.2 12 14.4l5.2-5.2'],
+  'chevron-right': ['M9.2 6.8 14.4 12l-5.2 5.2'],
   user: [
     'M12 12.3a4.2 4.2 0 1 0 0-8.4 4.2 4.2 0 0 0 0 8.4Z',
     'M4.7 20.1c1.25-3.4 3.7-5.1 7.3-5.1s6.05 1.7 7.3 5.1'
@@ -94,6 +132,7 @@ const pathMap: Record<string, string[]> = {
   wrong: ['M12 4.5a7.5 7.5 0 1 0 0 15 7.5 7.5 0 0 0 0-15Z', 'M9.4 9.4l5.2 5.2', 'M14.6 9.4l-5.2 5.2'],
   mastery: ['M4.6 14.4 9.2 9.8l3.4 3.4 6.8-7.4', 'M5 19.4h14'],
   analytics: ['M4.4 19.2V5', 'M4.4 19.2h15.2', 'M7.5 15.8l3.3-4 3.2 2.5 4.3-6.3'],
+  spark: ['M12 3.8l1.5 4.2 4.2 1.5-4.2 1.5-1.5 4.2-1.5-4.2-4.2-1.5 4.2-1.5L12 3.8Z', 'M18.3 14.2l.7 1.9 1.9.7-1.9.7-.7 1.9-.7-1.9-1.9-.7 1.9-.7.7-1.9Z', 'M6.4 14.7l.5 1.4 1.4.5-1.4.5-.5 1.4-.5-1.4-1.4-.5 1.4-.5.5-1.4Z'],
   config: ['M12 8.6a3.4 3.4 0 1 0 0 6.8 3.4 3.4 0 0 0 0-6.8Z', 'M19.1 13.2a7.9 7.9 0 0 0 0-2.4l2-1.5-2-3.4-2.4 1a7.4 7.4 0 0 0-2.1-1.2L14.3 3h-4.6l-.3 2.7a7.4 7.4 0 0 0-2.1 1.2l-2.4-1-2 3.4 2 1.5a7.9 7.9 0 0 0 0 2.4l-2 1.5 2 3.4 2.4-1a7.4 7.4 0 0 0 2.1 1.2l.3 2.7h4.6l.3-2.7a7.4 7.4 0 0 0 2.1-1.2l2.4 1 2-3.4-2-1.5Z']
 }
 

@@ -21,4 +21,8 @@ public class LearningAnalyticsQuery {
     @Min(value = 5, message = "趋势数量最小为5")
     @Max(value = 30, message = "趋势数量最大为30")
     private Integer trendLimit = 12;
+
+    @Min(value = 1, message = "统计天数最小为1")
+    @Max(value = 365, message = "统计天数最大为365")
+    private Integer days;
 }

@@ -58,6 +58,11 @@ public class PracticeTrendPointVO {
     private Integer obtainedScore;
 
     /**
+     * 本次练习耗时，单位秒。
+     */
+    private Integer durationSeconds;
+
+    /**
      * 正确率。
      */
     private BigDecimal accuracyRate;

@@ -282,6 +282,8 @@ public class PracticeServiceImpl implements PracticeService {
                 new Page<>(current, size),
                 new LambdaQueryWrapper<PracticeSession>()
                         .eq(PracticeSession::getUserId, userId)
+                        .eq(PracticeSession::getSessionStatus, SESSION_STATUS_SUBMITTED)
+                        .orderByDesc(PracticeSession::getSubmitTime)
                         .orderByDesc(PracticeSession::getCreatedAt)
         );
 

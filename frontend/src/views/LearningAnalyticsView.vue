@@ -244,6 +244,7 @@ const analytics = reactive<LearningAnalyticsOverviewPayload>({
   totalPracticeCount: 0,
   totalQuestionAttempts: 0,
   wrongAttemptCount: 0,
+  totalStudySeconds: 0,
   totalKnowledgePoints: 0,
   weakKnowledgePointCount: 0,
   averageAccuracyRate: 0,
@@ -331,6 +332,7 @@ const applyAnalytics = (data: LearningAnalyticsOverviewPayload) => {
   analytics.totalPracticeCount = data.totalPracticeCount || 0
   analytics.totalQuestionAttempts = data.totalQuestionAttempts || 0
   analytics.wrongAttemptCount = data.wrongAttemptCount || 0
+  analytics.totalStudySeconds = data.totalStudySeconds || 0
   analytics.totalKnowledgePoints = data.totalKnowledgePoints || 0
   analytics.weakKnowledgePointCount = data.weakKnowledgePointCount || 0
   analytics.averageAccuracyRate = Number(data.averageAccuracyRate || 0)

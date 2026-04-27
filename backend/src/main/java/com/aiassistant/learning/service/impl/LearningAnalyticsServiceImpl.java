@@ -94,11 +94,13 @@ public class LearningAnalyticsServiceImpl implements LearningAnalyticsService {
      */
     @Override
     public LearningAnalyticsOverviewVO overview(Long userId, LearningAnalyticsQuery query) {
-        List<PracticeSession> sessions = practiceSessionMapper.selectList(new LambdaQueryWrapper<PracticeSession>()
+        LambdaQueryWrapper<PracticeSession> sessionQuery = new LambdaQueryWrapper<PracticeSession>()
                 .eq(PracticeSession::getUserId, userId)
                 .eq(PracticeSession::getSessionStatus, SESSION_STATUS_SUBMITTED)
                 .eq(query.getMaterialId() != null, PracticeSession::getMaterialId, query.getMaterialId())
-                .orderByAsc(PracticeSession::getSubmitTime));
+                .ge(query.getDays() != null, PracticeSession::getSubmitTime, resolveStartTime(query.getDays()))
+                .orderByAsc(PracticeSession::getSubmitTime);
+        List<PracticeSession> sessions = practiceSessionMapper.selectList(sessionQuery);
         if (sessions.isEmpty()) {
             return emptyOverview();
         }
@@ -161,6 +163,7 @@ public class LearningAnalyticsServiceImpl implements LearningAnalyticsService {
                 .totalPracticeCount(sessions.size())
                 .totalQuestionAttempts(totalStats.attemptCount)
                 .wrongAttemptCount(totalStats.wrongCount)
+                .totalStudySeconds(totalStudySeconds(sessions))
                 .totalKnowledgePoints(knowledgeAccumulators.size())
                 .weakKnowledgePointCount((int) knowledgeAccumulators.stream().filter(item -> item.masteryPercent() < 70).count())
                 .averageAccuracyRate(totalStats.accuracyRate())
@@ -249,6 +252,7 @@ public class LearningAnalyticsServiceImpl implements LearningAnalyticsService {
                             .wrongCount(wrongCount)
                             .totalScore(safeInt(session.getTotalScore()))
                             .obtainedScore(safeInt(session.getObtainedScore()))
+                            .durationSeconds(safeInt(session.getDurationSeconds()))
                             .accuracyRate(session.getAccuracyRate() == null ? BigDecimal.ZERO : session.getAccuracyRate())
                             .scoreRate(percent(safeInt(session.getObtainedScore()), safeInt(session.getTotalScore())))
                             .submitTime(session.getSubmitTime())
@@ -378,6 +382,7 @@ public class LearningAnalyticsServiceImpl implements LearningAnalyticsService {
                 .totalPracticeCount(0)
                 .totalQuestionAttempts(0)
                 .wrongAttemptCount(0)
+                .totalStudySeconds(0L)
                 .totalKnowledgePoints(0)
                 .weakKnowledgePointCount(0)
                 .averageAccuracyRate(BigDecimal.ZERO)
@@ -434,6 +439,18 @@ public class LearningAnalyticsServiceImpl implements LearningAnalyticsService {
      */
     private static int safeInt(Integer value) {
         return value == null ? 0 : value;
+    }
+
+    private static LocalDateTime resolveStartTime(Integer days) {
+        return days == null ? null : LocalDateTime.now().minusDays(days);
+    }
+
+    private static long totalStudySeconds(List<PracticeSession> sessions) {
+        return sessions.stream()
+                .map(PracticeSession::getDurationSeconds)
+                .filter(Objects::nonNull)
+                .mapToLong(Integer::longValue)
+                .sum();
     }
 
     /**

@@ -357,7 +357,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { submitPracticeReviewTaskApi, type AiTaskDetail } from '@/api/modules/ai'
@@ -392,6 +392,9 @@ const page = reactive({
   current: 1,
   size: 10
 })
+
+const PRACTICE_DRAFT_KEY_PREFIX = 'ai-learning-assistant:practice-draft:'
+const PRACTICE_ACTIVE_DRAFT_KEY = 'ai-learning-assistant:practice-draft:active'
 
 const renameForm = reactive({
   sessionId: 0,
@@ -457,6 +460,102 @@ const syncAnswerForm = () => {
   })
   answerForm.value = form
 }
+
+const getPracticeDraftKey = (sessionId: number | string) => `${PRACTICE_DRAFT_KEY_PREFIX}${sessionId}`
+
+const isSubmittedPractice = () => String(practiceDetail.value?.sessionStatus || '').toUpperCase() === 'SUBMITTED'
+
+const isCurrentPracticeDraftable = () => Boolean(practiceDetail.value?.sessionId && !isSubmittedPractice())
+
+const readPracticeDraft = (sessionId: number | string) => {
+  if (typeof window === 'undefined') {
+    return null
+  }
+
+  try {
+    const rawDraft = window.localStorage.getItem(getPracticeDraftKey(sessionId))
+    if (!rawDraft) {
+      return null
+    }
+
+    const parsedDraft = JSON.parse(rawDraft)
+    if (!parsedDraft || typeof parsedDraft !== 'object') {
+      return null
+    }
+
+    const draft: Record<number, string> = {}
+    Object.entries(parsedDraft as Record<string, unknown>).forEach(([questionId, value]) => {
+      const normalizedId = Number(questionId)
+      if (Number.isFinite(normalizedId) && value !== undefined && value !== null) {
+        draft[normalizedId] = String(value)
+      }
+    })
+    return draft
+  } catch {
+    return null
+  }
+}
+
+const readActivePracticeDraftSessionId = () => {
+  if (typeof window === 'undefined') {
+    return 0
+  }
+
+  const sessionId = Number(window.localStorage.getItem(PRACTICE_ACTIVE_DRAFT_KEY))
+  return Number.isFinite(sessionId) ? sessionId : 0
+}
+
+const clearPracticeDraft = (sessionId?: number | string) => {
+  const targetSessionId = sessionId ?? practiceDetail.value?.sessionId
+  if (typeof window === 'undefined' || !targetSessionId) {
+    return
+  }
+  window.localStorage.removeItem(getPracticeDraftKey(targetSessionId))
+  if (window.localStorage.getItem(PRACTICE_ACTIVE_DRAFT_KEY) === String(targetSessionId)) {
+    window.localStorage.removeItem(PRACTICE_ACTIVE_DRAFT_KEY)
+  }
+}
+
+const savePracticeDraft = () => {
+  if (typeof window === 'undefined' || !isCurrentPracticeDraftable()) {
+    return
+  }
+
+  const sessionId = practiceDetail.value.sessionId
+  const hasAnswer = Object.values(answerForm.value).some((value) => String(value || '').trim())
+  if (!hasAnswer) {
+    clearPracticeDraft(sessionId)
+    return
+  }
+
+  window.localStorage.setItem(getPracticeDraftKey(sessionId), JSON.stringify(answerForm.value))
+  window.localStorage.setItem(PRACTICE_ACTIVE_DRAFT_KEY, String(sessionId))
+}
+
+const restorePracticeDraft = () => {
+  const sessionId = practiceDetail.value?.sessionId
+  if (!sessionId || isSubmittedPractice()) {
+    return
+  }
+
+  const draft = readPracticeDraft(sessionId)
+  if (!draft || !Object.keys(draft).length) {
+    return
+  }
+
+  answerForm.value = {
+    ...answerForm.value,
+    ...draft
+  }
+}
+
+watch(
+  answerForm,
+  () => {
+    savePracticeDraft()
+  },
+  { deep: true }
+)
 
 const toSectionLabel = (index: number) => ['一', '二', '三', '四', '五'][index] || String(index + 1)
 
@@ -620,6 +719,11 @@ const loadPracticeDetail = async (sessionId: number, silent = false) => {
     const res = await getPracticeDetailApi(sessionId)
     practiceDetail.value = res.data.data
     syncAnswerForm()
+    if (isSubmittedPractice()) {
+      clearPracticeDraft(sessionId)
+    } else {
+      restorePracticeDraft()
+    }
     activeQuestionId.value = practiceDetail.value?.answers?.[0]?.questionId || null
     router.replace({ path: '/practice', query: { sessionId: String(sessionId) } })
     if (hasPendingAiReview.value) {
@@ -736,12 +840,14 @@ const submitPractice = async () => {
 
   submitting.value = true
   try {
+    const sessionId = practiceDetail.value.sessionId
     const answers = (practiceDetail.value.answers || []).map((item: any) => ({
       questionId: item.questionId,
       userAnswer: answerForm.value[item.questionId] || ''
     }))
 
-    const res = await submitPracticeApi(practiceDetail.value.sessionId, answers)
+    const res = await submitPracticeApi(sessionId, answers)
+    clearPracticeDraft(sessionId)
     practiceDetail.value = res.data.data
     syncAnswerForm()
     if (hasPendingAiReview.value) {
@@ -765,12 +871,16 @@ onMounted(async () => {
   if (sessionId) {
     await loadPracticeDetail(sessionId)
     activeTab.value = 'current'
+  } else if (readActivePracticeDraftSessionId()) {
+    await loadPracticeDetail(readActivePracticeDraftSessionId())
+    activeTab.value = 'current'
   } else if (historyRecords.value.length) {
     activeTab.value = 'history'
   }
 })
 
 onUnmounted(() => {
+  savePracticeDraft()
   resetReviewTaskWaiting()
 })
 </script>

@@ -37,6 +37,7 @@ export interface PracticeTrendPoint {
   wrongCount: number
   totalScore: number
   obtainedScore: number
+  durationSeconds?: number
   accuracyRate: number
   scoreRate: number
   submitTime?: string
@@ -57,6 +58,7 @@ export interface LearningAnalyticsOverviewPayload {
   totalPracticeCount: number
   totalQuestionAttempts: number
   wrongAttemptCount: number
+  totalStudySeconds: number
   totalKnowledgePoints: number
   weakKnowledgePointCount: number
   averageAccuracyRate: number

@@ -33,7 +33,7 @@ mybatis-plus:
 
 app:
   cors:
-    allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173,https://ai-intelligent-learning-assistant-s.vercel.app,https://ai-intelligent-learning-assistant-system-8ur2sob6j.vercel.app}
+    allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:*,http://127.0.0.1:*,https://ai-intelligent-learning-assistant-s.vercel.app,https://ai-intelligent-learning-assistant-system-8ur2sob6j.vercel.app}
   ai:
     enabled: ${APP_AI_ENABLED:true}
     mock-mode: ${APP_AI_MOCK_MODE:true}
