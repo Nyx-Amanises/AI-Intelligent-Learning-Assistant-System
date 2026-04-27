@@ -79,7 +79,7 @@ Note: users in China may need a VPN to access the online demo.
 | Database | MySQL 8, Redis |
 | RAG | Qdrant, Embedding API, material chunking, Hit@K / Recall@K / MRR evaluation |
 | AI | OpenAI-compatible Chat API, SSE streaming, mock mode |
-|deploy| Docker Compose, Vercel, Railway |
+|deployment| Docker Compose, Vercel, Railway |
 
 ## Project Structure
 
