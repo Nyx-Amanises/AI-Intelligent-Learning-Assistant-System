@@ -1,6 +1,6 @@
 # AI Intelligent Learning Assistant System
 
-**Language**: [中文](README.md) | English
+**语言**: [中文](README.md) | English
 
 > A full-stack AI learning loop built around material management -> RAG retrieval -> AI summary and question generation -> online practice -> mistake review -> learning analytics -> agent-based study assistant.  
 > This project is suitable as a reference case for **AI application practice, RAG engineering, agent tool calling, graduation projects, course projects, and portfolio projects**.
@@ -27,7 +27,7 @@ Note: users in China may need a VPN to access the online demo.
 
 | Home / Learning Overview | Agent Study Assistant |
 | --- | --- |
-| ![Home](docs/images/home.png) | ![Agent Study Assistant](docs/images/agent.png) |
+| ![主页](docs/images/home.png) | ![Agent Study Assistant](docs/images/agent.png) |
 
 | Material Management | RAG Evaluation |
 | --- | --- |
@@ -79,7 +79,7 @@ Note: users in China may need a VPN to access the online demo.
 | Database | MySQL 8, Redis |
 | RAG | Qdrant, Embedding API, material chunking, Hit@K / Recall@K / MRR evaluation |
 | AI | OpenAI-compatible Chat API, SSE streaming, mock mode |
-| Deployment | Docker Compose, Vercel, Railway |
+|deploy| Docker Compose, Vercel, Railway |
 
 ## Project Structure
 
@@ -168,7 +168,7 @@ docker run -d --name qdrant -p 6333:6333 -p 6334:6334 -v qdrant_storage:/qdrant/
 
 The backend supports overriding configuration through environment variables:
 
-| Variable | Description |
+| Variable |描述|
 | --- | --- |
 | `SPRING_DATASOURCE_URL` | MySQL connection URL |
 | `SPRING_DATASOURCE_USERNAME` | MySQL username |
