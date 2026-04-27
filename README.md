@@ -1,5 +1,7 @@
 # AI 智能学习助手系统
 
+**语言 / Language**：中文 | [English](README.en.md)
+
 > 一个围绕“资料管理 -> RAG 检索 -> AI 总结/出题 -> 在线练习 -> 错题复盘 -> 学习分析 -> Agent 学习助手”构建的全栈 AI 学习闭环项目。  
 > 适合作为 **AI 应用实战、RAG 工程化、Agent 工具调用、毕业设计、课程设计、简历项目** 的参考案例。
 
@@ -98,7 +100,8 @@ AI-Intelligent-Learning-Assistant-System
 ├─ runtime/                   # AI 运行时配置，默认不提交敏感内容
 ├─ docker-compose.yml         # 本地一键启动
 ├─ vercel.json                # Vercel 前端部署配置
-└─ README.md
+├─ README.md                  # 中文说明
+└─ README.en.md               # English README
 ```
 
 ## 快速启动
