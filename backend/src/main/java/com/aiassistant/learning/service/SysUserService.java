@@ -3,6 +3,7 @@ package com.aiassistant.learning.service;
 import com.aiassistant.learning.entity.SysUser;
 import com.aiassistant.learning.vo.user.UserProfileVO;
 import com.baomidou.mybatisplus.extension.service.IService;
+import org.springframework.web.multipart.MultipartFile;
 
 /**
  * 系统用户业务接口。
@@ -35,4 +36,13 @@ public interface SysUserService extends IService<SysUser> {
      * @return 返回给前端展示的用户资料
      */
     UserProfileVO getCurrentUserProfile(Long userId);
+
+    /**
+     * Upload and update the current user's avatar.
+     *
+     * @param userId current user ID
+     * @param file avatar image file
+     * @return updated user profile
+     */
+    UserProfileVO uploadAvatar(Long userId, MultipartFile file);
 }

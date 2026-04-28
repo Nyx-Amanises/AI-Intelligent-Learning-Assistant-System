@@ -1,12 +1,19 @@
 import { defineStore } from 'pinia'
 
+export interface UserProfile {
+  id?: number
+  username?: string
+  nickname?: string
+  email?: string
+  phone?: string
+  avatarUrl?: string
+  roleCode?: string
+  lastLoginTime?: string
+}
+
 interface UserState {
   token: string
-  profile: {
-    id?: number
-    username?: string
-    nickname?: string
-  } | null
+  profile: UserProfile | null
 }
 
 export const useUserStore = defineStore('user', {
@@ -22,6 +29,14 @@ export const useUserStore = defineStore('user', {
       this.profile = profile
       localStorage.setItem('token', token)
       localStorage.setItem('profile', JSON.stringify(profile))
+    },
+    setProfile(profile: UserProfile | null) {
+      this.profile = profile
+      if (profile) {
+        localStorage.setItem('profile', JSON.stringify(profile))
+      } else {
+        localStorage.removeItem('profile')
+      }
     },
     logout() {
       this.token = ''
