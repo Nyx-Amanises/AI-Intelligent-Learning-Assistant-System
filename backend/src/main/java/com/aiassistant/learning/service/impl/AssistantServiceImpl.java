@@ -161,6 +161,46 @@ public class AssistantServiceImpl implements AssistantService {
     }
 
     /**
+     * 修改会话标题。
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public AssistantSessionDetailVO renameSession(Long userId, Long sessionId, String title) {
+        String normalizedTitle = title == null ? "" : title.trim();
+        if (!StringUtils.hasText(normalizedTitle)) {
+            throw new BusinessException("会话标题不能为空");
+        }
+        if (normalizedTitle.length() > 200) {
+            throw new BusinessException("会话标题长度不能超过200个字符");
+        }
+
+        AssistantSession session = getOwnedSession(userId, sessionId);
+        session.setTitle(normalizedTitle);
+        assistantSessionMapper.updateById(session);
+        return buildSessionDetail(
+                session,
+                loadMessages(session.getId(), 30),
+                loadRecentToolCalls(session.getId(), 20)
+        );
+    }
+
+    /**
+     * 修改会话置顶状态。
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public AssistantSessionDetailVO updateSessionPinned(Long userId, Long sessionId, boolean pinned) {
+        AssistantSession session = getOwnedSession(userId, sessionId);
+        session.setPinned(pinned ? 1 : 0);
+        assistantSessionMapper.updateById(session);
+        return buildSessionDetail(
+                session,
+                loadMessages(session.getId(), 30),
+                loadRecentToolCalls(session.getId(), 20)
+        );
+    }
+
+    /**
      * 非流式发送消息：先保存用户消息，再让编排器直接生成完整回复。
      */
     @Override

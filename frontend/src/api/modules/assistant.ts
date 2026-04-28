@@ -149,6 +149,12 @@ export const getAssistantSessionDetailApi = (sessionId: number, messageLimit = 3
     params: { messageLimit }
   })
 
+export const renameAssistantSessionApi = (sessionId: number, title: string) =>
+  http.put(`/assistant/sessions/${sessionId}/title`, { title })
+
+export const updateAssistantSessionPinnedApi = (sessionId: number, pinned: boolean) =>
+  http.put(`/assistant/sessions/${sessionId}/pinned`, { pinned })
+
 export const sendAssistantMessageApi = (sessionId: number, data: AssistantMessageSendPayload) =>
   http.post(`/assistant/sessions/${sessionId}/messages`, data)
 

@@ -4,6 +4,8 @@ import com.aiassistant.learning.common.result.ApiResponse;
 import com.aiassistant.learning.context.UserContext;
 import com.aiassistant.learning.dto.assistant.AssistantMessageSendRequest;
 import com.aiassistant.learning.dto.assistant.AssistantSessionCreateRequest;
+import com.aiassistant.learning.dto.assistant.AssistantSessionPinRequest;
+import com.aiassistant.learning.dto.assistant.AssistantSessionRenameRequest;
 import com.aiassistant.learning.service.AssistantService;
 import com.aiassistant.learning.vo.assistant.AssistantChatReplyVO;
 import com.aiassistant.learning.vo.assistant.AssistantSessionDetailVO;
@@ -16,6 +18,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -70,6 +73,32 @@ public class AssistantController {
     ) {
         Long userId = UserContext.getCurrentUserId();
         return ApiResponse.success(assistantService.getSessionDetail(userId, sessionId, messageLimit));
+    }
+
+    /**
+     * 修改当前用户自己的助手会话标题。
+     */
+    @PutMapping("/{sessionId}/title")
+    public ApiResponse<AssistantSessionDetailVO> renameSession(
+            @PathVariable Long sessionId,
+            @Valid @RequestBody AssistantSessionRenameRequest request
+    ) {
+        Long userId = UserContext.getCurrentUserId();
+        return ApiResponse.success("修改会话名称成功", assistantService.renameSession(userId, sessionId, request.getTitle()));
+    }
+
+    /**
+     * 修改当前用户自己的助手会话置顶状态。
+     */
+    @PutMapping("/{sessionId}/pinned")
+    public ApiResponse<AssistantSessionDetailVO> updateSessionPinned(
+            @PathVariable Long sessionId,
+            @Valid @RequestBody AssistantSessionPinRequest request
+    ) {
+        Long userId = UserContext.getCurrentUserId();
+        boolean pinned = Boolean.TRUE.equals(request.getPinned());
+        String message = pinned ? "会话已置顶" : "已取消置顶";
+        return ApiResponse.success(message, assistantService.updateSessionPinned(userId, sessionId, pinned));
     }
 
     /**

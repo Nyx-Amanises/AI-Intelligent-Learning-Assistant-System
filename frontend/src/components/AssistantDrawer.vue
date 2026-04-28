@@ -83,20 +83,47 @@
               class="assistant-session-card"
               :class="{
                 'assistant-session-card--active': activeSessionId === item.id,
+                'assistant-session-card--pinned': isSessionPinned(item),
                 'assistant-session-card--disabled': sendingMessage
               }"
               @click="selectSession(item.id)"
             >
               <div class="assistant-session-card__top">
-                <strong :title="item.title || '新对话'">{{ item.title || '新对话' }}</strong>
-                <button
-                  type="button"
-                  class="assistant-session-card__delete"
-                  :disabled="deletingSessionId === item.id || sendingMessage"
-                  @click.stop="removeSession(item.id)"
+                <span
+                  v-if="isSessionPinned(item)"
+                  class="assistant-session-card__pin"
+                  title="已置顶"
                 >
-                  {{ deletingSessionId === item.id ? '删除中...' : '删除' }}
-                </button>
+                  <AppIcon name="pin" :size="13" />
+                </span>
+                <strong :title="item.title || '新对话'">{{ item.title || '新对话' }}</strong>
+                <el-dropdown
+                  trigger="click"
+                  popper-class="assistant-session-menu"
+                  :disabled="sendingMessage || sessionActionBusy(item.id)"
+                  @command="handleSessionCommandFromMenu(item, $event)"
+                >
+                  <button
+                    type="button"
+                    class="assistant-session-card__menu-button"
+                    :disabled="sendingMessage || sessionActionBusy(item.id)"
+                    aria-label="更多对话操作"
+                    @click.stop
+                  >
+                    <AppIcon name="more-horizontal" :size="16" />
+                  </button>
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item command="rename">重命名</el-dropdown-item>
+                      <el-dropdown-item :command="isSessionPinned(item) ? 'unpin' : 'pin'">
+                        {{ isSessionPinned(item) ? '取消置顶' : '置顶聊天' }}
+                      </el-dropdown-item>
+                      <el-dropdown-item command="delete" divided class="assistant-session-menu__danger">
+                        删除
+                      </el-dropdown-item>
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
               </div>
             </article>
           </div>
@@ -357,7 +384,9 @@ import {
   deleteAssistantSessionApi,
   getAssistantSessionDetailApi,
   getAssistantSessionPageApi,
-  streamAssistantMessageApi
+  renameAssistantSessionApi,
+  streamAssistantMessageApi,
+  updateAssistantSessionPinnedApi
 } from '@/api/modules/assistant'
 import { getAiConfigApi } from '@/api/modules/ai'
 import { useUserStore } from '@/stores/user'
@@ -376,6 +405,8 @@ interface PendingTurnState {
   actualUserId?: number
   assistantMessageId: number
 }
+
+type AssistantSessionCommand = 'rename' | 'pin' | 'unpin' | 'delete'
 
 const props = defineProps<{
   modelValue: boolean
@@ -407,6 +438,8 @@ const creatingBlank = ref(false)
 const creatingContext = ref(false)
 const sendingMessage = ref(false)
 const deletingSessionId = ref<number | null>(null)
+const renamingSessionId = ref<number | null>(null)
+const pinningSessionId = ref<number | null>(null)
 const activeSessionId = ref<number | null>(null)
 const sessionDetail = ref<AssistantSessionDetail | null>(null)
 const draftMessage = ref('')
@@ -549,6 +582,39 @@ watch(
 )
 
 const isUserMessage = (role?: string) => String(role || '').toUpperCase() === 'USER'
+
+const isSessionPinned = (session?: Pick<AssistantSessionPageItem | AssistantSessionDetail, 'pinned'> | null) =>
+  Number(session?.pinned || 0) === 1
+
+const sessionActionBusy = (sessionId: number) =>
+  deletingSessionId.value === sessionId ||
+  renamingSessionId.value === sessionId ||
+  pinningSessionId.value === sessionId
+
+const syncSessionDetail = (detail: AssistantSessionDetail) => {
+  const normalizedDetail = normalizeSessionDetail(detail)
+  if (sessionDetail.value?.id === normalizedDetail.id) {
+    sessionDetail.value = {
+      ...sessionDetail.value,
+      ...normalizedDetail
+    }
+  }
+  sessionPage.records = sessionPage.records.map((item) =>
+    item.id === normalizedDetail.id
+      ? {
+          ...item,
+          title: normalizedDetail.title,
+          status: normalizedDetail.status,
+          pinned: normalizedDetail.pinned,
+          currentContextType: normalizedDetail.currentContextType,
+          currentContextId: normalizedDetail.currentContextId,
+          lastMessageAt: normalizedDetail.lastMessageAt,
+          createdAt: normalizedDetail.createdAt
+        }
+      : item
+  )
+  return normalizedDetail
+}
 
 const openPanel = () => {
   mobileSidebarOpen.value = false
@@ -1211,6 +1277,94 @@ const sendMessage = async () => {
   }
 }
 
+const renameSession = async (item: AssistantSessionPageItem) => {
+  if (sendingMessage.value) {
+    ElMessage.warning('当前回复还在生成中，暂时不能修改会话名称')
+    return
+  }
+
+  let nextTitle = ''
+  try {
+    const result = await ElMessageBox.prompt('请输入新的对话名称', '重命名对话', {
+      inputValue: item.title || '新对话',
+      inputPlaceholder: '请输入新的对话名称',
+      inputValidator: (value) => {
+        const title = String(value || '').trim()
+        if (!title) {
+          return '会话名称不能为空'
+        }
+        if (title.length > 200) {
+          return '会话名称不能超过 200 个字符'
+        }
+        return true
+      },
+      confirmButtonText: '保存',
+      cancelButtonText: '取消'
+    })
+    nextTitle = String(result.value || '').trim()
+  } catch (error) {
+    if (error === 'cancel' || error === 'close') {
+      return
+    }
+    ElMessage.error('打开重命名窗口失败')
+    return
+  }
+
+  if (!nextTitle || nextTitle === (item.title || '').trim()) {
+    return
+  }
+
+  renamingSessionId.value = item.id
+  try {
+    const res = await renameAssistantSessionApi(item.id, nextTitle)
+    syncSessionDetail(res.data.data as AssistantSessionDetail)
+    await loadSessionPage(false)
+    ElMessage.success('会话名称已更新')
+  } catch (error: any) {
+    ElMessage.error(error.message || '修改会话名称失败')
+  } finally {
+    renamingSessionId.value = null
+  }
+}
+
+const updateSessionPinned = async (item: AssistantSessionPageItem, pinned: boolean) => {
+  if (sendingMessage.value) {
+    ElMessage.warning('当前回复还在生成中，暂时不能修改置顶状态')
+    return
+  }
+
+  pinningSessionId.value = item.id
+  try {
+    const res = await updateAssistantSessionPinnedApi(item.id, pinned)
+    syncSessionDetail(res.data.data as AssistantSessionDetail)
+    await loadSessionPage(false)
+    ElMessage.success(pinned ? '已置顶聊天' : '已取消置顶')
+  } catch (error: any) {
+    ElMessage.error(error.message || '修改置顶状态失败')
+  } finally {
+    pinningSessionId.value = null
+  }
+}
+
+const handleSessionCommand = (item: AssistantSessionPageItem, command: string | number | object) => {
+  const action = String(command) as AssistantSessionCommand
+  if (action === 'rename') {
+    void renameSession(item)
+    return
+  }
+  if (action === 'pin' || action === 'unpin') {
+    void updateSessionPinned(item, action === 'pin')
+    return
+  }
+  if (action === 'delete') {
+    void removeSession(item.id)
+  }
+}
+
+const handleSessionCommandFromMenu = (item: AssistantSessionPageItem, command: unknown) => {
+  handleSessionCommand(item, command as string | number | object)
+}
+
 const removeSession = async (sessionId: number) => {
   if (sendingMessage.value) {
     ElMessage.warning('当前回复还在生成中，暂时不能删除会话')
@@ -1428,7 +1582,8 @@ onBeforeUnmount(() => {
 .assistant-page-button,
 .assistant-send-button,
 .assistant-inline-danger,
-.assistant-session-card__delete {
+.assistant-session-card__delete,
+.assistant-session-card__menu-button {
   border: 0;
   cursor: pointer;
   transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
@@ -1462,7 +1617,8 @@ onBeforeUnmount(() => {
 .assistant-top-button:disabled,
 .assistant-page-button:disabled,
 .assistant-send-button:disabled,
-.assistant-session-card__delete:disabled {
+.assistant-session-card__delete:disabled,
+.assistant-session-card__menu-button:disabled {
   cursor: not-allowed;
   opacity: 0.55;
   transform: none;
@@ -1577,6 +1733,17 @@ onBeforeUnmount(() => {
   background: rgba(111, 153, 255, 0.16);
 }
 
+.assistant-session-card--pinned:not(.assistant-session-card--active) {
+  background: rgba(255, 255, 255, 0.32);
+}
+
+.assistant-session-card__pin {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  color: #376fdc;
+}
+
 .assistant-session-card__top strong {
   flex: 1;
   min-width: 0;
@@ -1604,6 +1771,28 @@ onBeforeUnmount(() => {
   background: transparent;
   color: #ef6464;
   font-size: 11px;
+}
+
+.assistant-session-card__menu-button {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #6e7c94;
+}
+
+.assistant-session-card__menu-button:not(:disabled):hover,
+.assistant-session-card__menu-button:not(:disabled):focus-visible {
+  background: rgba(81, 98, 127, 0.1);
+  color: #273449;
+}
+
+:global(.assistant-session-menu__danger) {
+  color: #dc2626;
 }
 
 .assistant-mobile-menu-button,

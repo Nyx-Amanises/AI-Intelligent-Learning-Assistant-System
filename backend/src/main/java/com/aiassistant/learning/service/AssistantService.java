@@ -29,6 +29,16 @@ public interface AssistantService {
     AssistantSessionDetailVO getSessionDetail(Long userId, Long sessionId, Integer messageLimit);
 
     /**
+     * 修改助手会话标题。
+     */
+    AssistantSessionDetailVO renameSession(Long userId, Long sessionId, String title);
+
+    /**
+     * 修改助手会话置顶状态。
+     */
+    AssistantSessionDetailVO updateSessionPinned(Long userId, Long sessionId, boolean pinned);
+
+    /**
      * 非流式发送消息并获取完整回复。
      */
     AssistantChatReplyVO sendMessage(Long userId, Long sessionId, AssistantMessageSendRequest request);

@@ -1,0 +1,1055 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard 重构参考 - AI 智能学习助手</title>
+<style>
+:root {
+  --bg: #f8fafd;
+  --panel: #ffffff;
+  --panel-glass: rgba(255,255,255,0.72);
+  --text: #1e293b;
+  --text-secondary: #475569;
+  --muted: #94a3b8;
+  --brand: #6366f1;
+  --brand-hover: #4f46e5;
+  --brand-soft: rgba(99,102,241,0.08);
+  --brand-glow: rgba(99,102,241,0.2);
+  --blue: #3b82f6;
+  --green: #10b981;
+  --purple: #8b5cf6;
+  --orange: #f59e0b;
+  --pink: #ec4899;
+  --red: #ef4444;
+  --line: rgba(148,163,184,0.15);
+  --radius: 16px;
+  --radius-sm: 10px;
+  --radius-lg: 20px;
+  --radius-xl: 24px;
+  --shadow-sm: 0 1px 3px rgba(15,23,42,0.03);
+  --shadow: 0 4px 16px rgba(15,23,42,0.05);
+  --shadow-lg: 0 8px 32px rgba(15,23,42,0.08);
+  --shadow-xl: 0 20px 60px rgba(15,23,42,0.1);
+  --gradient-brand: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+  --gradient-hero: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  min-height: 100vh;
+}
+
+/* ===== SVG Icon Helper ===== */
+.icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.icon svg {
+  width: 1em;
+  height: 1em;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+}
+
+/* ===== Sidebar ===== */
+.sidebar {
+  background: var(--panel);
+  border-right: 1px solid var(--line);
+  padding: 28px 16px 20px;
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+}
+
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 12px 28px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 28px;
+}
+
+.sidebar-brand__icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--gradient-brand);
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-size: 18px;
+  box-shadow: 0 4px 14px var(--brand-glow);
+}
+
+.sidebar-brand__text {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.03em;
+}
+
+.sidebar-brand__sub {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.nav-group { margin-bottom: 28px; }
+
+.nav-group__title {
+  padding: 0 12px;
+  margin-bottom: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  margin-bottom: 2px;
+}
+
+.nav-item:hover {
+  background: var(--bg);
+  color: var(--text);
+}
+
+.nav-item--active {
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-weight: 600;
+}
+
+.nav-item__icon {
+  width: 22px;
+  height: 22px;
+  font-size: 20px;
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  padding: 16px 12px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sidebar-footer__avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--gradient-brand);
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.sidebar-footer__name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.sidebar-footer__role {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* ===== Main Content ===== */
+.main {
+  padding: 32px 40px;
+  max-width: 1320px;
+}
+
+/* ===== Hero Banner ===== */
+.hero {
+  position: relative;
+  padding: 40px 44px;
+  border-radius: var(--radius-xl);
+  background: var(--gradient-hero);
+  color: #fff;
+  overflow: hidden;
+  margin-bottom: 28px;
+  box-shadow: 0 12px 40px rgba(102,126,234,0.25);
+}
+
+.hero::before {
+  content: "";
+  position: absolute;
+  top: -60%;
+  right: -8%;
+  width: 500px;
+  height: 500px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.06);
+  pointer-events: none;
+}
+
+.hero::after {
+  content: "";
+  position: absolute;
+  bottom: -40%;
+  left: 20%;
+  width: 300px;
+  height: 300px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.04);
+  pointer-events: none;
+}
+
+.hero__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  position: relative;
+  z-index: 1;
+}
+
+.hero__greeting {
+  font-size: 14px;
+  opacity: 0.85;
+  margin-bottom: 10px;
+  font-weight: 500;
+}
+
+.hero__title {
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: -0.03em;
+}
+
+.hero__desc {
+  margin-top: 12px;
+  font-size: 14px;
+  opacity: 0.75;
+  line-height: 1.7;
+  max-width: 520px;
+}
+
+.hero__actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 24px;
+  position: relative;
+  z-index: 1;
+}
+
+.hero-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 22px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.hero-btn--primary {
+  background: #fff;
+  color: #6366f1;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.1);
+}
+
+.hero-btn--primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+}
+
+.hero-btn--ghost {
+  background: rgba(255,255,255,0.14);
+  color: #fff;
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,0.2);
+}
+
+.hero-btn--ghost:hover {
+  background: rgba(255,255,255,0.22);
+}
+
+.hero__time {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  opacity: 0.8;
+  padding: 10px 18px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.15);
+  white-space: nowrap;
+  backdrop-filter: blur(8px);
+}
+
+/* ===== Stats Grid ===== */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+.stat-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 22px;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  transition: all 0.25s cubic-bezier(0.4,0,0.2,1);
+  cursor: default;
+}
+
+.stat-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-lg);
+  border-color: transparent;
+}
+
+.stat-card__icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 13px;
+  display: grid;
+  place-items: center;
+  font-size: 22px;
+  flex-shrink: 0;
+}
+
+.stat-card__icon--blue { background: rgba(59,130,246,0.1); color: var(--blue); }
+.stat-card__icon--green { background: rgba(16,185,129,0.1); color: var(--green); }
+.stat-card__icon--purple { background: rgba(139,92,246,0.1); color: var(--purple); }
+.stat-card__icon--orange { background: rgba(245,158,11,0.1); color: var(--orange); }
+
+.stat-card__label {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 500;
+  margin-bottom: 6px;
+}
+
+.stat-card__value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.1;
+  letter-spacing: -0.04em;
+}
+
+.stat-card__sub {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* ===== Quick Actions ===== */
+.quick-actions {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-bottom: 28px;
+}
+
+.action-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 22px;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4,0,0.2,1);
+  position: relative;
+  overflow: hidden;
+}
+
+.action-card::after {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.action-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-xl);
+  border-color: transparent;
+}
+
+.action-card:hover::after { opacity: 1; }
+
+.action-card:nth-child(1)::after { background: var(--blue); }
+.action-card:nth-child(2)::after { background: var(--green); }
+.action-card:nth-child(3)::after { background: var(--purple); }
+.action-card:nth-child(4)::after { background: var(--orange); }
+
+.action-card__icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  font-size: 22px;
+  margin-bottom: 14px;
+}
+
+.action-card__icon--blue { background: rgba(59,130,246,0.08); color: var(--blue); }
+.action-card__icon--green { background: rgba(16,185,129,0.08); color: var(--green); }
+.action-card__icon--purple { background: rgba(139,92,246,0.08); color: var(--purple); }
+.action-card__icon--orange { background: rgba(245,158,11,0.08); color: var(--orange); }
+
+.action-card__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 5px;
+}
+
+.action-card__desc {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+/* ===== Content Grid ===== */
+.content-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.section-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  transition: box-shadow 0.2s ease;
+}
+
+.section-card:hover {
+  box-shadow: var(--shadow);
+}
+
+.section-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--line);
+}
+
+.section-card__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.section-card__link {
+  font-size: 12px;
+  color: var(--brand);
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.section-card__link:hover { opacity: 0.7; }
+
+.section-card__body { padding: 14px 22px 22px; }
+
+/* ===== Material List ===== */
+.material-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(148,163,184,0.1);
+}
+
+.material-row:last-child { border-bottom: 0; }
+
+.material-row__icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.material-row__icon--pdf { background: rgba(239,68,68,0.08); color: #ef4444; }
+.material-row__icon--doc { background: rgba(59,130,246,0.08); color: #3b82f6; }
+.material-row__icon--txt { background: rgba(16,185,129,0.08); color: #10b981; }
+
+.material-row__info { flex: 1; min-width: 0; }
+
+.material-row__name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.material-row__meta {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.status-badge--success { background: rgba(16,185,129,0.08); color: var(--green); }
+.status-badge--warning { background: rgba(245,158,11,0.08); color: var(--orange); }
+
+.status-badge__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* ===== Practice List ===== */
+.practice-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(148,163,184,0.1);
+}
+
+.practice-row:last-child { border-bottom: 0; }
+
+.practice-row__rank {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.practice-row__rank--1 { background: rgba(245,158,11,0.12); color: var(--orange); }
+.practice-row__rank--2 { background: rgba(59,130,246,0.1); color: var(--blue); }
+.practice-row__rank--3 { background: rgba(139,92,246,0.1); color: var(--purple); }
+.practice-row__rank--default { background: rgba(148,163,184,0.08); color: var(--muted); }
+
+.practice-row__info { flex: 1; min-width: 0; }
+
+.practice-row__name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.practice-row__meta {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.practice-row__score {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+}
+
+.practice-row__score--high { color: var(--green); }
+.practice-row__score--mid { color: var(--orange); }
+.practice-row__score--low { color: var(--red); }
+
+/* ===== Progress Section ===== */
+.progress-ring-wrap {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  padding: 16px 0;
+}
+
+.progress-ring {
+  width: 88px;
+  height: 88px;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.progress-ring svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.progress-ring__bg {
+  fill: none;
+  stroke: rgba(148,163,184,0.12);
+  stroke-width: 7;
+}
+
+.progress-ring__fill {
+  fill: none;
+  stroke: url(#progressGradient);
+  stroke-width: 7;
+  stroke-linecap: round;
+  stroke-dasharray: 201;
+  stroke-dashoffset: 50;
+}
+
+.progress-ring__text {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.progress-info__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+.progress-info__desc {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.mini-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.mini-stat {
+  padding: 14px;
+  border-radius: 12px;
+  text-align: center;
+}
+
+.mini-stat--brand { background: rgba(99,102,241,0.05); }
+.mini-stat--green { background: rgba(16,185,129,0.05); }
+.mini-stat--orange { background: rgba(245,158,11,0.05); }
+
+.mini-stat__label {
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.mini-stat__value {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.mini-stat--brand .mini-stat__value { color: var(--brand); }
+.mini-stat--green .mini-stat__value { color: var(--green); }
+.mini-stat--orange .mini-stat__value { color: var(--orange); }
+
+/* ===== Timeline ===== */
+.timeline { padding: 4px 0; }
+
+.timeline-item {
+  display: flex;
+  gap: 14px;
+  padding: 11px 0;
+  position: relative;
+}
+
+.timeline-item:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  left: 17px;
+  top: 42px;
+  bottom: -2px;
+  width: 2px;
+  background: var(--line);
+}
+
+.timeline-item__dot {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 16px;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.timeline-item__dot--brand { background: rgba(99,102,241,0.08); color: var(--brand); }
+.timeline-item__dot--green { background: rgba(16,185,129,0.08); color: var(--green); }
+.timeline-item__dot--orange { background: rgba(245,158,11,0.08); color: var(--orange); }
+
+.timeline-item__content { flex: 1; padding-top: 2px; }
+
+.timeline-item__text {
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.timeline-item__time {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+</style>
+</head>
+<body>
+<!-- Hidden SVG gradient defs -->
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#6366f1"/>
+      <stop offset="100%" stop-color="#a855f7"/>
+    </linearGradient>
+  </defs>
+</svg>
+
+<div class="layout">
+  <!-- ===== Sidebar ===== -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="sidebar-brand__icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+      </div>
+      <div>
+        <div class="sidebar-brand__text">AI Learning</div>
+        <div class="sidebar-brand__sub">智能学习助手</div>
+      </div>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-group__title">主要功能</div>
+      <div class="nav-item nav-item--active">
+        <span class="nav-item__icon icon"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></span>
+        学习概览
+      </div>
+      <div class="nav-item">
+        <span class="nav-item__icon icon"><svg viewBox="0 0 24 24"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg></span>
+        资料管理
+      </div>
+      <div class="nav-item">
+        <span class="nav-item__icon icon"><svg viewBox="0 0 24 24"><path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446A9 9 0 1 1 12 3z"/><path d="M17 4a2 2 0 0 1 2 2"/><path d="M21 8a2 2 0 0 1-2 2"/></svg></span>
+        AI 总结
+      </div>
+      <div class="nav-item">
+        <span class="nav-item__icon icon"><svg viewBox="0 0 24 24"><path d="M15.5 3H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2V8.5L15.5 3z"/><path d="M14 3v6h6"/><path d="M8 13h8"/><path d="M8 17h8"/><path d="M8 9h2"/></svg></span>
+        AI 出题
+      </div>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-group__title">练习与分析</div>
+      <div class="nav-item">
+        <span class="nav-item__icon icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></span>
+        练习记录
+      </div>
+      <div class="nav-item">
+        <span class="nav-item__icon icon"><svg viewBox="0 0 24 24"><path d="M12 2v20M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></span>
+        错题本
+      </div>
+      <div class="nav-item">
+        <span class="nav-item__icon icon"><svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span>
+        知识掌握
+      </div>
+      <div class="nav-item">
+        <span class="nav-item__icon icon"><svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M18.7 8l-5.1 5.2-2.8-2.7L7 14.3"/></svg></span>
+        学习分析
+      </div>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-group__title">系统</div>
+      <div class="nav-item">
+        <span class="nav-item__icon icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
+        AI 配置
+      </div>
+      <div class="nav-item">
+        <span class="nav-item__icon icon"><svg viewBox="0 0 24 24"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2z"/></svg></span>
+        RAG 评测
+      </div>
+      <div class="nav-item">
+        <span class="nav-item__icon icon"><svg viewBox="0 0 24 24"><path d="M12 8V4H8"/><rect x="8" y="2" width="13" height="10" rx="2"/><path d="M4 14h6"/><path d="M4 18h6"/><path d="M4 22h6"/><path d="M18 14v8"/><path d="M15 18h6"/></svg></span>
+        AI 任务
+      </div>
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="sidebar-footer__avatar">雪</div>
+      <div style="flex:1">
+        <div class="sidebar-footer__name">雪同学</div>
+        <div class="sidebar-footer__role">学习者</div>
+      </div>
+      <span class="icon" style="color:var(--muted); font-size:18px;">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+      </span>
+    </div>
+  </aside>
+
+  <!-- ===== Main Content ===== -->
+  <main class="main">
+    <!-- Hero Banner -->
+    <div class="hero">
+      <div class="hero__top">
+        <div>
+          <div class="hero__greeting">
+            <span class="icon" style="font-size:18px;vertical-align:middle;margin-right:4px"><svg viewBox="0 0 24 24"><path d="M18 11V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2"/><path d="M14 10V4a2 2 0 0 0-2-2 2 2 0 0 0-2 2v2"/><path d="M10 10.5V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 13"/></svg></span>
+            下午好，雪同学
+          </div>
+          <h1 class="hero__title">今天想学点什么？</h1>
+          <p class="hero__desc">你已经连续学习 7 天了，继续保持！上传资料、生成总结、完成练习，把学习闭环做成一条顺手的工作流。</p>
+        </div>
+        <div class="hero__time">
+          <span class="icon" style="font-size:16px"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span>
+          2026年4月27日 周一
+        </div>
+      </div>
+      <div class="hero__actions">
+        <button class="hero-btn hero-btn--primary">
+          <span class="icon" style="font-size:16px"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></span>
+          上传新资料
+        </button>
+        <button class="hero-btn hero-btn--ghost">
+          <span class="icon" style="font-size:16px"><svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span>
+          生成复习总结
+        </button>
+        <button class="hero-btn hero-btn--ghost">
+          <span class="icon" style="font-size:16px"><svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></span>
+          开始练习
+        </button>
+      </div>
+    </div>
+
+    <!-- Stats Row -->
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-card__icon stat-card__icon--blue"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
+        <div><div class="stat-card__label">资料总数</div><div class="stat-card__value">12</div><div class="stat-card__sub">已解析 10 份</div></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card__icon stat-card__icon--green"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div>
+        <div><div class="stat-card__label">AI 总结</div><div class="stat-card__value">8</div><div class="stat-card__sub">沉淀为复习笔记</div></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card__icon stat-card__icon--purple"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M15.5 3H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2V8.5L15.5 3z"/><path d="M14 3v6h6"/><path d="M8 13h8"/><path d="M8 17h8"/></svg></div>
+        <div><div class="stat-card__label">题集数量</div><div class="stat-card__value">5</div><div class="stat-card__sub">支持继续练习</div></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card__icon stat-card__icon--orange"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></div>
+        <div><div class="stat-card__label">最新得分</div><div class="stat-card__value">85</div><div class="stat-card__sub">17/20 题正确</div></div>
+      </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="quick-actions">
+      <div class="action-card">
+        <div class="action-card__icon action-card__icon--blue"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></div>
+        <div class="action-card__title">资料管理</div>
+        <div class="action-card__desc">上传、解析、整理学习材料</div>
+      </div>
+      <div class="action-card">
+        <div class="action-card__icon action-card__icon--green"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></div>
+        <div class="action-card__title">AI 总结</div>
+        <div class="action-card__desc">智能生成学习笔记</div>
+      </div>
+      <div class="action-card">
+        <div class="action-card__icon action-card__icon--purple"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
+        <div class="action-card__title">AI 出题</div>
+        <div class="action-card__desc">自动生成练习题集</div>
+      </div>
+      <div class="action-card">
+        <div class="action-card__icon action-card__icon--orange"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
+        <div class="action-card__title">练习记录</div>
+        <div class="action-card__desc">查看练习历史与成绩</div>
+      </div>
+    </div>
+
+    <!-- Content Grid -->
+    <div class="content-grid">
+      <div class="section-card">
+        <div class="section-card__header">
+          <div class="section-card__title"><span class="icon" style="font-size:18px;color:var(--blue)"><svg viewBox="0 0 24 24"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg></span> 最近资料</div>
+          <span class="section-card__link">查看全部 →</span>
+        </div>
+        <div class="section-card__body">
+          <div class="material-row">
+            <div class="material-row__icon material-row__icon--pdf"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+            <div class="material-row__info"><div class="material-row__name">深度学习基础 - 第三章 卷积神经网络</div><div class="material-row__meta">PDF · 15,230 字</div></div>
+            <span class="status-badge status-badge--success"><span class="status-badge__dot"></span>已解析</span>
+          </div>
+          <div class="material-row">
+            <div class="material-row__icon material-row__icon--doc"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
+            <div class="material-row__info"><div class="material-row__name">操作系统原理 - 进程调度算法</div><div class="material-row__meta">DOCX · 8,420 字</div></div>
+            <span class="status-badge status-badge--success"><span class="status-badge__dot"></span>已解析</span>
+          </div>
+          <div class="material-row">
+            <div class="material-row__icon material-row__icon--txt"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+            <div class="material-row__info"><div class="material-row__name">数据结构笔记 - 红黑树与 B+ 树</div><div class="material-row__meta">TXT · 5,100 字</div></div>
+            <span class="status-badge status-badge--warning"><span class="status-badge__dot"></span>解析中</span>
+          </div>
+          <div class="material-row">
+            <div class="material-row__icon material-row__icon--pdf"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+            <div class="material-row__info"><div class="material-row__name">计算机网络 - TCP/IP 协议栈详解</div><div class="material-row__meta">PDF · 22,800 字</div></div>
+            <span class="status-badge status-badge--success"><span class="status-badge__dot"></span>已解析</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <div class="section-card__header">
+          <div class="section-card__title"><span class="icon" style="font-size:18px;color:var(--orange)"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></span> 最近练习</div>
+          <span class="section-card__link">查看全部 →</span>
+        </div>
+        <div class="section-card__body">
+          <div class="practice-row">
+            <div class="practice-row__rank practice-row__rank--1">1</div>
+            <div class="practice-row__info"><div class="practice-row__name">深度学习 - CNN 专项练习</div><div class="practice-row__meta">20 题 · 17 题正确 · 2小时前</div></div>
+            <div class="practice-row__score practice-row__score--high">85</div>
+          </div>
+          <div class="practice-row">
+            <div class="practice-row__rank practice-row__rank--2">2</div>
+            <div class="practice-row__info"><div class="practice-row__name">操作系统 - 进程管理测验</div><div class="practice-row__meta">15 题 · 10 题正确 · 昨天</div></div>
+            <div class="practice-row__score practice-row__score--mid">67</div>
+          </div>
+          <div class="practice-row">
+            <div class="practice-row__rank practice-row__rank--3">3</div>
+            <div class="practice-row__info"><div class="practice-row__name">数据结构 - 树与图综合</div><div class="practice-row__meta">25 题 · 23 题正确 · 3天前</div></div>
+            <div class="practice-row__score practice-row__score--high">92</div>
+          </div>
+          <div class="practice-row">
+            <div class="practice-row__rank practice-row__rank--default">4</div>
+            <div class="practice-row__info"><div class="practice-row__name">计算机网络 - 传输层协议</div><div class="practice-row__meta">10 题 · 4 题正确 · 5天前</div></div>
+            <div class="practice-row__score practice-row__score--low">40</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Second Row: Progress + Activity -->
+    <div class="content-grid">
+      <div class="section-card">
+        <div class="section-card__header">
+          <div class="section-card__title"><span class="icon" style="font-size:18px;color:var(--brand)"><svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span> 学习进度</div>
+          <span class="section-card__link">详细分析 →</span>
+        </div>
+        <div class="section-card__body">
+          <div class="progress-ring-wrap">
+            <div class="progress-ring">
+              <svg viewBox="0 0 80 80">
+                <defs><linearGradient id="pg" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#6366f1"/><stop offset="100%" stop-color="#a855f7"/></linearGradient></defs>
+                <circle class="progress-ring__bg" cx="40" cy="40" r="32"/>
+                <circle style="fill:none;stroke:url(#pg);stroke-width:7;stroke-linecap:round;stroke-dasharray:201;stroke-dashoffset:50" cx="40" cy="40" r="32" transform="rotate(-90 40 40)"/>
+              </svg>
+              <div class="progress-ring__text">75%</div>
+            </div>
+            <div>
+              <div class="progress-info__title">本周学习完成度</div>
+              <div class="progress-info__desc">已完成 3/4 个学习目标，继续加油！<br>距离本周目标还差 1 个练习。</div>
+            </div>
+          </div>
+          <div class="mini-stats">
+            <div class="mini-stat mini-stat--brand"><div class="mini-stat__label">本周学习</div><div class="mini-stat__value">12h</div></div>
+            <div class="mini-stat mini-stat--green"><div class="mini-stat__label">完成练习</div><div class="mini-stat__value">8 次</div></div>
+            <div class="mini-stat mini-stat--orange"><div class="mini-stat__label">平均正确率</div><div class="mini-stat__value">71%</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <div class="section-card__header">
+          <div class="section-card__title"><span class="icon" style="font-size:18px;color:var(--purple)"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span> 最近动态</div>
+        </div>
+        <div class="section-card__body">
+          <div class="timeline">
+            <div class="timeline-item">
+              <div class="timeline-item__dot timeline-item__dot--brand"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div>
+              <div class="timeline-item__content"><div class="timeline-item__text">AI 完成了「深度学习基础」的总结生成</div><div class="timeline-item__time">2 小时前</div></div>
+            </div>
+            <div class="timeline-item">
+              <div class="timeline-item__dot timeline-item__dot--green"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></div>
+              <div class="timeline-item__content"><div class="timeline-item__text">完成了「CNN 专项练习」，得分 85 分</div><div class="timeline-item__time">2 小时前</div></div>
+            </div>
+            <div class="timeline-item">
+              <div class="timeline-item__dot timeline-item__dot--brand"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></div>
+              <div class="timeline-item__content"><div class="timeline-item__text">AI 生成了「操作系统 - 进程管理」题集，共 15 题</div><div class="timeline-item__time">昨天 16:30</div></div>
+            </div>
+            <div class="timeline-item">
+              <div class="timeline-item__dot timeline-item__dot--orange"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></div>
+              <div class="timeline-item__content"><div class="timeline-item__text">上传了新资料「数据结构笔记 - 红黑树与 B+ 树」</div><div class="timeline-item__time">昨天 14:20</div></div>
+            </div>
+            <div class="timeline-item">
+              <div class="timeline-item__dot timeline-item__dot--green"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></div>
+              <div class="timeline-item__content"><div class="timeline-item__text">完成了「数据结构 - 树与图综合」练习，得分 92 分</div><div class="timeline-item__time">3 天前</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+</body>
+</html>
