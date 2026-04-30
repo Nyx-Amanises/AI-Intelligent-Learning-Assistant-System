@@ -24,6 +24,7 @@ import com.aiassistant.learning.vo.ai.AiTaskDetailVO;
 import com.aiassistant.learning.vo.ai.AiTaskPageVO;
 import com.aiassistant.learning.vo.page.PageVO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -296,7 +297,16 @@ public class AiTaskServiceImpl implements AiTaskService {
         task.setStartedAt(null);
         task.setFinishedAt(null);
         task.setRetryCount((task.getRetryCount() == null ? 0 : task.getRetryCount()) + 1);
-        aiTaskMapper.updateById(task);
+        aiTaskMapper.update(null, new LambdaUpdateWrapper<AiTask>()
+                .eq(AiTask::getId, task.getId())
+                .set(AiTask::getStatus, task.getStatus())
+                .set(AiTask::getProgressRate, task.getProgressRate())
+                .set(AiTask::getErrorMessage, null)
+                .set(AiTask::getResultJson, null)
+                .set(AiTask::getStartedAt, null)
+                .set(AiTask::getFinishedAt, null)
+                .set(AiTask::getRetryCount, task.getRetryCount())
+                .set(AiTask::getUpdatedAt, LocalDateTime.now()));
 
         scheduleExecuteAfterCommit(task.getId());
         return toDetailVO(task);
@@ -329,7 +339,13 @@ public class AiTaskServiceImpl implements AiTaskService {
         task.setProgressRate(10);
         task.setStartedAt(LocalDateTime.now());
         task.setErrorMessage(null);
-        aiTaskMapper.updateById(task);
+        aiTaskMapper.update(null, new LambdaUpdateWrapper<AiTask>()
+                .eq(AiTask::getId, task.getId())
+                .set(AiTask::getStatus, task.getStatus())
+                .set(AiTask::getProgressRate, task.getProgressRate())
+                .set(AiTask::getStartedAt, task.getStartedAt())
+                .set(AiTask::getErrorMessage, null)
+                .set(AiTask::getUpdatedAt, LocalDateTime.now()));
 
         UserContext.setCurrentUserId(task.getUserId());
         try {
@@ -343,7 +359,15 @@ public class AiTaskServiceImpl implements AiTaskService {
             task.setProgressRate(result.progressRate() == null ? 100 : Math.max(0, Math.min(100, result.progressRate())));
             task.setResultJson(result.resultJson());
             task.setFinishedAt(LocalDateTime.now());
-            aiTaskMapper.updateById(task);
+            task.setErrorMessage(null);
+            aiTaskMapper.update(null, new LambdaUpdateWrapper<AiTask>()
+                    .eq(AiTask::getId, task.getId())
+                    .set(AiTask::getStatus, task.getStatus())
+                    .set(AiTask::getProgressRate, task.getProgressRate())
+                    .set(AiTask::getResultJson, task.getResultJson())
+                    .set(AiTask::getErrorMessage, null)
+                    .set(AiTask::getFinishedAt, task.getFinishedAt())
+                    .set(AiTask::getUpdatedAt, LocalDateTime.now()));
         } catch (Exception exception) {
             task.setStatus(STATUS_FAILED);
             task.setProgressRate(100);
