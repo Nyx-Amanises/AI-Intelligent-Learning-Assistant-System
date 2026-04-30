@@ -14,6 +14,7 @@ import com.aiassistant.learning.vo.ai.SummaryResultVO;
 import com.aiassistant.learning.vo.question.QuestionSetDetailVO;
 import jakarta.validation.Valid;
 import java.util.List;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -60,7 +61,7 @@ public class AiController {
      */
     @GetMapping("/config")
     public ApiResponse<AiConfigVO> getConfig() {
-        return ApiResponse.success(aiConfigService.getConfig());
+        return ApiResponse.success(aiConfigService.getConfig(UserContext.getCurrentUserId()));
     }
 
     /**
@@ -71,7 +72,22 @@ public class AiController {
      */
     @PutMapping("/config")
     public ApiResponse<AiConfigVO> updateConfig(@RequestBody AiConfigUpdateRequest request) {
-        return ApiResponse.success("AI 配置已更新", aiConfigService.updateConfig(request));
+        return ApiResponse.success("AI 配置已更新", aiConfigService.updateConfig(UserContext.getCurrentUserId(), request));
+    }
+
+    @DeleteMapping("/config")
+    public ApiResponse<AiConfigVO> clearConfig() {
+        return ApiResponse.success("已删除个人 AI 配置", aiConfigService.clearUserConfig(UserContext.getCurrentUserId()));
+    }
+
+    @GetMapping("/config/global")
+    public ApiResponse<AiConfigVO> getGlobalConfig() {
+        return ApiResponse.success(aiConfigService.getGlobalConfig(UserContext.getCurrentUserId()));
+    }
+
+    @PutMapping("/config/global")
+    public ApiResponse<AiConfigVO> updateGlobalConfig(@RequestBody AiConfigUpdateRequest request) {
+        return ApiResponse.success("共享 AI 配置已更新", aiConfigService.updateGlobalConfig(UserContext.getCurrentUserId(), request));
     }
 
     /**

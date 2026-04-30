@@ -32,6 +32,17 @@ export interface AiConfigPayload {
   defaultEmbeddingModel?: string
 }
 
+export interface AiConfigResponse extends AiConfigPayload {
+  configSource?: 'USER' | 'GLOBAL' | 'LEGACY' | 'ENV'
+  canManageGlobal?: boolean
+  personalConfigured?: boolean
+  globalConfigured?: boolean
+  apiKeyConfigured?: boolean
+  apiKeyPreview?: string
+  embeddingApiKeyConfigured?: boolean
+  embeddingApiKeyPreview?: string
+}
+
 export interface AiTaskDetail {
   id: number
   userId: number
@@ -147,3 +158,9 @@ export const deleteAiTaskApi = (taskId: number) => http.delete(`/ai/tasks/${task
 export const getAiConfigApi = () => http.get('/ai/config')
 
 export const updateAiConfigApi = (data: AiConfigPayload) => http.put('/ai/config', data)
+
+export const clearAiConfigApi = () => http.delete('/ai/config')
+
+export const getGlobalAiConfigApi = () => http.get('/ai/config/global')
+
+export const updateGlobalAiConfigApi = (data: AiConfigPayload) => http.put('/ai/config/global', data)

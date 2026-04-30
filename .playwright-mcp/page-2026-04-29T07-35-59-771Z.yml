@@ -1,0 +1,74 @@
+- main [ref=e3]:
+  - generic [ref=e4]:
+    - button "返回首页" [ref=e5] [cursor=pointer]:
+      - img [ref=e7]
+      - generic [ref=e10]: 智学画室
+    - navigation "页面切换" [ref=e11]:
+      - button "首页" [ref=e12] [cursor=pointer]
+      - button "登录" [ref=e13] [cursor=pointer]
+  - region "把学习安排成一场有光的创作。" [ref=e14]:
+    - generic [ref=e15]:
+      - paragraph [ref=e16]: AI Intelligent Learning Assistant
+      - heading "把学习安排成一场有光的创作。" [level=1] [ref=e17]
+      - paragraph [ref=e18]: 从目标、课程、笔记到复盘，AI 把零散的学习线索整理成清晰的节奏。
+      - generic [ref=e19]:
+        - button "开始学习" [ref=e20] [cursor=pointer]:
+          - img [ref=e22]
+          - text: 开始学习
+        - button "查看课表" [ref=e24] [cursor=pointer]:
+          - img [ref=e26]
+          - text: 查看课表
+    - complementary "今日学习概览" [ref=e29]:
+      - generic [ref=e30]:
+        - generic [ref=e31]: 今日画布
+        - strong [ref=e32]: 68%
+      - generic [ref=e39]:
+        - paragraph [ref=e40]: 创作力
+        - heading "视觉叙事课" [level=2] [ref=e41]
+        - text: 18:30 / 42 min
+        - generic "课程进度" [ref=e42]
+    - region "学习数据" [ref=e44]:
+      - article [ref=e45]:
+        - text: 今日灵感
+        - strong [ref=e46]: "12"
+        - paragraph [ref=e47]: 张知识卡片
+      - article [ref=e48]:
+        - text: 连续学习
+        - strong [ref=e49]: "16"
+        - paragraph [ref=e50]: 天保持节奏
+      - article [ref=e51]:
+        - text: AI 点评
+        - strong [ref=e52]: A-
+        - paragraph [ref=e53]: 表达更清晰
+    - region "课程工作台" [ref=e54]:
+      - generic [ref=e55]:
+        - generic [ref=e56]: Learning Path
+        - heading "今天先处理最有回报的三件事。" [level=2] [ref=e57]
+        - button "创作力 视觉叙事课 68%" [ref=e58] [cursor=pointer]:
+          - generic [ref=e59]: 创作力
+          - strong [ref=e60]: 视觉叙事课
+          - emphasis [ref=e61]: 68%
+        - button "结构力 知识图谱复盘 46%" [ref=e62] [cursor=pointer]:
+          - generic [ref=e63]: 结构力
+          - strong [ref=e64]: 知识图谱复盘
+          - emphasis [ref=e65]: 46%
+        - button "专注力 番茄学习流 82%" [ref=e66] [cursor=pointer]:
+          - generic [ref=e67]: 专注力
+          - strong [ref=e68]: 番茄学习流
+          - emphasis [ref=e69]: 82%
+      - generic [ref=e70]:
+        - generic [ref=e71]: Subject Studio
+        - heading "把每门课都留下可追踪的作品感。" [level=2] [ref=e72]
+        - generic [ref=e73]:
+          - article [ref=e74]:
+            - generic [ref=e75]: 语文
+            - strong [ref=e76]: 意象分析
+          - article [ref=e77]:
+            - generic [ref=e78]: 数学
+            - strong [ref=e79]: 错题归因
+          - article [ref=e80]:
+            - generic [ref=e81]: 英语
+            - strong [ref=e82]: 听说训练
+          - article [ref=e83]:
+            - generic [ref=e84]: 科学
+            - strong [ref=e85]: 实验记录

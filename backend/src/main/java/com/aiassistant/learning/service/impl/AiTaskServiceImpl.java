@@ -1,6 +1,7 @@
 package com.aiassistant.learning.service.impl;
 
 import com.aiassistant.learning.common.exception.BusinessException;
+import com.aiassistant.learning.context.UserContext;
 import com.aiassistant.learning.dto.ai.AiTaskCreateRequest;
 import com.aiassistant.learning.dto.ai.EmbeddingTaskPayload;
 import com.aiassistant.learning.dto.ai.EmbeddingTaskRequest;
@@ -330,6 +331,7 @@ public class AiTaskServiceImpl implements AiTaskService {
         task.setErrorMessage(null);
         aiTaskMapper.updateById(task);
 
+        UserContext.setCurrentUserId(task.getUserId());
         try {
             AiTaskProcessor processor = findProcessor(task.getTaskType());
             if (processor == null) {
@@ -348,6 +350,8 @@ public class AiTaskServiceImpl implements AiTaskService {
             task.setErrorMessage(truncateErrorMessage(exception.getMessage()));
             task.setFinishedAt(LocalDateTime.now());
             aiTaskMapper.updateById(task);
+        } finally {
+            UserContext.clear();
         }
     }
 

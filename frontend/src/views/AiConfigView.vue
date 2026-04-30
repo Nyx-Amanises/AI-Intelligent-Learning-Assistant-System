@@ -4,21 +4,57 @@
       <div>
         <h1 class="page-title">AI 配置</h1>
         <p class="page-desc">
-          聊天模型和向量模型分开配置。聊天支持 OpenAI 兼容、DeepSeek、豆包 Ark，Embedding 可单独切到豆包。
+          支持个人 API Key 和管理员共享 API Key。个人配置优先生效；未配置个人 Key 时，系统会自动使用管理员共享配置。
         </p>
       </div>
-      <div class="toolbar" style="margin-bottom: 0">
+      <div class="toolbar toolbar--config">
+        <el-radio-group
+          v-if="canManageGlobal"
+          v-model="saveScope"
+          size="large"
+          @change="loadConfig"
+        >
+          <el-radio-button label="USER">我的配置</el-radio-button>
+          <el-radio-button label="GLOBAL">共享配置</el-radio-button>
+        </el-radio-group>
         <el-button :loading="loading" @click="loadConfig">重新加载</el-button>
-        <el-button type="primary" :loading="saving" @click="saveConfig">保存配置</el-button>
+        <el-button
+          v-if="saveScope === 'USER' && personalConfigured"
+          plain
+          type="danger"
+          :loading="saving"
+          @click="clearPersonalConfig"
+        >
+          删除个人配置
+        </el-button>
+        <el-button type="primary" :loading="saving" @click="saveConfig">
+          保存{{ saveScope === 'GLOBAL' ? '共享' : '个人' }}配置
+        </el-button>
       </div>
     </div>
+
+    <el-alert
+      class="scope-alert"
+      :closable="false"
+      type="info"
+      show-icon
+    >
+      <template #title>
+        当前生效来源：{{ sourceLabel }}
+        <el-tag v-if="globalConfigured" size="small" type="success" effect="plain">已有共享配置</el-tag>
+        <el-tag v-if="personalConfigured" size="small" type="warning" effect="plain">已有个人配置</el-tag>
+      </template>
+      <template #default>
+        {{ scopeDescription }}
+      </template>
+    </el-alert>
 
     <div class="content-grid">
       <div class="content-grid content-grid--2">
         <div class="page-card">
           <div class="panel-title-row">
             <h3>聊天模型</h3>
-            <span class="soft-text">AI 总结、AI 出题继续走这里</span>
+            <span class="soft-text">AI 总结、AI 出题和 Agent 回复会使用这组配置</span>
           </div>
           <el-form label-position="top">
             <div class="workspace-form-grid workspace-form-grid--compact">
@@ -53,9 +89,9 @@
                 v-model="form.apiKey"
                 type="password"
                 show-password
-                placeholder="留空表示沿用当前已保存的 Key"
+                :placeholder="apiKeyPlaceholder"
               />
-              <div class="soft-text" style="margin-top: 8px">
+              <div class="soft-text key-status">
                 当前状态：{{ configInfo.apiKeyConfigured ? configInfo.apiKeyPreview : '未配置' }}
               </div>
             </el-form-item>
@@ -65,7 +101,7 @@
         <div class="page-card">
           <div class="panel-title-row">
             <h3>向量模型</h3>
-            <span class="soft-text">Embedding / RAG 检索走这里</span>
+            <span class="soft-text">Embedding / RAG 检索会使用这组配置</span>
           </div>
           <el-form label-position="top">
             <el-form-item label="Embedding Provider">
@@ -81,25 +117,19 @@
               />
             </el-form-item>
             <el-form-item label="Embedding Path">
-              <el-input
-                v-model="form.embeddingPath"
-                :placeholder="embeddingPathPlaceholder"
-              />
+              <el-input v-model="form.embeddingPath" :placeholder="embeddingPathPlaceholder" />
             </el-form-item>
             <el-form-item label="默认向量模型">
-              <el-input
-                v-model="form.defaultEmbeddingModel"
-                :placeholder="embeddingModelPlaceholder"
-              />
+              <el-input v-model="form.defaultEmbeddingModel" :placeholder="embeddingModelPlaceholder" />
             </el-form-item>
             <el-form-item label="Embedding API Key">
               <el-input
                 v-model="form.embeddingApiKey"
                 type="password"
                 show-password
-                placeholder="留空表示沿用当前已保存的 Key"
+                :placeholder="embeddingApiKeyPlaceholder"
               />
-              <div class="soft-text" style="margin-top: 8px">
+              <div class="soft-text key-status">
                 当前状态：{{
                   configInfo.embeddingApiKeyConfigured ? configInfo.embeddingApiKeyPreview : '未配置'
                 }}
@@ -112,26 +142,25 @@
       <div class="content-grid content-grid--2">
         <div class="page-card">
           <div class="panel-title-row">
-            <h3>推荐配置</h3>
+            <h3>配置规则</h3>
           </div>
           <div class="tips-stack">
             <div class="tip-card">
-              <div class="tip-card__title">聊天接口</div>
+              <div class="tip-card__title">个人配置优先</div>
               <div class="tip-card__desc">
-                DeepSeek 和豆包 Ark 聊天都走 OpenAI 兼容格式，选择 Provider 后可以套用推荐 Base URL 和 Path。
+                普通用户保存的是自己的配置，不会覆盖管理员共享 Key；没有个人配置时自动回退到共享配置。
               </div>
             </div>
             <div class="tip-card">
-              <div class="tip-card__title">豆包向量接口</div>
+              <div class="tip-card__title">共享配置只给管理员维护</div>
               <div class="tip-card__desc">
-                Provider 选 `豆包 Ark 多模态向量`，Base URL 一般是 `https://ark.cn-beijing.volces.com`，
-                Path 一般是 `/api/v3/embeddings/multimodal`。
+                用户名 admin 或角色为 ADMIN 的账号可以维护共享配置，适合给体验用户提供默认可用的模型能力。
               </div>
             </div>
             <div class="tip-card">
-              <div class="tip-card__title">聊天模型示例</div>
+              <div class="tip-card__title">个人配置不会偷用共享 Key</div>
               <div class="tip-card__desc">
-                DeepSeek 可填 `deepseek-chat`。豆包 Ark 通常填写控制台里的推理接入点 ID 或模型名。
+                如果普通用户保存个人 Base URL 并关闭 Mock 模式，就必须填写自己的聊天 API Key，避免共享 Key 被转发到用户自定义地址。
               </div>
             </div>
           </div>
@@ -139,23 +168,25 @@
 
         <div class="page-card">
           <div class="panel-title-row">
-            <h3>运行说明</h3>
+            <h3>推荐配置</h3>
           </div>
           <div class="tips-stack">
             <div class="tip-card">
-              <div class="tip-card__title">配置保存位置</div>
-              <div class="tip-card__desc">后端会把运行时配置保存到 `backend/runtime/ai-config.json`。</div>
-            </div>
-            <div class="tip-card">
-              <div class="tip-card__title">什么时候会用到向量配置</div>
+              <div class="tip-card__title">聊天接口</div>
               <div class="tip-card__desc">
-                点击“生成 Embedding”、调用检索预览，以及后续 RAG 总结/出题时，都会优先用这组向量配置。
+                DeepSeek 和豆包 Ark 聊天都可以套用预设；OpenAI 兼容接口适合中转站或自建网关。
               </div>
             </div>
             <div class="tip-card">
-              <div class="tip-card__title">没配向量接口也不影响聊天</div>
+              <div class="tip-card__title">向量接口</div>
               <div class="tip-card__desc">
-                聊天链路和向量链路已拆开，向量接口配错不会影响 AI 总结 / AI 出题的普通聊天调用。
+                OpenAI 兼容向量通常使用 /v1/embeddings；豆包多模态向量通常使用 /api/v3/embeddings/multimodal。
+              </div>
+            </div>
+            <div class="tip-card">
+              <div class="tip-card__title">旧配置兼容</div>
+              <div class="tip-card__desc">
+                数据库没有配置时，后端仍会读取旧的 runtime/ai-config.json 和环境变量，线上迁移更平滑。
               </div>
             </div>
           </div>
@@ -167,11 +198,25 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
-import { ElMessage } from 'element-plus'
-import { getAiConfigApi, updateAiConfigApi } from '@/api/modules/ai'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import {
+  clearAiConfigApi,
+  getAiConfigApi,
+  getGlobalAiConfigApi,
+  updateAiConfigApi,
+  updateGlobalAiConfigApi,
+  type AiConfigResponse
+} from '@/api/modules/ai'
+
+type SaveScope = 'USER' | 'GLOBAL'
 
 const loading = ref(false)
 const saving = ref(false)
+const saveScope = ref<SaveScope>('USER')
+const canManageGlobal = ref(false)
+const personalConfigured = ref(false)
+const globalConfigured = ref(false)
+const configSource = ref<'USER' | 'GLOBAL' | 'LEGACY' | 'ENV'>('ENV')
 const configInfo = ref({
   apiKeyConfigured: false,
   apiKeyPreview: '',
@@ -202,7 +247,7 @@ const chatProviderPresets: Record<
     baseUrl: 'https://api.openai.com',
     chatPath: '/v1/chat/completions',
     defaultModel: '',
-    basePlaceholder: '例如：https://newapi.hjlyywp.com 或 https://api.openai.com',
+    basePlaceholder: '例如：https://newapi.example.com 或 https://api.openai.com',
     pathPlaceholder: '例如：/v1/chat/completions',
     modelPlaceholder: '例如：gpt-4o-mini，或你的中转站模型名'
   },
@@ -223,6 +268,37 @@ const chatProviderPresets: Record<
     modelPlaceholder: '填写火山方舟控制台中的推理接入点 ID 或模型名'
   }
 }
+
+const sourceLabelMap = {
+  USER: '我的个人配置',
+  GLOBAL: '管理员共享配置',
+  LEGACY: '旧运行时配置',
+  ENV: '环境变量默认配置'
+}
+
+const sourceLabel = computed(() => sourceLabelMap[configSource.value] || '环境变量默认配置')
+
+const scopeDescription = computed(() => {
+  if (saveScope.value === 'GLOBAL') {
+    return '你正在维护管理员共享配置。普通用户没有个人配置时，会自动使用这组配置。'
+  }
+  if (personalConfigured.value) {
+    return '你当前有个人配置，AI 调用会优先使用这组个人配置。'
+  }
+  return '你还没有个人配置，AI 调用会自动回退到管理员共享配置或环境变量。'
+})
+
+const apiKeyPlaceholder = computed(() =>
+  saveScope.value === 'GLOBAL'
+    ? '留空表示沿用当前共享 Key'
+    : '留空表示沿用当前账号已保存 Key；没有个人 Key 时请删除个人配置以使用共享配置'
+)
+
+const embeddingApiKeyPlaceholder = computed(() =>
+  saveScope.value === 'GLOBAL'
+    ? '留空表示沿用当前共享 Embedding Key；未填时复用聊天 Key'
+    : '留空表示沿用当前账号已保存 Embedding Key；未填时复用个人聊天 Key'
+)
 
 const activeChatPreset = computed(
   () => chatProviderPresets[form.chatProviderType] || chatProviderPresets.OPENAI_COMPATIBLE
@@ -252,33 +328,42 @@ const applyChatPreset = () => {
   form.chatPath = preset.chatPath
   form.defaultModel = preset.defaultModel
   if (form.chatProviderType === 'DOUBAO_ARK') {
-    ElMessage.info('豆包 Ark 的模型名通常需要填写你在火山方舟控制台创建的推理接入点 ID。')
+    ElMessage.info('豆包 Ark 的模型名通常需要填写火山方舟控制台创建的推理接入点 ID。')
   }
+}
+
+const applyLoadedConfig = (data: AiConfigResponse) => {
+  form.enabled = Boolean(data.enabled)
+  form.mockMode = Boolean(data.mockMode)
+  form.chatProviderType = data.chatProviderType || 'OPENAI_COMPATIBLE'
+  form.baseUrl = data.baseUrl || ''
+  form.chatPath = data.chatPath || ''
+  form.defaultModel = data.defaultModel || ''
+  form.apiKey = ''
+  form.embeddingProviderType = data.embeddingProviderType || 'OPENAI_COMPATIBLE'
+  form.embeddingBaseUrl = data.embeddingBaseUrl || ''
+  form.embeddingPath = data.embeddingPath || ''
+  form.defaultEmbeddingModel = data.defaultEmbeddingModel || ''
+  form.embeddingApiKey = ''
+  configInfo.value = {
+    apiKeyConfigured: Boolean(data.apiKeyConfigured),
+    apiKeyPreview: data.apiKeyPreview || '',
+    embeddingApiKeyConfigured: Boolean(data.embeddingApiKeyConfigured),
+    embeddingApiKeyPreview: data.embeddingApiKeyPreview || ''
+  }
+  canManageGlobal.value = Boolean(data.canManageGlobal)
+  personalConfigured.value = Boolean(data.personalConfigured)
+  globalConfigured.value = Boolean(data.globalConfigured)
+  configSource.value = data.configSource || 'ENV'
 }
 
 const loadConfig = async () => {
   loading.value = true
   try {
-    const res = await getAiConfigApi()
-    const data = res.data.data
-    form.enabled = data.enabled
-    form.mockMode = data.mockMode
-    form.chatProviderType = data.chatProviderType || 'OPENAI_COMPATIBLE'
-    form.baseUrl = data.baseUrl || ''
-    form.chatPath = data.chatPath || ''
-    form.defaultModel = data.defaultModel || ''
-    form.apiKey = ''
-    form.embeddingProviderType = data.embeddingProviderType || 'OPENAI_COMPATIBLE'
-    form.embeddingBaseUrl = data.embeddingBaseUrl || ''
-    form.embeddingPath = data.embeddingPath || ''
-    form.defaultEmbeddingModel = data.defaultEmbeddingModel || ''
-    form.embeddingApiKey = ''
-    configInfo.value = {
-      apiKeyConfigured: data.apiKeyConfigured,
-      apiKeyPreview: data.apiKeyPreview,
-      embeddingApiKeyConfigured: data.embeddingApiKeyConfigured,
-      embeddingApiKeyPreview: data.embeddingApiKeyPreview
-    }
+    const res = saveScope.value === 'GLOBAL' && canManageGlobal.value
+      ? await getGlobalAiConfigApi()
+      : await getAiConfigApi()
+    applyLoadedConfig(res.data.data)
   } catch (error: any) {
     ElMessage.error(error.message || '加载 AI 配置失败')
   } finally {
@@ -286,35 +371,55 @@ const loadConfig = async () => {
   }
 }
 
+const buildPayload = () => ({
+  enabled: form.enabled,
+  mockMode: form.mockMode,
+  chatProviderType: form.chatProviderType,
+  baseUrl: form.baseUrl.trim(),
+  chatPath: form.chatPath.trim(),
+  defaultModel: form.defaultModel.trim(),
+  apiKey: form.apiKey.trim() || undefined,
+  embeddingProviderType: form.embeddingProviderType,
+  embeddingBaseUrl: form.embeddingBaseUrl.trim(),
+  embeddingPath: form.embeddingPath.trim(),
+  defaultEmbeddingModel: form.defaultEmbeddingModel.trim(),
+  embeddingApiKey: form.embeddingApiKey.trim() || undefined
+})
+
 const saveConfig = async () => {
   saving.value = true
   try {
-    const res = await updateAiConfigApi({
-      enabled: form.enabled,
-      mockMode: form.mockMode,
-      chatProviderType: form.chatProviderType,
-      baseUrl: form.baseUrl.trim(),
-      chatPath: form.chatPath.trim(),
-      defaultModel: form.defaultModel.trim(),
-      apiKey: form.apiKey.trim() || undefined,
-      embeddingProviderType: form.embeddingProviderType,
-      embeddingBaseUrl: form.embeddingBaseUrl.trim(),
-      embeddingPath: form.embeddingPath.trim(),
-      defaultEmbeddingModel: form.defaultEmbeddingModel.trim(),
-      embeddingApiKey: form.embeddingApiKey.trim() || undefined
-    })
-    const data = res.data.data
-    configInfo.value = {
-      apiKeyConfigured: data.apiKeyConfigured,
-      apiKeyPreview: data.apiKeyPreview,
-      embeddingApiKeyConfigured: data.embeddingApiKeyConfigured,
-      embeddingApiKeyPreview: data.embeddingApiKeyPreview
-    }
-    form.apiKey = ''
-    form.embeddingApiKey = ''
-    ElMessage.success('AI 配置保存成功')
+    const payload = buildPayload()
+    const res = saveScope.value === 'GLOBAL'
+      ? await updateGlobalAiConfigApi(payload)
+      : await updateAiConfigApi(payload)
+    applyLoadedConfig(res.data.data)
+    ElMessage.success(`${saveScope.value === 'GLOBAL' ? '共享' : '个人'} AI 配置保存成功`)
   } catch (error: any) {
     ElMessage.error(error.message || '保存 AI 配置失败')
+  } finally {
+    saving.value = false
+  }
+}
+
+const clearPersonalConfig = async () => {
+  try {
+    await ElMessageBox.confirm('删除个人配置后，将自动使用管理员共享配置。确定删除吗？', '删除个人配置', {
+      type: 'warning',
+      confirmButtonText: '删除',
+      cancelButtonText: '取消'
+    })
+  } catch {
+    return
+  }
+
+  saving.value = true
+  try {
+    const res = await clearAiConfigApi()
+    applyLoadedConfig(res.data.data)
+    ElMessage.success('个人 AI 配置已删除')
+  } catch (error: any) {
+    ElMessage.error(error.message || '删除个人配置失败')
   } finally {
     saving.value = false
   }
@@ -324,6 +429,22 @@ loadConfig()
 </script>
 
 <style scoped>
+.toolbar--config {
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 0;
+}
+
+.scope-alert {
+  margin-bottom: 16px;
+}
+
+.scope-alert :deep(.el-alert__title) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .provider-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -331,9 +452,28 @@ loadConfig()
   width: 100%;
 }
 
+.key-status {
+  margin-top: 8px;
+}
+
 @media (max-width: 720px) {
+  .toolbar--config,
   .provider-row {
     grid-template-columns: 1fr;
+  }
+
+  .toolbar--config > * {
+    width: 100%;
+  }
+
+  .toolbar--config :deep(.el-radio-group) {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+  }
+
+  .toolbar--config :deep(.el-radio-button__inner) {
+    width: 100%;
   }
 }
 </style>

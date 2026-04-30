@@ -24,6 +24,26 @@ public class AiConfigVO {
     private Boolean mockMode;
 
     /**
+     * Effective source: USER / GLOBAL / LEGACY / ENV.
+     */
+    private String configSource;
+
+    /**
+     * Whether the current user can manage shared AI config.
+     */
+    private Boolean canManageGlobal;
+
+    /**
+     * Whether the current user has saved personal AI config.
+     */
+    private Boolean personalConfigured;
+
+    /**
+     * Whether administrator shared AI config exists.
+     */
+    private Boolean globalConfigured;
+
+    /**
      * 聊天模型服务提供方。
      */
     private String chatProviderType;

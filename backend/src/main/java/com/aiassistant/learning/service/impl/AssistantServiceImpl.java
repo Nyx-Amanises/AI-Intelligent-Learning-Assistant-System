@@ -1,6 +1,7 @@
 package com.aiassistant.learning.service.impl;
 
 import com.aiassistant.learning.common.exception.BusinessException;
+import com.aiassistant.learning.context.UserContext;
 import com.aiassistant.learning.dto.assistant.AssistantMessageSendRequest;
 import com.aiassistant.learning.dto.assistant.AssistantSessionCreateRequest;
 import com.aiassistant.learning.entity.AssistantMessage;
@@ -313,6 +314,7 @@ public class AssistantServiceImpl implements AssistantService {
             AssistantMessageSendRequest request,
             AssistantAgentOrchestrator.AssistantPreparedResult preparedResult
     ) {
+        UserContext.setCurrentUserId(userId);
         try {
             sendStreamEvent(emitter, buildSessionEventPayload(session, userMessage));
             sendStreamEvent(emitter, buildTraceEventPayload(preparedResult));
@@ -358,6 +360,8 @@ public class AssistantServiceImpl implements AssistantService {
                     preparedResult,
                     resolveStreamErrorMessage(exception)
             );
+        } finally {
+            UserContext.clear();
         }
     }
 

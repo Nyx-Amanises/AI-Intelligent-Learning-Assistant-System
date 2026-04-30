@@ -2,130 +2,257 @@ package com.aiassistant.learning.service.impl;
 
 import com.aiassistant.learning.common.exception.BusinessException;
 import com.aiassistant.learning.config.AiProperties;
+import com.aiassistant.learning.context.UserContext;
 import com.aiassistant.learning.dto.ai.AiConfigUpdateRequest;
+import com.aiassistant.learning.entity.AiConfig;
+import com.aiassistant.learning.entity.SysUser;
+import com.aiassistant.learning.mapper.AiConfigMapper;
+import com.aiassistant.learning.mapper.SysUserMapper;
 import com.aiassistant.learning.service.AiConfigService;
 import com.aiassistant.learning.vo.ai.AiConfigVO;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 /**
- * AI 配置服务实现类。
- *
- * <p>这个类的核心思路是：优先读取运行时 JSON 配置，如果某个字段没有配置，
- * 再回退到 application.yml 中的默认配置。</p>
+ * Resolves AI config with this priority:
+ * personal user config -> administrator shared config -> legacy JSON file -> env/application config.
  */
 @Service
 public class AiConfigServiceImpl implements AiConfigService {
 
-    /** OpenAI 兼容接口，很多国产或本地模型也会提供这种协议。 */
+    private static final String SCOPE_GLOBAL = "GLOBAL";
+    private static final String SCOPE_USER = "USER";
+    private static final long GLOBAL_USER_ID = 0L;
+    private static final String ROLE_ADMIN = "ADMIN";
+    private static final String ADMIN_USERNAME = "admin";
+
     private static final String CHAT_PROVIDER_OPENAI_COMPATIBLE = "OPENAI_COMPATIBLE";
-    /** DeepSeek 官方接口。 */
     private static final String CHAT_PROVIDER_DEEPSEEK = "DEEPSEEK";
-    /** 火山引擎豆包 Ark 接口。 */
     private static final String CHAT_PROVIDER_DOUBAO_ARK = "DOUBAO_ARK";
+    private static final String EMBEDDING_PROVIDER_OPENAI_COMPATIBLE = "OPENAI_COMPATIBLE";
 
-    /** yml 中注入的默认 AI 配置。 */
     private final AiProperties aiProperties;
-    /** 读写 runtime/ai-config.json 时使用的 JSON 工具。 */
     private final ObjectMapper objectMapper;
+    private final AiConfigMapper aiConfigMapper;
+    private final SysUserMapper sysUserMapper;
 
-    public AiConfigServiceImpl(AiProperties aiProperties, ObjectMapper objectMapper) {
+    public AiConfigServiceImpl(
+            AiProperties aiProperties,
+            ObjectMapper objectMapper,
+            AiConfigMapper aiConfigMapper,
+            SysUserMapper sysUserMapper
+    ) {
         this.aiProperties = aiProperties;
         this.objectMapper = objectMapper;
+        this.aiConfigMapper = aiConfigMapper;
+        this.sysUserMapper = sysUserMapper;
     }
 
-    /**
-     * 查询配置时返回的是“合并后”的结果，而不是只返回配置文件里的原始值。
-     */
     @Override
-    public AiConfigVO getConfig() {
-        PersistedAiConfig persistedConfig = loadPersistedConfig();
-        ResolvedAiConfig resolvedConfig = mergeConfig(persistedConfig);
-        return buildConfigVO(resolvedConfig);
+    public AiConfigVO getConfig(Long userId) {
+        requireUser(userId);
+        return buildConfigVO(userId, resolveEffectiveConfig(userId));
     }
 
-    /**
-     * 更新配置时，前端没有传的字段会沿用当前运行时配置。
-     */
     @Override
-    public AiConfigVO updateConfig(AiConfigUpdateRequest request) {
-        PersistedAiConfig persistedConfig = loadPersistedConfig();
-        ResolvedAiConfig currentConfig = mergeConfig(persistedConfig);
-
-        PersistedAiConfig targetConfig = new PersistedAiConfig();
-        targetConfig.setEnabled(request.getEnabled() == null ? currentConfig.enabled() : request.getEnabled());
-        targetConfig.setMockMode(request.getMockMode() == null ? currentConfig.mockMode() : request.getMockMode());
-        targetConfig.setChatProviderType(hasText(request.getChatProviderType())
-                ? request.getChatProviderType().trim().toUpperCase()
-                : currentConfig.chatProviderType());
-        targetConfig.setBaseUrl(hasText(request.getBaseUrl()) ? request.getBaseUrl().trim() : currentConfig.baseUrl());
-        targetConfig.setChatPath(hasText(request.getChatPath()) ? request.getChatPath().trim() : currentConfig.chatPath());
-        targetConfig.setEmbeddingProviderType(hasText(request.getEmbeddingProviderType())
-                ? request.getEmbeddingProviderType().trim()
-                : currentConfig.embeddingProviderType());
-        targetConfig.setEmbeddingBaseUrl(hasText(request.getEmbeddingBaseUrl())
-                ? request.getEmbeddingBaseUrl().trim()
-                : currentConfig.embeddingBaseUrl());
-        targetConfig.setEmbeddingPath(hasText(request.getEmbeddingPath())
-                ? request.getEmbeddingPath().trim()
-                : currentConfig.embeddingPath());
-        targetConfig.setDefaultModel(hasText(request.getDefaultModel()) ? request.getDefaultModel().trim() : currentConfig.defaultModel());
-        targetConfig.setDefaultEmbeddingModel(hasText(request.getDefaultEmbeddingModel())
-                ? request.getDefaultEmbeddingModel().trim()
-                : currentConfig.defaultEmbeddingModel());
-        targetConfig.setApiKey(hasText(request.getApiKey()) ? request.getApiKey().trim() : currentConfig.apiKey());
-        targetConfig.setEmbeddingApiKey(hasText(request.getEmbeddingApiKey())
-                ? request.getEmbeddingApiKey().trim()
-                : currentConfig.embeddingApiKey());
-
-        validateConfig(targetConfig);
-        savePersistedConfig(targetConfig);
-
-        return buildConfigVO(mergeConfig(targetConfig));
+    @Transactional(rollbackFor = Exception.class)
+    public AiConfigVO updateConfig(Long userId, AiConfigUpdateRequest request) {
+        requireUser(userId);
+        AiConfig existing = findConfig(SCOPE_USER, userId);
+        ConfigDraft sharedFallback = resolveSharedConfig().config;
+        ConfigDraft target = buildTargetConfig(
+                request,
+                existing == null ? null : fromEntity(existing),
+                sharedFallback,
+                false
+        );
+        validateConfig(target);
+        upsertConfig(existing, SCOPE_USER, userId, target);
+        return getConfig(userId);
     }
 
-    /**
-     * 业务代码调用大模型前会通过这里拿到最终配置。
-     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public AiConfigVO clearUserConfig(Long userId) {
+        requireUser(userId);
+        aiConfigMapper.delete(new LambdaQueryWrapper<AiConfig>()
+                .eq(AiConfig::getScope, SCOPE_USER)
+                .eq(AiConfig::getUserId, userId));
+        return getConfig(userId);
+    }
+
+    @Override
+    public AiConfigVO getGlobalConfig(Long userId) {
+        requireAdmin(userId);
+        return buildConfigVO(userId, resolveSharedConfig());
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public AiConfigVO updateGlobalConfig(Long userId, AiConfigUpdateRequest request) {
+        requireAdmin(userId);
+        AiConfig existing = findConfig(SCOPE_GLOBAL, GLOBAL_USER_ID);
+        ConfigDraft legacyFallback = resolveLegacyFallback();
+        ConfigDraft target = buildTargetConfig(
+                request,
+                existing == null ? null : fromEntity(existing),
+                legacyFallback,
+                true
+        );
+        validateConfig(target);
+        upsertConfig(existing, SCOPE_GLOBAL, GLOBAL_USER_ID, target);
+        return getGlobalConfig(userId);
+    }
+
     @Override
     public ResolvedAiConfig getResolvedConfig() {
-        return mergeConfig(loadPersistedConfig());
+        return getResolvedConfig(UserContext.getCurrentUserId());
     }
 
-    /**
-     * 合并运行时配置和默认配置。
-     */
-    private ResolvedAiConfig mergeConfig(PersistedAiConfig persistedConfig) {
-        return new ResolvedAiConfig(
-                persistedConfig.getEnabled() == null ? aiProperties.getEnabled() : persistedConfig.getEnabled(),
-                persistedConfig.getMockMode() == null ? aiProperties.getMockMode() : persistedConfig.getMockMode(),
-                resolveChatProviderType(persistedConfig),
-                resolveChatBaseUrl(persistedConfig),
-                resolveChatPath(persistedConfig),
-                resolveEmbeddingProviderType(persistedConfig),
-                resolveEmbeddingBaseUrl(persistedConfig),
-                resolveEmbeddingPath(persistedConfig),
-                hasText(persistedConfig.getApiKey()) ? persistedConfig.getApiKey().trim() : aiProperties.getApiKey(),
-                resolveEmbeddingApiKey(persistedConfig),
-                resolveDefaultChatModel(persistedConfig),
-                hasText(persistedConfig.getDefaultEmbeddingModel())
-                        ? persistedConfig.getDefaultEmbeddingModel().trim()
-                        : resolveDefaultEmbeddingModel()
+    @Override
+    public ResolvedAiConfig getResolvedConfig(Long userId) {
+        return toResolvedConfig(resolveEffectiveConfig(userId).config);
+    }
+
+    private EffectiveConfig resolveEffectiveConfig(Long userId) {
+        EffectiveConfig sharedConfig = resolveSharedConfig();
+        if (userId == null) {
+            return sharedConfig;
+        }
+
+        AiConfig personalConfig = findConfig(SCOPE_USER, userId);
+        if (personalConfig == null) {
+            return sharedConfig;
+        }
+
+        ConfigDraft personalDraft = mergeDraft(fromEntity(personalConfig), sharedConfig.config, false);
+        if (!isUsableConfig(personalDraft)) {
+            return sharedConfig;
+        }
+        return new EffectiveConfig(personalDraft, SCOPE_USER);
+    }
+
+    private EffectiveConfig resolveSharedConfig() {
+        ConfigDraft fallback = resolveLegacyFallback();
+        String source = hasAnyValue(loadLegacyConfig()) ? "LEGACY" : "ENV";
+
+        AiConfig globalConfig = findConfig(SCOPE_GLOBAL, GLOBAL_USER_ID);
+        if (globalConfig != null) {
+            ConfigDraft globalDraft = mergeDraft(fromEntity(globalConfig), fallback, true);
+            if (isUsableConfig(globalDraft)) {
+                return new EffectiveConfig(globalDraft, SCOPE_GLOBAL);
+            }
+        }
+        return new EffectiveConfig(fallback, source);
+    }
+
+    private ConfigDraft resolveLegacyFallback() {
+        return mergeDraft(loadLegacyConfig(), fromProperties(), true);
+    }
+
+    private ConfigDraft buildTargetConfig(
+            AiConfigUpdateRequest request,
+            ConfigDraft existing,
+            ConfigDraft fallback,
+            boolean allowFallbackSecrets
+    ) {
+        ConfigDraft target = new ConfigDraft();
+        target.enabled = request.getEnabled() == null ? firstNonNull(bool(existing, "enabled"), fallback.enabled) : request.getEnabled();
+        target.mockMode = request.getMockMode() == null ? firstNonNull(bool(existing, "mockMode"), fallback.mockMode) : request.getMockMode();
+        target.chatProviderType = pickText(request.getChatProviderType(), text(existing, "chatProviderType"), fallback.chatProviderType);
+        target.baseUrl = pickText(request.getBaseUrl(), text(existing, "baseUrl"), fallback.baseUrl);
+        target.chatPath = pickText(request.getChatPath(), text(existing, "chatPath"), fallback.chatPath);
+        target.defaultModel = pickText(request.getDefaultModel(), text(existing, "defaultModel"), fallback.defaultModel);
+        target.embeddingProviderType = pickText(
+                request.getEmbeddingProviderType(),
+                text(existing, "embeddingProviderType"),
+                fallback.embeddingProviderType
         );
+        target.embeddingBaseUrl = pickText(request.getEmbeddingBaseUrl(), text(existing, "embeddingBaseUrl"), fallback.embeddingBaseUrl);
+        target.embeddingPath = pickText(request.getEmbeddingPath(), text(existing, "embeddingPath"), fallback.embeddingPath);
+        target.defaultEmbeddingModel = pickText(
+                request.getDefaultEmbeddingModel(),
+                text(existing, "defaultEmbeddingModel"),
+                fallback.defaultEmbeddingModel
+        );
+        target.apiKey = pickSecret(
+                request.getApiKey(),
+                text(existing, "apiKey"),
+                allowFallbackSecrets ? fallback.apiKey : null
+        );
+        target.embeddingApiKey = pickSecret(
+                request.getEmbeddingApiKey(),
+                text(existing, "embeddingApiKey"),
+                allowFallbackSecrets ? fallback.embeddingApiKey : null
+        );
+        return target;
     }
 
-    /**
-     * 把内部配置对象转换成前端展示对象，同时对 API Key 做脱敏。
-     */
-    private AiConfigVO buildConfigVO(ResolvedAiConfig resolvedConfig) {
+    private void validateConfig(ConfigDraft draft) {
+        ResolvedAiConfig config = toResolvedConfig(draft);
+        if (!Boolean.TRUE.equals(config.enabled())) {
+            return;
+        }
+        if (Boolean.TRUE.equals(config.mockMode())) {
+            return;
+        }
+        if (!isSupportedChatProvider(config.chatProviderType())) {
+            throw new BusinessException("不支持的聊天模型 Provider: " + config.chatProviderType());
+        }
+        if (!hasText(config.baseUrl())) {
+            throw new BusinessException("请填写 AI Base URL");
+        }
+        if (!hasText(config.chatPath())) {
+            throw new BusinessException("请填写 AI Chat Path");
+        }
+        if (!hasText(config.defaultModel())) {
+            throw new BusinessException("请填写默认模型");
+        }
+        if (!hasText(config.apiKey())) {
+            throw new BusinessException("请填写当前配置作用域自己的 AI API Key。普通用户不填写个人 Key 时请删除个人配置，以使用管理员共享配置。");
+        }
+    }
+
+    private void upsertConfig(AiConfig existing, String scope, Long userId, ConfigDraft draft) {
+        AiConfig entity = existing == null ? new AiConfig() : existing;
+        entity.setScope(scope);
+        entity.setUserId(userId);
+        entity.setEnabled(draft.enabled);
+        entity.setMockMode(draft.mockMode);
+        entity.setChatProviderType(normalizeText(draft.chatProviderType, true));
+        entity.setBaseUrl(normalizeText(draft.baseUrl, false));
+        entity.setChatPath(normalizeText(draft.chatPath, false));
+        entity.setApiKey(normalizeText(draft.apiKey, false));
+        entity.setDefaultModel(normalizeText(draft.defaultModel, false));
+        entity.setEmbeddingProviderType(normalizeText(draft.embeddingProviderType, true));
+        entity.setEmbeddingBaseUrl(normalizeText(draft.embeddingBaseUrl, false));
+        entity.setEmbeddingPath(normalizeText(draft.embeddingPath, false));
+        entity.setEmbeddingApiKey(normalizeText(draft.embeddingApiKey, false));
+        entity.setDefaultEmbeddingModel(normalizeText(draft.defaultEmbeddingModel, false));
+
+        if (existing == null) {
+            aiConfigMapper.insert(entity);
+            return;
+        }
+        aiConfigMapper.updateById(entity);
+    }
+
+    private AiConfigVO buildConfigVO(Long userId, EffectiveConfig effectiveConfig) {
+        ResolvedAiConfig resolvedConfig = toResolvedConfig(effectiveConfig.config);
         return AiConfigVO.builder()
                 .enabled(Boolean.TRUE.equals(resolvedConfig.enabled()))
                 .mockMode(Boolean.TRUE.equals(resolvedConfig.mockMode()))
+                .configSource(effectiveConfig.source)
+                .canManageGlobal(isAdmin(userId))
+                .personalConfigured(userId != null && findConfig(SCOPE_USER, userId) != null)
+                .globalConfigured(findConfig(SCOPE_GLOBAL, GLOBAL_USER_ID) != null)
                 .chatProviderType(resolvedConfig.chatProviderType())
                 .baseUrl(resolvedConfig.baseUrl())
                 .chatPath(resolvedConfig.chatPath())
@@ -141,64 +268,155 @@ public class AiConfigServiceImpl implements AiConfigService {
                 .build();
     }
 
-    /**
-     * 从磁盘读取运行时配置；文件不存在时返回空配置。
-     */
-    private PersistedAiConfig loadPersistedConfig() {
+    private ResolvedAiConfig toResolvedConfig(ConfigDraft draft) {
+        String chatProviderType = normalizeText(draft.chatProviderType, true);
+        if (!hasText(chatProviderType)) {
+            chatProviderType = CHAT_PROVIDER_OPENAI_COMPATIBLE;
+        }
+
+        String baseUrl = normalizeText(draft.baseUrl, false);
+        if (!hasText(baseUrl)) {
+            baseUrl = switch (chatProviderType) {
+                case CHAT_PROVIDER_DEEPSEEK -> "https://api.deepseek.com";
+                case CHAT_PROVIDER_DOUBAO_ARK -> "https://ark.cn-beijing.volces.com";
+                default -> "https://api.openai.com";
+            };
+        }
+
+        String chatPath = normalizeText(draft.chatPath, false);
+        if (!hasText(chatPath)) {
+            chatPath = switch (chatProviderType) {
+                case CHAT_PROVIDER_DEEPSEEK -> "/chat/completions";
+                case CHAT_PROVIDER_DOUBAO_ARK -> "/api/v3/responses";
+                default -> "/v1/chat/completions";
+            };
+        }
+
+        String defaultModel = normalizeText(draft.defaultModel, false);
+        if (!hasText(defaultModel) && CHAT_PROVIDER_DEEPSEEK.equals(chatProviderType)) {
+            defaultModel = "deepseek-chat";
+        }
+
+        String embeddingProviderType = normalizeText(draft.embeddingProviderType, true);
+        if (!hasText(embeddingProviderType)) {
+            embeddingProviderType = EMBEDDING_PROVIDER_OPENAI_COMPATIBLE;
+        }
+
+        String embeddingBaseUrl = normalizeText(draft.embeddingBaseUrl, false);
+        if (!hasText(embeddingBaseUrl)) {
+            embeddingBaseUrl = baseUrl;
+        }
+
+        String embeddingPath = normalizeText(draft.embeddingPath, false);
+        if (!hasText(embeddingPath)) {
+            embeddingPath = hasText(chatPath) && chatPath.contains("/chat/completions")
+                    ? chatPath.replace("/chat/completions", "/embeddings")
+                    : "/v1/embeddings";
+        }
+
+        String apiKey = normalizeText(draft.apiKey, false);
+        String embeddingApiKey = normalizeText(draft.embeddingApiKey, false);
+        if (!hasText(embeddingApiKey)) {
+            embeddingApiKey = apiKey;
+        }
+
+        String defaultEmbeddingModel = normalizeText(draft.defaultEmbeddingModel, false);
+        if (!hasText(defaultEmbeddingModel)) {
+            defaultEmbeddingModel = defaultModel;
+        }
+
+        return new ResolvedAiConfig(
+                draft.enabled,
+                draft.mockMode,
+                chatProviderType,
+                baseUrl,
+                chatPath,
+                embeddingProviderType,
+                embeddingBaseUrl,
+                embeddingPath,
+                apiKey,
+                embeddingApiKey,
+                defaultModel,
+                defaultEmbeddingModel
+        );
+    }
+
+    private ConfigDraft mergeDraft(ConfigDraft override, ConfigDraft fallback, boolean allowFallbackSecrets) {
+        ConfigDraft result = new ConfigDraft();
+        ConfigDraft safeOverride = override == null ? new ConfigDraft() : override;
+        ConfigDraft safeFallback = fallback == null ? new ConfigDraft() : fallback;
+        result.enabled = firstNonNull(safeOverride.enabled, safeFallback.enabled);
+        result.mockMode = firstNonNull(safeOverride.mockMode, safeFallback.mockMode);
+        result.chatProviderType = pickText(safeOverride.chatProviderType, safeFallback.chatProviderType);
+        result.baseUrl = pickText(safeOverride.baseUrl, safeFallback.baseUrl);
+        result.chatPath = pickText(safeOverride.chatPath, safeFallback.chatPath);
+        result.defaultModel = pickText(safeOverride.defaultModel, safeFallback.defaultModel);
+        result.embeddingProviderType = pickText(safeOverride.embeddingProviderType, safeFallback.embeddingProviderType);
+        result.embeddingBaseUrl = pickText(safeOverride.embeddingBaseUrl, safeFallback.embeddingBaseUrl);
+        result.embeddingPath = pickText(safeOverride.embeddingPath, safeFallback.embeddingPath);
+        result.defaultEmbeddingModel = pickText(safeOverride.defaultEmbeddingModel, safeFallback.defaultEmbeddingModel);
+        result.apiKey = pickSecret(safeOverride.apiKey, allowFallbackSecrets ? safeFallback.apiKey : null);
+        result.embeddingApiKey = pickSecret(safeOverride.embeddingApiKey, allowFallbackSecrets ? safeFallback.embeddingApiKey : null);
+        return result;
+    }
+
+    private boolean isUsableConfig(ConfigDraft draft) {
+        ResolvedAiConfig config = toResolvedConfig(draft);
+        if (!Boolean.TRUE.equals(config.enabled())) {
+            return true;
+        }
+        if (Boolean.TRUE.equals(config.mockMode())) {
+            return true;
+        }
+        return hasText(config.apiKey());
+    }
+
+    private ConfigDraft fromEntity(AiConfig entity) {
+        ConfigDraft draft = new ConfigDraft();
+        draft.enabled = entity.getEnabled();
+        draft.mockMode = entity.getMockMode();
+        draft.chatProviderType = entity.getChatProviderType();
+        draft.baseUrl = entity.getBaseUrl();
+        draft.chatPath = entity.getChatPath();
+        draft.apiKey = entity.getApiKey();
+        draft.defaultModel = entity.getDefaultModel();
+        draft.embeddingProviderType = entity.getEmbeddingProviderType();
+        draft.embeddingBaseUrl = entity.getEmbeddingBaseUrl();
+        draft.embeddingPath = entity.getEmbeddingPath();
+        draft.embeddingApiKey = entity.getEmbeddingApiKey();
+        draft.defaultEmbeddingModel = entity.getDefaultEmbeddingModel();
+        return draft;
+    }
+
+    private ConfigDraft fromProperties() {
+        ConfigDraft draft = new ConfigDraft();
+        draft.enabled = aiProperties.getEnabled();
+        draft.mockMode = aiProperties.getMockMode();
+        draft.chatProviderType = aiProperties.getChatProviderType();
+        draft.baseUrl = aiProperties.getBaseUrl();
+        draft.chatPath = aiProperties.getChatPath();
+        draft.apiKey = aiProperties.getApiKey();
+        draft.defaultModel = aiProperties.getDefaultModel();
+        draft.embeddingProviderType = aiProperties.getEmbeddingProviderType();
+        draft.embeddingBaseUrl = aiProperties.getEmbeddingBaseUrl();
+        draft.embeddingPath = aiProperties.getEmbeddingPath();
+        draft.embeddingApiKey = aiProperties.getEmbeddingApiKey();
+        draft.defaultEmbeddingModel = aiProperties.getDefaultEmbeddingModel();
+        return draft;
+    }
+
+    private ConfigDraft loadLegacyConfig() {
         Path configPath = resolveConfigPath();
         if (!Files.exists(configPath)) {
-            return new PersistedAiConfig();
+            return new ConfigDraft();
         }
         try {
-            return objectMapper.readValue(configPath.toFile(), PersistedAiConfig.class);
+            return objectMapper.readValue(configPath.toFile(), ConfigDraft.class);
         } catch (IOException exception) {
             throw new BusinessException(500, "读取 AI 配置失败: " + exception.getMessage());
         }
     }
 
-    /**
-     * 将配置保存到 runtime/ai-config.json 或自定义路径。
-     */
-    private void savePersistedConfig(PersistedAiConfig config) {
-        Path configPath = resolveConfigPath();
-        try {
-            Files.createDirectories(configPath.getParent());
-            objectMapper.writerWithDefaultPrettyPrinter().writeValue(configPath.toFile(), config);
-        } catch (IOException exception) {
-            throw new BusinessException(500, "保存 AI 配置失败: " + exception.getMessage());
-        }
-    }
-
-    /**
-     * 校验启用真实 AI 调用时必须填写的关键配置。
-     */
-    private void validateConfig(PersistedAiConfig config) {
-        if (!Boolean.TRUE.equals(config.getEnabled())) {
-            return;
-        }
-        if (Boolean.TRUE.equals(config.getMockMode())) {
-            return;
-        }
-        if (!isSupportedChatProvider(config.getChatProviderType())) {
-            throw new BusinessException("不支持的聊天模型 Provider: " + config.getChatProviderType());
-        }
-        if (!hasText(config.getBaseUrl())) {
-            throw new BusinessException("请填写 AI Base URL");
-        }
-        if (!hasText(config.getChatPath())) {
-            throw new BusinessException("请填写 AI Chat Path");
-        }
-        if (!hasText(config.getDefaultModel())) {
-            throw new BusinessException("请填写默认模型");
-        }
-        if (!hasText(config.getApiKey())) {
-            throw new BusinessException("请填写 AI API Key");
-        }
-    }
-
-    /**
-     * 获取配置文件路径。
-     */
     private Path resolveConfigPath() {
         if (hasText(aiProperties.getConfigFile())) {
             return Paths.get(aiProperties.getConfigFile()).toAbsolutePath();
@@ -206,88 +424,38 @@ public class AiConfigServiceImpl implements AiConfigService {
         return Paths.get(System.getProperty("user.dir"), "runtime", "ai-config.json").toAbsolutePath();
     }
 
-    /**
-     * StringUtils.hasText 的简单包装，让下面代码读起来更短。
-     */
-    private boolean hasText(String value) {
-        return StringUtils.hasText(value);
+    private AiConfig findConfig(String scope, Long userId) {
+        return aiConfigMapper.selectOne(new LambdaQueryWrapper<AiConfig>()
+                .eq(AiConfig::getScope, scope)
+                .eq(AiConfig::getUserId, userId)
+                .last("limit 1"));
     }
 
-    /**
-     * 解析聊天模型提供商类型。
-     */
-    private String resolveChatProviderType(PersistedAiConfig persistedConfig) {
-        if (hasText(persistedConfig.getChatProviderType())) {
-            return persistedConfig.getChatProviderType().trim().toUpperCase();
+    private boolean isAdmin(Long userId) {
+        if (userId == null) {
+            return false;
         }
-        if (hasText(aiProperties.getChatProviderType())) {
-            return aiProperties.getChatProviderType().trim().toUpperCase();
+        SysUser user = sysUserMapper.selectById(userId);
+        if (user == null) {
+            return false;
         }
-        return CHAT_PROVIDER_OPENAI_COMPATIBLE;
+        return ROLE_ADMIN.equalsIgnoreCase(normalizeText(user.getRoleCode(), false))
+                || ADMIN_USERNAME.equalsIgnoreCase(normalizeText(user.getUsername(), false));
     }
 
-    /**
-     * 根据提供商推导默认聊天接口地址。
-     */
-    private String resolveChatBaseUrl(PersistedAiConfig persistedConfig) {
-        if (hasText(persistedConfig.getBaseUrl())) {
-            return persistedConfig.getBaseUrl().trim();
+    private void requireUser(Long userId) {
+        if (userId == null) {
+            throw new BusinessException(401, "请先登录");
         }
-        String providerType = resolveChatProviderType(persistedConfig);
-        if (!CHAT_PROVIDER_OPENAI_COMPATIBLE.equals(providerType)) {
-            return switch (providerType) {
-                case CHAT_PROVIDER_DEEPSEEK -> "https://api.deepseek.com";
-                case CHAT_PROVIDER_DOUBAO_ARK -> "https://ark.cn-beijing.volces.com";
-                default -> null;
-            };
-        }
-        if (hasText(aiProperties.getBaseUrl())) {
-            return aiProperties.getBaseUrl().trim();
-        }
-        return "https://api.openai.com";
     }
 
-    /**
-     * 根据提供商推导默认聊天接口路径。
-     */
-    private String resolveChatPath(PersistedAiConfig persistedConfig) {
-        if (hasText(persistedConfig.getChatPath())) {
-            return persistedConfig.getChatPath().trim();
+    private void requireAdmin(Long userId) {
+        requireUser(userId);
+        if (!isAdmin(userId)) {
+            throw new BusinessException(403, "只有管理员可以维护共享 AI 配置");
         }
-        String providerType = resolveChatProviderType(persistedConfig);
-        if (!CHAT_PROVIDER_OPENAI_COMPATIBLE.equals(providerType)) {
-            return switch (providerType) {
-                case CHAT_PROVIDER_DEEPSEEK -> "/chat/completions";
-                case CHAT_PROVIDER_DOUBAO_ARK -> "/api/v3/responses";
-                default -> null;
-            };
-        }
-        if (hasText(aiProperties.getChatPath())) {
-            return aiProperties.getChatPath().trim();
-        }
-        return "/v1/chat/completions";
     }
 
-    /**
-     * 解析默认聊天模型名。
-     */
-    private String resolveDefaultChatModel(PersistedAiConfig persistedConfig) {
-        if (hasText(persistedConfig.getDefaultModel())) {
-            return persistedConfig.getDefaultModel().trim();
-        }
-        String providerType = resolveChatProviderType(persistedConfig);
-        if (CHAT_PROVIDER_DEEPSEEK.equals(providerType)) {
-            return "deepseek-chat";
-        }
-        if (hasText(aiProperties.getDefaultModel())) {
-            return aiProperties.getDefaultModel().trim();
-        }
-        return null;
-    }
-
-    /**
-     * 判断聊天模型提供商是否在当前系统支持范围内。
-     */
     private boolean isSupportedChatProvider(String providerType) {
         if (!hasText(providerType)) {
             return true;
@@ -298,77 +466,24 @@ public class AiConfigServiceImpl implements AiConfigService {
                 || CHAT_PROVIDER_DOUBAO_ARK.equals(normalized);
     }
 
-    /**
-     * 解析 Embedding 接口路径；OpenAI 兼容接口通常把 chat/completions 替换成 embeddings。
-     */
-    private String resolveEmbeddingPath(PersistedAiConfig persistedConfig) {
-        if (hasText(persistedConfig.getEmbeddingPath())) {
-            return persistedConfig.getEmbeddingPath().trim();
+    private boolean hasAnyValue(ConfigDraft draft) {
+        if (draft == null) {
+            return false;
         }
-        if (hasText(aiProperties.getEmbeddingPath())) {
-            return aiProperties.getEmbeddingPath().trim();
-        }
-        if (hasText(persistedConfig.getChatPath()) && persistedConfig.getChatPath().contains("/chat/completions")) {
-            return persistedConfig.getChatPath().replace("/chat/completions", "/embeddings").trim();
-        }
-        if (hasText(aiProperties.getChatPath()) && aiProperties.getChatPath().contains("/chat/completions")) {
-            return aiProperties.getChatPath().replace("/chat/completions", "/embeddings").trim();
-        }
-        return "/v1/embeddings";
+        return draft.enabled != null
+                || draft.mockMode != null
+                || hasText(draft.chatProviderType)
+                || hasText(draft.baseUrl)
+                || hasText(draft.chatPath)
+                || hasText(draft.apiKey)
+                || hasText(draft.defaultModel)
+                || hasText(draft.embeddingProviderType)
+                || hasText(draft.embeddingBaseUrl)
+                || hasText(draft.embeddingPath)
+                || hasText(draft.embeddingApiKey)
+                || hasText(draft.defaultEmbeddingModel);
     }
 
-    /**
-     * 解析 Embedding 提供商类型。
-     */
-    private String resolveEmbeddingProviderType(PersistedAiConfig persistedConfig) {
-        if (hasText(persistedConfig.getEmbeddingProviderType())) {
-            return persistedConfig.getEmbeddingProviderType().trim().toUpperCase();
-        }
-        if (hasText(aiProperties.getEmbeddingProviderType())) {
-            return aiProperties.getEmbeddingProviderType().trim().toUpperCase();
-        }
-        return "OPENAI_COMPATIBLE";
-    }
-
-    /**
-     * 解析 Embedding 接口基础地址；默认复用聊天接口地址。
-     */
-    private String resolveEmbeddingBaseUrl(PersistedAiConfig persistedConfig) {
-        if (hasText(persistedConfig.getEmbeddingBaseUrl())) {
-            return persistedConfig.getEmbeddingBaseUrl().trim();
-        }
-        if (hasText(aiProperties.getEmbeddingBaseUrl())) {
-            return aiProperties.getEmbeddingBaseUrl().trim();
-        }
-        return hasText(persistedConfig.getBaseUrl()) ? persistedConfig.getBaseUrl().trim() : aiProperties.getBaseUrl();
-    }
-
-    /**
-     * 解析 Embedding API Key；没有单独配置时复用聊天模型 Key。
-     */
-    private String resolveEmbeddingApiKey(PersistedAiConfig persistedConfig) {
-        if (hasText(persistedConfig.getEmbeddingApiKey())) {
-            return persistedConfig.getEmbeddingApiKey().trim();
-        }
-        if (hasText(aiProperties.getEmbeddingApiKey())) {
-            return aiProperties.getEmbeddingApiKey().trim();
-        }
-        return hasText(persistedConfig.getApiKey()) ? persistedConfig.getApiKey().trim() : aiProperties.getApiKey();
-    }
-
-    /**
-     * 解析默认 Embedding 模型。
-     */
-    private String resolveDefaultEmbeddingModel() {
-        if (hasText(aiProperties.getDefaultEmbeddingModel())) {
-            return aiProperties.getDefaultEmbeddingModel().trim();
-        }
-        return aiProperties.getDefaultModel();
-    }
-
-    /**
-     * API Key 脱敏：只保留前后少量字符，避免完整密钥暴露到前端。
-     */
     private String maskApiKey(String apiKey) {
         if (!hasText(apiKey)) {
             return "";
@@ -380,22 +495,83 @@ public class AiConfigServiceImpl implements AiConfigService {
         return trimmed.substring(0, 4) + "****" + trimmed.substring(trimmed.length() - 4);
     }
 
-    /**
-     * 持久化到 JSON 文件中的配置结构。
-     */
-    private static class PersistedAiConfig {
+    private String normalizeText(String value, boolean upperCase) {
+        if (!hasText(value)) {
+            return null;
+        }
+        String normalized = value.trim();
+        return upperCase ? normalized.toUpperCase() : normalized;
+    }
+
+    private String pickText(String... values) {
+        for (String value : values) {
+            if (hasText(value)) {
+                return value.trim();
+            }
+        }
+        return null;
+    }
+
+    private String pickSecret(String... values) {
+        return pickText(values);
+    }
+
+    private boolean hasText(String value) {
+        return StringUtils.hasText(value);
+    }
+
+    @SafeVarargs
+    private final <T> T firstNonNull(T... values) {
+        for (T value : values) {
+            if (value != null) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    private Boolean bool(ConfigDraft draft, String fieldName) {
+        if (draft == null) {
+            return null;
+        }
+        return "enabled".equals(fieldName) ? draft.enabled : draft.mockMode;
+    }
+
+    private String text(ConfigDraft draft, String fieldName) {
+        if (draft == null) {
+            return null;
+        }
+        return switch (fieldName) {
+            case "chatProviderType" -> draft.chatProviderType;
+            case "baseUrl" -> draft.baseUrl;
+            case "chatPath" -> draft.chatPath;
+            case "apiKey" -> draft.apiKey;
+            case "defaultModel" -> draft.defaultModel;
+            case "embeddingProviderType" -> draft.embeddingProviderType;
+            case "embeddingBaseUrl" -> draft.embeddingBaseUrl;
+            case "embeddingPath" -> draft.embeddingPath;
+            case "embeddingApiKey" -> draft.embeddingApiKey;
+            case "defaultEmbeddingModel" -> draft.defaultEmbeddingModel;
+            default -> null;
+        };
+    }
+
+    private record EffectiveConfig(ConfigDraft config, String source) {
+    }
+
+    private static class ConfigDraft {
 
         private Boolean enabled;
         private Boolean mockMode;
         private String chatProviderType;
         private String baseUrl;
         private String chatPath;
+        private String apiKey;
+        private String defaultModel;
         private String embeddingProviderType;
         private String embeddingBaseUrl;
         private String embeddingPath;
-        private String apiKey;
         private String embeddingApiKey;
-        private String defaultModel;
         private String defaultEmbeddingModel;
 
         public Boolean getEnabled() {
@@ -438,6 +614,22 @@ public class AiConfigServiceImpl implements AiConfigService {
             this.chatPath = chatPath;
         }
 
+        public String getApiKey() {
+            return apiKey;
+        }
+
+        public void setApiKey(String apiKey) {
+            this.apiKey = apiKey;
+        }
+
+        public String getDefaultModel() {
+            return defaultModel;
+        }
+
+        public void setDefaultModel(String defaultModel) {
+            this.defaultModel = defaultModel;
+        }
+
         public String getEmbeddingProviderType() {
             return embeddingProviderType;
         }
@@ -462,28 +654,12 @@ public class AiConfigServiceImpl implements AiConfigService {
             this.embeddingPath = embeddingPath;
         }
 
-        public String getApiKey() {
-            return apiKey;
-        }
-
-        public void setApiKey(String apiKey) {
-            this.apiKey = apiKey;
-        }
-
         public String getEmbeddingApiKey() {
             return embeddingApiKey;
         }
 
         public void setEmbeddingApiKey(String embeddingApiKey) {
             this.embeddingApiKey = embeddingApiKey;
-        }
-
-        public String getDefaultModel() {
-            return defaultModel;
-        }
-
-        public void setDefaultModel(String defaultModel) {
-            this.defaultModel = defaultModel;
         }
 
         public String getDefaultEmbeddingModel() {
