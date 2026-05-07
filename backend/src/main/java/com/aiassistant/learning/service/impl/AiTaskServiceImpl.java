@@ -19,6 +19,7 @@ import com.aiassistant.learning.mapper.PracticeSessionMapper;
 import com.aiassistant.learning.mapper.QuestionSetMapper;
 import com.aiassistant.learning.mapper.StudyMaterialMapper;
 import com.aiassistant.learning.service.AiTaskService;
+import com.aiassistant.learning.service.cache.AiTaskRedisCacheService;
 import com.aiassistant.learning.service.task.AiTaskProcessor;
 import com.aiassistant.learning.vo.ai.AiTaskDetailVO;
 import com.aiassistant.learning.vo.ai.AiTaskPageVO;
@@ -66,6 +67,7 @@ public class AiTaskServiceImpl implements AiTaskService {
     private final List<AiTaskProcessor> taskProcessors;
     /** 将任务参数对象转换成 JSON 保存。 */
     private final ObjectMapper objectMapper;
+    private final AiTaskRedisCacheService aiTaskRedisCacheService;
     /** 注入自身代理，确保 @Async 在内部调用时也能生效。 */
     private final AiTaskService selfAiTaskService;
 
@@ -76,6 +78,7 @@ public class AiTaskServiceImpl implements AiTaskService {
             QuestionSetMapper questionSetMapper,
             List<AiTaskProcessor> taskProcessors,
             ObjectMapper objectMapper,
+            AiTaskRedisCacheService aiTaskRedisCacheService,
             @Lazy AiTaskService selfAiTaskService
     ) {
         this.aiTaskMapper = aiTaskMapper;
@@ -84,6 +87,7 @@ public class AiTaskServiceImpl implements AiTaskService {
         this.questionSetMapper = questionSetMapper;
         this.taskProcessors = taskProcessors;
         this.objectMapper = objectMapper;
+        this.aiTaskRedisCacheService = aiTaskRedisCacheService;
         this.selfAiTaskService = selfAiTaskService;
     }
 
@@ -93,7 +97,7 @@ public class AiTaskServiceImpl implements AiTaskService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public AiTaskDetailVO createTask(Long userId, AiTaskCreateRequest request) {
-        return toDetailVO(createTaskRecord(
+        return cacheTaskDetail(createTaskRecord(
                 userId,
                 request.getTaskType(),
                 request.getBizType(),
@@ -127,7 +131,7 @@ public class AiTaskServiceImpl implements AiTaskService {
                 toJson(payload)
         );
         scheduleExecuteAfterCommit(task.getId());
-        return toDetailVO(task);
+        return cacheTaskDetail(task);
     }
 
     /**
@@ -156,7 +160,7 @@ public class AiTaskServiceImpl implements AiTaskService {
                 toJson(payload)
         );
         scheduleExecuteAfterCommit(task.getId());
-        return toDetailVO(task);
+        return cacheTaskDetail(task);
     }
 
     /**
@@ -167,7 +171,7 @@ public class AiTaskServiceImpl implements AiTaskService {
     public AiTaskDetailVO submitPracticeReviewTask(Long userId, Long sessionId) {
         AiTask existingTask = findActiveTask(userId, "PRACTICE_REVIEW", "PRACTICE_SESSION", sessionId);
         if (existingTask != null) {
-            return toDetailVO(existingTask);
+            return cacheTaskDetail(existingTask);
         }
 
         PracticeReviewTaskPayload payload = new PracticeReviewTaskPayload();
@@ -183,7 +187,7 @@ public class AiTaskServiceImpl implements AiTaskService {
                 toJson(payload)
         );
         scheduleExecuteAfterCommit(task.getId());
-        return toDetailVO(task);
+        return cacheTaskDetail(task);
     }
 
     /**
@@ -207,7 +211,7 @@ public class AiTaskServiceImpl implements AiTaskService {
                 toJson(payload)
         );
         scheduleExecuteAfterCommit(task.getId());
-        return toDetailVO(task);
+        return cacheTaskDetail(task);
     }
 
     /**
@@ -242,7 +246,8 @@ public class AiTaskServiceImpl implements AiTaskService {
      */
     @Override
     public AiTaskDetailVO getTaskDetail(Long userId, Long taskId) {
-        return toDetailVO(getOwnedTask(userId, taskId));
+        return aiTaskRedisCacheService.getTaskDetail(userId, taskId)
+                .orElseGet(() -> cacheTaskDetail(getOwnedTask(userId, taskId)));
     }
 
     /**
@@ -250,19 +255,19 @@ public class AiTaskServiceImpl implements AiTaskService {
      */
     @Override
     public AiTaskDetailVO waitForTask(Long userId, Long taskId, Long timeoutMs) {
-        AiTask task = getOwnedTask(userId, taskId);
+        AiTaskDetailVO taskDetail = getTaskDetail(userId, taskId);
         long waitTimeoutMs = Math.max(1000L, Math.min(timeoutMs == null ? 120000L : timeoutMs, 150000L));
         long deadline = System.currentTimeMillis() + waitTimeoutMs;
-        while (!isTerminalStatus(task.getStatus()) && System.currentTimeMillis() < deadline) {
+        while (!isTerminalStatus(taskDetail.getStatus()) && System.currentTimeMillis() < deadline) {
             try {
                 Thread.sleep(1200L);
             } catch (InterruptedException exception) {
                 Thread.currentThread().interrupt();
                 break;
             }
-            task = getOwnedTask(userId, taskId);
+            taskDetail = getTaskDetail(userId, taskId);
         }
-        return toDetailVO(task);
+        return taskDetail;
     }
 
     /**
@@ -276,7 +281,7 @@ public class AiTaskServiceImpl implements AiTaskService {
             throw new BusinessException("只有等待中的任务才能重新派发");
         }
         scheduleExecuteAfterCommit(task.getId());
-        return toDetailVO(task);
+        return cacheTaskDetail(task);
     }
 
     /**
@@ -309,7 +314,7 @@ public class AiTaskServiceImpl implements AiTaskService {
                 .set(AiTask::getUpdatedAt, LocalDateTime.now()));
 
         scheduleExecuteAfterCommit(task.getId());
-        return toDetailVO(task);
+        return cacheTaskDetail(task);
     }
 
     /**
@@ -320,6 +325,7 @@ public class AiTaskServiceImpl implements AiTaskService {
     public void deleteTask(Long userId, Long taskId) {
         AiTask task = getOwnedTask(userId, taskId);
         aiTaskMapper.deleteById(task.getId());
+        aiTaskRedisCacheService.evictTaskDetail(task.getUserId(), task.getId());
     }
 
     /**
@@ -346,6 +352,7 @@ public class AiTaskServiceImpl implements AiTaskService {
                 .set(AiTask::getStartedAt, task.getStartedAt())
                 .set(AiTask::getErrorMessage, null)
                 .set(AiTask::getUpdatedAt, LocalDateTime.now()));
+        cacheTaskDetail(task);
 
         UserContext.setCurrentUserId(task.getUserId());
         try {
@@ -368,12 +375,14 @@ public class AiTaskServiceImpl implements AiTaskService {
                     .set(AiTask::getErrorMessage, null)
                     .set(AiTask::getFinishedAt, task.getFinishedAt())
                     .set(AiTask::getUpdatedAt, LocalDateTime.now()));
+            cacheTaskDetail(task);
         } catch (Exception exception) {
             task.setStatus(STATUS_FAILED);
             task.setProgressRate(100);
             task.setErrorMessage(truncateErrorMessage(exception.getMessage()));
             task.setFinishedAt(LocalDateTime.now());
             aiTaskMapper.updateById(task);
+            cacheTaskDetail(task);
         } finally {
             UserContext.clear();
         }
@@ -600,5 +609,11 @@ public class AiTaskServiceImpl implements AiTaskService {
                 .createdAt(task.getCreatedAt())
                 .updatedAt(task.getUpdatedAt())
                 .build();
+    }
+
+    private AiTaskDetailVO cacheTaskDetail(AiTask task) {
+        AiTaskDetailVO detailVO = toDetailVO(task);
+        aiTaskRedisCacheService.cacheTaskDetail(detailVO);
+        return detailVO;
     }
 }
