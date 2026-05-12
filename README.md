@@ -13,7 +13,7 @@
 > 注：广告、推广信息恕不回复，邮件请备注「AI学习系统+来意」
 
 
-## 在线体验
+## 在线体验（已失效）
   注意:中国用户需要使用vpn以访问
 - 前端 Demo：[https://ai-intelligent-learning-assistant-s.vercel.app](https://ai-intelligent-learning-assistant-s.vercel.app)
 - 后端健康检查：[https://backend-production-d1f3.up.railway.app/api/health](https://backend-production-d1f3.up.railway.app/api/health)
