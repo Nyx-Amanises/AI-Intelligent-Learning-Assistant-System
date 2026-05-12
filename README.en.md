@@ -7,6 +7,13 @@
 
 ![AI Intelligent Learning Assistant System Social Preview](docs/images/social-preview.png)
 
+## Highlights
+
+- **Complete AI learning loop**: material parsing, RAG retrieval, AI summaries, AI question generation, online practice, mistake review, and learning analytics.
+- **Engineering-oriented RAG**: Qdrant-based vector retrieval with page references, similarity scores, section metadata, and Hit@K / Recall@K / MRR evaluation.
+- **Agent tool calling**: the study assistant supports SSE streaming and can query system context such as materials, question sets, practice records, and task status.
+- **Portfolio-friendly full stack**: Spring Boot, Vue3, MySQL, Redis/Valkey, Qdrant, Docker, Vercel, Render, and Aiven in one reproducible project.
+
 ## Contact
 
 If you have questions or suggestions about this project, you can email: `3111471949@qq.com`
@@ -15,13 +22,13 @@ If you have questions or suggestions about this project, you can email: `3111471
 
 ## Live Demo
 
-Note: users in China may need a VPN to access the online demo.
+Note: access to Vercel, Render, and Qdrant Cloud may be unstable from mainland China. Render free services can cold-start, so the first request may take several seconds.
 
 - Frontend Demo: [https://ai-intelligent-learning-assistant-s.vercel.app](https://ai-intelligent-learning-assistant-s.vercel.app)
-- Backend Health Check: [https://backend-production-d1f3.up.railway.app/api/health](https://backend-production-d1f3.up.railway.app/api/health)
+- Backend Health Check: [https://ai-learning-assistant-backend-zfth.onrender.com/api/health](https://ai-learning-assistant-backend-zfth.onrender.com/api/health)
 - GitHub Repository: [https://github.com/Nyx-Amanises/AI-Intelligent-Learning-Assistant-System](https://github.com/Nyx-Amanises/AI-Intelligent-Learning-Assistant-System)
 
-> The production environment is deployed with Vercel and Railway. The backend may take a few seconds to respond on the first request if it is cold-starting.
+The production environment is deployed with **Vercel + Render + Aiven MySQL + Aiven Valkey + Qdrant Cloud**. See the deployment guide: [Free Cloud Deployment: Render + Aiven + Qdrant Cloud](docs/deploy-render-aiven-qdrant.md).
 
 ## Screenshots
 
@@ -79,7 +86,7 @@ Note: users in China may need a VPN to access the online demo.
 | Database | MySQL 8, Redis |
 | RAG | Qdrant, Embedding API, material chunking, Hit@K / Recall@K / MRR evaluation |
 | AI | OpenAI-compatible Chat API, SSE streaming, mock mode |
-|deployment| Docker Compose, Vercel, Railway |
+| Deployment | Docker Compose, Vercel, Render, Aiven MySQL, Aiven Valkey, Qdrant Cloud |
 
 ## Project Structure
 
@@ -96,9 +103,12 @@ AI-Intelligent-Learning-Assistant-System
 │  └─ Dockerfile
 ├─ db/                        # Database schema and migration scripts
 ├─ docker/mysql/init/         # MySQL container initialization scripts
+├─ docs/deploy-render-aiven-qdrant.md
+│                              # Free cloud deployment guide
 ├─ docs/images/               # README screenshots and social preview
 ├─ runtime/                   # AI runtime config, sensitive values are not committed by default
 ├─ docker-compose.yml         # One-command local startup
+├─ render.yaml                # Render Blueprint config
 ├─ vercel.json                # Vercel frontend deployment config
 ├─ README.md                  # Chinese README
 └─ README.en.md               # English README
@@ -174,6 +184,7 @@ The backend supports overriding configuration through environment variables:
 | `SPRING_DATASOURCE_USERNAME` | MySQL username |
 | `SPRING_DATASOURCE_PASSWORD` | MySQL password |
 | `SPRING_REDIS_HOST` | Redis host |
+| `SPRING_REDIS_SSL_ENABLED` | Whether Redis / Valkey TLS is enabled |
 | `APP_AI_ENABLED` | Whether AI capabilities are enabled |
 | `APP_AI_MOCK_MODE` | Whether mock mode is enabled |
 | `APP_AI_CHAT_PROVIDER_TYPE` | Chat model provider |
@@ -185,8 +196,10 @@ The backend supports overriding configuration through environment variables:
 | `APP_AI_EMBEDDING_API_KEY` | Embedding API key |
 | `APP_AI_DEFAULT_EMBEDDING_MODEL` | Default embedding model |
 | `APP_QDRANT_BASE_URL` | Qdrant base URL |
+| `APP_QDRANT_API_KEY` | Qdrant API key |
 | `APP_QDRANT_COLLECTION_NAME` | Qdrant collection name |
 | `APP_JWT_SECRET` | JWT secret |
+| `VITE_API_BASE_URL` | Frontend production API base URL |
 
 Runtime AI configuration saved from the AI configuration page is written to:
 
@@ -211,8 +224,12 @@ runtime/ai-config.json
 Current production deployment:
 
 - Frontend: Vercel
-- Backend: Railway
-- Database and dependencies: Railway / external managed services
+- Backend: Render Web Service
+- MySQL: Aiven MySQL Free
+- Redis / Valkey: Aiven Valkey Free
+- Vector database: Qdrant Cloud Free
+
+For the full migration and configuration process, see: [Free Cloud Deployment: Render + Aiven + Qdrant Cloud](docs/deploy-render-aiven-qdrant.md).
 
 Frontend production build:
 
@@ -228,7 +245,13 @@ Set-Location backend
 mvn -DskipTests package
 ```
 
-Vercel uses the root-level `vercel.json`:
+Vercel uses the root-level `vercel.json` and requires this production environment variable:
+
+```text
+VITE_API_BASE_URL=https://<RENDER_BACKEND_DOMAIN>/api
+```
+
+`vercel.json`:
 
 ```json
 {
@@ -238,7 +261,7 @@ Vercel uses the root-level `vercel.json`:
 }
 ```
 
-For Railway backend deployment, make sure the service root points to `backend` and configure MySQL, Redis, Qdrant, AI provider, and JWT environment variables.
+For Render backend deployment, use the root-level `render.yaml` Blueprint or manually create a Docker Web Service. Make sure the service root points to `backend` and configure MySQL, Valkey, Qdrant, AI provider, and JWT environment variables.
 
 ## Roadmap
 

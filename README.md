@@ -7,19 +7,28 @@
 
 ![AI 智能学习助手系统 Social Preview](docs/images/social-preview.png)
 
+## 项目亮点
+
+- **完整 AI 学习闭环**：资料解析、RAG 检索、AI 总结、AI 出题、在线练习、错题复盘和学习分析形成一套可演示流程。
+- **工程化 RAG 能力**：基于 Qdrant 的资料向量检索，支持引用页码、相似度、章节信息和 Hit@K / Recall@K / MRR 评测。
+- **Agent 工具调用**：学习助手支持 SSE 流式回复，并能查询资料、题集、练习记录、任务状态等系统上下文。
+- **适合简历展示**：覆盖 Spring Boot、Vue3、MySQL、Redis/Valkey、Qdrant、Docker、Vercel、Render、Aiven 等完整全栈部署链路。
+
 
 ## 联系方式
 如有对本项目有问题，建议，可发送邮件至：`3111471949@qq.com`
 > 注：广告、推广信息恕不回复，邮件请备注「AI学习系统+来意」
 
 
-## 在线体验（已失效）
-  注意:中国用户需要使用vpn以访问
+## 在线体验
+
+> 中国大陆网络访问 Vercel / Render / Qdrant Cloud 可能不稳定，如打不开可尝试网络加速。Render 免费实例有冷启动，首次请求可能需要等待几十秒。
+
 - 前端 Demo：[https://ai-intelligent-learning-assistant-s.vercel.app](https://ai-intelligent-learning-assistant-s.vercel.app)
-- 后端健康检查：[https://backend-production-d1f3.up.railway.app/api/health](https://backend-production-d1f3.up.railway.app/api/health)
+- 后端健康检查：[https://ai-learning-assistant-backend-zfth.onrender.com/api/health](https://ai-learning-assistant-backend-zfth.onrender.com/api/health)
 - GitHub 仓库：[https://github.com/Nyx-Amanises/AI-Intelligent-Learning-Assistant-System](https://github.com/Nyx-Amanises/AI-Intelligent-Learning-Assistant-System)
 
-> 线上环境使用 Vercel + Railway 部署。首次访问时，如果后端处于冷启动状态，接口可能需要等待几秒。
+线上环境使用 **Vercel + Render + Aiven MySQL + Aiven Valkey + Qdrant Cloud** 部署，部署过程可参考：[Render + Aiven + Qdrant Cloud 免费部署指南](docs/deploy-render-aiven-qdrant.md)。
 
 
 ## 项目截图
@@ -78,7 +87,7 @@
 | 数据库 | MySQL 8, Redis |
 | RAG | Qdrant, Embedding API, 资料分段, Hit@K / Recall@K / MRR 评测 |
 | AI | OpenAI-compatible Chat API, SSE 流式输出, Mock 模式 |
-| 部署 | Docker Compose, Vercel, Railway |
+| 部署 | Docker Compose, Vercel, Render, Aiven MySQL, Aiven Valkey, Qdrant Cloud |
 
 
 ## 目录结构
@@ -96,9 +105,12 @@ AI-Intelligent-Learning-Assistant-System
 │  └─ Dockerfile
 ├─ db/                        # 建表与迁移脚本
 ├─ docker/mysql/init/         # MySQL 容器初始化脚本
+├─ docs/deploy-render-aiven-qdrant.md
+│                              # 免费云部署指南
 ├─ docs/images/               # README 截图和社交预览图
 ├─ runtime/                   # AI 运行时配置，默认不提交敏感内容
 ├─ docker-compose.yml         # 本地一键启动
+├─ render.yaml                # Render Blueprint 配置
 ├─ vercel.json                # Vercel 前端部署配置
 ├─ README.md                  # 中文说明
 └─ README.en.md               # English README
@@ -174,6 +186,7 @@ docker run -d --name qdrant -p 6333:6333 -p 6334:6334 -v qdrant_storage:/qdrant/
 | `SPRING_DATASOURCE_USERNAME` | MySQL 用户名 |
 | `SPRING_DATASOURCE_PASSWORD` | MySQL 密码 |
 | `SPRING_REDIS_HOST` | Redis 地址 |
+| `SPRING_REDIS_SSL_ENABLED` | Redis / Valkey 是否启用 TLS |
 | `APP_AI_ENABLED` | 是否启用 AI 能力 |
 | `APP_AI_MOCK_MODE` | 是否启用 Mock 模式 |
 | `APP_AI_CHAT_PROVIDER_TYPE` | 聊天模型 Provider |
@@ -185,8 +198,10 @@ docker run -d --name qdrant -p 6333:6333 -p 6334:6334 -v qdrant_storage:/qdrant/
 | `APP_AI_EMBEDDING_API_KEY` | Embedding API Key |
 | `APP_AI_DEFAULT_EMBEDDING_MODEL` | 默认 Embedding 模型 |
 | `APP_QDRANT_BASE_URL` | Qdrant 地址 |
+| `APP_QDRANT_API_KEY` | Qdrant API Key |
 | `APP_QDRANT_COLLECTION_NAME` | Qdrant Collection 名称 |
 | `APP_JWT_SECRET` | JWT 密钥 |
+| `VITE_API_BASE_URL` | 前端生产环境后端 API 地址 |
 
 AI 配置页面保存的运行时配置默认写入：
 
@@ -211,8 +226,12 @@ runtime/ai-config.json
 当前线上部署方式：
 
 - 前端：Vercel
-- 后端：Railway
-- 数据库与依赖：Railway / 外部托管服务
+- 后端：Render Web Service
+- MySQL：Aiven MySQL Free
+- Redis / Valkey：Aiven Valkey Free
+- 向量数据库：Qdrant Cloud Free
+
+完整迁移和配置步骤见：[Render + Aiven + Qdrant Cloud 免费部署指南](docs/deploy-render-aiven-qdrant.md)。
 
 前端生产构建：
 
@@ -228,7 +247,13 @@ Set-Location backend
 mvn -DskipTests package
 ```
 
-Vercel 使用根目录的 `vercel.json`：
+Vercel 使用根目录的 `vercel.json`，并配置生产环境变量：
+
+```text
+VITE_API_BASE_URL=https://<RENDER_BACKEND_DOMAIN>/api
+```
+
+`vercel.json`：
 
 ```json
 {
@@ -238,7 +263,7 @@ Vercel 使用根目录的 `vercel.json`：
 }
 ```
 
-Railway 后端部署时，需要确保服务根目录指向 `backend`，并配置好 MySQL、Redis、Qdrant、AI Provider 和 JWT 相关环境变量。
+Render 后端部署时，可以使用根目录的 `render.yaml` Blueprint，也可以手动创建 Docker Web Service。需要确保服务根目录指向 `backend`，并配置好 MySQL、Valkey、Qdrant、AI Provider 和 JWT 相关环境变量。
 
 ## 后续规划
 
