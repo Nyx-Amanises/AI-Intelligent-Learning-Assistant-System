@@ -16,6 +16,8 @@ spring:
       password: ${SPRING_REDIS_PASSWORD:}
       database: ${SPRING_REDIS_DATABASE:0}
       timeout: ${SPRING_REDIS_TIMEOUT:5s}
+      ssl:
+        enabled: ${SPRING_REDIS_SSL_ENABLED:false}
   servlet:
     multipart:
       max-file-size: 20MB

@@ -38,7 +38,6 @@ public class QdrantVectorStoreServiceImpl implements VectorStoreService {
             return;
         }
         validateQdrantEnabled();
-
         int vectorSize = segmentVectors.stream()
                 .findFirst()
                 .map(MaterialSegmentVector::vector)

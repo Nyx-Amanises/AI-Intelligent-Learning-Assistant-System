@@ -1,0 +1,44 @@
+services:
+  - type: web
+    name: ai-learning-assistant-backend
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    autoDeploy: true
+    envVars:
+      - key: APP_CORS_ALLOWED_ORIGINS
+        sync: false
+      - key: SPRING_DATASOURCE_URL
+        sync: false
+      - key: SPRING_DATASOURCE_USERNAME
+        sync: false
+      - key: SPRING_DATASOURCE_PASSWORD
+        sync: false
+      - key: SPRING_REDIS_HOST
+        sync: false
+      - key: SPRING_REDIS_PORT
+        sync: false
+      - key: SPRING_REDIS_PASSWORD
+        sync: false
+      - key: SPRING_REDIS_SSL_ENABLED
+        value: true
+      - key: APP_QDRANT_ENABLED
+        value: true
+      - key: APP_QDRANT_BASE_URL
+        sync: false
+      - key: APP_QDRANT_API_KEY
+        sync: false
+      - key: APP_QDRANT_COLLECTION_NAME
+        value: material_segment_vectors
+      - key: APP_FILE_UPLOAD_DIR
+        value: /tmp/ai-learning-uploads
+      - key: APP_AI_CONFIG_FILE
+        value: /tmp/ai-config.json
+      - key: APP_AI_ENABLED
+        value: true
+      - key: APP_AI_MOCK_MODE
+        value: true
+      - key: APP_JWT_SECRET
+        generateValue: true
