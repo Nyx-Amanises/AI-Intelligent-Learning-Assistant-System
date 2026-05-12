@@ -28,7 +28,7 @@
           删除个人配置
         </el-button>
         <el-button type="primary" :loading="saving" @click="saveConfig">
-          保存{{ saveScope === 'GLOBAL' ? '共享' : '个人' }}配置
+          {{ saveButtonText }}
         </el-button>
       </div>
     </div>
@@ -160,7 +160,7 @@
             <div class="tip-card">
               <div class="tip-card__title">个人配置不会偷用共享 Key</div>
               <div class="tip-card__desc">
-                如果普通用户保存个人 Base URL 并关闭 Mock 模式，就必须填写自己的聊天 API Key，避免共享 Key 被转发到用户自定义地址。
+                普通用户不填个人 Key 时，只有接口地址、路径和模型与共享配置一致，才会安全复用共享 Key；自定义地址时必须填写自己的 Key。
               </div>
             </div>
           </div>
@@ -278,6 +278,13 @@ const sourceLabelMap = {
 
 const sourceLabel = computed(() => sourceLabelMap[configSource.value] || '环境变量默认配置')
 
+const saveButtonText = computed(() => {
+  if (saveScope.value === 'GLOBAL') {
+    return '保存共享配置'
+  }
+  return personalConfigured.value ? '保存个人配置' : '创建个人配置'
+})
+
 const scopeDescription = computed(() => {
   if (saveScope.value === 'GLOBAL') {
     return '你正在维护管理员共享配置。普通用户没有个人配置时，会自动使用这组配置。'
@@ -285,19 +292,22 @@ const scopeDescription = computed(() => {
   if (personalConfigured.value) {
     return '你当前有个人配置，AI 调用会优先使用这组个人配置。'
   }
-  return '你还没有个人配置，AI 调用会自动回退到管理员共享配置或环境变量。'
+  if (globalConfigured.value) {
+    return '你还没有个人配置，AI 调用会自动使用管理员共享配置；如果只想关闭 Mock 并继续使用共享 Key，请保持接口地址、路径和模型与共享配置一致后创建个人配置。'
+  }
+  return '你还没有个人配置，AI 调用会自动回退到环境变量。'
 })
 
 const apiKeyPlaceholder = computed(() =>
   saveScope.value === 'GLOBAL'
     ? '留空表示沿用当前共享 Key'
-    : '留空表示沿用当前账号已保存 Key；没有个人 Key 时请删除个人配置以使用共享配置'
+    : '留空表示沿用当前账号已保存 Key；与共享配置端点一致时可复用共享 Key'
 )
 
 const embeddingApiKeyPlaceholder = computed(() =>
   saveScope.value === 'GLOBAL'
     ? '留空表示沿用当前共享 Embedding Key；未填时复用聊天 Key'
-    : '留空表示沿用当前账号已保存 Embedding Key；未填时复用个人聊天 Key'
+    : '留空表示沿用当前账号已保存 Embedding Key；端点一致时可复用共享 Embedding Key'
 )
 
 const activeChatPreset = computed(

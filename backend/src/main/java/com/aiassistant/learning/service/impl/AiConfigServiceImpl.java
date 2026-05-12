@@ -73,7 +73,7 @@ public class AiConfigServiceImpl implements AiConfigService {
                 sharedFallback,
                 false
         );
-        validateConfig(target);
+        validateConfig(applySharedSecretsWhenEndpointMatches(target, sharedFallback));
         upsertConfig(existing, SCOPE_USER, userId, target);
         return getConfig(userId);
     }
@@ -133,10 +133,11 @@ public class AiConfigServiceImpl implements AiConfigService {
         }
 
         ConfigDraft personalDraft = mergeDraft(fromEntity(personalConfig), sharedConfig.config, false);
-        if (!isUsableConfig(personalDraft)) {
+        ConfigDraft effectivePersonalDraft = applySharedSecretsWhenEndpointMatches(personalDraft, sharedConfig.config);
+        if (!isUsableConfig(effectivePersonalDraft)) {
             return sharedConfig;
         }
-        return new EffectiveConfig(personalDraft, SCOPE_USER);
+        return new EffectiveConfig(effectivePersonalDraft, SCOPE_USER);
     }
 
     private EffectiveConfig resolveSharedConfig() {
@@ -216,7 +217,7 @@ public class AiConfigServiceImpl implements AiConfigService {
             throw new BusinessException("请填写默认模型");
         }
         if (!hasText(config.apiKey())) {
-            throw new BusinessException("请填写当前配置作用域自己的 AI API Key。普通用户不填写个人 Key 时请删除个人配置，以使用管理员共享配置。");
+            throw new BusinessException("请填写当前配置作用域自己的 AI API Key。普通用户不填写个人 Key 时，只有接口地址、路径和模型与共享配置一致，才会复用管理员共享 Key。");
         }
     }
 
@@ -358,6 +359,97 @@ public class AiConfigServiceImpl implements AiConfigService {
         result.apiKey = pickSecret(safeOverride.apiKey, allowFallbackSecrets ? safeFallback.apiKey : null);
         result.embeddingApiKey = pickSecret(safeOverride.embeddingApiKey, allowFallbackSecrets ? safeFallback.embeddingApiKey : null);
         return result;
+    }
+
+    private ConfigDraft applySharedSecretsWhenEndpointMatches(ConfigDraft draft, ConfigDraft sharedConfig) {
+        ConfigDraft result = copyDraft(draft);
+        if (sharedConfig == null) {
+            return result;
+        }
+        ResolvedAiConfig sharedResolved = toResolvedConfig(sharedConfig);
+        if (!hasText(result.apiKey)
+                && hasText(sharedResolved.apiKey())
+                && usesSameChatEndpoint(result, sharedConfig)) {
+            result.apiKey = sharedResolved.apiKey();
+        }
+        if (!hasText(result.embeddingApiKey)
+                && hasText(sharedResolved.embeddingApiKey())
+                && usesSameEmbeddingEndpoint(result, sharedConfig)) {
+            result.embeddingApiKey = sharedResolved.embeddingApiKey();
+        }
+        return result;
+    }
+
+    private boolean usesSameChatEndpoint(ConfigDraft draft, ConfigDraft sharedConfig) {
+        ResolvedAiConfig current = toResolvedConfig(draft);
+        ResolvedAiConfig shared = toResolvedConfig(sharedConfig);
+        return sameConfigValue(current.chatProviderType(), shared.chatProviderType())
+                && sameUrl(current.baseUrl(), shared.baseUrl())
+                && samePath(current.chatPath(), shared.chatPath())
+                && sameConfigValue(current.defaultModel(), shared.defaultModel());
+    }
+
+    private boolean usesSameEmbeddingEndpoint(ConfigDraft draft, ConfigDraft sharedConfig) {
+        ResolvedAiConfig current = toResolvedConfig(draft);
+        ResolvedAiConfig shared = toResolvedConfig(sharedConfig);
+        return sameConfigValue(current.embeddingProviderType(), shared.embeddingProviderType())
+                && sameUrl(current.embeddingBaseUrl(), shared.embeddingBaseUrl())
+                && samePath(current.embeddingPath(), shared.embeddingPath())
+                && sameConfigValue(current.defaultEmbeddingModel(), shared.defaultEmbeddingModel());
+    }
+
+    private ConfigDraft copyDraft(ConfigDraft draft) {
+        ConfigDraft source = draft == null ? new ConfigDraft() : draft;
+        ConfigDraft target = new ConfigDraft();
+        target.enabled = source.enabled;
+        target.mockMode = source.mockMode;
+        target.chatProviderType = source.chatProviderType;
+        target.baseUrl = source.baseUrl;
+        target.chatPath = source.chatPath;
+        target.apiKey = source.apiKey;
+        target.defaultModel = source.defaultModel;
+        target.embeddingProviderType = source.embeddingProviderType;
+        target.embeddingBaseUrl = source.embeddingBaseUrl;
+        target.embeddingPath = source.embeddingPath;
+        target.embeddingApiKey = source.embeddingApiKey;
+        target.defaultEmbeddingModel = source.defaultEmbeddingModel;
+        return target;
+    }
+
+    private boolean sameConfigValue(String left, String right) {
+        String normalizedLeft = normalizeText(left, false);
+        String normalizedRight = normalizeText(right, false);
+        if (!hasText(normalizedLeft) && !hasText(normalizedRight)) {
+            return true;
+        }
+        return normalizedLeft != null && normalizedLeft.equals(normalizedRight);
+    }
+
+    private boolean sameUrl(String left, String right) {
+        return sameConfigValue(trimTrailingSlash(left), trimTrailingSlash(right));
+    }
+
+    private boolean samePath(String left, String right) {
+        return sameConfigValue(normalizePath(left), normalizePath(right));
+    }
+
+    private String trimTrailingSlash(String value) {
+        String normalized = normalizeText(value, false);
+        if (!hasText(normalized)) {
+            return null;
+        }
+        while (normalized.endsWith("/") && normalized.length() > 1) {
+            normalized = normalized.substring(0, normalized.length() - 1);
+        }
+        return normalized;
+    }
+
+    private String normalizePath(String value) {
+        String normalized = normalizeText(value, false);
+        if (!hasText(normalized)) {
+            return null;
+        }
+        return normalized.startsWith("/") ? normalized : "/" + normalized;
     }
 
     private boolean isUsableConfig(ConfigDraft draft) {
