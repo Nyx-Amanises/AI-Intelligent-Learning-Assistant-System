@@ -24,6 +24,8 @@ If you have questions or suggestions about this project, you can email: `3111471
 
 Note: access to Vercel, Render, and Qdrant Cloud may be unstable from mainland China. Render free services can cold-start, so the first request may take several seconds.
 
+Demo account
+Username: admin  Password: 123456
 - Frontend Demo: [https://ai-intelligent-learning-assistant-s.vercel.app](https://ai-intelligent-learning-assistant-s.vercel.app)
 - Backend Health Check: [https://ai-learning-assistant-backend-zfth.onrender.com/api/health](https://ai-learning-assistant-backend-zfth.onrender.com/api/health)
 - GitHub Repository: [https://github.com/Nyx-Amanises/AI-Intelligent-Learning-Assistant-System](https://github.com/Nyx-Amanises/AI-Intelligent-Learning-Assistant-System)
