@@ -23,7 +23,7 @@
 ## 在线体验
 
 > 中国大陆网络访问 Vercel / Render / Qdrant Cloud 可能不稳定，如打不开可尝试网络加速。Render 免费实例有冷启动，首次请求可能需要等待几十秒。
-
+示例账号：账号：admin  密码：123456
 - 前端 Demo：[https://ai-intelligent-learning-assistant-s.vercel.app](https://ai-intelligent-learning-assistant-s.vercel.app)
 - 后端健康检查：[https://ai-learning-assistant-backend-zfth.onrender.com/api/health](https://ai-learning-assistant-backend-zfth.onrender.com/api/health)
 - GitHub 仓库：[https://github.com/Nyx-Amanises/AI-Intelligent-Learning-Assistant-System](https://github.com/Nyx-Amanises/AI-Intelligent-Learning-Assistant-System)
