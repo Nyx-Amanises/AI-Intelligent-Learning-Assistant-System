@@ -1,18 +1,20 @@
 <template>
   <button
-    v-if="!visible"
+    v-if="!visible && showLauncher"
+    ref="launcherRef"
     type="button"
     class="assistant-fab"
+    aria-label="打开 AI 学习助手"
+    aria-haspopup="dialog"
     @click="openPanel"
   >
-    <span class="assistant-fab__glow" />
     <span class="assistant-fab__icon">
       <AppIcon name="assistant" :size="24" />
     </span>
     <span class="assistant-fab__label">AI 学习助手</span>
-    <span class="assistant-fab__hint">Agent</span>
   </button>
 
+  <Teleport to="body">
   <transition name="assistant-overlay">
     <div v-if="visible" class="assistant-overlay" @click.self="closePanel">
       <div
@@ -20,10 +22,21 @@
         class="assistant-mobile-scrim"
         @click="closeMobileSidebar"
       />
-      <div class="assistant-panel">
+      <div
+        ref="panelRef"
+        class="assistant-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-label="AI 学习助手"
+        tabindex="-1"
+        @keydown="handlePanelKeydown"
+      >
         <aside
+          ref="sidebarRef"
           class="assistant-sidebar"
           :class="{ 'assistant-sidebar--mobile-open': mobileSidebarOpen }"
+          :inert="isCompactLayout && !mobileSidebarOpen"
+          aria-label="学习助手会话"
         >
           <div class="assistant-sidebar__brand">
             <div class="assistant-sidebar__brand-row">
@@ -31,17 +44,18 @@
                 <AppIcon name="copilot" :size="25" />
               </span>
               <div>
-                <div class="assistant-sidebar__kicker">Built-in Agent</div>
-                <h2>Study Copilot</h2>
+                <div class="assistant-sidebar__kicker">让知识，成为自己的</div>
+                <h2>AI 学习助手</h2>
               </div>
+              <button type="button" class="assistant-sidebar__close" aria-label="收起会话列表" @click="closeMobileSidebar">收起</button>
             </div>
             <p>{{ currentBinding.helperText }}</p>
           </div>
 
           <div class="assistant-context-card">
-            <span class="assistant-context-card__label">当前页面上下文</span>
+            <span class="assistant-context-card__label">对话范围</span>
             <strong>{{ currentBinding.label }}</strong>
-            <em>新对话不会自动绑定页面上下文；需要资料时，直接在对话里告诉我资料标题或 ID。</em>
+            <em>提问时说明资料或题集的名称，便于找到学习内容。</em>
           </div>
 
           <div class="assistant-sidebar__actions">
@@ -86,7 +100,6 @@
                 'assistant-session-card--pinned': isSessionPinned(item),
                 'assistant-session-card--disabled': sendingMessage
               }"
-              @click="selectSession(item.id)"
             >
               <div class="assistant-session-card__top">
                 <span
@@ -96,7 +109,14 @@
                 >
                   <AppIcon name="pin" :size="13" />
                 </span>
-                <strong :title="item.title || '新对话'">{{ item.title || '新对话' }}</strong>
+                <button
+                  type="button"
+                  class="assistant-session-card__select"
+                  :disabled="sendingMessage"
+                  :aria-current="activeSessionId === item.id ? 'true' : undefined"
+                  :title="item.title || '新对话'"
+                  @click="selectSession(item.id)"
+                >{{ item.title || '新对话' }}</button>
                 <el-dropdown
                   trigger="click"
                   popper-class="assistant-session-menu"
@@ -129,12 +149,14 @@
           </div>
         </aside>
 
-        <main class="assistant-main">
+        <main class="assistant-main" :inert="isCompactLayout && mobileSidebarOpen">
           <header class="assistant-main__topbar">
             <button
               type="button"
+              ref="mobileMenuRef"
               class="assistant-mobile-menu-button"
               aria-label="打开会话菜单"
+              :aria-expanded="mobileSidebarOpen"
               @click="openMobileSidebar"
             >
               <span />
@@ -154,10 +176,7 @@
               >
                 {{ sessionPageLoading ? '刷新中...' : '刷新' }}
               </button>
-              <button type="button" class="assistant-top-button" @click="closePanel">关闭</button>
-              <button type="button" class="assistant-mobile-avatar" @click="closePanel">
-                {{ mobileAvatarLabel }}
-              </button>
+              <button type="button" class="assistant-top-button assistant-close-button" aria-label="关闭 AI 学习助手" @click="closePanel">关闭</button>
             </div>
           </header>
 
@@ -168,9 +187,9 @@
 
           <section v-if="!sessionDetail" class="assistant-home">
             <div class="assistant-home__hero">
-              <div class="assistant-home__greeting">Hi {{ greetingName }}</div>
+              <div class="assistant-home__greeting">你好，{{ greetingName }}</div>
               <h2>今天想学点什么？</h2>
-              <p>基于资料、题集、练习和任务进度，给你连续可追问的学习帮助。</p>
+              <p>一起读懂资料、梳理知识，把不明白的地方再学透一点。</p>
             </div>
 
             <div class="assistant-composer assistant-composer--hero">
@@ -178,6 +197,7 @@
                 v-model="draftMessage"
                 class="assistant-textarea"
                 maxlength="4000"
+                aria-label="向 AI 学习助手提问"
                 placeholder="输入你的问题。回车发送，Shift + 回车换行。"
                 @keydown="handleComposerKeydown"
               />
@@ -217,12 +237,11 @@
                   {{ formatContextLabel(sessionDetail.currentContextType, sessionDetail.currentContextId, sessionDetail) }}
                 </span>
                 <span class="assistant-status-chip">消息 {{ sessionDetail.messages.length }}</span>
-                <span class="assistant-status-chip">{{ sessionDetail.status || 'ACTIVE' }}</span>
               </div>
-              <p>最近活跃 {{ formatDateTime(sessionDetail.lastMessageAt || sessionDetail.updatedAt || sessionDetail.createdAt) }}</p>
+              <p v-if="sessionDetail.lastMessageAt || sessionDetail.updatedAt || sessionDetail.createdAt">最近活跃 {{ formatDateTime(sessionDetail.lastMessageAt || sessionDetail.updatedAt || sessionDetail.createdAt) }}</p>
             </div>
 
-            <div ref="messageStreamRef" class="assistant-thread">
+            <div ref="messageStreamRef" class="assistant-thread" role="log" aria-label="对话消息" aria-live="polite" :aria-busy="sendingMessage">
               <div v-if="!sessionDetail.messages.length" class="assistant-thread__empty">
                 <strong>这段对话已经准备好了</strong>
                 <p>直接开始提问，或者点一条建议让我先帮你起个头。</p>
@@ -341,6 +360,7 @@
                 v-model="draftMessage"
                 class="assistant-textarea assistant-textarea--compact"
                 maxlength="4000"
+                aria-label="继续向 AI 学习助手提问"
                 placeholder="继续追问、要求重写、要提纲、要习题或要复盘建议都可以。"
                 @keydown="handleComposerKeydown"
               />
@@ -364,10 +384,11 @@
       </div>
     </div>
   </transition>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRoute } from 'vue-router'
 import {
@@ -408,9 +429,12 @@ interface PendingTurnState {
 
 type AssistantSessionCommand = 'rename' | 'pin' | 'unpin' | 'delete'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   modelValue: boolean
-}>()
+  showLauncher?: boolean
+}>(), {
+  showLauncher: true
+})
 
 const emit = defineEmits<{
   (event: 'update:modelValue', value: boolean): void
@@ -444,22 +468,28 @@ const activeSessionId = ref<number | null>(null)
 const sessionDetail = ref<AssistantSessionDetail | null>(null)
 const draftMessage = ref('')
 const messageStreamRef = ref<HTMLElement | null>(null)
+const panelRef = ref<HTMLElement | null>(null)
+const sidebarRef = ref<HTMLElement | null>(null)
+const launcherRef = ref<HTMLButtonElement | null>(null)
+const mobileMenuRef = ref<HTMLButtonElement | null>(null)
+const isCompactLayout = ref(false)
+let compactLayoutQuery: MediaQueryList | null = null
+let previousFocusedElement: HTMLElement | null = null
+let previousBodyOverflow = ''
+let bodyScrollLocked = false
 const toolCallMap = ref<Record<number, AssistantToolCall[]>>({})
 const memoryMap = ref<Record<number, AssistantRelevantMemory[]>>({})
 const pendingTurn = ref<PendingTurnState | null>(null)
 const aiMockMode = ref(false)
 const aiConfigChecking = ref(false)
-const mockModeNoticeTitle = '\u5f53\u524d AI \u914d\u7f6e\u5904\u4e8e Mock \u6a21\u5f0f'
-const mockModeNoticeText = '\u6b64\u65f6 Agent \u4e0d\u4f1a\u8c03\u7528\u771f\u5b9e\u6a21\u578b\u63a5\u53e3\uff1b\u5982\u9700\u771f\u5b9e AI \u56de\u590d\uff0c\u8bf7\u5230 AI \u914d\u7f6e\u4e2d\u5173\u95ed Mock \u6a21\u5f0f\u3002'
+const mockModeNoticeTitle = '当前使用模拟回复'
+const mockModeNoticeText = '当前回复由模拟模式提供。需要真实 AI 回答时，可在 AI 设置中关闭模拟模式。'
 const draftCount = computed(() => draftMessage.value.length)
 const totalSessionPages = computed(() =>
   Math.max(1, Math.ceil((sessionPage.total || 0) / Math.max(1, sessionPage.size || 1)))
 )
 const greetingName = computed(
   () => userStore.profile?.nickname || userStore.profile?.username || '同学'
-)
-const mobileAvatarLabel = computed(() =>
-  (greetingName.value || 'A').trim().slice(0, 1).toUpperCase()
 )
 const mobileSidebarOpen = ref(false)
 let streamAbortController: AbortController | null = null
@@ -515,7 +545,7 @@ const currentBinding = computed<CurrentPageBinding>(() => {
   return {
     bindable: false,
     label: '通用对话',
-    helperText: '新对话默认不绑定资料、题集或练习记录。需要上下文时，直接在消息里说明资料标题、资料 ID 或题集 ID。',
+    helperText: '整理资料、解答问题，陪你把知识学扎实。',
     payload: {}
   }
 })
@@ -551,24 +581,80 @@ const quickPrompts = computed(() => {
   }
 
   return [
-    '帮我制定今天的学习计划',
-    '我准备把这个项目写到简历上，怎么表达更好',
-    '怎么提高复习效率'
+    '帮我找到最近上传的学习资料',
+    '如何把知识点整理成复习提纲',
+    '怎样安排一轮错题复习'
   ]
 })
 
-watch(visible, (value) => {
+const restoreBodyScroll = () => {
+  if (!bodyScrollLocked) return
+  document.body.style.overflow = previousBodyOverflow
+  bodyScrollLocked = false
+}
+
+const syncPanelVisibility = async (value: boolean) => {
   if (value) {
+    previousFocusedElement = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    if (!bodyScrollLocked) previousBodyOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
+    bodyScrollLocked = true
     if (!sendingMessage.value) {
       resetToFreshSession()
       void loadAiConfigNotice()
       void loadSessionPage(false)
     }
+    await nextTick()
+    if (visible.value) panelRef.value?.focus({ preventScroll: true })
   } else {
-    document.body.style.overflow = ''
+    restoreBodyScroll()
+    await nextTick()
+    if (!visible.value) {
+      const target = previousFocusedElement?.isConnected ? previousFocusedElement : launcherRef.value
+      target?.focus({ preventScroll: true })
+    }
   }
-})
+}
+
+watch(visible, syncPanelVisibility)
+
+const syncCompactLayout = () => {
+  isCompactLayout.value = Boolean(compactLayoutQuery?.matches)
+  if (!isCompactLayout.value) mobileSidebarOpen.value = false
+}
+
+const handlePanelKeydown = (event: KeyboardEvent) => {
+  if (event.defaultPrevented || event.isComposing) return
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    event.stopPropagation()
+    if (mobileSidebarOpen.value) closeMobileSidebar()
+    else closePanel()
+    return
+  }
+  if (event.key !== 'Tab') return
+  const scope = isCompactLayout.value && mobileSidebarOpen.value ? sidebarRef.value : panelRef.value
+  if (!scope) return
+  const focusable = Array.from(scope.querySelectorAll<HTMLElement>(
+    'button:not([disabled]), a[href], input:not([disabled]), textarea:not([disabled]), select:not([disabled]), summary, [tabindex]:not([tabindex="-1"])'
+  )).filter((element) => !element.closest('[inert]') && element.getClientRects().length > 0 && getComputedStyle(element).visibility !== 'hidden')
+  const first = focusable[0]
+  const last = focusable[focusable.length - 1]
+  const active = document.activeElement
+  if (!first || !last) {
+    event.preventDefault()
+    panelRef.value?.focus()
+  } else if (!focusable.includes(active as HTMLElement)) {
+    event.preventDefault()
+    ;(event.shiftKey ? last : first).focus()
+  } else if (event.shiftKey && active === first) {
+    event.preventDefault()
+    last.focus()
+  } else if (!event.shiftKey && active === last) {
+    event.preventDefault()
+    first.focus()
+  }
+}
 
 watch(
   () => sessionDetail.value?.messages.length,
@@ -638,10 +724,13 @@ const resetToFreshSession = () => {
 
 const openMobileSidebar = () => {
   mobileSidebarOpen.value = true
+  void nextTick(() => sidebarRef.value?.querySelector<HTMLButtonElement>('button')?.focus())
 }
 
 const closeMobileSidebar = () => {
+  const wasOpen = mobileSidebarOpen.value
   mobileSidebarOpen.value = false
+  if (wasOpen) void nextTick(() => mobileMenuRef.value?.focus())
 }
 
 const loadAiConfigNotice = async () => {
@@ -822,9 +911,11 @@ const scrollToBottom = () => {
 
 const fillPrompt = (prompt: string) => {
   draftMessage.value = prompt
+  panelRef.value?.querySelector<HTMLTextAreaElement>('textarea')?.focus()
 }
 
 const handleComposerKeydown = (event: KeyboardEvent) => {
+  if (event.isComposing || event.keyCode === 229) return
   if (event.key === 'Enter' && !event.shiftKey) {
     event.preventDefault()
     void sendMessage()
@@ -1399,8 +1490,16 @@ const removeSession = async (sessionId: number) => {
   }
 }
 
+onMounted(() => {
+  compactLayoutQuery = window.matchMedia('(max-width: 900px)')
+  compactLayoutQuery.addEventListener('change', syncCompactLayout)
+  syncCompactLayout()
+  if (visible.value) void syncPanelVisibility(true)
+})
+
 onBeforeUnmount(() => {
-  document.body.style.overflow = ''
+  restoreBodyScroll()
+  compactLayoutQuery?.removeEventListener('change', syncCompactLayout)
   streamAbortController?.abort()
   pendingTurn.value = null
 })
@@ -1493,8 +1592,8 @@ onBeforeUnmount(() => {
   gap: 14px;
   min-height: 0;
   padding: 28px 18px 18px;
-  background: #edf2fa;
-  border-right: 1px solid rgba(221, 227, 237, 0.9);
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--line);
   overflow: hidden;
 }
 
@@ -1502,7 +1601,7 @@ onBeforeUnmount(() => {
 .assistant-main__topbar h1,
 .assistant-home__hero h2 {
   margin: 0;
-  color: #1f2937;
+  color: var(--text);
 }
 
 .assistant-sidebar__brand-row {
@@ -1517,14 +1616,14 @@ onBeforeUnmount(() => {
   display: grid;
   place-items: center;
   border-radius: 14px;
-  background: linear-gradient(135deg, #1f7a5a, #48c78e);
+  background: linear-gradient(135deg, var(--brand), #48c78e);
   color: #fff;
   box-shadow: 0 14px 28px rgba(31, 122, 90, 0.18);
 }
 
 .assistant-sidebar__kicker,
 .assistant-main__eyebrow {
-  color: #5b6b8a;
+  color: var(--text-secondary);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.14em;
@@ -1536,7 +1635,7 @@ onBeforeUnmount(() => {
 .assistant-context-card em,
 .assistant-thread__empty p {
   margin: 10px 0 0;
-  color: #6c7b95;
+  color: var(--text-secondary);
   line-height: 1.7;
   font-size: 13px;
 }
@@ -1554,13 +1653,13 @@ onBeforeUnmount(() => {
 .assistant-context-card {
   padding: 0 0 14px;
   border: 0;
-  border-bottom: 1px solid rgba(210, 219, 232, 0.92);
+  border-bottom: 1px solid var(--line);
   border-radius: 0;
 }
 
 .assistant-context-card__label {
   display: block;
-  color: #7d8ca6;
+  color: var(--text-secondary);
   font-size: 12px;
   font-weight: 700;
 }
@@ -1569,7 +1668,7 @@ onBeforeUnmount(() => {
   display: block;
   margin-top: 12px;
   font-size: 16px;
-  color: #24324b;
+  color: var(--text);
 }
 
 .assistant-sidebar__actions {
@@ -1596,7 +1695,7 @@ onBeforeUnmount(() => {
   padding: 12px 14px;
   border-radius: 14px;
   background: transparent;
-  color: #3a4a64;
+  color: var(--text-secondary);
   font-size: 14px;
   font-weight: 600;
   text-align: left;
@@ -1604,8 +1703,8 @@ onBeforeUnmount(() => {
 
 .assistant-control--primary,
 .assistant-send-button {
-  background: rgba(109, 150, 255, 0.12);
-  color: #2f65d9;
+  background: var(--brand-soft);
+  color: var(--brand);
 }
 
 .assistant-control--ghost,
@@ -1665,20 +1764,20 @@ onBeforeUnmount(() => {
 .assistant-conversation__hero p,
 .assistant-composer__meta,
 .assistant-turn__time {
-  color: #70809a;
+  color: var(--text-secondary);
 }
 
 .assistant-session-header strong {
   margin-left: 8px;
   font-size: 18px;
-  color: #1f2937;
+  color: var(--text);
 }
 
 .assistant-sidebar__empty {
   padding: 8px 0;
   border-radius: 0;
   background: transparent;
-  color: #6b7b92;
+  color: var(--text-secondary);
   font-size: 13px;
   line-height: 1.75;
 }
@@ -1730,7 +1829,7 @@ onBeforeUnmount(() => {
 }
 
 .assistant-session-card--active {
-  background: rgba(111, 153, 255, 0.16);
+  background: var(--brand-soft);
 }
 
 .assistant-session-card--pinned:not(.assistant-session-card--active) {
@@ -1741,7 +1840,7 @@ onBeforeUnmount(() => {
   display: inline-grid;
   place-items: center;
   flex: 0 0 auto;
-  color: #376fdc;
+  color: var(--brand);
 }
 
 .assistant-session-card__top strong {
@@ -1756,7 +1855,7 @@ onBeforeUnmount(() => {
 
 .assistant-session-card p {
   margin: 6px 0 0;
-  color: #5f6d85;
+  color: var(--text-secondary);
   font-size: 12px;
   line-height: 1.6;
   display: -webkit-box;
@@ -1769,7 +1868,7 @@ onBeforeUnmount(() => {
 .assistant-inline-danger {
   padding: 0;
   background: transparent;
-  color: #ef6464;
+  color: var(--red);
   font-size: 11px;
 }
 
@@ -1782,13 +1881,13 @@ onBeforeUnmount(() => {
   padding: 0;
   border-radius: 8px;
   background: transparent;
-  color: #6e7c94;
+  color: var(--text-secondary);
 }
 
 .assistant-session-card__menu-button:not(:disabled):hover,
 .assistant-session-card__menu-button:not(:disabled):focus-visible {
   background: rgba(81, 98, 127, 0.1);
-  color: #273449;
+  color: var(--text);
 }
 
 :global(.assistant-session-menu__danger) {
@@ -1804,7 +1903,7 @@ onBeforeUnmount(() => {
   padding: 8px 0;
   border-radius: 0;
   background: transparent;
-  color: #51627f;
+  color: var(--text-secondary);
   font-size: 13px;
   font-weight: 600;
 }
@@ -1871,7 +1970,7 @@ onBeforeUnmount(() => {
 }
 
 .assistant-home__greeting {
-  color: #52627f;
+  color: var(--text-secondary);
   font-size: 16px;
 }
 
@@ -1886,7 +1985,7 @@ onBeforeUnmount(() => {
 .assistant-composer {
   width: min(720px, 100%);
   padding: 16px 20px;
-  border: 1px solid rgba(219, 225, 234, 0.96);
+  border: 1px solid var(--line);
   border-radius: 32px;
   background: #fff;
   box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
@@ -1907,7 +2006,7 @@ onBeforeUnmount(() => {
   border: 0;
   outline: none;
   background: transparent;
-  color: #1f2937;
+  color: var(--text);
   font: inherit;
   font-size: 16px;
   line-height: 1.7;
@@ -1921,7 +2020,7 @@ onBeforeUnmount(() => {
 }
 
 .assistant-textarea::placeholder {
-  color: #98a5b7;
+  color: var(--muted);
 }
 
 .assistant-composer__meta {
@@ -1956,14 +2055,14 @@ onBeforeUnmount(() => {
   border-bottom: 1px solid transparent;
   border-radius: 0;
   background: transparent;
-  color: #566987;
+  color: var(--text-secondary);
   font-size: 14px;
   cursor: pointer;
 }
 
 .assistant-suggestion-chip:hover {
-  color: #2f65d9;
-  border-bottom-color: rgba(47, 101, 217, 0.4);
+  color: var(--brand);
+  border-bottom-color: var(--brand);
 }
 
 .assistant-conversation__hero {
@@ -1971,7 +2070,7 @@ onBeforeUnmount(() => {
   margin: 0 auto;
   padding: 0 0 14px;
   border: 0;
-  border-bottom: 1px solid rgba(229, 233, 240, 1);
+  border-bottom: 1px solid var(--line);
   border-radius: 0;
   box-shadow: none;
 }
@@ -1988,13 +2087,13 @@ onBeforeUnmount(() => {
   padding: 0;
   border-radius: 0;
   background: transparent;
-  color: #6b7a92;
+  color: var(--text-secondary);
   font-size: 12px;
   font-weight: 600;
 }
 
 .assistant-status-chip--brand {
-  color: #356bdc;
+  color: var(--brand);
 }
 
 .assistant-thread {
@@ -2037,7 +2136,7 @@ onBeforeUnmount(() => {
 }
 
 .assistant-turn__meta {
-  color: #66768f;
+  color: var(--text-secondary);
   font-size: 11px;
   font-weight: 600;
 }
@@ -2057,12 +2156,12 @@ onBeforeUnmount(() => {
 
 .assistant-turn__avatar--assistant {
   background: linear-gradient(135deg, #c7f2df, #dbeafe);
-  color: #1f7a5a;
+  color: var(--brand);
 }
 
 .assistant-turn__avatar--user {
   background: linear-gradient(135deg, #dbeafe, #f1f5f9);
-  color: #31517a;
+  color: var(--brand);
 }
 
 .assistant-turn__content {
@@ -2072,7 +2171,7 @@ onBeforeUnmount(() => {
   border: 0;
   border-radius: 0;
   background: transparent;
-  color: #1f2937;
+  color: var(--text);
   font-size: 15px;
   line-height: 1.95;
   white-space: pre-wrap;
@@ -2080,11 +2179,11 @@ onBeforeUnmount(() => {
 }
 
 .assistant-turn__content--assistant {
-  color: #1f2937;
+  color: var(--text);
 }
 
 .assistant-turn__content--streaming {
-  color: #1f2937;
+  color: var(--text);
 }
 
 .assistant-turn--user .assistant-turn__content {
@@ -2094,7 +2193,7 @@ onBeforeUnmount(() => {
   border-radius: 24px 24px 10px 24px;
   background: linear-gradient(135deg, rgba(233, 241, 255, 0.98), rgba(243, 248, 255, 0.98));
   box-shadow: 0 10px 24px rgba(148, 163, 184, 0.16);
-  color: #26344e;
+  color: var(--text);
   font-weight: 600;
   text-align: left;
 }
@@ -2107,14 +2206,14 @@ onBeforeUnmount(() => {
   margin-top: 10px;
   padding: 12px 0 0;
   border: 0;
-  border-top: 1px solid rgba(229, 233, 240, 1);
+  border-top: 1px solid var(--line);
   border-radius: 0;
   background: transparent;
 }
 
 .assistant-turn__trace summary {
   cursor: pointer;
-  color: #5a6a85;
+  color: var(--text-secondary);
   font-size: 12px;
   font-weight: 700;
 }
@@ -2125,7 +2224,7 @@ onBeforeUnmount(() => {
 
 .assistant-trace-block__label {
   margin: 12px 0 8px;
-  color: #6a7a94;
+  color: var(--text-secondary);
   font-size: 12px;
   font-weight: 700;
 }
@@ -2140,7 +2239,7 @@ onBeforeUnmount(() => {
   padding: 0;
   border-radius: 999px;
   background: transparent;
-  color: #435268;
+  color: var(--text-secondary);
   font-size: 12px;
 }
 
@@ -2160,7 +2259,7 @@ onBeforeUnmount(() => {
 }
 
 .assistant-trace-chip--memory {
-  color: #356bdc;
+  color: var(--brand);
 }
 
 .assistant-trace-block pre {
@@ -2168,7 +2267,7 @@ onBeforeUnmount(() => {
   padding: 12px 0 0;
   border-radius: 0;
   background: transparent;
-  color: #324255;
+  color: var(--text-secondary);
   font-size: 12px;
   line-height: 1.7;
   white-space: pre-wrap;
@@ -2185,7 +2284,7 @@ onBeforeUnmount(() => {
   border: 0;
   border-radius: 0;
   background: transparent;
-  color: #5d6c86;
+  color: var(--text-secondary);
   box-shadow: none;
 }
 
@@ -2197,7 +2296,7 @@ onBeforeUnmount(() => {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #6d8eff;
+  background: var(--brand);
   animation: assistant-bounce 1.1s ease-in-out infinite;
 }
 
@@ -2212,7 +2311,7 @@ onBeforeUnmount(() => {
 .assistant-typing-cursor {
   display: inline-block;
   margin-left: 2px;
-  color: #5d8dff;
+  color: var(--brand);
   animation: assistant-cursor 0.9s steps(1) infinite;
 }
 
@@ -2268,7 +2367,7 @@ onBeforeUnmount(() => {
   .assistant-sidebar {
     max-height: 42vh;
     border-right: 0;
-    border-bottom: 1px solid rgba(190, 205, 221, 0.58);
+    border-bottom: 1px solid var(--line);
   }
 
   .assistant-main {
@@ -2295,13 +2394,13 @@ onBeforeUnmount(() => {
   }
 
   .assistant-overlay {
-    background: #eef3f9;
+    background: var(--bg);
     backdrop-filter: none;
   }
 
   .assistant-panel {
     grid-template-columns: 1fr;
-    background: #eef3f9;
+    background: var(--bg);
   }
 
   .assistant-mobile-scrim {
@@ -2321,7 +2420,7 @@ onBeforeUnmount(() => {
     max-height: none;
     padding: 22px 16px 16px;
     overflow-y: auto;
-    border-right: 1px solid rgba(203, 213, 225, 0.95);
+    border-right: 1px solid var(--line);
     border-bottom: 0;
     box-shadow: 22px 0 48px rgba(15, 23, 42, 0.18);
     transform: translateX(-105%);
@@ -2340,7 +2439,7 @@ onBeforeUnmount(() => {
   .assistant-main {
     height: 100dvh;
     padding: 0 18px 12px;
-    background: #eef3f9;
+    background: var(--bg);
   }
 
   .assistant-main__topbar {
@@ -2367,7 +2466,7 @@ onBeforeUnmount(() => {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    color: #111827;
+    color: var(--text);
     font-size: 21px;
     line-height: 1.2;
     letter-spacing: 0;
@@ -2394,7 +2493,7 @@ onBeforeUnmount(() => {
     display: block;
     height: 3px;
     border-radius: 999px;
-    background: #111827;
+    background: var(--text);
   }
 
   .assistant-main__actions {
@@ -2435,14 +2534,14 @@ onBeforeUnmount(() => {
   }
 
   .assistant-home__greeting {
-    color: #111827;
+    color: var(--text);
     font-size: 24px;
     line-height: 1.25;
   }
 
   .assistant-home__hero h2 {
     margin-top: 4px;
-    color: #111827;
+    color: var(--text);
     font-size: 42px;
     line-height: 1.12;
     letter-spacing: 0;
@@ -2467,7 +2566,7 @@ onBeforeUnmount(() => {
     border-radius: 999px;
     background: #fff;
     box-shadow: 0 12px 24px rgba(15, 23, 42, 0.06);
-    color: #3f4857;
+    color: var(--text-secondary);
     font-size: 18px;
     font-weight: 600;
   }
@@ -2575,4 +2674,105 @@ onBeforeUnmount(() => {
     font-size: 14px;
   }
 }
+
+/* Shared workspace colors and accessible modal controls. */
+.assistant-fab { min-height: 52px; padding: 12px 18px; z-index: 1500; background: var(--brand); box-shadow: var(--shadow-lg); }
+.assistant-fab__icon { color: #fff; }
+.assistant-overlay { z-index: 1800; display: grid; place-items: center; padding: 20px; background: rgb(27 42 32 / 32%); backdrop-filter: blur(4px); }
+.assistant-panel { position: relative; width: min(1380px, 100%); height: min(920px, calc(100dvh - 40px)); max-height: calc(100dvh - 40px); grid-template-columns: 270px minmax(0, 1fr); border: 1px solid var(--line); border-radius: 20px; background: var(--panel); box-shadow: 0 28px 80px rgb(27 42 32 / 18%); outline: none; }
+.assistant-sidebar { height: 100%; max-height: none; padding: 24px 18px; border-right: 1px solid var(--line); border-bottom: 0; background: var(--bg-secondary); }
+.assistant-sidebar__brand-row { gap: 10px; }
+.assistant-sidebar__brand h2 { margin-top: 4px; font-size: 17px; line-height: 1.5; letter-spacing: -.3px; }
+.assistant-sidebar__logo { width: 40px; height: 40px; flex: 0 0 40px; border-radius: 11px; background: var(--brand); box-shadow: none; }
+.assistant-sidebar__kicker { font-size: 10px; letter-spacing: 0; }
+.assistant-sidebar__close { display: none; }
+.assistant-main { height: 100%; padding: 22px 28px 18px; background: var(--panel); }
+.assistant-main__topbar { flex: 0 0 auto; margin-bottom: 22px; }
+.assistant-main__title-block { min-width: 0; }
+.assistant-main__topbar h1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 19px; line-height: 1.5; }
+.assistant-main__eyebrow { color: var(--brand); font-size: 11px; letter-spacing: 0; }
+.assistant-main__actions { flex: 0 0 auto; gap: 8px; }
+.assistant-control { min-height: 44px; border-radius: 9px; }
+.assistant-control--primary { border: 1px solid var(--line); background: var(--panel); color: var(--brand); }
+.assistant-control:not(:disabled):hover, .assistant-top-button:not(:disabled):hover { background: var(--brand-light); }
+.assistant-top-button { min-height: 44px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 9px; color: var(--text-secondary); }
+.assistant-top-button--ghost { border-color: transparent; }
+.assistant-context-card em { display: block; font-style: normal; }
+.assistant-session-card { padding: 3px 8px; }
+.assistant-session-card__top { gap: 6px; }
+.assistant-session-card__select { flex: 1; min-width: 0; min-height: 44px; overflow: hidden; padding: 0; border: 0; background: transparent; color: var(--text); font: inherit; font-size: 13px; font-weight: 500; text-align: left; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.assistant-session-card__select:disabled { cursor: default; }
+.assistant-session-card__menu-button { width: 44px; height: 44px; }
+.assistant-session-card:not(.assistant-session-card--disabled):hover { background: var(--panel); }
+.assistant-session-card--active, .assistant-session-card--active:not(.assistant-session-card--disabled):hover { background: var(--brand-soft); }
+.assistant-session-card--active .assistant-session-card__select { color: var(--brand); font-weight: 600; }
+.assistant-home { padding: 26px 16px 48px; overflow-y: auto; }
+.assistant-home > * { flex-shrink: 0; }
+.assistant-home__hero h2 { font-size: clamp(28px, 3.3vw, 38px); line-height: 1.4; letter-spacing: -.8px; }
+.assistant-home__hero p { display: block; max-width: 42ch; margin: 12px auto 0; font-size: 14px; }
+.assistant-home__greeting { color: var(--brand); font-size: 15px; }
+.assistant-composer { border-radius: 14px; background: var(--panel); box-shadow: var(--shadow-sm); transition: border-color .18s ease, box-shadow .18s ease; }
+.assistant-composer:focus-within { border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-soft); }
+.assistant-composer--dock { width: min(820px, 100%); border-radius: 14px; }
+.assistant-send-button { min-height: 44px; border-radius: 9px; background: var(--brand); color: #fff; }
+.assistant-send-button:not(:disabled):hover { background: var(--brand-hover); }
+.assistant-suggestion-row { gap: 10px; }
+.assistant-suggestion-chip { display: inline-flex; align-items: center; min-height: 44px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--text-secondary); font-size: 13px; font-weight: 400; line-height: 1.6; text-align: left; box-shadow: none; transition: border-color .18s ease, color .18s ease; }
+.assistant-suggestion-chip:hover { border-color: var(--brand); color: var(--brand); }
+.assistant-inline-danger { min-height: 44px; font-size: 12px; }
+.assistant-turn__avatar--assistant { background: var(--brand-soft); color: var(--brand); }
+.assistant-turn__avatar--user { background: var(--bg-secondary); color: var(--text-secondary); }
+.assistant-turn--user .assistant-turn__content { border: 1px solid var(--line); border-radius: 16px 16px 5px 16px; background: var(--brand-light); color: var(--text); font-weight: 400; box-shadow: none; }
+.assistant-turn__trace summary { min-height: 36px; padding-top: 8px; }
+.assistant-panel button:focus-visible, .assistant-panel summary:focus-visible, .assistant-fab:focus-visible { outline: 2px solid var(--brand); outline-offset: 3px; }
+
+@media (max-width: 900px) {
+  .assistant-overlay { padding: 0; backdrop-filter: none; }
+  .assistant-panel { width: 100%; height: 100dvh; max-height: 100dvh; grid-template-columns: 1fr; border: 0; border-radius: 0; }
+  .assistant-sidebar { position: absolute; inset: 0 auto 0 0; z-index: 3; width: min(86vw, 320px); height: 100%; max-height: none; padding: 22px 16px; overflow-y: auto; border-right: 1px solid var(--line); box-shadow: 14px 0 36px rgb(27 42 32 / 12%); transform: translateX(-105%); visibility: hidden; transition: transform .2s ease, visibility .2s ease; }
+  .assistant-sidebar--mobile-open { transform: translateX(0); visibility: visible; }
+  .assistant-sidebar__close { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; margin-left: auto; padding: 0 4px; border: 0; border-radius: 8px; background: transparent; color: var(--text-secondary); font-size: 12px; cursor: pointer; }
+  .assistant-mobile-scrim { position: absolute; display: block; inset: 0; z-index: 2; background: rgb(27 42 32 / 30%); }
+  .assistant-main { height: 100%; padding: 0 18px calc(12px + env(safe-area-inset-bottom)); background: var(--panel); }
+  .assistant-main__topbar { display: grid; grid-template-columns: 44px minmax(0, 1fr) 56px; align-items: center; gap: 8px; min-height: 76px; margin-bottom: 8px; padding: 10px 0; }
+  .assistant-main__title-block { text-align: center; }
+  .assistant-main__eyebrow { display: block; font-size: 10px; line-height: 1.5; }
+  .assistant-main__topbar h1 { margin: 3px 0 0; font-size: 17px; line-height: 1.4; }
+  .assistant-main__actions { justify-content: flex-end; gap: 0; }
+  .assistant-main__actions .assistant-top-button { display: none; }
+  .assistant-main__actions .assistant-close-button { display: inline-flex; align-items: center; justify-content: center; min-width: 48px; padding: 6px 10px; font-size: 12px; }
+  .assistant-mobile-menu-button { display: flex; flex-direction: column; justify-content: center; gap: 5px; width: 44px; height: 44px; padding: 11px 10px; border: 1px solid var(--line); border-radius: 10px; background: transparent; cursor: pointer; }
+  .assistant-mobile-menu-button span { display: block; height: 2px; width: 100%; border-radius: 2px; background: var(--text-secondary); }
+  .assistant-home { justify-content: flex-start; gap: 24px; padding: 38px 4px 20px; }
+  .assistant-home__hero { text-align: center; }
+  .assistant-home__greeting { color: var(--brand); font-size: 15px; }
+  .assistant-home__hero h2 { margin-top: 8px; font-size: 32px; }
+  .assistant-home__hero p { display: block; font-size: 13px; line-height: 1.8; }
+}
+
+@media (max-width: 640px) {
+  .assistant-fab { padding: 10px; }
+  .assistant-home { gap: 22px; padding: 24px 2px 16px; }
+  .assistant-home__hero h2 { font-size: 30px; }
+  .assistant-home__greeting { font-size: 14px; }
+  .assistant-suggestion-row { width: 100%; gap: 8px; }
+  .assistant-suggestion-chip { width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px; font-size: 13px; box-shadow: none; }
+  .assistant-composer--hero { padding: 14px; border-radius: 14px; }
+  .assistant-composer--hero .assistant-textarea { min-height: 90px; }
+  .assistant-composer--dock { padding: 12px 14px; border-radius: 14px; }
+  .assistant-textarea, .assistant-textarea--compact { font-size: 16px; }
+  .assistant-composer__meta span:first-child { display: inline; }
+  .assistant-turn__content { font-size: 15px; line-height: 1.85; }
+  .assistant-turn--user .assistant-turn__content { max-width: 90%; border-radius: 14px 14px 4px 14px; }
+}
+
+@media (max-height: 640px) {
+  .assistant-home { justify-content: flex-start; padding-top: 16px; padding-bottom: 16px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .assistant-thinking__dot, .assistant-typing-cursor { animation: none; }
+  .assistant-overlay-enter-active, .assistant-overlay-leave-active, .assistant-sidebar, .assistant-composer, .assistant-suggestion-chip, .assistant-panel button { transition: none; }
+}
+
 </style>

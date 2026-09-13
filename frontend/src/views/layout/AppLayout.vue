@@ -1,429 +1,219 @@
 <template>
-  <div
-    class="shell-app shell-app--workspace"
-    :class="{ 'shell-app--sidebar-collapsed': isSidebarCollapsed }"
-  >
-    <aside class="shell-side shell-side--crm">
-      <div class="app-header__brand app-header__brand--sidebar">
-        <div class="app-header__logo">
-          <AppIcon name="brand" :size="23" />
-        </div>
-        <div class="app-header__brand-text">
-          <strong>AI 智能学习助手</strong>
-        </div>
-      </div>
-
-      <div class="nav-card nav-card--crm">
-        <RouterLink
-          v-for="item in navItems"
-          :key="item.path"
-          class="nav-link nav-link--crm"
-          :title="isSidebarCollapsed ? item.label : undefined"
-          :to="item.path"
-        >
-          <span class="nav-link__icon">
-            <AppIcon :name="item.icon" :size="18" />
-          </span>
-          <span class="nav-link__label">{{ item.label }}</span>
-        </RouterLink>
-      </div>
-
-      <div class="side-footer side-footer--crm">
-        <RouterLink
-          class="side-settings-link"
-          title="系统设置"
-          to="/ai-config"
-        >
-          <span class="side-settings-link__icon">
-            <AppIcon name="config" :size="18" />
-          </span>
-          <span class="side-settings-link__label">系统设置</span>
-          <AppIcon class="side-settings-link__chevron" name="chevron-right" :size="15" />
-        </RouterLink>
-      </div>
+  <div class="learning-shell" :class="{ 'learning-shell--collapsed': isSidebarCollapsed }">
+    <a class="skip-to-content" href="#workspace-content">跳到主要内容</a>
+    <aside class="learning-sidebar" aria-label="学习工作台导航">
+      <WorkspaceNavigation :collapsed="isSidebarCollapsed" @open-assistant="openAssistant" />
     </aside>
-
-    <div class="shell-content">
-      <header class="app-header">
-        <button
-          type="button"
-          class="app-header__menu"
-          :aria-expanded="!isSidebarCollapsed"
-          :aria-label="isSidebarCollapsed ? '展开导航栏' : '收起导航栏'"
-          :title="isSidebarCollapsed ? '展开导航栏' : '收起导航栏'"
-          @click="toggleSidebar"
-        >
-          <AppIcon name="menu" :size="20" />
-        </button>
-
-        <div class="app-header__actions">
-          <button type="button" class="app-header__tool" aria-label="搜索">
-            <AppIcon name="search" :size="18" />
+    <div class="learning-main">
+      <header class="workspace-topbar">
+        <div class="workspace-topbar__location">
+          <button type="button" class="workspace-icon-button" :aria-label="isMobile ? '打开导航' : isSidebarCollapsed ? '展开导航栏' : '收起导航栏'" :aria-expanded="isMobile ? mobileNavOpen : !isSidebarCollapsed" @click="toggleSidebar">
+            <AppIcon name="menu" :size="19" />
           </button>
-          <button type="button" class="app-header__tool app-header__tool--notice" aria-label="通知">
-            <AppIcon name="bell" :size="18" />
-            <span>3</span>
-          </button>
-
-          <div class="app-header__user-group">
-            <input
-              ref="avatarInputRef"
-              class="app-header__avatar-input"
-              type="file"
-              accept="image/jpeg,image/png,image/webp,image/gif"
-              @change="handleAvatarChange"
-            >
-            <button
-              type="button"
-              class="app-header__avatar-button"
-              :class="{ 'is-uploading': avatarUploading }"
-              :disabled="avatarUploading"
-              aria-label="上传头像"
-              title="上传头像"
-              @click="openAvatarPicker"
-            >
-              <img
-                v-if="avatarSrc"
-                class="app-header__avatar-image"
-                :src="avatarSrc"
-                alt=""
-              >
-              <span v-else class="app-header__avatar">{{ avatarText }}</span>
-              <span class="app-header__avatar-mask">
-                <AppIcon name="camera" :size="14" />
-              </span>
-            </button>
-
-            <el-dropdown trigger="click" @command="handleUserCommand">
-              <button type="button" class="app-header__user-badge">
-                <strong>{{ displayName }}</strong>
-                <AppIcon name="chevron-down" :size="15" />
-              </button>
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item command="logout">退出登录</el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
+          <div class="workspace-breadcrumb" aria-label="当前位置">
+            <span>{{ currentPage.group }}</span><AppIcon name="chevron-right" :size="13" /><strong>{{ currentPage.label }}</strong>
           </div>
         </div>
+        <div class="workspace-topbar__actions">
+          <button class="workspace-search-trigger" type="button" aria-label="搜索学习资料" @click="searchVisible = true">
+            <AppIcon name="search" :size="17" /><span>搜索学习资料</span><kbd>Ctrl K</kbd>
+          </button>
+          <button type="button" class="workspace-topbar__ai" aria-label="打开 AI 学习助手" @click="openAssistant">
+            <AppIcon name="spark" :size="18" /><span>AI 助手</span>
+          </button>
+          <span class="workspace-topbar__divider" aria-hidden="true" />
+          <el-dropdown trigger="click" @command="handleUserCommand">
+            <button type="button" class="workspace-user" aria-label="账户菜单">
+              <img v-if="avatarSrc" :src="avatarSrc" alt="" class="workspace-user__avatar">
+              <span v-else class="workspace-user__avatar">{{ avatarText }}</span>
+              <span class="workspace-user__name">{{ displayName }}</span><AppIcon name="chevron-down" :size="13" />
+            </button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="avatar" :disabled="avatarUploading">{{ avatarUploading ? '正在上传…' : '更换头像' }}</el-dropdown-item>
+                <el-dropdown-item command="settings">模型与设置</el-dropdown-item>
+                <el-dropdown-item command="logout" divided>退出登录</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+          <input ref="avatarInputRef" type="file" accept="image/jpeg,image/png,image/webp,image/gif" class="visually-hidden" tabindex="-1" aria-hidden="true" @change="handleAvatarChange">
+        </div>
       </header>
-
-      <main class="shell-main shell-main--crm">
-        <RouterView />
+      <main id="workspace-content" class="workspace-content" tabindex="-1">
+        <RouterView v-slot="{ Component }"><component :is="Component" @open-assistant="openAssistant" /></RouterView>
+        <footer class="workspace-footer"><span>AI 智能学习助手</span><span>让每一次学习，都有所收获。</span></footer>
       </main>
     </div>
-
-    <AssistantDrawer v-if="showAssistantDrawer" v-model="assistantVisible" />
+    <el-drawer v-model="mobileNavOpen" direction="ltr" size="260px" :with-header="false" class="workspace-mobile-nav" aria-label="学习导航">
+      <button type="button" class="workspace-mobile-close" aria-label="关闭导航" @click="mobileNavOpen = false"><AppIcon name="close" :size="18" /></button>
+      <WorkspaceNavigation @navigate="mobileNavOpen = false" @open-assistant="openAssistant" />
+    </el-drawer>
+    <el-dialog v-model="searchVisible" title="搜索学习资料" width="520px" class="workspace-search-dialog" @opened="searchInputRef?.focus()">
+      <form @submit.prevent="searchMaterials">
+        <label for="workspace-search-input" class="workspace-search-label">输入资料名称或关键词</label>
+        <el-input id="workspace-search-input" ref="searchInputRef" v-model="searchKeyword" placeholder="例如：计算机网络、数据结构…" clearable size="large" />
+        <p class="workspace-search-help">在你的资料库中查找，继续上一次的学习。</p>
+        <div class="workspace-search-actions"><el-button @click="searchVisible = false">取消</el-button><el-button type="primary" native-type="submit">搜索资料</el-button></div>
+      </form>
+    </el-dialog>
+    <AssistantDrawer v-model="assistantVisible" :show-launcher="false" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
+import { RouterView, useRoute, useRouter } from 'vue-router'
 import { API_BASE_URL } from '@/api/http'
 import { getProfileApi, uploadAvatarApi } from '@/api/modules/auth'
 import AssistantDrawer from '@/components/AssistantDrawer.vue'
 import AppIcon from '@/components/AppIcon.vue'
+import WorkspaceNavigation from '@/components/WorkspaceNavigation.vue'
+import { navigationItems } from '@/config/navigation'
 import { useUserStore } from '@/stores/user'
 
 const SIDEBAR_COLLAPSED_KEY = 'ai-learning-assistant:sidebar-collapsed'
-const MAX_AVATAR_SIZE = 5 * 1024 * 1024
-const ALLOWED_AVATAR_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
-
 const userStore = useUserStore()
 const router = useRouter()
 const route = useRoute()
 const assistantVisible = ref(false)
+const mobileNavOpen = ref(false)
+const searchVisible = ref(false)
+const searchKeyword = ref('')
+const searchInputRef = ref<{ focus: () => void }>()
 const avatarInputRef = ref<HTMLInputElement | null>(null)
 const avatarUploading = ref(false)
 const isSidebarCollapsed = ref(localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1')
-
+const mobileQuery = window.matchMedia('(max-width: 760px)')
+const isMobile = ref(mobileQuery.matches)
 const displayName = computed(() => userStore.profile?.nickname || userStore.profile?.username || '学习者')
 const avatarText = computed(() => displayName.value.slice(0, 1).toUpperCase())
-const showAssistantDrawer = computed(() => route.path !== '/dashboard')
-const avatarSrc = computed(() => resolveAvatarUrl(userStore.profile?.avatarUrl))
-
-const apiOrigin = computed(() => API_BASE_URL.replace(/\/api\/?$/, ''))
-
-const handleUserCommand = (command: string) => {
-  if (command === 'logout') {
-    logout()
-  }
-}
-
-const navItems = [
-  { path: '/dashboard', label: '首页', icon: 'home' },
-  { path: '/materials', label: '资料管理', icon: 'materials' },
-  { path: '/ai-tasks', label: '任务中心', icon: 'tasks' },
-  { path: '/rag-eval', label: 'RAG 评测', icon: 'eval' },
-  { path: '/summary', label: 'AI 总结', icon: 'summary' },
-  { path: '/quiz', label: 'AI 出题', icon: 'quiz' },
-  { path: '/practice', label: '练习记录', icon: 'practice' },
-  { path: '/wrong-questions', label: '错题本', icon: 'wrong' },
-  { path: '/mastery', label: '掌握度', icon: 'mastery' },
-  { path: '/analytics', label: '学习分析', icon: 'analytics' },
-  { path: '/ai-config', label: 'AI 配置', icon: 'config' }
-]
-
-onMounted(() => {
-  void refreshProfile()
+const currentPage = computed(() => navigationItems.find((item) => item.path === route.path) || navigationItems[0])
+const avatarSrc = computed(() => {
+  const url = userStore.profile?.avatarUrl
+  if (!url) return ''
+  if (/^(https?:|data:|blob:)/i.test(url)) return url
+  const origin = API_BASE_URL.replace(/\/api\/?$/, '')
+  if (url.startsWith('/api/')) return origin + url
+  return url.startsWith('/') ? url : origin + '/api/' + url.replace(/^\/+/, '')
 })
 
-const toggleSidebar = () => {
+function toggleSidebar() {
+  if (isMobile.value) { mobileNavOpen.value = !mobileNavOpen.value; return }
   isSidebarCollapsed.value = !isSidebarCollapsed.value
   localStorage.setItem(SIDEBAR_COLLAPSED_KEY, isSidebarCollapsed.value ? '1' : '0')
 }
-
-const openAvatarPicker = () => {
-  avatarInputRef.value?.click()
+function openAssistant() { mobileNavOpen.value = false; assistantVisible.value = true }
+function searchMaterials() {
+  const keyword = searchKeyword.value.trim()
+  searchVisible.value = false
+  void router.push({ path: '/materials', query: keyword ? { keyword } : {} })
 }
-
-const handleAvatarChange = async (event: Event) => {
+function handleUserCommand(command: string) {
+  if (command === 'avatar') avatarInputRef.value?.click()
+  if (command === 'settings') void router.push('/ai-config')
+  if (command === 'logout') { userStore.logout(); void router.push('/login') }
+}
+async function handleAvatarChange(event: Event) {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
   input.value = ''
-  if (!file) {
-    return
+  if (!file) return
+  if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) {
+    ElMessage.warning('请选择 JPG、PNG、WebP 或 GIF 图片'); return
   }
-
-  if (!ALLOWED_AVATAR_TYPES.includes(file.type)) {
-    ElMessage.warning('请选择 JPG、PNG、WebP 或 GIF 图片')
-    return
-  }
-  if (file.size > MAX_AVATAR_SIZE) {
-    ElMessage.warning('头像图片不能超过 5MB')
-    return
-  }
-
+  if (file.size > 5 * 1024 * 1024) { ElMessage.warning('头像图片不能超过 5MB'); return }
   avatarUploading.value = true
   try {
     const response = await uploadAvatarApi(file)
-    const profile = response.data?.data
-    userStore.setProfile(profile)
+    userStore.setProfile(response.data.data)
     ElMessage.success('头像已更新')
-  } catch (error) {
-    const message = error instanceof Error ? error.message : '头像上传失败'
-    ElMessage.error(message)
-  } finally {
-    avatarUploading.value = false
+  } catch (error) { ElMessage.error(error instanceof Error ? error.message : '头像上传失败') }
+  finally { avatarUploading.value = false }
+}
+function handleViewportChange(event: MediaQueryListEvent) {
+  isMobile.value = event.matches
+  if (!event.matches) mobileNavOpen.value = false
+}
+function handleShortcut(event: KeyboardEvent) {
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k' && !assistantVisible.value) {
+    event.preventDefault(); searchVisible.value = !searchVisible.value
   }
 }
-
-const refreshProfile = async () => {
-  if (!userStore.token) {
-    return
+watch(() => route.path, () => {
+  mobileNavOpen.value = false
+  document.title = currentPage.value.label + ' · AI 智能学习助手'
+})
+onMounted(() => {
+  mobileQuery.addEventListener('change', handleViewportChange)
+  window.addEventListener('keydown', handleShortcut)
+  document.title = currentPage.value.label + ' · AI 智能学习助手'
+  if (userStore.token) {
+    void getProfileApi().then((response) => {
+      if (response.data.data) userStore.setProfile(response.data.data)
+    }).catch(() => { /* Authentication errors are handled by the shared interceptor. */ })
   }
-  try {
-    const response = await getProfileApi()
-    const profile = response.data?.data
-    if (profile) {
-      userStore.setProfile(profile)
-    }
-  } catch {
-    // Token 失效会由 http 拦截器处理。
-  }
-}
-
-const resolveAvatarUrl = (url?: string) => {
-  if (!url) {
-    return ''
-  }
-  if (/^(https?:|data:|blob:)/i.test(url)) {
-    return url
-  }
-  if (url.startsWith('/api/')) {
-    return `${apiOrigin.value}${url}`
-  }
-  if (url.startsWith('/')) {
-    return url
-  }
-  return `${apiOrigin.value}/api/${url.replace(/^\/+/, '')}`
-}
-
-const logout = () => {
-  userStore.logout()
-  router.push('/login')
-}
+})
+onUnmounted(() => {
+  mobileQuery.removeEventListener('change', handleViewportChange)
+  window.removeEventListener('keydown', handleShortcut)
+})
 </script>
 
 <style scoped>
-.shell-app--workspace {
-  transition: grid-template-columns 0.2s ease;
+.learning-shell { display: grid; grid-template-columns: 232px minmax(0, 1fr); min-height: 100dvh; background: var(--bg); }
+.learning-shell--collapsed { grid-template-columns: 76px minmax(0, 1fr); }
+.learning-sidebar { position: sticky; top: 0; height: 100dvh; border-right: 1px solid var(--line); min-width: 0; }
+.learning-main { min-width: 0; }
+.workspace-topbar { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; justify-content: space-between; height: 72px; padding: 0 38px 0 26px; gap: 20px; background: rgba(255,255,253,.97); border-bottom: 1px solid var(--line); }
+.workspace-topbar__location, .workspace-topbar__actions, .workspace-breadcrumb { display: flex; align-items: center; min-width: 0; }
+.workspace-topbar__location { gap: 14px; }
+.workspace-icon-button { width: 38px; height: 40px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 8px; background: transparent; color: var(--muted); cursor: pointer; }
+.workspace-icon-button:hover { background: var(--bg-secondary); color: var(--text); }
+.workspace-breadcrumb { gap: 12px; font-size: 12px; white-space: nowrap; }
+.workspace-breadcrumb > span { color: var(--muted); }
+.workspace-breadcrumb .app-icon { color: #a0a79e; }
+.workspace-breadcrumb strong { font-weight: 500; }
+.workspace-topbar__actions { gap: 20px; }
+.workspace-search-trigger { display: flex; align-items: center; gap: 10px; min-height: 37px; width: 236px; padding: 0 12px; border: 1px solid var(--line); border-radius: 7px; color: var(--muted); background: #f9faf7; text-align: left; font-size: 12px; cursor: pointer; }
+.workspace-search-trigger:hover { border-color: #b4c5b7; }
+.workspace-search-trigger kbd { margin-left: auto; font: inherit; font-size: 12px; color: var(--muted); padding: 2px 5px; background: #fff; border: 1px solid var(--line); border-radius: 4px; }
+.workspace-topbar__ai { display: flex; align-items: center; gap: 7px; min-height: 40px; padding: 0; border: 0; background: transparent; color: var(--brand); cursor: pointer; font-size: 12px; font-weight: 500; white-space: nowrap; }
+.workspace-topbar__divider { height: 22px; width: 1px; background: var(--line); }
+.workspace-user { display: flex; align-items: center; gap: 9px; min-height: 44px; padding: 0; border: 0; background: transparent; color: var(--text); cursor: pointer; }
+.workspace-user__avatar { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; object-fit: cover; background: #eeeadd; color: #6d644f; font-size: 13px; font-weight: 650; }
+.workspace-user__name { max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.workspace-content { max-width: 1540px; margin: 0 auto; padding: 34px 38px 20px; outline: none; min-height: calc(100dvh - 72px); }
+.workspace-footer { display: flex; justify-content: space-between; gap: 14px; margin-top: 38px; padding-top: 17px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; letter-spacing: .3px; }
+.skip-to-content { position: fixed; z-index: 4000; top: -80px; left: 20px; padding: 12px 18px; border-radius: 8px; color: #fff; background: var(--brand); }
+.skip-to-content:focus { top: 10px; }
+.workspace-search-label { display: block; margin-bottom: 10px; font-size: 13px; color: var(--text-secondary); }
+.workspace-search-help { color: var(--muted); font-size: 12px; line-height: 1.8; }
+.workspace-search-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px; }
+.workspace-mobile-close { position: absolute; right: 8px; top: 8px; z-index: 2; display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid var(--line); border-radius: 50%; background: #fff; color: var(--muted); cursor: pointer; }
+@media (max-width: 1180px) {
+  .workspace-topbar { padding-inline: 18px 24px; gap: 12px; }
+  .workspace-topbar__actions { gap: 12px; }
+  .workspace-search-trigger { width: 190px; }
+  .workspace-content { padding: 28px 24px 20px; }
+  .workspace-user__name { display: none; }
 }
-
-.shell-app--workspace.shell-app--sidebar-collapsed {
-  grid-template-columns: 72px minmax(0, 1fr);
+@media (max-width: 960px) {
+  .workspace-search-trigger { width: 40px; justify-content: center; padding: 0; }
+  .workspace-search-trigger span, .workspace-search-trigger kbd { display: none; }
+  .workspace-breadcrumb > span, .workspace-breadcrumb > .app-icon { display: none; }
 }
-
-.shell-app--sidebar-collapsed .shell-side--crm {
-  padding-inline: 10px;
-  overflow-x: hidden;
-}
-
-.shell-app--sidebar-collapsed .app-header__brand--sidebar {
-  justify-content: center;
-  padding-inline: 0;
-}
-
-.shell-app--sidebar-collapsed .app-header__brand-text,
-.shell-app--sidebar-collapsed .nav-link__label,
-.shell-app--sidebar-collapsed .side-settings-link__label,
-.shell-app--sidebar-collapsed .side-settings-link__chevron {
-  width: 0;
-  opacity: 0;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-.shell-app--sidebar-collapsed .nav-link--crm,
-.shell-app--sidebar-collapsed .side-settings-link {
-  justify-content: center;
-  padding-inline: 0;
-}
-
-.shell-app--sidebar-collapsed .nav-link--crm {
-  gap: 0;
-}
-
-.shell-app--sidebar-collapsed .side-settings-link__icon {
-  background: transparent;
-}
-
-.app-header__menu {
-  border-radius: 8px;
-  transition: background 0.2s ease;
-}
-
-.app-header__menu:hover {
-  background: #f1f5f9;
-}
-
-.app-header__user-group {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-}
-
-.app-header__avatar-input {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.app-header__avatar-button {
-  position: relative;
-  width: 38px;
-  height: 38px;
-  display: inline-grid;
-  place-items: center;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  cursor: pointer;
-  overflow: hidden;
-}
-
-.app-header__avatar-button:disabled {
-  cursor: wait;
-}
-
-.app-header__avatar-button:hover .app-header__avatar-mask,
-.app-header__avatar-button:focus-visible .app-header__avatar-mask,
-.app-header__avatar-button.is-uploading .app-header__avatar-mask {
-  opacity: 1;
-}
-
-.app-header__avatar-button:focus-visible {
-  outline: 2px solid rgba(31, 122, 90, 0.35);
-  outline-offset: 3px;
-}
-
-.app-header__avatar-image,
-.app-header__avatar {
-  width: 38px;
-  height: 38px;
-}
-
-.app-header__avatar-image {
-  display: block;
-  object-fit: cover;
-  border-radius: 50%;
-}
-
-.app-header__avatar {
-  display: inline-grid;
-  place-items: center;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #dbeafe, #dcfce7);
-  color: #0f5138;
-  font-size: 14px;
-  font-weight: 800;
-}
-
-.app-header__avatar-mask {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  background: rgba(15, 23, 42, 0.52);
-  color: #fff;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-}
-
-.app-header__user-badge {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  min-height: 38px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--text);
-  font-size: 14px;
-  cursor: pointer;
-}
-
-.app-header__user-badge strong {
-  max-width: 120px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.app-header__user-label {
-  color: var(--muted);
-  font-size: 11px;
-}
-
-@media (max-width: 720px) {
-  .shell-app--workspace.shell-app--sidebar-collapsed {
-    grid-template-columns: 1fr;
-  }
-
-  .shell-app--sidebar-collapsed .app-header__brand-text,
-  .shell-app--sidebar-collapsed .nav-link__label,
-  .shell-app--sidebar-collapsed .side-settings-link__label,
-  .shell-app--sidebar-collapsed .side-settings-link__chevron {
-    width: auto;
-    opacity: 1;
-    pointer-events: auto;
-  }
-}
-
-@media (max-width: 768px) {
-  .app-header__actions {
-    gap: 8px;
-  }
-
-  .app-header__user-group {
-    display: none;
-  }
+@media (max-width: 760px) {
+  .learning-shell, .learning-shell--collapsed { grid-template-columns: minmax(0,1fr); }
+  .learning-sidebar { display: none; }
+  .workspace-topbar { height: 64px; padding-inline: 12px 18px; gap: 8px; }
+  .workspace-topbar__location { gap: 6px; }
+  .workspace-topbar__actions { gap: 9px; }
+  .workspace-topbar__ai { width: 44px; justify-content: center; min-height: 44px; }
+  .workspace-topbar__ai span, .workspace-topbar__divider, .workspace-user > .app-icon { display: none; }
+  .workspace-icon-button, .workspace-search-trigger { width: 44px; min-height: 44px; }
+  .workspace-user { min-width: 44px; justify-content: center; }
+  .workspace-content { padding: 24px 18px 20px; min-height: calc(100dvh - 64px); }
+  .workspace-footer { font-size: 12px; flex-wrap: wrap; }
 }
 </style>

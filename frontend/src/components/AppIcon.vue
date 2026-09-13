@@ -96,6 +96,20 @@ const fileIconMap: Record<string, { label: string; accent: string; paper: string
 const fileIcon = computed(() => fileIconMap[props.name])
 
 const pathMap: Record<string, string[]> = {
+  'book-open': ['M12 5.8c-2.8-1.7-6-1.9-9-1v14.5c3-1 6.2-.7 9 1 2.8-1.7 6-2 9-1V4.8c-3-1-6.2-.7-9 1Z', 'M12 5.8v14.5'],
+  folder: ['M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v10H3V7Z'],
+  plus: ['M12 5v14', 'M5 12h14'],
+  'arrow-right': ['M4 12h15', 'M13 6l6 6-6 6'],
+  'arrow-up-right': ['M6 18 18 6', 'M6 6h12v12'],
+  calendar: ['M5 5h14v15H5V5Z', 'M8 3v4M16 3v4M5 10h14'],
+  clock: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z', 'M12 7v5l3 2'],
+  refresh: ['M20 7v5h-5', 'M4 17v-5h5', 'M6 6a8 8 0 0 1 13 3l1 3', 'M18 18a8 8 0 0 1-13-3l-1-3'],
+  close: ['M6 6l12 12', 'M18 6 6 18'],
+  check: ['M5 12l4 4L19 6'],
+  upload: ['M12 16V3', 'M7 8l5-5 5 5', 'M4 15v6h16v-6'],
+  download: ['M12 3v13', 'M7 11l5 5 5-5', 'M4 16v5h16v-5'],
+  grid: ['M4 4h6v6H4V4Z', 'M14 4h6v6h-6V4Z', 'M4 14h6v6H4v-6Z', 'M14 14h6v6h-6v-6Z'],
+  list: ['M9 6h11M9 12h11M9 18h11', 'M4 6h.01M4 12h.01M4 18h.01'],
   brand: [
     'M12 3.2 20.4 7.8 12 12.4 3.6 7.8 12 3.2Z',
     'M6.5 10.1v4.6c1.4 1.6 3.2 2.4 5.5 2.4s4.1-.8 5.5-2.4v-4.6',

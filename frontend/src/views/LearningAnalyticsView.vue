@@ -4,7 +4,7 @@
       <div>
         <h1 class="page-title">学习分析</h1>
         <p class="page-desc">
-          把练习、错题和知识点掌握度汇总成可视化看板，用来观察学习趋势、薄弱点和资料表现。
+          看见每一次练习的进步，找到下一步值得复习的内容。
         </p>
       </div>
       <div class="toolbar" style="margin-bottom: 0">
@@ -13,6 +13,7 @@
           clearable
           filterable
           placeholder="全部资料"
+          aria-label="按学习资料筛选分析"
           :loading="materialsLoading"
           style="width: 260px"
           @change="loadAnalytics"
@@ -20,7 +21,7 @@
           <el-option
             v-for="item in materials"
             :key="item.id"
-            :label="`${item.title} · #${item.id}`"
+            :label="item.title"
             :value="item.id"
           />
         </el-select>
@@ -28,9 +29,29 @@
       </div>
     </div>
 
-    <div class="analytics-hero">
+    <div v-if="materialsError" class="insight-load-error" role="alert">
+      <div><strong>资料列表暂时无法加载</strong><p>可以继续查看学习分析，重试后即可选择资料。</p></div>
+      <el-button :loading="materialsLoading" @click="loadMaterials">重新加载资料</el-button>
+    </div>
+    <div v-if="loadError" class="insight-load-error" role="alert">
+      <div><strong>{{ loadError }}</strong><p>数据暂时没有读取成功，请重试。</p></div>
+      <el-button type="primary" :loading="loading" @click="loadAnalytics">重新加载分析</el-button>
+    </div>
+
+    <div v-if="hasLoaded && !loading && !loadError && !analytics.totalQuestionAttempts" class="analytics-empty-callout">
+      <div>
+        <h2>{{ filters.materialId ? '这份资料还没有练习记录' : '完成一次练习，开始了解你的学习状态' }}</h2>
+        <p>提交练习后，正确率趋势与复习重点会自动呈现在这里。</p>
+      </div>
+      <div class="analytics-empty-actions">
+        <el-button v-if="filters.materialId" @click="clearMaterialFilter">查看全部资料</el-button>
+        <el-button type="primary" @click="router.push(materialsLoaded && !materials.length ? '/materials' : '/quiz')">{{ materialsLoaded && !materials.length ? '添加学习资料' : '去做一次练习' }}</el-button>
+      </div>
+    </div>
+
+    <div v-if="hasLoaded && !loading && !loadError" class="analytics-hero">
       <div class="analytics-hero__main">
-        <span>Learning Signals</span>
+        <span>学习概览</span>
         <strong>{{ analytics.averageScoreRate }}%</strong>
         <p>平均得分率。当前统计来自 {{ analytics.totalPracticeCount }} 次练习、{{ analytics.totalQuestionAttempts }} 次作答。</p>
       </div>
@@ -55,7 +76,7 @@
     </div>
 
     <div v-if="loading" class="state-block">正在生成学习分析图表...</div>
-    <template v-else>
+    <template v-else-if="hasLoaded && !loadError">
       <div class="analytics-grid analytics-grid--top">
         <div class="analytics-card">
           <div class="analytics-card__head">
@@ -92,23 +113,39 @@
             <span class="analytics-card__badge">最近 {{ analytics.practiceTrend.length }} 次</span>
           </div>
           <div v-if="analytics.practiceTrend.length" class="line-chart-wrap">
-            <svg viewBox="0 0 640 220" role="img" aria-label="练习正确率趋势">
-              <line x1="32" y1="28" x2="32" y2="188" class="chart-axis" />
-              <line x1="32" y1="188" x2="610" y2="188" class="chart-axis" />
-              <polyline :points="trendLinePoints" class="trend-line" />
-              <circle
-                v-for="point in trendPlotPoints"
-                :key="point.sessionId"
-                :cx="point.x"
-                :cy="point.y"
-                r="5"
-                class="trend-dot"
-              />
-            </svg>
-            <div class="trend-labels">
-              <span v-for="point in trendPlotPoints" :key="`label-${point.sessionId}`">
-                {{ point.label }}
-              </span>
+            <div class="trend-chart-frame">
+              <div class="trend-y-axis" aria-hidden="true">
+                <span v-for="tick in trendAxisTicks" :key="tick.value" :style="{ top: tick.y / 220 * 100 + '%' }">{{ tick.value }}%</span>
+              </div>
+              <svg viewBox="0 0 640 220" preserveAspectRatio="none" role="group" aria-label="练习正确率趋势，纵轴范围为 0 至 100%">
+                <line v-for="tick in trendAxisTicks" :key="tick.value" x1="12" :y1="tick.y" x2="628" :y2="tick.y" class="trend-grid-line" aria-hidden="true" />
+                <line x1="12" y1="28" x2="12" y2="188" class="chart-axis" aria-hidden="true" />
+                <line x1="12" y1="188" x2="628" y2="188" class="chart-axis" aria-hidden="true" />
+                <polyline :points="trendLinePoints" class="trend-line" aria-hidden="true" />
+                <circle
+                  v-for="point in trendPlotPoints"
+                  :key="point.sessionId"
+                  :cx="point.x"
+                  :cy="point.y"
+                  r="5"
+                  class="trend-dot"
+                  role="img"
+                  tabindex="0"
+                  :aria-label="formatTrendPoint(point)"
+                ><title>{{ formatTrendPoint(point) }}</title></circle>
+              </svg>
+            </div>
+            <div class="trend-labels" aria-hidden="true">
+              <span
+                v-for="(point, index) in trendAxisLabels"
+                :key="'label-' + point.sessionId"
+                :class="{
+                  'trend-label--first': index === 0 && trendAxisLabels.length > 1,
+                  'trend-label--last': index === trendAxisLabels.length - 1 && trendAxisLabels.length > 1
+                }"
+                :style="{ left: point.x / 640 * 100 + '%' }"
+                :title="formatDateTime(point.submitTime)"
+              >{{ point.label }}</span>
             </div>
           </div>
           <div v-else class="state-block empty">还没有可展示的练习趋势。</div>
@@ -146,7 +183,7 @@
           <div class="analytics-card__head">
             <div>
               <h3>资料表现</h3>
-              <p>按资料聚合练习表现，方便定位哪份资料还需要复习。</p>
+              <p>找到还需要复习的学习资料。</p>
             </div>
           </div>
           <div v-if="analytics.materialPerformance.length" class="material-rank-list">
@@ -176,13 +213,13 @@
           <div class="analytics-card__head">
             <div>
               <h3>薄弱知识点</h3>
-              <p>优先显示掌握度较低、错题较多的知识点。</p>
+              <p>优先复习掌握度低于 70% 的知识点。</p>
             </div>
             <el-button link type="primary" @click="router.push('/wrong-questions')">看错题</el-button>
           </div>
-          <div v-if="analytics.weakKnowledgePoints.length" class="weak-point-grid">
+          <div v-if="reviewPoints.length" class="weak-point-grid">
             <button
-              v-for="item in analytics.weakKnowledgePoints"
+              v-for="item in reviewPoints"
               :key="`${item.materialId || 0}-${item.knowledgePoint}`"
               type="button"
               class="weak-point-card"
@@ -193,14 +230,14 @@
               <em>掌握度 {{ item.masteryPercent }}% · 错 {{ item.wrongCount }} 次</em>
             </button>
           </div>
-          <div v-else class="state-block empty">暂无薄弱知识点。</div>
+          <div v-else class="state-block empty">{{ analytics.totalKnowledgePoints ? '目前没有掌握度低于 70% 的知识点，继续保持。' : '完成练习后，这里会整理需要优先复习的知识点。' }}</div>
         </div>
 
         <div class="analytics-card">
           <div class="analytics-card__head">
             <div>
               <h3>最近练习</h3>
-              <p>把最新练习作为趋势图的文字补充。</p>
+              <p>回顾最近的练习与正确率。</p>
             </div>
           </div>
           <div v-if="recentTrend.length" class="recent-practice-list">
@@ -221,7 +258,6 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
-import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
 import {
   getLearningAnalyticsOverviewApi,
@@ -233,6 +269,10 @@ import { getMaterialPageApi, type MaterialPageItem } from '@/api/modules/materia
 
 const router = useRouter()
 const loading = ref(false)
+const hasLoaded = ref(false)
+const loadError = ref('')
+const materialsError = ref('')
+const materialsLoaded = ref(false)
 const materialsLoading = ref(false)
 const materials = ref<MaterialPageItem[]>([])
 
@@ -256,40 +296,46 @@ const analytics = reactive<LearningAnalyticsOverviewPayload>({
   weakKnowledgePoints: []
 })
 
+const reviewPoints = computed(() =>
+  analytics.weakKnowledgePoints.filter((item) => Number(item.masteryPercent) < 70)
+)
+
 const masteryColors: Record<string, string> = {
-  MASTERED: '#16a34a',
-  GOOD: '#2563eb',
-  WEAK: '#f59e0b',
-  RISK: '#e11d48'
+  MASTERED: 'var(--green)',
+  GOOD: 'var(--blue)',
+  WEAK: 'var(--accent)',
+  RISK: 'var(--red)'
 }
 
 const masteryLegend = computed(() =>
   analytics.masteryDistribution.map((item) => ({
     ...item,
-    color: masteryColors[item.level] || '#94a3b8'
+    color: masteryColors[item.level] || 'var(--muted)'
   }))
 )
 
 const donutStyle = computed(() => {
   if (!analytics.masteryDistribution.length || !analytics.totalKnowledgePoints) {
-    return { background: '#eef2f7' }
+    return { background: 'var(--line)' }
   }
   let current = 0
   const segments = analytics.masteryDistribution.map((item) => {
     const start = current
     current += Number(item.percent || 0)
-    const color = masteryColors[item.level] || '#94a3b8'
+    const color = masteryColors[item.level] || 'var(--muted)'
     return `${color} ${start}% ${current}%`
   })
   return { background: `conic-gradient(${segments.join(', ')})` }
 })
 
+const trendAxisTicks = [{ value: 100, y: 28 }, { value: 50, y: 108 }, { value: 0, y: 188 }]
+
 const trendPlotPoints = computed(() => {
   const list = analytics.practiceTrend
   const width = 640
   const height = 220
-  const left = 32
-  const right = 610
+  const left = 12
+  const right = 628
   const top = 28
   const bottom = 188
   if (!list.length) {
@@ -310,6 +356,15 @@ const trendPlotPoints = computed(() => {
 })
 
 const trendLinePoints = computed(() => trendPlotPoints.value.map((item) => `${item.x},${item.y}`).join(' '))
+
+const trendAxisLabels = computed(() => {
+  const points = trendPlotPoints.value
+  if (points.length <= 5) return points
+  return Array.from({ length: 5 }, (_, index) => points[Math.round(index * (points.length - 1) / 4)])
+})
+
+const formatTrendPoint = (point: PracticeTrendPoint) =>
+  `${point.sessionName}，${formatDateTime(point.submitTime)}，正确率 ${point.accuracyRate}%（${point.correctCount} / ${point.totalQuestions} 题正确）`
 
 const recentTrend = computed(() => [...analytics.practiceTrend].reverse().slice(0, 5))
 
@@ -346,15 +401,25 @@ const applyAnalytics = (data: LearningAnalyticsOverviewPayload) => {
 
 const loadMaterials = async () => {
   materialsLoading.value = true
+  materialsError.value = ''
   try {
     const res = await getMaterialPageApi({
       current: 1,
       size: 50,
       parseStatus: 'SUCCESS'
     })
-    materials.value = res.data.data.records || []
-  } catch (error: any) {
-    ElMessage.error(error.message || '加载资料列表失败')
+    const firstPage = res.data.data
+    const records = firstPage.records || []
+    const pageCount = Math.ceil(Number(firstPage.total || records.length) / 50)
+    const remainingPages = await Promise.all(
+      Array.from({ length: Math.max(0, pageCount - 1) }, (_, index) =>
+        getMaterialPageApi({ current: index + 2, size: 50, parseStatus: 'SUCCESS' })
+      )
+    )
+    materials.value = [...records, ...remainingPages.flatMap((response) => response.data.data.records || [])]
+    materialsLoaded.value = true
+  } catch {
+    materialsError.value = '资料列表暂时无法加载'
   } finally {
     materialsLoading.value = false
   }
@@ -362,17 +427,24 @@ const loadMaterials = async () => {
 
 const loadAnalytics = async () => {
   loading.value = true
+  loadError.value = ''
   try {
     const res = await getLearningAnalyticsOverviewApi({
       materialId: filters.materialId || undefined,
       trendLimit: 12
     })
     applyAnalytics(res.data.data as LearningAnalyticsOverviewPayload)
-  } catch (error: any) {
-    ElMessage.error(error.message || '加载学习分析失败')
+    hasLoaded.value = true
+  } catch {
+    loadError.value = '学习分析暂时无法加载'
   } finally {
     loading.value = false
   }
+}
+
+const clearMaterialFilter = () => {
+  filters.materialId = undefined
+  void loadAnalytics()
 }
 
 const goMastery = (item: WeakKnowledgePointItem) => {
@@ -388,3 +460,31 @@ const goMastery = (item: WeakKnowledgePointItem) => {
 void loadMaterials()
 void loadAnalytics()
 </script>
+
+<style scoped>
+.insight-load-error { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; margin-bottom: 20px; padding: 22px 24px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.insight-load-error strong { color: var(--text); font-size: 15px; }
+.insight-load-error p { margin: 7px 0 0; color: var(--muted); font-size: 13px; line-height: 1.8; }
+.analytics-empty-callout { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 20px; margin-bottom: 20px; padding: 22px 24px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.analytics-empty-callout h2 { margin: 0; color: var(--text); font-size: 16px; font-weight: 600; }
+.analytics-empty-callout p { margin: 8px 0 0; color: var(--muted); font-size: 13px; line-height: 1.8; }
+.analytics-empty-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.analytics-empty-actions :deep(.el-button + .el-button) { margin-left: 0; }
+.trend-chart-frame { position: relative; padding-left: 42px; }
+.trend-y-axis { position: absolute; inset: 0 auto 0 0; width: 34px; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.trend-y-axis span { position: absolute; right: 0; transform: translateY(-50%); }
+.line-chart-wrap svg { height: 220px; border-radius: 8px; background: var(--bg); overflow: visible; }
+.trend-grid-line { stroke: var(--line); stroke-width: 1; stroke-dasharray: 4 5; vector-effect: non-scaling-stroke; }
+.trend-line, .trend-dot, .chart-axis { vector-effect: non-scaling-stroke; }
+.trend-dot:focus { fill: var(--brand); stroke-width: 6; }
+.trend-labels { position: relative; display: block; height: 22px; margin: 8px 0 0 42px; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.trend-labels span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+.trend-labels .trend-label--first { transform: none; }
+.trend-labels .trend-label--last { transform: translateX(-100%); }
+@media (max-width: 600px) {
+  .analytics-empty-callout { padding: 18px; }
+  .trend-chart-frame { padding-left: 36px; }
+  .trend-y-axis { width: 30px; font-size: 11px; }
+  .trend-labels { margin-left: 36px; font-size: 11px; }
+}
+</style>

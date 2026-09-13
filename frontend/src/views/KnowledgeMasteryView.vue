@@ -4,7 +4,7 @@
       <div>
         <h1 class="page-title">知识点掌握度</h1>
         <p class="page-desc">
-          根据练习提交记录、客观题判定和简答题 AI 评分，统计每个知识点的得分率、错题数和薄弱程度。
+          看看哪些知识已经掌握，哪些还值得再练一次。
         </p>
       </div>
       <div class="toolbar" style="margin-bottom: 0">
@@ -12,7 +12,12 @@
       </div>
     </div>
 
-    <div class="mastery-summary-grid">
+    <div v-if="materialsError" class="mastery-load-error" role="alert">
+      <div><strong>资料列表暂时无法加载</strong><p>可以继续查看知识点，重试后即可选择资料。</p></div>
+      <el-button :loading="materialsLoading" @click="loadMaterials">重新加载资料</el-button>
+    </div>
+
+    <div v-if="hasLoaded && !loading && !loadError" class="mastery-summary-grid">
       <div class="mastery-summary-card mastery-summary-card--main">
         <span>平均掌握度</span>
         <strong>{{ overview.averageMasteryPercent }}%</strong>
@@ -48,13 +53,14 @@
             v-model="filters.materialId"
             clearable
             filterable
-            placeholder="资料"
+            placeholder="全部资料"
+            aria-label="筛选学习资料"
             :loading="materialsLoading"
           >
             <el-option
               v-for="item in materials"
               :key="item.id"
-              :label="`${item.title} · #${item.id}`"
+              :label="item.title"
               :value="item.id"
             />
           </el-select>
@@ -64,25 +70,24 @@
             <el-option label="基本掌握" value="GOOD" />
             <el-option label="已掌握" value="MASTERED" />
           </el-select>
-          <el-select v-model="filters.questionType" clearable placeholder="题型">
+          <el-select v-model="filters.questionType" clearable placeholder="全部题型" aria-label="筛选题型">
             <el-option label="单选题" value="SINGLE" />
             <el-option label="判断题" value="JUDGE" />
             <el-option label="简答题" value="SHORT" />
-            <el-option label="简答题" value="SHORT_ANSWER" />
           </el-select>
           <el-button @click="resetFilters">重置条件</el-button>
         </div>
 
-        <div class="workspace-toolbar__meta">
+        <div v-if="hasLoaded && !loading && !loadError" class="workspace-toolbar__meta">
           <span class="workspace-chip">知识点 {{ overview.totalKnowledgePoints }}</span>
           <span class="workspace-chip workspace-chip--brand">错题 {{ overview.wrongAttempts }}</span>
         </div>
       </div>
 
-      <div v-if="overview.weakestPoints.length" class="mastery-weak-list">
+      <div v-if="hasLoaded && !loading && !loadError && reviewPoints.length" class="mastery-weak-list">
         <div class="mastery-weak-list__title">优先复习</div>
         <button
-          v-for="item in overview.weakestPoints"
+          v-for="item in reviewPoints"
           :key="`${item.materialId || 0}-${item.knowledgePoint}`"
           class="mastery-weak-pill"
           type="button"
@@ -94,10 +99,17 @@
 
       <div class="workspace-body">
         <div v-if="loading" class="state-block">正在计算知识点掌握度...</div>
-        <div v-else-if="!records.length" class="state-block empty">
-          暂时没有可统计的知识点。完成练习并提交后，这里会自动生成掌握度分析。
+        <div v-else-if="loadError" class="mastery-load-error mastery-load-error--body" role="alert">
+          <div><strong>{{ loadError }}</strong><p>数据暂时没有读取成功，请重试。</p></div>
+          <el-button type="primary" :loading="loading" @click="loadMastery">重新加载统计</el-button>
         </div>
-        <div v-else class="workspace-table">
+        <div v-else-if="hasLoaded && !records.length" class="state-block empty mastery-empty">
+          <h3>{{ hasFilters ? '没有找到匹配的知识点' : '从一次练习开始，了解自己的掌握程度' }}</h3>
+          <p>{{ hasFilters ? '试试其他关键词，或清除筛选条件查看全部知识点。' : '提交练习后，这里会整理已掌握的知识与需要巩固的重点。' }}</p>
+          <el-button v-if="hasFilters" @click="resetFilters">清除筛选</el-button>
+          <el-button v-else type="primary" @click="router.push(materialsLoaded && !materials.length ? '/materials' : '/quiz')">{{ materialsLoaded && !materials.length ? '添加学习资料' : '去做一次练习' }}</el-button>
+        </div>
+        <div v-else-if="hasLoaded" class="workspace-table">
           <div class="workspace-table__head workspace-table__head--mastery">
             <span>知识点</span>
             <span>掌握度</span>
@@ -146,7 +158,7 @@
           </div>
         </div>
 
-        <div class="workspace-pagination">
+        <div v-if="hasLoaded && !loading && !loadError && total" class="workspace-pagination">
           <div class="workspace-pagination__meta">
             第 {{ page.current }} / {{ Math.max(1, Math.ceil(total / page.size)) }} 页
           </div>
@@ -218,8 +230,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { computed, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getKnowledgeMasteryOverviewApi, type KnowledgeMasteryItem, type KnowledgeMasteryOverviewPayload } from '@/api/modules/knowledgeMastery'
 import { getMaterialPageApi, type MaterialPageItem } from '@/api/modules/material'
@@ -228,6 +239,10 @@ import { useAutoListQuery } from '@/composables/useAutoListQuery'
 const router = useRouter()
 const route = useRoute()
 const loading = ref(false)
+const hasLoaded = ref(false)
+const loadError = ref('')
+const materialsError = ref('')
+const materialsLoaded = ref(false)
 const materialsLoading = ref(false)
 const drawerVisible = ref(false)
 const records = ref<KnowledgeMasteryItem[]>([])
@@ -247,6 +262,10 @@ const overview = reactive({
   weakestPoints: [] as KnowledgeMasteryItem[]
 })
 
+const reviewPoints = computed(() =>
+  overview.weakestPoints.filter((item) => Number(item.masteryPercent) < 70)
+)
+
 const filters = reactive({
   keyword: typeof route.query.keyword === 'string' ? route.query.keyword : '',
   materialId: typeof route.query.materialId === 'string' && Number(route.query.materialId)
@@ -255,6 +274,8 @@ const filters = reactive({
   masteryLevel: '',
   questionType: ''
 })
+
+const hasFilters = computed(() => Boolean(filters.keyword || filters.materialId || filters.masteryLevel || filters.questionType))
 
 const page = reactive({
   current: 1,
@@ -280,7 +301,7 @@ const formatQuestionTypes = (value?: string) => {
   if (!value) {
     return '题型未记录'
   }
-  return value
+  const labels = value
     .split(',')
     .filter(Boolean)
     .map((item) => {
@@ -296,20 +317,20 @@ const formatQuestionTypes = (value?: string) => {
           return item
       }
     })
-    .join(' / ')
+  return [...new Set(labels)].join(' / ')
 }
 
 const progressColor = (percent: number) => {
   if (percent >= 85) {
-    return '#16a34a'
+    return 'var(--green)'
   }
   if (percent >= 70) {
-    return '#2563eb'
+    return 'var(--blue)'
   }
   if (percent >= 50) {
-    return '#d97706'
+    return 'var(--accent)'
   }
-  return '#e11d48'
+  return 'var(--red)'
 }
 
 const applyOverview = (data: KnowledgeMasteryOverviewPayload) => {
@@ -328,15 +349,25 @@ const applyOverview = (data: KnowledgeMasteryOverviewPayload) => {
 
 const loadMaterials = async () => {
   materialsLoading.value = true
+  materialsError.value = ''
   try {
     const res = await getMaterialPageApi({
       current: 1,
       size: 50,
       parseStatus: 'SUCCESS'
     })
-    materials.value = res.data.data.records || []
-  } catch (error: any) {
-    ElMessage.error(error.message || '加载资料列表失败')
+    const firstPage = res.data.data
+    const records = firstPage.records || []
+    const pageCount = Math.ceil(Number(firstPage.total || records.length) / 50)
+    const remainingPages = await Promise.all(
+      Array.from({ length: Math.max(0, pageCount - 1) }, (_, index) =>
+        getMaterialPageApi({ current: index + 2, size: 50, parseStatus: 'SUCCESS' })
+      )
+    )
+    materials.value = [...records, ...remainingPages.flatMap((response) => response.data.data.records || [])]
+    materialsLoaded.value = true
+  } catch {
+    materialsError.value = '资料列表暂时无法加载'
   } finally {
     materialsLoading.value = false
   }
@@ -344,6 +375,7 @@ const loadMaterials = async () => {
 
 const loadMastery = async () => {
   loading.value = true
+  loadError.value = ''
   try {
     const res = await getKnowledgeMasteryOverviewApi({
       current: page.current,
@@ -354,8 +386,9 @@ const loadMastery = async () => {
       questionType: filters.questionType || undefined
     })
     applyOverview(res.data.data as KnowledgeMasteryOverviewPayload)
-  } catch (error: any) {
-    ElMessage.error(error.message || '加载知识点掌握度失败')
+    hasLoaded.value = true
+  } catch {
+    loadError.value = '知识点掌握度暂时无法加载'
   } finally {
     loading.value = false
   }
@@ -399,3 +432,13 @@ const goWrongQuestions = (item: KnowledgeMasteryItem) => {
 void loadMaterials()
 void loadMastery()
 </script>
+
+<style scoped>
+.mastery-load-error { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; margin-bottom: 20px; padding: 22px 24px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.mastery-load-error--body { margin: 0; }
+.mastery-load-error strong { color: var(--text); font-size: 15px; }
+.mastery-load-error p { margin: 7px 0 0; color: var(--muted); font-size: 13px; line-height: 1.8; }
+.mastery-empty { display: grid; justify-items: center; align-content: center; gap: 12px; min-height: 240px; padding: 32px 20px; text-align: center; }
+.mastery-empty h3 { margin: 0; color: var(--text); font-size: 17px; font-weight: 600; line-height: 1.7; }
+.mastery-empty p { max-width: 450px; margin: 0 0 6px; color: var(--muted); font-size: 13px; line-height: 1.9; }
+</style>
