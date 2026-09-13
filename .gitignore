@@ -10,3 +10,6 @@ runtime/
 Thumbs.db
 
 .vercel
+
+# Local Java exercise draft
+/backend/src/main/java/com/aiassistant/learning/mapper/Main.java
