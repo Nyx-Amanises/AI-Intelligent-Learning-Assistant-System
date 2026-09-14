@@ -1,79 +1,64 @@
 <template>
   <main class="login-page">
-    <div class="login-shell">
-      <section class="login-story" aria-labelledby="login-story-title">
-        <div class="login-brand">
-          <span class="login-brand__mark"><AppIcon name="book-open" :size="26" /></span>
-          <div><strong>AI 学习助手</strong><span>让知识，成为自己的</span></div>
-        </div>
-
-        <div class="login-story__copy">
-          <span class="login-eyebrow">每一次学习，都更进一步</span>
-          <h1 id="login-story-title">把知识，<br>学成自己的。</h1>
-          <p>让资料有条理，让复习有方向。<br>在一个专注的空间里，理解、练习、慢慢掌握。</p>
-        </div>
-
-        <div class="learning-path" aria-label="学习路径">
-          <div class="learning-path__heading"><span>从读懂，到会用</span><AppIcon name="spark" :size="18" /></div>
-          <div v-for="(step, index) in learningSteps" :key="step.title" class="learning-path__step">
-            <span class="learning-path__icon"><AppIcon :name="step.icon" :size="20" /></span>
-            <div><strong>{{ step.title }}</strong><p>{{ step.description }}</p></div>
-            <span class="learning-path__number">0{{ index + 1 }}</span>
-          </div>
-        </div>
-
-        <p class="login-story__footnote">资料 <span aria-hidden="true">→</span> 总结 <span aria-hidden="true">→</span> 练习 <span aria-hidden="true">→</span> 复盘</p>
-      </section>
-
+    <div class="login-shell" :class="{ 'login-shell--register': isRegister }">
       <section class="login-form-panel" aria-labelledby="login-form-title">
+        <div class="login-brand" aria-label="AI 学习助手">
+          <span class="login-brand__mark"><AppIcon name="book-open" :size="23" /></span>
+          <span class="login-brand__name">AI 学习助手</span>
+        </div>
+
         <div class="login-form-content">
-          <span class="login-form-eyebrow">你的个人学习空间</span>
-          <h2 id="login-form-title">{{ isRegister ? '开启学习新一页' : '欢迎回来' }}</h2>
-          <p class="login-form-description">{{ isRegister ? '创建账号，把学习资料和每一点进步留在这里。' : '登录后，继续上一次的思考与探索。' }}</p>
+          <header class="login-form-heading">
+            <p class="login-form-eyebrow">{{ isRegister ? 'A NEW CHAPTER' : 'WELCOME BACK' }}</p>
+            <h1 id="login-form-title">{{ isRegister ? '开启学习新一页' : '欢迎回来' }}</h1>
+            <p class="login-form-description">{{ isRegister ? '创建你的账号，让好奇心在这里生根。' : '登录你的学习空间，继续探索与积累。' }}</p>
+          </header>
 
           <p v-if="registrationNotice" class="auth-notice auth-notice--success" role="status">{{ registrationNotice }}</p>
           <p v-if="submitError" class="auth-notice auth-notice--error" role="alert">{{ submitError }}</p>
 
           <form class="auth-form" novalidate :aria-busy="submitting" @submit.prevent="submit">
-            <div class="auth-field">
-              <label for="auth-username">用户名</label>
-              <input
-                id="auth-username"
-                ref="usernameInput"
-                v-model="form.username"
-                name="username"
-                type="text"
-                autocomplete="username"
-                autocapitalize="none"
-                spellcheck="false"
-                required
-                :disabled="submitting"
-                :maxlength="isRegister ? 20 : undefined"
-                :placeholder="isRegister ? '设置 4–20 位用户名' : '输入你的用户名'"
-                :aria-invalid="Boolean(errors.username)"
-                :aria-describedby="errors.username ? 'auth-username-error' : undefined"
-                @blur="validateField('username')"
-              >
-              <p v-if="errors.username" id="auth-username-error" class="auth-field-error">{{ errors.username }}</p>
-            </div>
+            <div class="auth-name-row" :class="{ 'auth-name-row--register': isRegister }">
+              <div class="auth-field">
+                <label for="auth-username">用户名</label>
+                <input
+                  id="auth-username"
+                  ref="usernameInput"
+                  v-model="form.username"
+                  name="username"
+                  type="text"
+                  autocomplete="username"
+                  autocapitalize="none"
+                  spellcheck="false"
+                  required
+                  :disabled="submitting"
+                  :maxlength="isRegister ? 20 : undefined"
+                  :placeholder="isRegister ? '4–20 位用户名' : '请输入你的用户名'"
+                  :aria-invalid="Boolean(errors.username)"
+                  :aria-describedby="errors.username ? 'auth-username-error' : undefined"
+                  @blur="validateField('username')"
+                >
+                <p v-if="errors.username" id="auth-username-error" class="auth-field-error">{{ errors.username }}</p>
+              </div>
 
-            <div v-if="isRegister" class="auth-field">
-              <label for="auth-nickname">昵称</label>
-              <input
-                id="auth-nickname"
-                v-model="form.nickname"
-                name="nickname"
-                type="text"
-                autocomplete="nickname"
-                maxlength="20"
-                required
-                :disabled="submitting"
-                placeholder="希望我们如何称呼你"
-                :aria-invalid="Boolean(errors.nickname)"
-                :aria-describedby="errors.nickname ? 'auth-nickname-error' : undefined"
-                @blur="validateField('nickname')"
-              >
-              <p v-if="errors.nickname" id="auth-nickname-error" class="auth-field-error">{{ errors.nickname }}</p>
+              <div v-if="isRegister" class="auth-field">
+                <label for="auth-nickname">昵称</label>
+                <input
+                  id="auth-nickname"
+                  v-model="form.nickname"
+                  name="nickname"
+                  type="text"
+                  autocomplete="nickname"
+                  maxlength="20"
+                  required
+                  :disabled="submitting"
+                  placeholder="怎么称呼你"
+                  :aria-invalid="Boolean(errors.nickname)"
+                  :aria-describedby="errors.nickname ? 'auth-nickname-error' : undefined"
+                  @blur="validateField('nickname')"
+                >
+                <p v-if="errors.nickname" id="auth-nickname-error" class="auth-field-error">{{ errors.nickname }}</p>
+              </div>
             </div>
 
             <div v-if="isRegister" class="auth-field">
@@ -86,7 +71,7 @@
                 inputmode="email"
                 autocomplete="email"
                 :disabled="submitting"
-                placeholder="输入你的邮箱地址"
+                placeholder="name@example.com"
                 :aria-invalid="Boolean(errors.email)"
                 :aria-describedby="errors.email ? 'auth-email-error' : undefined"
                 @blur="validateField('email')"
@@ -106,7 +91,7 @@
                   :autocomplete="isRegister ? 'new-password' : 'current-password'"
                   :maxlength="isRegister ? 20 : undefined"
                   :disabled="submitting"
-                  :placeholder="isRegister ? '设置 6–20 位密码' : '输入你的密码'"
+                  :placeholder="isRegister ? '设置 6–20 位密码' : '请输入你的密码'"
                   :aria-invalid="Boolean(errors.password)"
                   :aria-describedby="errors.password ? 'auth-password-error' : undefined"
                   required
@@ -119,7 +104,17 @@
                   :aria-label="passwordVisible ? '隐藏密码' : '显示密码'"
                   :aria-pressed="passwordVisible"
                   @click="passwordVisible = !passwordVisible"
-                >{{ passwordVisible ? '隐藏' : '显示' }}</button>
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                    <template v-if="passwordVisible">
+                      <path d="m3 3 18 18M10.6 10.6a2 2 0 0 0 2.8 2.8M9.8 5.3A10.2 10.2 0 0 1 12 5c6 0 10 7 10 7a18 18 0 0 1-3.2 3.8M6.2 6.2A20 20 0 0 0 2 12s4 7 10 7a11 11 0 0 0 5.1-1.4" />
+                    </template>
+                    <template v-else>
+                      <path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </template>
+                  </svg>
+                </button>
               </div>
               <p v-if="errors.password" id="auth-password-error" class="auth-field-error">{{ errors.password }}</p>
             </div>
@@ -127,17 +122,40 @@
             <button class="auth-submit" type="submit" :disabled="submitting">
               <span v-if="submitting" class="auth-submit__spinner" aria-hidden="true" />
               <span>{{ submitting ? (isRegister ? '正在创建账号…' : '正在登录…') : (isRegister ? '创建账号' : '登录学习空间') }}</span>
-              <AppIcon v-if="!submitting" name="chevron-right" :size="18" />
+              <AppIcon v-if="!submitting" name="arrow-right" :size="18" />
             </button>
           </form>
 
           <div class="auth-switch">
-            <span>{{ isRegister ? '已经有账号？' : '第一次来到这里？' }}</span>
-            <button type="button" :disabled="submitting" @click="toggleMode(!isRegister)">{{ isRegister ? '返回登录' : '创建账号' }}</button>
+            <span>{{ isRegister ? '已经有账号？' : '还没有账号？' }}</span>
+            <button type="button" :disabled="submitting" @click="toggleMode(!isRegister)">
+              {{ isRegister ? '返回登录' : '创建账号' }}
+              <AppIcon name="arrow-up-right" :size="13" />
+            </button>
           </div>
         </div>
-        <p class="login-form-footnote">从一份资料开始，积累属于你的知识。</p>
+
+        <p class="login-form-footnote"><span aria-hidden="true" />从一份资料开始，积累属于你的知识</p>
       </section>
+
+      <aside class="login-visual" aria-labelledby="login-visual-title">
+        <img
+          class="login-visual__image"
+          :src="botanicalPhoto"
+          alt=""
+          width="1400"
+          height="1051"
+          fetchpriority="high"
+          decoding="async"
+          draggable="false"
+        >
+        <div class="login-visual__copy">
+          <p class="login-visual__eyebrow"><span aria-hidden="true" />LEARNING IS GROWING</p>
+          <h2 id="login-visual-title">让好奇，<br>慢慢生长。</h2>
+          <p class="login-visual__description">在这里，把每一份知识学成自己的。</p>
+        </div>
+        <p class="login-visual__footnote">按自己的节奏，每天多懂一点。</p>
+      </aside>
     </div>
   </main>
 </template>
@@ -149,6 +167,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { loginApi, registerApi } from '@/api/modules/auth'
 import { useUserStore } from '@/stores/user'
 import AppIcon from '@/components/AppIcon.vue'
+import botanicalPhoto from '@/assets/auth/botanical-study.webp'
 
 type AuthField = 'username' | 'nickname' | 'email' | 'password'
 
@@ -164,12 +183,6 @@ const usernameInput = ref<HTMLInputElement | null>(null)
 const passwordInput = ref<HTMLInputElement | null>(null)
 const form = reactive({ username: '', password: '', nickname: '', email: '' })
 const errors = reactive<Record<AuthField, string>>({ username: '', nickname: '', email: '', password: '' })
-const learningSteps = [
-  { icon: 'materials', title: '把资料读清楚', description: '整理课程资料，用 AI 提炼核心知识。' },
-  { icon: 'practice', title: '让理解更扎实', description: '围绕学习内容出题，在练习中检验理解。' },
-  { icon: 'mastery', title: '把薄弱点补起来', description: '回看错题与掌握度，找到下一步方向。' }
-]
-
 const validateField = (field: AuthField) => {
   let message = ''
   const value = form[field].trim()
@@ -245,120 +258,221 @@ const submit = async () => {
 
 <style scoped>
 .login-page {
-  --login-story-bg: var(--brand-light, #eef3ec);
+  --auth-ink: #263d30;
+  --auth-muted: #737c73;
+  --auth-green: #315a3e;
+  --auth-line: #dfe4dc;
   min-height: 100svh;
   display: grid;
   place-items: center;
-  padding: 32px;
-  background: var(--bg);
+  padding: 40px 32px;
+  background: #f3f4ef;
+  color: var(--auth-ink);
+  font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif;
 }
 
 .login-shell {
   display: grid;
-  grid-template-columns: 1.06fr 1fr;
-  width: min(1160px, 100%);
-  min-height: min(780px, calc(100svh - 64px));
-  border: 1px solid var(--line);
-  border-radius: 24px;
-  overflow: hidden;
-  background: var(--panel);
-  box-shadow: 0 20px 70px rgb(38 54 40 / 4%);
+  grid-template-columns: 1.02fr 1fr;
+  width: min(1180px, 100%);
+  min-height: 704px;
+  padding: 12px;
+  border: 1px solid #e4e7de;
+  border-radius: 28px;
+  background: #fffefa;
+  box-shadow: 0 24px 70px -28px rgb(41 58 35 / 15%), 0 2px 8px rgb(41 58 35 / 2%);
+  animation: auth-reveal .5s ease-out both;
 }
 
-.login-story {
+.login-form-panel {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  padding: 44px 48px 32px;
-  background: var(--login-story-bg);
-  border-right: 1px solid var(--line);
+  padding: 32px 52px 25px;
 }
 
-.login-brand { display: flex; align-items: center; gap: 12px; }
-.login-brand__mark { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 13px; color: #fff; background: var(--brand); }
-.login-brand > div { display: flex; flex-direction: column; gap: 5px; }
-.login-brand strong { color: var(--text); font-size: 18px; letter-spacing: -.3px; }
-.login-brand div > span { color: var(--text-secondary); font-size: 11px; }
-.login-story__copy { margin: 60px 0 34px; }
-.login-eyebrow { color: var(--brand); font-size: 12px; font-weight: 600; letter-spacing: 2px; }
-.login-story h1 { margin: 18px 0 22px; color: var(--text); font-size: clamp(36px, 3.8vw, 54px); line-height: 1.28; letter-spacing: -1.5px; font-weight: 650; }
-.login-story__copy > p { margin: 0; color: var(--text-secondary); font-size: 14px; line-height: 1.9; }
-.learning-path { padding: 18px 22px 6px; border: 1px solid var(--line); border-radius: 16px; background: var(--panel); }
-.learning-path__heading { display: flex; align-items: center; justify-content: space-between; padding-bottom: 8px; color: var(--brand); font-size: 12px; font-weight: 600; }
-.learning-path__step { display: grid; grid-template-columns: 36px minmax(0, 1fr) 22px; align-items: center; gap: 12px; padding: 15px 0; }
-.learning-path__step + .learning-path__step { border-top: 1px solid var(--line); }
-.learning-path__icon { display: grid; place-items: center; width: 36px; height: 36px; background: var(--brand-light); color: var(--brand); border-radius: 10px; }
-.learning-path__step strong { color: var(--text); font-size: 13px; font-weight: 600; }
-.learning-path__step p { margin: 5px 0 0; color: var(--text-secondary); font-size: 12px; line-height: 1.65; }
-.learning-path__number { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
-.login-story__footnote { display: flex; align-items: center; gap: 16px; margin: auto 0 0; padding-top: 28px; color: var(--text-secondary); font-size: 12px; }
-.login-story__footnote span { color: var(--brand); }
+.login-brand {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: min(352px, 100%);
+  margin-inline: auto;
+}
+.login-brand__mark {
+  display: grid;
+  place-items: center;
+  width: 37px;
+  height: 37px;
+  border-radius: 11px;
+  color: #fffefa;
+  background: var(--auth-green);
+}
+.login-brand__name { font-size: 16px; font-weight: 600; letter-spacing: .2px; }
+.login-form-content { width: min(352px, 100%); margin: auto; padding: 48px 0; }
+.login-form-heading { margin-bottom: 32px; }
+.login-form-eyebrow {
+  margin: 0 0 12px;
+  color: #798775;
+  font: 500 10px/1.5 "Segoe UI", sans-serif;
+  letter-spacing: 2.1px;
+}
+.login-form-heading h1 { margin: 0; font-size: 32px; font-weight: 600; line-height: 1.45; letter-spacing: -1px; }
+.login-form-description { margin: 12px 0 0; color: var(--auth-muted); font-size: 13px; line-height: 1.9; }
 
-.login-form-panel { display: flex; flex-direction: column; justify-content: center; min-width: 0; padding: 66px 56px 28px; }
-.login-form-content { width: min(360px, 100%); margin: auto; padding: 20px 0; }
-.login-form-eyebrow { color: var(--brand); font-size: 12px; font-weight: 600; letter-spacing: 1px; }
-.login-form-content h2 { margin: 14px 0 12px; color: var(--text); font-size: 30px; line-height: 1.35; font-weight: 650; letter-spacing: -.8px; }
-.login-form-description { margin: 0 0 30px; color: var(--text-secondary); font-size: 14px; line-height: 1.8; }
-.auth-form { display: grid; grid-template-columns: minmax(0,1fr); justify-content: stretch; gap: 20px; padding: 0; }
+.auth-form { display: grid; grid-template-columns: minmax(0, 1fr); gap: 23px; padding: 0; }
+.auth-name-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.auth-name-row--register { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .auth-field { min-width: 0; }
-.auth-field label { display: block; margin-bottom: 9px; color: var(--text); font-size: 13px; font-weight: 600; }
-.auth-field label > span { margin-left: 5px; color: var(--muted); font-size: 12px; font-weight: 400; }
-.auth-field input { width: 100%; height: 48px; padding: 0 14px; border: 1px solid var(--line); border-radius: 9px; outline: none; background: var(--panel); color: var(--text); font: inherit; font-size: 14px; transition: border-color .18s ease, box-shadow .18s ease; }
-.auth-field input::placeholder { color: var(--muted); }
-.auth-field input:hover { border-color: var(--muted); }
-.auth-field input:focus { border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-soft); }
-.auth-field input[aria-invalid="true"] { border-color: var(--red); }
-.auth-field input:disabled { cursor: wait; background: var(--bg-secondary); opacity: .7; }
+.auth-field label { display: block; margin-bottom: 9px; color: #354438; font-size: 13px; font-weight: 500; }
+.auth-field label > span { margin-left: 5px; color: var(--auth-muted); font-size: 11px; font-weight: 400; }
+.auth-field input {
+  width: 100%;
+  height: 50px;
+  padding: 0 15px;
+  border: 1px solid var(--auth-line);
+  border-radius: 8px;
+  outline: none;
+  background: #fffefa;
+  color: var(--auth-ink);
+  font: inherit;
+  font-size: 13px;
+  transition: border-color .18s ease, box-shadow .18s ease, background-color .18s ease;
+}
+.auth-field input::placeholder { color: #959b91; }
+.auth-field input:hover { border-color: #adb9a7; }
+.auth-field input:focus { border-color: var(--auth-green); background: #fff; box-shadow: 0 0 0 3px #e9efe4; }
+.auth-field input[aria-invalid="true"] { border-color: #b45449; }
+.auth-field input[aria-invalid="true"]:focus { box-shadow: 0 0 0 3px #faeeea; }
+.auth-field input:disabled { cursor: wait; background: #f1f3ed; opacity: .75; }
 .auth-password { position: relative; }
-.auth-password input { padding-right: 64px; }
-.auth-password__toggle { position: absolute; top: 2px; right: 3px; min-width: 54px; min-height: 44px; padding: 0 10px; border: 0; border-radius: 7px; background: transparent; color: var(--text-secondary); font: inherit; font-size: 12px; cursor: pointer; }
-.auth-password__toggle:hover { color: var(--brand); }
-.auth-field-error { margin: 7px 0 0; color: var(--danger-text, #a13c35); font-size: 12px; line-height: 1.6; }
-.auth-notice { margin: 0 0 22px; padding: 12px 14px; border-radius: 9px; font-size: 13px; line-height: 1.65; }
-.auth-notice--error { color: var(--danger-text, #a13c35); background: var(--red-soft); }
-.auth-notice--success { color: var(--brand); background: var(--brand-light); }
-.auth-submit { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 48px; margin-top: 5px; padding: 12px 20px; border: 1px solid var(--brand); border-radius: 9px; background: var(--brand); color: #fff; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; transition: background .18s ease, border-color .18s ease; }
-.auth-submit:hover { background: var(--brand-hover); border-color: var(--brand-hover); }
-.auth-submit:disabled { cursor: wait; opacity: .7; }
+.auth-password input { padding-right: 50px; }
+.auth-password__toggle {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #7d877a;
+  cursor: pointer;
+  transition: color .18s ease, background-color .18s ease;
+}
+.auth-password__toggle svg { width: 19px; height: 19px; }
+.auth-password__toggle:hover { color: var(--auth-green); background: #f0f3ea; }
+.auth-field-error { margin: 7px 0 0; color: #a13c35; font-size: 12px; line-height: 1.65; }
+.auth-notice { margin: 0 0 22px; padding: 12px 14px; border-radius: 8px; font-size: 13px; line-height: 1.75; }
+.auth-notice--error { color: #a13c35; background: #faeeea; }
+.auth-notice--success { color: #28503a; background: #edf3e8; }
+.auth-submit {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 50px;
+  margin-top: 5px;
+  padding: 12px 45px;
+  border: 1px solid var(--auth-green);
+  border-radius: 8px;
+  background: var(--auth-green);
+  color: #fff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: 0 3px 7px rgb(35 66 39 / 8%);
+  transition: background-color .18s ease, border-color .18s ease, box-shadow .18s ease;
+}
+.auth-submit > .app-icon { position: absolute; right: 18px; transition: transform .18s ease; }
+.auth-submit:hover:not(:disabled) { background: #254b32; border-color: #254b32; box-shadow: 0 4px 12px rgb(35 66 39 / 16%); }
+.auth-submit:hover:not(:disabled) > .app-icon { transform: translateX(3px); }
+.auth-submit:disabled { cursor: wait; opacity: .72; }
 .auth-submit__spinner { width: 16px; height: 16px; border: 2px solid rgb(255 255 255 / 35%); border-top-color: currentColor; border-radius: 50%; animation: auth-spin .7s linear infinite; }
-.auth-switch { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 4px; margin-top: 22px; color: var(--text-secondary); font-size: 13px; }
-.auth-switch button { min-height: 44px; padding: 0 8px; border: 0; border-radius: 7px; background: transparent; color: var(--brand); font: inherit; font-weight: 600; cursor: pointer; }
-.auth-switch button:hover { background: var(--brand-light); }
+.auth-switch { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 1px; margin-top: 24px; color: var(--auth-muted); font-size: 12px; }
+.auth-switch button { display: inline-flex; align-items: center; gap: 4px; min-height: 44px; padding: 0 7px; border: 0; border-radius: 6px; background: transparent; color: var(--auth-green); font: inherit; font-weight: 600; cursor: pointer; }
+.auth-switch button:hover { background: #edf3e8; }
 .auth-switch button:disabled, .auth-password__toggle:disabled { cursor: wait; opacity: .6; }
-.auth-switch button:focus-visible, .auth-password__toggle:focus-visible, .auth-submit:focus-visible { outline: 3px solid var(--brand); outline-offset: 3px; }
-.login-form-footnote { margin: 24px 0 0; color: var(--muted); text-align: center; font-size: 12px; line-height: 1.7; }
+.auth-switch button:focus-visible, .auth-password__toggle:focus-visible, .auth-submit:focus-visible { outline: 3px solid #7e9d79; outline-offset: 3px; }
+.login-form-footnote { display: flex; align-items: center; justify-content: center; gap: 7px; margin: 0; color: #899181; font-size: 10px; line-height: 1.8; text-align: center; }
+.login-form-footnote > span { width: 4px; height: 4px; flex: 0 0 auto; border-radius: 50%; background: #9baa8f; }
 
+.login-visual {
+  position: relative;
+  isolation: isolate;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 18px;
+  background: #e9ecdf;
+}
+.login-visual__image { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 52% center; mix-blend-mode: multiply; filter: saturate(.82); }
+.login-visual::after { position: absolute; z-index: -1; inset: 0; background: linear-gradient(180deg, rgb(239 241 230 / 30%), transparent 42%, transparent 78%, rgb(236 239 226 / 24%)); content: ""; }
+.login-visual__image { z-index: -2; }
+.login-visual__copy { position: relative; padding: 47px 42px; }
+.login-visual__eyebrow { display: flex; align-items: center; gap: 10px; margin: 0 0 24px; color: #5d7455; font: 500 9px/1.5 "Segoe UI", sans-serif; letter-spacing: 2.1px; }
+.login-visual__eyebrow > span { width: 24px; height: 1px; background: currentColor; }
+.login-visual__copy h2 { margin: 0; color: #2d4e36; font-family: "Noto Serif SC", "Songti SC", "STSong", "SimSun", serif; font-size: clamp(35px, 3.25vw, 46px); font-weight: 400; line-height: 1.5; letter-spacing: 2px; }
+.login-visual__description { margin: 20px 0 0; color: #5c7052; font-size: 12px; line-height: 1.8; letter-spacing: .5px; }
+.login-visual__footnote { position: absolute; right: 36px; bottom: 25px; left: 42px; margin: 0; color: #5f7356; font-size: 11px; line-height: 1.8; letter-spacing: .8px; }
+.login-shell--register .login-form-content { padding-block: 30px; }
+.login-shell--register .login-form-heading { margin-bottom: 25px; }
+.login-shell--register .auth-form { gap: 18px; }
+.login-shell--register .auth-switch { margin-top: 17px; }
+
+@keyframes auth-reveal { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes auth-spin { to { transform: rotate(360deg); } }
 
-@media (max-width: 1000px) {
-  .login-page { padding: 24px; }
-  .login-story { padding: 36px 32px 28px; }
-  .login-form-panel { padding: 44px 36px 28px; }
-  .login-story__copy { margin-top: 48px; }
+@media (max-width: 1040px) {
+  .login-page { padding: 28px; }
+  .login-form-panel { padding: 32px 30px 25px; }
+  .login-visual__copy { padding: 45px 32px; }
+  .login-visual__copy h2 { font-size: 38px; }
+  .login-visual__description { font-size: 11px; letter-spacing: 0; }
+  .login-visual__footnote { left: 32px; font-size: 10px; }
 }
 
-@media (max-width: 720px) {
-  .login-page { display: block; padding: 0; }
-  .login-shell { grid-template-columns: 1fr; min-height: 100svh; border: 0; border-radius: 0; box-shadow: none; }
-  .login-story { padding: 24px 28px; border-right: 0; border-bottom: 1px solid var(--line); }
-  .login-brand__mark { width: 36px; height: 36px; border-radius: 10px; }
-  .login-brand strong { font-size: 17px; }
-  .login-story__copy { margin: 28px 0 0; }
-  .login-eyebrow { font-size: 11px; letter-spacing: 1px; }
-  .login-story h1 { margin: 10px 0 12px; font-size: 32px; line-height: 1.3; letter-spacing: -.8px; }
-  .login-story h1 br { display: none; }
-  .login-story__copy > p { font-size: 13px; line-height: 1.75; }
-  .learning-path, .login-story__footnote { display: none; }
-  .login-form-panel { padding: 30px 28px calc(22px + env(safe-area-inset-bottom)); }
-  .login-form-content { padding: 0; margin: 0 auto; }
-  .login-form-content h2 { margin-top: 10px; font-size: 27px; }
-  .login-form-description { margin-bottom: 25px; font-size: 13px; }
+@media (max-width: 760px) {
+  .login-page { padding: 24px; }
+  .login-shell { grid-template-columns: minmax(0, 1fr); width: min(480px, 100%); min-height: min(720px, calc(100svh - 48px)); padding: 0; border-radius: 22px; }
+  .login-form-panel { padding: 36px 38px 28px; }
+  .login-visual { display: none; }
+  .login-form-content { padding-block: 48px; }
   .auth-field input { font-size: 16px; }
-  .login-form-footnote { margin-top: 28px; font-size: 11px; }
+  .auth-name-row--register input { font-size: 14px; }
+}
+
+@media (max-width: 480px) {
+  .login-page { padding: 16px; }
+  .login-shell { min-height: min(720px, calc(100svh - 32px)); border-radius: 20px; }
+  .login-form-panel { padding: 30px 25px 25px; }
+  .login-brand__name { font-size: 15px; }
+  .login-form-heading h1 { font-size: 30px; }
+  .login-form-description { font-size: 12px; }
+  .login-form-footnote { font-size: 10px; }
+  .auth-name-row { gap: 13px; }
+}
+
+@media (max-width: 360px) {
+  .login-page { padding: 10px; }
+  .login-shell { min-height: calc(100svh - 20px); }
+  .login-form-panel { padding: 26px 20px 22px; }
+  .login-form-heading h1 { font-size: 27px; }
+  .auth-name-row--register { grid-template-columns: minmax(0, 1fr); }
+  .auth-name-row--register input { font-size: 16px; }
+}
+
+@media (max-height: 760px) and (min-width: 761px) {
+  .login-page { padding-block: 24px; }
+  .login-shell { min-height: 650px; }
+  .login-form-content { padding-block: 30px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .auth-submit__spinner { animation: none; }
-  .auth-field input, .auth-submit { transition: none; }
+  .login-shell, .auth-submit__spinner { animation: none; }
+  .auth-field input, .auth-submit, .auth-submit > .app-icon, .auth-password__toggle { transition: none; }
 }
 </style>
