@@ -8,8 +8,14 @@ export interface LoginPayload {
 export interface RegisterPayload {
   username: string
   password: string
+  confirmPassword: string
   nickname: string
   email?: string
+}
+
+export interface UpdateProfilePayload {
+  nickname: string
+  email?: string | null
 }
 
 export const loginApi = (data: LoginPayload) => http.post('/auth/login', data)
@@ -17,6 +23,8 @@ export const loginApi = (data: LoginPayload) => http.post('/auth/login', data)
 export const registerApi = (data: RegisterPayload) => http.post('/auth/register', data)
 
 export const getProfileApi = () => http.get('/user/profile')
+
+export const updateProfileApi = (data: UpdateProfilePayload) => http.put('/user/profile', data)
 
 export const uploadAvatarApi = (file: File) => {
   const formData = new FormData()

@@ -2,9 +2,9 @@
   <section class="quiz-view">
     <div class="page-header">
       <div>
-        <div class="learning-eyebrow">把知识变成掌握</div>
+        <div class="learning-eyebrow">专注练习</div>
         <h1 class="page-title">练习题集</h1>
-        <p class="page-desc">从你的学习资料中生成练习，用一次小测检验理解。</p>
+        <p class="page-desc">选一套题，把理解再加深一点。</p>
       </div>
       <el-button type="primary" :loading="generating" @click="generateDialogVisible = true">
         <svg class="button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke-linecap="round" /></svg>
@@ -14,12 +14,14 @@
 
     <div class="workspace-panel">
       <div class="quiz-library-heading">
-        <div><h2>我的题集 <span>{{ total }}</span></h2><p>选一套题，开始今天的专注练习。</p></div>
-        <el-button :loading="questionSetLoading" @click="loadQuestionSets">刷新</el-button>
+        <div><h2>全部题集 <span>{{ total }}</span></h2></div>
+        <el-button text :loading="questionSetLoading" @click="loadQuestionSets">刷新</el-button>
       </div>
       <div class="workspace-toolbar">
         <div class="workspace-filter-bar quiz-filter-bar">
-          <el-input v-model="filters.keyword" clearable placeholder="搜索题集名称" aria-label="搜索题集" class="workspace-filter-bar__search" />
+          <el-input v-model="filters.keyword" clearable placeholder="搜索题集名称" aria-label="搜索题集" class="workspace-filter-bar__search">
+            <template #prefix><svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 4 4" stroke-linecap="round" /></svg></template>
+          </el-input>
           <el-select v-model="filters.status" clearable placeholder="全部状态" aria-label="筛选题集状态">
             <el-option label="可练习" value="ACTIVE" />
             <el-option label="已停用" value="DISABLED" />
@@ -27,7 +29,7 @@
           <el-select v-model="filters.difficultyLevel" clearable placeholder="全部难度" aria-label="筛选难度">
             <el-option v-for="level in 5" :key="level" :label="formatDifficulty(level)" :value="level" />
           </el-select>
-          <el-button @click="resetFilters">重置</el-button>
+          <el-button text @click="resetFilters">重置</el-button>
         </div>
       </div>
 
@@ -43,17 +45,20 @@
           <el-button v-else type="primary" @click="router.push('/materials')">先添加学习资料</el-button>
         </div>
         <div v-else class="quiz-card-grid">
-          <article v-for="item in questionSets" :key="item.id" class="quiz-set-card">
-            <div class="quiz-set-card__top">
-              <span class="quiz-set-card__category">学习自测</span>
-              <span class="quiz-status" :class="{ 'quiz-status--disabled': item.status === 'DISABLED' }">{{ formatSetStatus(item.status) }}</span>
-            </div>
-            <button type="button" class="quiz-set-card__title" @click="viewQuestionSet(item)">{{ item.title }}</button>
-            <p class="quiz-set-card__date">创建于 {{ formatDateTime(item.createdAt).slice(0, 10) }}</p>
-            <div class="quiz-set-card__stats">
-              <div><strong>{{ item.questionCount }}</strong><span>道题目</span></div>
-              <div><strong>{{ item.totalScore }}</strong><span>总分</span></div>
-              <div><strong class="quiz-set-card__difficulty">{{ formatDifficulty(item.difficultyLevel) }}</strong><span>练习难度</span></div>
+          <article v-for="(item, index) in questionSets" :key="item.id" class="quiz-set-card">
+            <span class="quiz-set-card__number" aria-hidden="true">{{ String((page.current - 1) * page.size + index + 1).padStart(2, '0') }}</span>
+            <div class="quiz-set-card__content">
+              <div class="quiz-set-card__top">
+                <span class="quiz-set-card__category">学习自测</span>
+                <span class="quiz-status" :class="{ 'quiz-status--disabled': item.status === 'DISABLED' }">{{ formatSetStatus(item.status) }}</span>
+              </div>
+              <button type="button" class="quiz-set-card__title" @click="viewQuestionSet(item)">{{ item.title }}</button>
+              <div class="quiz-set-card__meta">
+                <span>{{ item.questionCount }} 道题目</span>
+                <span>满分 {{ item.totalScore }} 分</span>
+                <span>{{ formatDifficulty(item.difficultyLevel) }}</span>
+                <span class="quiz-set-card__date">{{ formatDateTime(item.createdAt).slice(0, 10) }}</span>
+              </div>
             </div>
             <div class="quiz-set-card__actions">
               <div class="quiz-set-card__secondary">
@@ -93,9 +98,9 @@
         <el-form-item label="题集名称"><el-input v-model="form.questionSetTitle" maxlength="200" show-word-limit placeholder="给这次练习起个名字" /></el-form-item>
         <div class="quiz-form-heading"><strong>题型组合</strong><span>共 {{ totalQuestionCount }} 道 · 最多 20 道</span></div>
         <div class="quiz-count-grid">
-          <el-form-item label="单选题"><el-input-number v-model="form.singleCount" :min="0" :max="20" aria-label="单选题数量" controls-position="right" /></el-form-item>
-          <el-form-item label="判断题"><el-input-number v-model="form.judgeCount" :min="0" :max="20" aria-label="判断题数量" controls-position="right" /></el-form-item>
-          <el-form-item label="简答题"><el-input-number v-model="form.shortAnswerCount" :min="0" :max="20" aria-label="简答题数量" controls-position="right" /></el-form-item>
+          <el-form-item label="单选题"><el-input-number v-model="form.singleCount" :min="0" :max="20" aria-label="单选题数量" /></el-form-item>
+          <el-form-item label="判断题"><el-input-number v-model="form.judgeCount" :min="0" :max="20" aria-label="判断题数量" /></el-form-item>
+          <el-form-item label="简答题"><el-input-number v-model="form.shortAnswerCount" :min="0" :max="20" aria-label="简答题数量" /></el-form-item>
         </div>
         <el-alert v-if="totalQuestionCount > 20 || totalQuestionCount <= 0" title="请选择 1 至 20 道题，再开始生成。" type="warning" :closable="false" show-icon class="quiz-notice" />
         <el-form-item label="练习难度" class="quiz-difficulty-field">
@@ -567,49 +572,60 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.learning-eyebrow { margin-bottom: 8px; color: var(--brand); font-size: 12px; font-weight: 650; letter-spacing: .12em; }
-.button-icon { width: 16px; height: 16px; margin-right: 7px; }
-.quiz-library-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 24px 24px 0; }
-.quiz-library-heading h2 { display: flex; align-items: center; gap: 9px; margin: 0; font-size: 17px; }
-.quiz-library-heading h2 span { min-width: 24px; padding: 2px 7px; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; font-size: 12px; font-weight: 500; text-align: center; }
-.quiz-library-heading p { margin: 7px 0 0; color: var(--muted); font-size: 13px; }
-.quiz-view .quiz-filter-bar { display: grid; grid-template-columns: minmax(200px, 1.6fr) minmax(120px, .75fr) minmax(120px, .75fr) auto; width: 100%; margin-bottom: 0; }
-.quiz-view .workspace-toolbar { margin-top: 6px; }
-.quiz-notice { margin-bottom: 20px; }
-.quiz-loading { display: grid; gap: 24px; padding: 24px; color: var(--muted); font-size: 13px; }
-.quiz-card-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
-.quiz-set-card { display: flex; flex-direction: column; min-width: 0; padding: 23px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); transition: border-color .2s; }
-.quiz-set-card:hover { border-color: var(--brand); }
-.quiz-set-card__top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-.quiz-set-card__category { font-size: 12px; color: var(--muted); }
+.quiz-view { max-width: 1180px; min-width: 0; margin: 0 auto; }
+.learning-eyebrow { margin-bottom: 10px; color: var(--muted); font-size: 13px; font-weight: 500; letter-spacing: .12em; }
+.button-icon { width: 17px; height: 17px; }
+.search-icon { width: 18px; height: 18px; margin-right: 5px; }
+.quiz-view .workspace-panel { background: transparent; border: 0; border-radius: 0; overflow: visible; }
+.quiz-library-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 0 0 12px; }
+.quiz-library-heading h2 { display: flex; align-items: baseline; gap: 12px; margin: 0; font-size: 18px; font-weight: 600; }
+.quiz-library-heading h2 span { color: var(--muted); font-size: 14px; font-weight: 400; font-variant-numeric: tabular-nums; }
+.quiz-view .quiz-filter-bar { display: grid; grid-template-columns: minmax(200px, 1.6fr) minmax(130px, .65fr) minmax(130px, .65fr) auto; gap: 12px; width: 100%; margin-bottom: 0; }
+.quiz-view .workspace-toolbar { margin: 0; padding: 0 0 26px; border-bottom: 1px solid var(--line); background: transparent; }
+.quiz-view .workspace-filter-bar :deep(.el-input__wrapper), .quiz-view .workspace-filter-bar :deep(.el-select__wrapper) { min-height: 46px; padding-inline: 16px; border-radius: 999px; background: transparent; box-shadow: none; }
+.quiz-view .workspace-filter-bar :deep(.el-input__wrapper) { background: var(--bg-secondary); }
+.quiz-view .workspace-filter-bar :deep(.el-select__wrapper:hover) { background: var(--bg-secondary); }
+.quiz-view .workspace-filter-bar :deep(.el-input__wrapper.is-focus), .quiz-view .workspace-filter-bar :deep(.el-select__wrapper.is-focused) { box-shadow: 0 0 0 2px var(--brand); }
+.quiz-view .workspace-body { padding: 0; }
+.quiz-notice { margin-block: 20px; }
+.quiz-loading { display: grid; gap: 24px; padding: 40px 0; color: var(--muted); font-size: 14px; }
+.quiz-card-grid { display: grid; grid-template-columns: minmax(0, 1fr); }
+.quiz-set-card { display: grid; grid-template-columns: 46px minmax(0, 1fr) 272px; gap: 26px; align-items: center; min-width: 0; padding: 30px 0; border-bottom: 1px solid var(--line); }
+.quiz-set-card__number { align-self: start; padding-top: 4px; color: #b0b8aa; font-size: 25px; font-weight: 400; font-variant-numeric: tabular-nums; letter-spacing: -.04em; }
+.quiz-set-card__content { min-width: 0; }
+.quiz-set-card__top { display: flex; align-items: center; flex-wrap: wrap; gap: 18px; }
+.quiz-set-card__category { font-size: 12px; color: var(--muted); letter-spacing: .04em; }
 .quiz-status { display: inline-flex; align-items: center; gap: 6px; color: var(--brand); font-size: 12px; }
 .quiz-status::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
 .quiz-status--disabled { color: var(--muted); }
-.quiz-set-card__title { width: fit-content; max-width: 100%; margin: 18px 0 0; padding: 0; border: 0; background: none; color: var(--text); font: inherit; font-size: 18px; font-weight: 650; line-height: 1.6; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
+.quiz-set-card__title { width: fit-content; max-width: 100%; min-height: 44px; margin: 9px 0 0; padding: 4px 0; border: 0; background: none; color: var(--text); font: inherit; font-size: 20px; font-weight: 600; line-height: 1.6; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
 .quiz-set-card__title:hover { color: var(--brand); }
 .quiz-set-card__title:focus-visible { outline: 2px solid var(--brand); outline-offset: 5px; border-radius: 3px; }
-.quiz-set-card__date { margin: 7px 0 24px; color: var(--muted); font-size: 12px; }
-.quiz-set-card__stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: auto; padding: 15px 0; background: var(--bg); border-radius: 8px; }
-.quiz-set-card__stats > div { display: grid; gap: 7px; padding: 0 17px; }
-.quiz-set-card__stats > div + div { border-left: 1px solid var(--line); }
-.quiz-set-card__stats strong { color: var(--text); font-size: 24px; line-height: 1.2; font-weight: 600; font-variant-numeric: tabular-nums; }
-.quiz-set-card__stats strong.quiz-set-card__difficulty { font-size: 19px; line-height: 1.5; }
-.quiz-set-card__stats span { font-size: 12px; color: var(--muted); }
-.quiz-set-card__actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 20px; }
-.quiz-set-card__secondary { display: flex; align-items: center; gap: 5px; }
-.quiz-set-card__secondary :deep(.el-button) { min-height: 36px; }
-.quiz-more-button { font-size: 21px; letter-spacing: .06em; }
-.quiz-action-arrow { margin-left: 10px; }
-.learning-empty { display: grid; justify-items: center; align-content: center; min-height: 340px; padding: 40px 20px; text-align: center; }
-.learning-empty__icon { display: grid; place-items: center; width: 64px; height: 64px; margin-bottom: 20px; border: 1px solid var(--line); border-radius: 16px; color: var(--brand); background: var(--bg); }
-.learning-empty__icon svg { width: 29px; height: 29px; }
-.learning-empty h3 { margin: 0 0 10px; color: var(--text); font-size: 18px; font-weight: 600; }
-.learning-empty p { max-width: 440px; margin: 0 0 24px; color: var(--muted); font-size: 14px; line-height: 1.8; }
+.quiz-set-card__meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; margin-top: 9px; color: var(--muted); font-size: 13px; line-height: 1.7; }
+.quiz-set-card__meta > span + span::before { content: '·'; margin-right: 14px; color: #a7afa2; }
+.quiz-set-card__actions { display: flex; align-items: center; justify-content: flex-end; gap: 14px; }
+.quiz-set-card__secondary { display: flex; align-items: center; gap: 4px; }
+.quiz-set-card__secondary :deep(.el-button) { min-height: 44px; font-size: 13px; }
+.quiz-set-card__actions > :deep(.el-button) { min-height: 46px; border-color: transparent; background: var(--brand-soft); color: var(--brand); }
+.quiz-set-card__actions > :deep(.el-button:hover:not(.is-disabled)) { background: #d8e3d7; }
+.quiz-set-card__actions > :deep(.el-button.is-disabled) { opacity: .5; }
+.quiz-set-card__secondary :deep(.quiz-more-button) { min-width: 44px; font-size: 21px; letter-spacing: .06em; }
+.quiz-action-arrow { margin-left: 4px; }
+.quiz-view .workspace-pagination { border-top: 0; margin-top: 0; padding-top: 26px; }
+.quiz-view .workspace-pagination :deep(.el-pager li), .quiz-view .workspace-pagination :deep(.btn-prev), .quiz-view .workspace-pagination :deep(.btn-next) { min-width: 44px; height: 44px; border-radius: 50%; background: transparent; }
+.quiz-view .workspace-pagination :deep(.el-pager li.is-active) { color: var(--brand); background: var(--brand-soft); }
+.learning-empty { display: grid; justify-items: center; align-content: center; min-height: 370px; padding: 52px 20px; text-align: center; }
+.learning-empty__icon { display: grid; place-items: center; width: 72px; height: 72px; margin-bottom: 24px; border-radius: 50%; color: var(--brand); background: var(--brand-soft); }
+.learning-empty__icon svg { width: 30px; height: 30px; }
+.learning-empty h3 { margin: 0 0 12px; color: var(--text); font-size: 21px; font-weight: 500; line-height: 1.5; }
+.learning-empty p { max-width: 440px; margin: 0 0 26px; color: var(--muted); font-size: 15px; line-height: 1.9; }
 .learning-empty--compact { min-height: 200px; }
 .quiz-form-heading { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin: 4px 0 14px; font-size: 14px; }
 .quiz-form-heading span { color: var(--muted); font-size: 12px; }
 .quiz-count-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
-.quiz-count-grid :deep(.el-input-number) { width: 100%; }
+.quiz-count-grid :deep(.el-input-number) { width: 100%; height: 46px; --el-component-size: 46px; }
+.quiz-count-grid :deep(.el-input-number__increase), .quiz-count-grid :deep(.el-input-number__decrease) { width: 44px; }
+.quiz-count-grid :deep(.el-input__wrapper) { padding-inline: 48px; }
 .quiz-difficulty-field { padding: 0 12px 18px; }
 .quiz-advanced { border-top: 1px solid var(--line); padding-top: 16px; margin-bottom: 16px; }
 .quiz-advanced summary { padding-bottom: 16px; color: var(--muted); font-size: 13px; cursor: pointer; }
@@ -618,12 +634,12 @@ onMounted(async () => {
 .quiz-preview-heading { padding-bottom: 20px; border-bottom: 1px solid var(--line); }
 .quiz-preview-heading h2 { margin: 0; font-size: 21px; line-height: 1.6; overflow-wrap: anywhere; color: var(--text); }
 .quiz-preview-heading p { display: flex; flex-wrap: wrap; gap: 16px; margin: 12px 0 0; font-size: 13px; color: var(--muted); }
-.quiz-preview-questions { display: grid; gap: 18px; margin-top: 24px; }
-.quiz-preview-question { padding: 20px; border: 1px solid var(--line); border-radius: 10px; }
+.quiz-preview-questions { display: grid; gap: 0; margin-top: 10px; }
+.quiz-preview-question { padding: 28px 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; }
 .quiz-preview-question__meta { display: flex; justify-content: space-between; color: var(--brand); font-size: 12px; }
 .quiz-preview-question h3 { margin: 14px 0; color: var(--text); font-size: 16px; font-weight: 600; line-height: 1.85; overflow-wrap: anywhere; }
-.quiz-preview-question .option-list { color: var(--text); font-size: 14px; line-height: 1.8; }
-.quiz-preview-question .option-list > div { padding: 9px 12px; background: var(--bg); border-radius: 6px; }
+.quiz-preview-question .option-list { color: var(--text); font-size: 15px; line-height: 1.8; }
+.quiz-preview-question .option-list > div { padding: 9px 0; background: transparent; border-radius: 0; }
 .quiz-answer { margin-top: 20px; font-size: 13px; }
 .quiz-answer summary { color: var(--brand); cursor: pointer; line-height: 1.8; }
 .quiz-answer .analysis-box { border-radius: 8px; }
@@ -632,16 +648,29 @@ onMounted(async () => {
 .quiz-references { border-top: 1px solid var(--line); padding-top: 20px; }
 .quiz-references .rag-reference-list { margin-top: 16px; }
 @media (max-width: 1000px) {
-  .quiz-card-grid { grid-template-columns: 1fr; }
-  .quiz-view .quiz-filter-bar { grid-template-columns: 1fr 1fr; }
+  .quiz-set-card { grid-template-columns: 40px minmax(0, 1fr); gap: 16px 22px; }
+  .quiz-set-card__actions { grid-column: 2; justify-content: space-between; }
+  .quiz-view .quiz-filter-bar { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
+  .quiz-view .workspace-filter-bar__search { grid-column: 1 / -1; }
 }
 @media (max-width: 600px) {
-  .quiz-library-heading { padding: 18px 16px 0; align-items: flex-start; }
-  .quiz-library-heading p { max-width: 220px; line-height: 1.7; }
-  .quiz-view .quiz-filter-bar { grid-template-columns: minmax(0, 1fr); }
-  .quiz-set-card { padding: 18px; }
-  .quiz-set-card__stats > div { padding: 0 12px; }
+  .quiz-view .page-header { flex-direction: column; align-items: stretch; gap: 24px; }
+  .quiz-view .page-header > .el-button { align-self: flex-start; }
+  .quiz-library-heading { padding-bottom: 8px; }
+  .quiz-view .quiz-filter-bar { gap: 10px 4px; }
+  .quiz-view .workspace-filter-bar :deep(.el-select__wrapper) { padding-inline: 10px; }
+  .quiz-view .workspace-toolbar { padding-bottom: 20px; }
+  .quiz-set-card { grid-template-columns: 28px minmax(0, 1fr); padding-block: 24px; gap: 14px; }
+  .quiz-set-card__number { font-size: 20px; }
+  .quiz-set-card__title { font-size: 18px; }
+  .quiz-set-card__meta { font-size: 12px; gap: 6px 10px; }
+  .quiz-set-card__meta > span + span::before { margin-right: 10px; }
+  .quiz-set-card__date { flex-basis: 100%; }
+  .quiz-set-card__meta > .quiz-set-card__date::before { display: none; }
+  .quiz-set-card__actions { gap: 8px; flex-wrap: wrap; }
+  .quiz-set-card__actions > :deep(.el-button) { padding-inline: 16px; }
+  .learning-empty { padding-inline: 8px; min-height: 330px; }
+  .learning-empty h3 { font-size: 19px; }
   .quiz-count-grid { grid-template-columns: 1fr; gap: 0; }
-  .quiz-set-card__actions { flex-wrap: wrap; }
 }
 </style>

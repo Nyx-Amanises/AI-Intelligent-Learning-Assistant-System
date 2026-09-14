@@ -4,14 +4,14 @@
     ref="launcherRef"
     type="button"
     class="assistant-fab"
-    aria-label="打开 AI 学习助手"
+    :aria-label="`打开${ASSISTANT_NAME}`"
     aria-haspopup="dialog"
     @click="openPanel"
   >
     <span class="assistant-fab__icon">
       <AppIcon name="assistant" :size="24" />
     </span>
-    <span class="assistant-fab__label">AI 学习助手</span>
+    <span class="assistant-fab__label">{{ ASSISTANT_NAME }}</span>
   </button>
 
   <Teleport to="body">
@@ -27,7 +27,7 @@
         class="assistant-panel"
         role="dialog"
         aria-modal="true"
-        aria-label="AI 学习助手"
+        :aria-label="ASSISTANT_NAME"
         tabindex="-1"
         @keydown="handlePanelKeydown"
       >
@@ -45,7 +45,7 @@
               </span>
               <div>
                 <div class="assistant-sidebar__kicker">让知识，成为自己的</div>
-                <h2>AI 学习助手</h2>
+                <h2>{{ ASSISTANT_NAME }}</h2>
               </div>
               <button type="button" class="assistant-sidebar__close" aria-label="收起会话列表" @click="closeMobileSidebar">收起</button>
             </div>
@@ -164,7 +164,7 @@
               <span />
             </button>
             <div class="assistant-main__title-block">
-              <span class="assistant-main__eyebrow">AI 学习助手</span>
+              <span class="assistant-main__eyebrow">{{ ASSISTANT_NAME }}</span>
               <h1>{{ sessionDetail ? (sessionDetail.title || '新对话') : '今天继续哪一块？' }}</h1>
             </div>
             <div class="assistant-main__actions">
@@ -176,7 +176,7 @@
               >
                 {{ sessionPageLoading ? '刷新中...' : '刷新' }}
               </button>
-              <button type="button" class="assistant-top-button assistant-close-button" aria-label="关闭 AI 学习助手" @click="closePanel">关闭</button>
+              <button type="button" class="assistant-top-button assistant-close-button" :aria-label="`关闭${ASSISTANT_NAME}`" @click="closePanel">关闭</button>
             </div>
           </header>
 
@@ -197,7 +197,7 @@
                 v-model="draftMessage"
                 class="assistant-textarea"
                 maxlength="4000"
-                aria-label="向 AI 学习助手提问"
+                :aria-label="`向${ASSISTANT_NAME}提问`"
                 placeholder="输入你的问题。回车发送，Shift + 回车换行。"
                 @keydown="handleComposerKeydown"
               />
@@ -360,7 +360,7 @@
                 v-model="draftMessage"
                 class="assistant-textarea assistant-textarea--compact"
                 maxlength="4000"
-                aria-label="继续向 AI 学习助手提问"
+                :aria-label="`继续向${ASSISTANT_NAME}提问`"
                 placeholder="继续追问、要求重写、要提纲、要习题或要复盘建议都可以。"
                 @keydown="handleComposerKeydown"
               />
@@ -412,6 +412,7 @@ import {
 import { getAiConfigApi } from '@/api/modules/ai'
 import { useUserStore } from '@/stores/user'
 import AppIcon from '@/components/AppIcon.vue'
+import { ASSISTANT_NAME } from '@/config/brand'
 
 interface CurrentPageBinding {
   bindable: boolean

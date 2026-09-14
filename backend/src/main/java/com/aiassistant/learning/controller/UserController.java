@@ -3,8 +3,10 @@ package com.aiassistant.learning.controller;
 import com.aiassistant.learning.common.result.ApiResponse;
 import com.aiassistant.learning.config.FileStorageProperties;
 import com.aiassistant.learning.context.UserContext;
+import com.aiassistant.learning.dto.user.UpdateProfileRequest;
 import com.aiassistant.learning.service.SysUserService;
 import com.aiassistant.learning.vo.user.UserProfileVO;
+import jakarta.validation.Valid;
 import java.net.MalformedURLException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -18,6 +20,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -56,6 +60,12 @@ public class UserController {
     public ApiResponse<UserProfileVO> profile() {
         Long userId = UserContext.getCurrentUserId();
         return ApiResponse.success(sysUserService.getCurrentUserProfile(userId));
+    }
+
+    @PutMapping("/profile")
+    public ApiResponse<UserProfileVO> updateProfile(@Valid @RequestBody UpdateProfileRequest request) {
+        Long userId = UserContext.getCurrentUserId();
+        return ApiResponse.success("个人信息已更新", sysUserService.updateCurrentUserProfile(userId, request));
     }
 
     @PostMapping(value = "/avatar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

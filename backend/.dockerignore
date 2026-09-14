@@ -2,3 +2,6 @@ target/
 uploads/
 *.log
 .idea/
+
+# Local exercise draft, also excluded from Git.
+src/main/java/com/aiassistant/learning/mapper/Main.java

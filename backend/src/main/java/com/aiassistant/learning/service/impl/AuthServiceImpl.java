@@ -8,6 +8,7 @@ import com.aiassistant.learning.service.AuthService;
 import com.aiassistant.learning.service.SysUserService;
 import com.aiassistant.learning.util.JwtTokenUtil;
 import com.aiassistant.learning.vo.auth.LoginVO;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import java.time.LocalDateTime;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -54,6 +55,10 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void register(RegisterRequest request) {
+        if (request.getPassword() == null || !request.getPassword().equals(request.getConfirmPassword())) {
+            throw new BusinessException("两次输入的密码不一致");
+        }
+
         SysUser existedUser = sysUserService.getByUsername(request.getUsername());
         if (existedUser != null) {
             throw new BusinessException("用户名已存在");
@@ -90,8 +95,9 @@ public class AuthServiceImpl implements AuthService {
             throw new BusinessException(403, "账号已被禁用");
         }
 
-        user.setLastLoginTime(LocalDateTime.now());
-        sysUserService.updateById(user);
+        sysUserService.update(new LambdaUpdateWrapper<SysUser>()
+                .eq(SysUser::getId, user.getId())
+                .set(SysUser::getLastLoginTime, LocalDateTime.now()));
 
         String token = jwtTokenUtil.createToken(user.getId(), user.getUsername());
         return LoginVO.builder()

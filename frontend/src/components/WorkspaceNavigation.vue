@@ -1,27 +1,49 @@
 <template>
-  <div class="workspace-navigation" :class="{ 'is-collapsed': collapsed }">
-    <RouterLink class="workspace-brand" to="/dashboard" aria-label="AI 学习助手，返回学习概览" @click="emit('navigate')">
-      <span class="workspace-brand__mark"><AppIcon name="book-open" :size="23" /></span>
-      <span class="workspace-brand__name"><strong>AI 学习助手</strong><small>让知识，成为自己的</small></span>
-    </RouterLink>
-    <nav class="workspace-navigation__groups" aria-label="主要导航">
-      <div v-for="group in navigationGroups" :key="group.label" class="workspace-nav-group">
-        <p class="workspace-nav-group__label">{{ group.label }}</p>
-        <RouterLink v-for="item in group.items" :key="item.path" :to="item.path" class="workspace-nav-item" :title="collapsed ? item.label : undefined" :aria-label="item.label" @click="emit('navigate')">
-          <AppIcon :name="item.icon" :size="19" /><span>{{ item.label }}</span><i class="workspace-nav-item__active" aria-hidden="true" />
-        </RouterLink>
-      </div>
-    </nav>
-    <div class="workspace-navigation__bottom">
-      <button class="workspace-ai-entry" type="button" aria-label="打开 AI 学习助手" @click="emit('openAssistant')">
-        <span class="workspace-ai-entry__icon"><AppIcon name="spark" :size="21" /></span>
-        <span class="workspace-ai-entry__copy"><strong>学习路上，有我陪你</strong><small>向 AI 提问，理清思路</small></span>
-        <AppIcon class="workspace-ai-entry__arrow" name="arrow-up-right" :size="17" />
-      </button>
-      <RouterLink class="workspace-nav-item workspace-settings" to="/ai-config" aria-label="模型与设置" :title="collapsed ? '模型与设置' : undefined" @click="emit('navigate')">
-        <AppIcon name="config" :size="19" /><span>模型与设置</span>
+  <div class="workspace-navigation">
+    <div class="workspace-navigation__header">
+      <RouterLink class="workspace-brand" to="/dashboard" :aria-label="APP_NAME + '，返回首页'" @click="emit('navigate')">
+        <BrandLogo class="workspace-brand__logo" aria-hidden="true" />
       </RouterLink>
-      <p class="workspace-navigation__note">每一点积累，都算数。</p>
+      <button type="button" class="workspace-navigation__close" aria-label="关闭更多功能" @click="emit('close')">
+        <AppIcon name="close" :size="21" />
+      </button>
+    </div>
+
+    <div class="workspace-navigation__scroll">
+      <button class="workspace-assistant-entry" type="button" :aria-label="'打开' + ASSISTANT_NAME" @click="emit('openAssistant')">
+        <AppIcon name="spark" :size="24" />
+        <span><strong>{{ ASSISTANT_NAME }}</strong><small>解答疑惑，整理思路</small></span>
+        <AppIcon name="arrow-up-right" :size="20" />
+      </button>
+
+      <nav class="workspace-navigation__groups" aria-label="全部功能">
+        <section v-for="group in navigationGroups" :key="group.label" class="workspace-nav-group" :aria-label="group.label">
+          <h2 class="workspace-nav-group__label">{{ group.label }}</h2>
+          <RouterLink
+            v-for="item in group.items"
+            :key="item.path"
+            :to="item.path"
+            class="workspace-nav-item"
+            :aria-label="item.label"
+            @click="emit('navigate')"
+          >
+            <AppIcon :name="item.icon" :size="20" />
+            <span>{{ item.label }}</span>
+            <AppIcon class="workspace-nav-item__arrow" name="chevron-right" :size="16" />
+          </RouterLink>
+        </section>
+      </nav>
+
+      <div class="workspace-navigation__account" aria-label="账户操作">
+        <button type="button" class="workspace-account-action" :disabled="avatarUploading" @click="emit('userCommand', 'avatar')">
+          <AppIcon name="camera" :size="19" />
+          <span>{{ avatarUploading ? '正在上传…' : '更换头像' }}</span>
+        </button>
+        <button type="button" class="workspace-account-action" @click="emit('userCommand', 'logout')">
+          <span>退出登录</span>
+          <AppIcon name="arrow-right" :size="19" />
+        </button>
+      </div>
     </div>
   </div>
 </template>
@@ -29,54 +51,116 @@
 <script setup lang="ts">
 import { RouterLink } from 'vue-router'
 import AppIcon from '@/components/AppIcon.vue'
+import BrandLogo from '@/components/BrandLogo.vue'
 import { navigationGroups } from '@/config/navigation'
-withDefaults(defineProps<{ collapsed?: boolean }>(), { collapsed: false })
-const emit = defineEmits<{ navigate: []; openAssistant: [] }>()
+import { APP_NAME, ASSISTANT_NAME } from '@/config/brand'
+
+withDefaults(defineProps<{ avatarUploading?: boolean }>(), { avatarUploading: false })
+const emit = defineEmits<{
+  navigate: []
+  close: []
+  openAssistant: []
+  userCommand: [command: string]
+}>()
 </script>
 
 <style scoped>
-.workspace-navigation { display: flex; flex-direction: column; height: 100%; min-height: 0; padding: 0 16px; background: var(--sidebar-bg); }
-.workspace-brand { display: flex; align-items: center; gap: 11px; flex: 0 0 89px; padding: 0 8px; }
-.workspace-brand__mark { display: grid; place-items: center; width: 37px; height: 40px; border-radius: 11px; color: #fff; background: var(--brand); flex-shrink: 0; }
-.workspace-brand__name { display: grid; gap: 5px; min-width: 0; }
-.workspace-brand__name strong { color: var(--text); font-size: 17px; font-weight: 700; letter-spacing: -.5px; white-space: nowrap; }
-.workspace-brand__name small { font-size: 12px; color: var(--muted); white-space: nowrap; letter-spacing: .6px; }
-.workspace-navigation__groups { flex: 1; overflow-y: auto; scrollbar-width: thin; padding-bottom: 12px; }
-.workspace-nav-group + .workspace-nav-group { margin-top: 24px; }
-.workspace-nav-group__label { margin: 7px 13px 9px; color: var(--muted); font-size: 12px; font-weight: 500; letter-spacing: .8px; }
-.workspace-nav-item { position: relative; display: flex; align-items: center; gap: 12px; min-height: 43px; margin-bottom: 3px; padding: 10px 13px; border-radius: 8px; color: var(--text-secondary); font-size: 13px; font-weight: 500; transition: color .18s, background .18s; }
-.workspace-nav-item > .app-icon { color: var(--muted); }
-.workspace-nav-item:hover { background: var(--bg-secondary); color: var(--text); }
-.workspace-nav-item.router-link-active { color: var(--brand); background: var(--brand-soft); font-weight: 650; }
-.workspace-nav-item.router-link-active > .app-icon { color: var(--brand); }
-.workspace-nav-item__active { display: none; height: 5px; width: 5px; border-radius: 50%; background: var(--brand); margin-left: auto; }
-.workspace-nav-item.router-link-active .workspace-nav-item__active { display: block; }
-.workspace-navigation__bottom { flex-shrink: 0; padding: 14px 0 18px; }
-.workspace-ai-entry { width: 100%; display: flex; gap: 10px; align-items: center; text-align: left; padding: 14px 11px; margin-bottom: 14px; border: 1px solid #dce5d9; border-radius: 10px; background: #edf2e9; color: var(--brand); cursor: pointer; transition: border-color .18s, background .18s; }
-.workspace-ai-entry:hover { background: #e4eddf; border-color: #b3c9b3; }
-.workspace-ai-entry__icon { display: flex; flex: 0 0 23px; }
-.workspace-ai-entry__copy { display: grid; gap: 6px; min-width: 0; }
-.workspace-ai-entry__copy strong { font-size: 12px; font-weight: 600; white-space: nowrap; }
-.workspace-ai-entry__copy small { font-size: 12px; color: #61725f; white-space: nowrap; }
-.workspace-ai-entry__arrow { margin-left: auto; }
-.workspace-settings { border-top: 1px solid var(--line); border-radius: 0; padding-top: 15px; }
-.workspace-navigation__note { margin: 12px 13px 0; color: var(--muted); font-size: 12px; }
-.is-collapsed { padding-inline: 10px; }
-.is-collapsed .workspace-brand { padding-inline: 0; justify-content: center; }
-.is-collapsed .workspace-brand__name, .is-collapsed .workspace-nav-item > span, .is-collapsed .workspace-nav-item__active, .is-collapsed .workspace-ai-entry__copy, .is-collapsed .workspace-ai-entry__arrow, .is-collapsed .workspace-navigation__note { display: none; }
-.is-collapsed .workspace-nav-group__label { height: 1px; font-size: 0; border-top: 1px solid var(--line); margin: 14px 8px; }
-.is-collapsed .workspace-nav-item, .is-collapsed .workspace-ai-entry { justify-content: center; padding-inline: 0; }
-.is-collapsed .workspace-nav-group + .workspace-nav-group { margin-top: 12px; }
-@media (max-height: 800px) {
-  .workspace-brand { flex-basis: 75px; }
-  .workspace-nav-group + .workspace-nav-group { margin-top: 14px; }
-  .workspace-nav-item { min-height: 39px; padding-block: 8px; }
-  .workspace-navigation__note { display: none; }
-  .workspace-navigation__bottom { padding-block: 9px 12px; }
+.workspace-navigation {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--bg);
 }
-@media (max-width: 760px) {
-  .workspace-nav-item { min-height: 44px; font-size: 14px; }
-  .workspace-ai-entry__copy strong { font-size: 12px; }
-  .workspace-ai-entry__copy small { font-size: 12px; }
+.workspace-navigation__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 0 0 auto;
+  gap: 24px;
+  padding: max(24px, env(safe-area-inset-top)) 26px 22px;
+}
+.workspace-brand { display: flex; align-items: center; min-height: 48px; border-radius: 4px; }
+.workspace-brand__logo { width: 142px; }
+.workspace-navigation__close {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+.workspace-navigation__close:hover { background: var(--bg-secondary); }
+.workspace-navigation__scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  padding: 0 26px max(24px, env(safe-area-inset-bottom));
+}
+.workspace-assistant-entry {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 16px;
+  padding: 20px 0 24px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: var(--brand);
+  text-align: left;
+  cursor: pointer;
+}
+.workspace-assistant-entry > span { display: grid; gap: 4px; }
+.workspace-assistant-entry strong { font-size: 16px; font-weight: 600; }
+.workspace-assistant-entry small { color: var(--muted); font-size: 12px; font-weight: 400; }
+.workspace-assistant-entry > .app-icon:last-child { margin-left: auto; }
+.workspace-assistant-entry:hover { color: var(--brand-hover); }
+.workspace-nav-group { padding-top: 22px; }
+.workspace-nav-group + .workspace-nav-group { margin-top: 10px; border-top: 1px solid var(--line); }
+.workspace-nav-group__label { margin: 0 0 10px; color: var(--muted); font-size: 12px; font-weight: 500; letter-spacing: .1em; }
+.workspace-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  min-height: 49px;
+  margin-inline: -10px;
+  padding: 10px;
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-size: 15px;
+  font-weight: 400;
+  text-decoration: none;
+  transition: color .18s ease, background-color .18s ease;
+}
+.workspace-nav-item__arrow { margin-left: auto; color: var(--muted); opacity: .6; }
+.workspace-nav-item:hover { color: var(--text); background: var(--bg-secondary); }
+.workspace-nav-item.router-link-active { color: var(--brand); font-weight: 600; background: var(--brand-light); }
+.workspace-nav-item.router-link-active .workspace-nav-item__arrow { color: var(--brand); opacity: 1; }
+.workspace-navigation__account { display: flex; gap: 20px; justify-content: space-between; margin-top: 26px; padding-top: 16px; border-top: 1px solid var(--line); }
+.workspace-account-action {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+}
+.workspace-account-action:hover { color: var(--text); }
+.workspace-account-action:disabled { opacity: .55; cursor: wait; }
+.workspace-navigation button:focus-visible,
+.workspace-navigation a:focus-visible { outline: 2px solid var(--brand); outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) {
+  .workspace-nav-item { transition: none; }
 }
 </style>

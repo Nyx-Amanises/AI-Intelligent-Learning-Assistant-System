@@ -2,9 +2,9 @@
   <section class="material-library" aria-labelledby="material-library-title">
     <header class="material-library__header">
       <div>
-        <p class="material-library__eyebrow">你的知识，从这里积累</p>
-        <h1 id="material-library-title" class="page-title">我的资料库</h1>
-        <p class="material-library__description">收藏课堂笔记与课程文档，让 AI 帮你整理重点、生成练习。</p>
+        <p class="material-library__eyebrow">我的内容</p>
+        <h1 id="material-library-title" class="page-title">资料库</h1>
+        <p class="material-library__description">讲义、笔记与文档，都收在这里。</p>
       </div>
       <div class="material-library__header-actions">
         <el-button @click="textDialogVisible = true">
@@ -17,12 +17,6 @@
         </el-button>
       </div>
     </header>
-
-    <div class="material-library__guide">
-      <span class="material-library__guide-icon"><AppIcon name="spark" :size="22" /></span>
-      <p><strong>让资料真正用起来</strong><span>上传后解析内容，再用一份摘要或一组练习开始复习。</span></p>
-      <span class="material-library__formats">PDF / Word / TXT</span>
-    </div>
 
     <div class="material-library__filters" role="search" aria-label="筛选学习资料">
       <el-input
@@ -44,7 +38,7 @@
         <el-option label="已解析" value="SUCCESS" />
         <el-option label="解析失败" value="FAILED" />
       </el-select>
-      <el-button class="material-library__reset" :disabled="!hasActiveFilters" @click="resetFilters">重置</el-button>
+      <el-button text class="material-library__reset" :disabled="!hasActiveFilters" @click="resetFilters">重置</el-button>
     </div>
 
     <div class="material-library__section-heading">
@@ -80,9 +74,14 @@
     </div>
     <div v-else class="material-library__grid">
       <article v-for="row in materials" :key="row.id" class="material-library-card" :aria-label="row.title">
-        <div class="material-library-card__top">
-          <span class="material-library-card__file"><AppIcon :name="getMaterialIcon(row.materialType)" :size="34" /></span>
-          <el-dropdown trigger="click" :disabled="actionLoadingId === row.id" @command="(command: string) => handleMaterialCommand(command, row)">
+        <button type="button" class="material-library-card__cover" :data-kind="row.materialType" :aria-label="`查看${row.title}`" @click="viewDetail(row.id)">
+          <AppIcon :name="getMaterialIcon(row.materialType)" :size="26" />
+          <span>{{ row.materialType === 'MARKDOWN' ? 'MD' : row.materialType }}</span>
+        </button>
+        <div class="material-library-card__content">
+          <div class="material-library-card__top">
+            <h3 :title="row.title"><button type="button" @click="viewDetail(row.id)">{{ row.title }}</button></h3>
+            <el-dropdown trigger="click" :disabled="actionLoadingId === row.id" @command="(command: string) => handleMaterialCommand(command, row)">
             <button type="button" class="material-library-card__more" :disabled="actionLoadingId === row.id" :aria-label="`${row.title}的更多操作`" :aria-busy="actionLoadingId === row.id">
               <span v-if="actionLoadingId === row.id" class="material-library__spinner" aria-label="正在处理"></span>
               <AppIcon v-else name="more-horizontal" :size="20" />
@@ -96,24 +95,25 @@
                 <el-dropdown-item command="delete" divided class="material-library-menu__danger">删除资料</el-dropdown-item>
               </el-dropdown-menu>
             </template>
-          </el-dropdown>
+            </el-dropdown>
+          </div>
+          <p class="material-library-card__meta"><span>{{ formatDate(row.createdAt) }}</span><span>{{ formatCharacters(row.totalCharacters) }}</span></p>
+          <div class="material-library-card__tags">
+            <span v-for="tag in getTags(row.tags).slice(0, 3)" :key="tag" class="material-library-card__tag" :title="tag">{{ tag }}</span>
+            <span v-if="getTags(row.tags).length > 3" class="material-library-card__tag" :title="getTags(row.tags).slice(3).join('、')">+{{ getTags(row.tags).length - 3 }}</span>
+            <span v-if="!getTags(row.tags).length" class="material-library-card__untagged">{{ formatDifficulty(row.difficultyLevel) }}</span>
+          </div>
         </div>
-        <p class="material-library-card__type">{{ formatMaterialType(row.materialType) }}</p>
-        <h3 :title="row.title">{{ row.title }}</h3>
-        <p class="material-library-card__meta"><span>{{ formatDate(row.createdAt) }}</span><span>{{ formatCharacters(row.totalCharacters) }}</span></p>
-        <div class="material-library-card__tags">
-          <span v-for="tag in getTags(row.tags).slice(0, 3)" :key="tag" class="material-library-card__tag" :title="tag">{{ tag }}</span>
-          <span v-if="getTags(row.tags).length > 3" class="material-library-card__tag" :title="getTags(row.tags).slice(3).join('、')">+{{ getTags(row.tags).length - 3 }}</span>
-          <span v-if="!getTags(row.tags).length" class="material-library-card__untagged">{{ formatDifficulty(row.difficultyLevel) }}</span>
-        </div>
-        <div class="material-library-card__status-row">
-          <span class="material-library-status" :class="`material-library-status--${getStatusTone(row.parseStatus)}`"><i></i>{{ formatParseStatus(row.parseStatus) }}</span>
-          <span class="material-library-card__summary">{{ formatSummaryStatus(row.summaryStatus) }}</span>
-        </div>
-        <div class="material-library-card__actions">
-          <button type="button" class="material-library-card__open" @click="viewDetail(row.id)">查看资料<AppIcon name="arrow-right" :size="16" /></button>
-          <button type="button" class="material-library-card__study" :aria-label="`${row.title}的 AI 总结`" @click="goSummary(row.id)">摘要</button>
-          <button type="button" class="material-library-card__study" :aria-label="`根据${row.title}生成练习`" @click="goQuiz(row.id)">出题</button>
+        <div class="material-library-card__aside">
+          <div class="material-library-card__status-row">
+            <span class="material-library-status" :class="`material-library-status--${getStatusTone(row.parseStatus)}`"><i></i>{{ formatParseStatus(row.parseStatus) }}</span>
+            <span class="material-library-card__summary">{{ formatSummaryStatus(row.summaryStatus) }}</span>
+          </div>
+          <div class="material-library-card__actions">
+            <button type="button" class="material-library-card__open" @click="viewDetail(row.id)">阅读<AppIcon name="arrow-right" :size="16" /></button>
+            <button type="button" class="material-library-card__study" :aria-label="`${row.title}的 AI 总结`" @click="goSummary(row.id)">摘要</button>
+            <button type="button" class="material-library-card__study" :aria-label="`根据${row.title}生成练习`" @click="goQuiz(row.id)">出题</button>
+          </div>
         </div>
       </article>
     </div>
@@ -823,119 +823,91 @@ void loadMaterials()
 </script>
 
 <style scoped>
-.material-library {
-  width: 100%;
-  max-width: 1280px;
-  min-width: 0;
-  margin: 0 auto;
-}
-
-.material-library__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-  margin-bottom: 26px;
-}
-
-.material-library__eyebrow {
-  margin: 0 0 9px;
-  color: var(--brand);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: .05em;
-}
-
-.material-library__header .page-title { font-size: clamp(28px, 3vw, 34px); font-weight: 700; letter-spacing: -.03em; }
-.material-library__description { margin: 12px 0 0; color: var(--muted); font-size: 14px; line-height: 1.8; }
+.material-library { width: 100%; max-width: 1180px; min-width: 0; margin: 0 auto; }
+.material-library__header { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 38px; }
+.material-library__eyebrow { margin: 0 0 10px; color: var(--muted); font-size: 13px; font-weight: 500; letter-spacing: .12em; }
+.material-library__header .page-title { font-size: clamp(28px, 3vw, 36px); font-weight: 600; letter-spacing: -.035em; }
+.material-library__description { margin: 12px 0 0; color: var(--muted); font-size: 15px; line-height: 1.8; }
 .material-library__header-actions { display: flex; gap: 10px; flex: 0 0 auto; }
 .material-library :deep(.el-button) { min-height: 44px; }
-.material-library__header-actions :deep(.el-button) { margin: 0; padding-inline: 18px; }
+.material-library__header-actions :deep(.el-button) { margin: 0; padding-inline: 22px; }
 .material-library :deep(.el-button > span), .material-library-detail :deep(.el-button > span) { gap: 7px; }
-
-.material-library__guide {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 17px 20px;
-  margin-bottom: 28px;
-  background: color-mix(in srgb, var(--brand) 5%, var(--panel));
-  border: 1px solid color-mix(in srgb, var(--brand) 12%, var(--line));
-  border-radius: 14px;
-}
-.material-library__guide-icon { display: grid; place-items: center; width: 42px; height: 42px; flex: 0 0 auto; border-radius: 11px; color: var(--brand); background: var(--panel); }
-.material-library__guide p { display: flex; flex-direction: column; gap: 5px; min-width: 0; margin: 0; font-size: 13px; line-height: 1.6; }
-.material-library__guide strong { color: var(--text); font-weight: 600; }
-.material-library__guide p span { color: var(--muted); }
-.material-library__formats { margin-left: auto; padding-left: 16px; color: var(--muted); font-size: 12px; white-space: nowrap; letter-spacing: .03em; }
-
-.material-library__filters { display: grid; grid-template-columns: minmax(180px, 1fr) 154px 144px 64px; gap: 10px; align-items: center; }
+.material-library__filters { display: grid; grid-template-columns: minmax(180px, 1fr) 158px 150px 64px; gap: 12px; align-items: center; padding-bottom: 26px; border-bottom: 1px solid var(--line); }
 .material-library__filters :deep(.el-select), .material-library__filters :deep(.el-input) { min-width: 0; width: 100%; }
-.material-library__filters :deep(.el-input__wrapper), .material-library__filters :deep(.el-select__wrapper) { min-height: 44px; background: var(--panel); }
+.material-library__filters :deep(.el-input__wrapper), .material-library__filters :deep(.el-select__wrapper) { min-height: 46px; background: transparent; box-shadow: none; border-radius: 999px; padding-inline: 16px; }
+.material-library__filters :deep(.el-input__wrapper) { background: var(--bg-secondary); }
+.material-library__filters :deep(.el-select__wrapper:hover) { background: var(--bg-secondary); }
+.material-library__filters :deep(.el-input__wrapper.is-focus), .material-library__filters :deep(.el-select__wrapper.is-focused) { box-shadow: 0 0 0 2px var(--brand); }
 .material-library__search :deep(.el-input__prefix) { margin-right: 6px; color: var(--muted); }
 .material-library__reset { margin: 0; }
-.material-library__section-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin: 20px 0 13px; }
-.material-library__section-heading h2 { display: flex; align-items: center; gap: 10px; margin: 0; color: var(--text); font-size: 16px; font-weight: 600; }
-.material-library__section-heading h2 span { padding: 3px 9px; border-radius: 6px; background: color-mix(in srgb, var(--muted) 8%, var(--panel)); color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
-.material-library__refresh { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 44px; padding: 0 10px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; }
-.material-library__refresh:hover { color: var(--brand); background: color-mix(in srgb, var(--brand) 5%, var(--panel)); }
+.material-library__section-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin: 26px 0 6px; }
+.material-library__section-heading h2 { display: flex; align-items: baseline; gap: 12px; margin: 0; color: var(--text); font-size: 18px; font-weight: 600; }
+.material-library__section-heading h2 span { color: var(--muted); font-size: 14px; font-weight: 400; font-variant-numeric: tabular-nums; }
+.material-library__refresh { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 44px; padding: 0 10px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font: inherit; font-size: 14px; cursor: pointer; }
+.material-library__refresh:hover { color: var(--brand); background: var(--bg-secondary); }
 .material-library__refresh:disabled { cursor: wait; opacity: .55; }
-
-.material-library__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 284px), 1fr)); gap: 18px; }
-.material-library-card { display: flex; flex-direction: column; min-width: 0; padding: 21px; border: 1px solid var(--line); border-radius: 16px; background: var(--panel); transition: border-color .18s ease, box-shadow .18s ease; }
-.material-library-card:hover { border-color: color-mix(in srgb, var(--brand) 28%, var(--line)); box-shadow: 0 5px 20px color-mix(in srgb, var(--text) 4%, transparent); }
-.material-library-card__top { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.material-library-card__file { display: grid; place-items: center; width: 50px; height: 54px; border-radius: 12px; background: var(--bg); }
-.material-library-card__more { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 9px; background: transparent; color: var(--muted); cursor: pointer; }
-.material-library-card__more:hover { background: var(--bg); color: var(--text); }
+.material-library__grid { display: grid; grid-template-columns: minmax(0, 1fr); }
+.material-library-card { display: grid; grid-template-columns: 74px minmax(0, 1fr) 224px; align-items: center; gap: 24px; min-width: 0; padding: 26px 0; border-bottom: 1px solid var(--line); }
+.material-library-card__cover { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; width: 74px; height: 104px; padding: 14px 6px 12px 10px; border: 0; border-left: 5px solid #bacbbc; border-radius: 2px 7px 7px 2px; background: #e5eae0; color: #506651; font: inherit; cursor: pointer; box-shadow: 2px 3px 0 #eeeee6; transition: background .18s; }
+.material-library-card__cover[data-kind="PDF"] { background: #ede1d7; color: #956952; border-left-color: #d3baaa; }
+.material-library-card__cover[data-kind="DOC"], .material-library-card__cover[data-kind="DOCX"], .material-library-card__cover[data-kind="WORD"] { background: #e1e8e9; color: #577477; border-left-color: #b7cbd0; }
+.material-library-card__cover span { max-width: 100%; color: inherit; font-size: 10px; letter-spacing: .02em; text-align: center; overflow-wrap: anywhere; }
+.material-library-card__cover :deep(.app-icon path[stroke]) { stroke: currentColor; }
+.material-library-card__cover :deep(.app-icon path[fill-opacity]), .material-library-card__cover :deep(.app-icon rect) { fill: currentColor; }
+.material-library-card__cover:hover { filter: brightness(.97); }
+.material-library-card__file { display: grid; place-items: center; flex: 0 0 auto; width: 50px; height: 54px; border-radius: 10px; background: var(--bg); }
+.material-library-card__content, .material-library-card__aside { min-width: 0; }
+.material-library-card__top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.material-library-card__more { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--muted); cursor: pointer; }
+.material-library-card__more:hover { background: var(--bg-secondary); color: var(--text); }
 .material-library-card__more:disabled { cursor: wait; }
-.material-library-card__type { margin: 18px 0 8px; color: var(--muted); font-size: 12px; }
-.material-library-card h3 { display: -webkit-box; min-height: 3em; margin: 0; overflow: hidden; color: var(--text); font-size: 17px; font-weight: 650; line-height: 1.5; overflow-wrap: anywhere; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-.material-library-card__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 10px 0 16px; color: var(--muted); font-size: 12px; line-height: 1.6; font-variant-numeric: tabular-nums; }
+.material-library-card h3 { min-width: 0; margin: 0; color: var(--text); font-size: 18px; font-weight: 600; line-height: 1.65; overflow-wrap: anywhere; }
+.material-library-card h3 button { display: block; max-width: 100%; min-height: 44px; padding: 5px 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
+.material-library-card h3 button:hover { color: var(--brand); }
+.material-library-card__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 2px 0 10px; color: var(--muted); font-size: 13px; line-height: 1.65; font-variant-numeric: tabular-nums; }
 .material-library-card__meta span + span::before { content: '·'; margin-right: 12px; }
-.material-library-card__tags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-height: 25px; margin-bottom: 20px; }
-.material-library-card__tag { max-width: 11em; overflow: hidden; padding: 4px 8px; border-radius: 6px; background: var(--bg); color: var(--muted); font-size: 12px; line-height: 1.5; text-overflow: ellipsis; white-space: nowrap; }
+.material-library-card__tags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; min-height: 22px; }
+.material-library-card__tag { max-width: 14em; overflow: hidden; color: var(--muted); font-size: 12px; line-height: 1.6; text-overflow: ellipsis; white-space: nowrap; }
+.material-library-card__tag::before { content: '#'; margin-right: 2px; opacity: .65; }
 .material-library-card__untagged { color: var(--muted); font-size: 12px; }
-.material-library-card__status-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-top: auto; padding-bottom: 17px; }
-.material-library-status { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 6px; font-size: 12px; line-height: 1.5; white-space: nowrap; }
+.material-library-card__status-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; margin-bottom: 14px; }
+.material-library-status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; line-height: 1.5; white-space: nowrap; }
 .material-library-status i { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
-.material-library-status--ready { color: var(--brand); background: color-mix(in srgb, var(--brand) 8%, var(--panel)); }
-.material-library-status--pending { color: var(--muted); background: var(--bg); }
-.material-library-status--processing { color: color-mix(in srgb, var(--accent) 50%, var(--text)); background: color-mix(in srgb, var(--accent) 10%, var(--panel)); }
-.material-library-status--failed { color: color-mix(in srgb, var(--red) 70%, var(--text)); background: color-mix(in srgb, var(--red) 7%, var(--panel)); }
+.material-library-status--ready { color: var(--brand); }
+.material-library-status--pending { color: var(--muted); }
+.material-library-status--processing { color: #956931; }
+.material-library-status--failed { color: var(--red); }
 .material-library-card__summary { color: var(--muted); font-size: 12px; }
-.material-library-card__actions { display: grid; grid-template-columns: minmax(0, 1fr) 48px 48px; align-items: center; gap: 6px; padding-top: 14px; border-top: 1px solid var(--line); }
-.material-library-card__actions button { min-width: 0; min-height: 44px; padding: 0 8px; border: 0; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; transition: background .18s ease, color .18s ease; }
-.material-library-card__open { display: inline-flex; align-items: center; justify-content: center; gap: 10px; background: color-mix(in srgb, var(--brand) 7%, var(--panel)); color: var(--brand); }
-.material-library-card__open:hover { background: color-mix(in srgb, var(--brand) 13%, var(--panel)); }
+.material-library-card__actions { display: grid; grid-template-columns: minmax(0, 1fr) 50px 50px; align-items: center; gap: 4px; }
+.material-library-card__actions button { min-width: 0; min-height: 44px; padding: 0 8px; border: 0; border-radius: 999px; font: inherit; font-size: 14px; font-weight: 500; cursor: pointer; transition: background .18s ease, color .18s ease; }
+.material-library-card__open { display: inline-flex; align-items: center; justify-content: center; gap: 10px; background: var(--brand-soft); color: var(--brand); }
+.material-library-card__open:hover { background: #d8e3d7; }
 .material-library-card__study { color: var(--muted); background: transparent; }
-.material-library-card__study:hover { color: var(--brand); background: var(--bg); }
-
-.material-library__state { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; min-height: 340px; padding: 44px 24px; border: 1px dashed var(--line); border-radius: 16px; background: var(--panel); text-align: center; }
-.material-library__state-icon { display: grid; place-items: center; width: 72px; height: 72px; border-radius: 20px; background: color-mix(in srgb, var(--brand) 6%, var(--panel)); color: var(--brand); }
-.material-library__state h2 { margin: 4px 0 0; font-size: 20px; font-weight: 600; color: var(--text); line-height: 1.5; }
-.material-library__state p { max-width: 400px; margin: 0 0 5px; color: var(--muted); font-size: 14px; line-height: 1.8; overflow-wrap: anywhere; }
-.material-library__text-link { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; }
+.material-library-card__study:hover { color: var(--brand); background: var(--bg-secondary); }
+.material-library__state { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; min-height: 370px; padding: 52px 24px; text-align: center; }
+.material-library__state-icon { display: grid; place-items: center; width: 72px; height: 72px; border-radius: 50%; background: var(--brand-soft); color: var(--brand); }
+.material-library__state h2 { margin: 4px 0 0; font-size: 21px; font-weight: 500; color: var(--text); line-height: 1.5; }
+.material-library__state p { max-width: 430px; margin: 0 0 5px; color: var(--muted); font-size: 15px; line-height: 1.9; overflow-wrap: anywhere; }
+.material-library__text-link { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font: inherit; font-size: 14px; cursor: pointer; }
 .material-library__text-link:hover { color: var(--brand); }
-.material-library-card--loading { min-height: 337px; gap: 18px; }
-.material-library__skeleton { border-radius: 7px; background: color-mix(in srgb, var(--muted) 10%, var(--panel)); animation: materialLibraryPulse 1.7s ease-in-out infinite; }
-.material-library__skeleton--icon { width: 48px; height: 52px; }
-.material-library__skeleton--title { width: 82%; height: 22px; margin-top: 10px; }
-.material-library__skeleton--text { width: 60%; height: 16px; }
-.material-library__skeleton--footer { height: 44px; width: 100%; margin-top: auto; }
+.material-library-card--loading { grid-template-columns: 74px minmax(0, 1fr) 224px; min-height: 150px; gap: 14px 24px; }
+.material-library__skeleton { border-radius: 6px; background: color-mix(in srgb, var(--muted) 10%, var(--panel)); animation: materialLibraryPulse 1.7s ease-in-out infinite; }
+.material-library__skeleton--icon { width: 74px; height: 104px; grid-row: 1 / 3; }
+.material-library__skeleton--title { width: 76%; height: 22px; align-self: end; }
+.material-library__skeleton--text { width: 50%; height: 16px; grid-column: 2; align-self: start; }
+.material-library__skeleton--footer { height: 44px; width: 100%; grid-row: 1 / 3; grid-column: 3; }
 .material-library__spinner { display: inline-block; width: 18px; height: 18px; flex: 0 0 auto; border: 2px solid var(--line); border-top-color: var(--brand); border-radius: 50%; animation: materialLibrarySpin .8s linear infinite; }
 @keyframes materialLibraryPulse { 50% { opacity: .45; } }
 @keyframes materialLibrarySpin { to { transform: rotate(360deg); } }
-
-.material-library__pagination { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 18px; margin-top: 26px; padding-top: 20px; border-top: 1px solid var(--line); }
+.material-library__pagination { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 18px; padding-top: 26px; }
 .material-library__pagination-meta { display: flex; align-items: center; gap: 16px; color: var(--muted); font-size: 13px; }
-.material-library__pagination-meta :deep(.el-select) { width: 124px; }
-.material-library__pagination-meta :deep(.el-select__wrapper) { min-height: 44px; }
+.material-library__pagination-meta :deep(.el-select) { width: 132px; }
+.material-library__pagination-meta :deep(.el-select__wrapper) { min-height: 44px; background: transparent; box-shadow: none; }
 .material-library__pagination-controls { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .material-library__page-indicator { display: none; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
 .material-library__pagination :deep(.el-pagination) { gap: 3px; }
-.material-library__pagination :deep(.el-pager li), .material-library__pagination :deep(.btn-prev), .material-library__pagination :deep(.btn-next) { min-width: 44px; height: 44px; border-radius: 8px; background: transparent; }
-.material-library__pagination :deep(.el-pager li.is-active) { color: var(--brand); background: color-mix(in srgb, var(--brand) 8%, var(--panel)); }
+.material-library__pagination :deep(.el-pager li), .material-library__pagination :deep(.btn-prev), .material-library__pagination :deep(.btn-next) { min-width: 44px; height: 44px; border-radius: 50%; background: transparent; }
+.material-library__pagination :deep(.el-pager li.is-active) { color: var(--brand); background: var(--brand-soft); }
 
 .material-library-upload > p { margin: 0 0 20px; color: var(--muted); font-size: 14px; line-height: 1.8; }
 .material-library-upload :deep(.el-upload) { display: block; width: 100%; }
@@ -976,20 +948,31 @@ void loadMaterials()
   .material-library__header { flex-wrap: wrap; }
   .material-library__filters { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 64px; }
   .material-library__search { grid-column: 1 / -1; }
-  .material-library__formats { display: none; }
+  .material-library-card { grid-template-columns: 64px minmax(0, 1fr); gap: 14px 20px; }
+  .material-library-card__cover { width: 64px; height: 90px; }
+  .material-library-card__aside { grid-column: 2; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px 20px; }
+  .material-library-card__status-row { justify-content: flex-start; margin-bottom: 0; }
+  .material-library-card__actions { flex: 0 0 214px; margin-left: auto; }
+  .material-library-card--loading { grid-template-columns: 64px minmax(0, 1fr); }
+  .material-library__skeleton--icon { width: 64px; height: 90px; }
+  .material-library__skeleton--footer { display: none; }
 }
-
 @media (max-width: 640px) {
-  .material-library__header { gap: 20px; margin-bottom: 22px; }
+  .material-library__header { gap: 24px; margin-bottom: 28px; }
   .material-library__header-actions { width: 100%; }
-  .material-library__header-actions :deep(.el-button) { flex: 1; }
-  .material-library__guide { padding: 15px; margin-bottom: 22px; align-items: flex-start; }
-  .material-library__guide-icon { width: 34px; height: 34px; }
-  .material-library__guide p { font-size: 12px; }
-  .material-library__grid { gap: 14px; }
-  .material-library-card { padding: 20px; }
-  .material-library__state { min-height: 330px; padding-inline: 20px; }
-  .material-library__state h2 { font-size: 18px; }
+  .material-library__header-actions :deep(.el-button) { flex: 1; padding-inline: 14px; }
+  .material-library__description { font-size: 14px; }
+  .material-library__filters { gap: 10px 4px; padding-bottom: 18px; }
+  .material-library__filters :deep(.el-select__wrapper) { padding-inline: 10px; }
+  .material-library__section-heading { margin-top: 18px; }
+  .material-library-card { padding-block: 24px; gap: 16px; }
+  .material-library-card h3 { font-size: 17px; }
+  .material-library-card__meta { font-size: 12px; gap: 4px 8px; }
+  .material-library-card__meta span + span::before { margin-right: 8px; }
+  .material-library-card__aside { grid-column: 1 / -1; }
+  .material-library-card__actions { flex-basis: 190px; }
+  .material-library__state { min-height: 330px; padding-inline: 12px; }
+  .material-library__state h2 { font-size: 19px; }
   .material-library__pagination { gap: 12px; }
   .material-library__pagination-controls { margin-left: auto; }
   .material-library__pagination :deep(.el-pager) { display: none; }

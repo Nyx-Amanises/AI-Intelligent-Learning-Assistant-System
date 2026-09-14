@@ -1,7 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" fill="none">
-  <title>知序</title>
+  <title>知序印记</title>
   <path d="M9 4.5 54 4.8Q59.4 4.5 59.1 10L59.5 53.5Q59.8 59.2 54 59.4L9.5 59Q4.1 59.2 4.5 53.5L4.2 10Q4 4.2 9 4.5Z" fill="#A64B38"/>
-  <g stroke="#FFFDF7" stroke-width="3.8" stroke-linecap="square" stroke-linejoin="round">
+  <path d="M10 9.4 53.5 9.7 54 53.9 9.7 53.6Z" stroke="#FFFDF7" stroke-width="1.2" stroke-linejoin="round"/>
+  <g stroke="#FFFDF7" stroke-width="3.3" stroke-linecap="square" stroke-linejoin="round">
     <path d="M20 15.5 16 24M18.5 21H29M13.5 32H31.5M24.3 21V31Q24.3 42 14 48.5M23.5 36 31.5 47"/>
     <path d="M37 21H48.5V46H37Z"/>
   </g>

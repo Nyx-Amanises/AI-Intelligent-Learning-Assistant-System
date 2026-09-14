@@ -20,6 +20,7 @@ const router = createRouter({
         { path: '/wrong-questions', name: 'wrong-questions', component: () => import('@/views/WrongQuestionView.vue') },
         { path: '/mastery', name: 'mastery', component: () => import('@/views/KnowledgeMasteryView.vue') },
         { path: '/analytics', name: 'analytics', component: () => import('@/views/LearningAnalyticsView.vue') },
+        { path: '/profile', name: 'profile', component: () => import('@/views/ProfileView.vue') },
         { path: '/ai-config', name: 'ai-config', component: () => import('@/views/AiConfigView.vue') }
       ]
     }

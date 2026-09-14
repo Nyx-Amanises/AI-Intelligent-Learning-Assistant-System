@@ -2,9 +2,9 @@
   <section class="summary-view">
     <div class="page-header">
       <div>
-        <div class="learning-eyebrow">理解与整理</div>
-        <h1 class="page-title">AI 总结</h1>
-        <p class="page-desc">把长资料整理成清晰的知识脉络，让每一次复习更有重点。</p>
+        <div class="learning-eyebrow">我的内容</div>
+        <h1 class="page-title">学习总结</h1>
+        <p class="page-desc">读过的内容，整理成自己的理解。</p>
       </div>
       <el-button type="primary" :loading="generating" @click="openGenerateDialog">
         <svg class="button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke-linecap="round" /></svg>
@@ -14,12 +14,14 @@
 
     <div class="workspace-panel">
       <div class="summary-library-heading">
-        <div><h2>我的总结 <span>{{ summaryHistory.length }}</span></h2><p>从核心概念到考试重点，随时回顾已整理的知识。</p></div>
-        <el-button :loading="historyLoading" @click="loadSummaryHistory">刷新</el-button>
+        <div><h2>全部总结 <span>{{ summaryHistory.length }}</span></h2></div>
+        <el-button text :loading="historyLoading" @click="loadSummaryHistory">刷新</el-button>
       </div>
       <div class="workspace-toolbar">
         <div class="workspace-filter-bar workspace-filter-bar--summary">
-          <el-input v-model="keyword" clearable placeholder="搜索资料名称或总结内容" aria-label="搜索总结" class="workspace-filter-bar__search" />
+          <el-input v-model="keyword" clearable placeholder="搜索资料名称或总结内容" aria-label="搜索总结" class="workspace-filter-bar__search">
+            <template #prefix><svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 4 4" stroke-linecap="round" /></svg></template>
+          </el-input>
           <el-select v-model="filterMaterialId" clearable filterable placeholder="全部资料" aria-label="筛选资料" :loading="materialsLoading">
             <el-option v-for="item in materials" :key="item.id" :label="item.title" :value="item.id" />
           </el-select>
@@ -28,7 +30,7 @@
             <el-option label="考试重点" value="EXAM" />
             <el-option label="结构提纲" value="OUTLINE" />
           </el-select>
-          <el-button @click="resetFilters">重置</el-button>
+          <el-button text @click="resetFilters">重置</el-button>
         </div>
       </div>
 
@@ -47,13 +49,16 @@
           <el-button v-else type="primary" @click="router.push('/materials')">前往资料库</el-button>
         </div>
         <div v-else class="summary-card-grid">
-          <article v-for="item in pagedSummaryHistory" :key="item.recordId" class="summary-note-card">
-            <div class="summary-note-card__top">
-              <span class="summary-type">{{ formatSummaryType(item.summaryType) }}</span>
-              <span class="summary-note-card__date">{{ formatDateTime(item.createdAt).slice(0, 10) }}</span>
+          <article v-for="(item, index) in pagedSummaryHistory" :key="item.recordId" class="summary-note-card">
+            <span class="summary-note-card__number" aria-hidden="true">{{ String((pagination.current - 1) * pagination.size + index + 1).padStart(2, '0') }}</span>
+            <div class="summary-note-card__content">
+              <div class="summary-note-card__top">
+                <span class="summary-type">{{ formatSummaryType(item.summaryType) }}</span>
+                <span class="summary-note-card__date">{{ formatDateTime(item.createdAt).slice(0, 10) }}</span>
+              </div>
+              <button type="button" class="summary-note-card__title" @click="openSummaryDialog(item)">{{ item.materialTitle || '未命名资料' }}</button>
+              <p class="summary-note-card__excerpt">{{ buildExcerpt(item.summaryText, 160) }}</p>
             </div>
-            <button type="button" class="summary-note-card__title" @click="openSummaryDialog(item)">{{ item.materialTitle || '未命名资料' }}</button>
-            <p class="summary-note-card__excerpt">{{ buildExcerpt(item.summaryText, 120) }}</p>
             <div class="summary-note-card__actions">
               <el-button link type="primary" @click="openSummaryDialog(item)">阅读总结 <span aria-hidden="true">→</span></el-button>
               <div>
@@ -279,7 +284,12 @@ const buildExcerpt = (text?: string, length = 60) => {
   if (!text) {
     return '暂无内容'
   }
-  const normalized = text.replace(/\s+/g, ' ').trim()
+  const normalized = text
+    .replace(/^\s{0,3}(?:#{1,6}\s+|>\s*|[-+*]\s+|\d+[.)]\s+)/gm, '')
+    .replace(/!?\[([^\]]*)\]\([^)]+\)/g, '$1')
+    .replace(/(\*\*|__|~~|`)(.*?)\1/g, '$2')
+    .replace(/\s+/g, ' ')
+    .trim()
   return normalized.length > length ? `${normalized.slice(0, length)}...` : normalized
 }
 
@@ -454,36 +464,48 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.learning-eyebrow { margin-bottom: 8px; color: var(--brand); font-size: 12px; font-weight: 650; letter-spacing: .12em; }
-.button-icon { width: 16px; height: 16px; margin-right: 7px; }
-.summary-library-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 24px 24px 0; }
-.summary-library-heading h2 { display: flex; align-items: center; gap: 9px; margin: 0; font-size: 17px; }
-.summary-library-heading h2 span { min-width: 24px; padding: 2px 7px; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; font-size: 12px; font-weight: 500; text-align: center; }
-.summary-library-heading p { margin: 7px 0 0; color: var(--muted); font-size: 13px; }
-.summary-view .workspace-filter-bar--summary { display: grid; grid-template-columns: minmax(200px, 1.6fr) minmax(140px, 1fr) minmax(120px, .75fr) auto; width: 100%; margin-bottom: 0; }
-.summary-view .workspace-toolbar { margin-top: 6px; }
-.generation-notice { margin-bottom: 20px; }
-.summary-loading { display: grid; gap: 24px; padding: 24px; color: var(--muted); font-size: 13px; }
-.summary-card-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
-.summary-note-card { display: flex; flex-direction: column; min-width: 0; padding: 23px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); transition: border-color .2s; }
-.summary-note-card:hover { border-color: var(--brand); }
-.summary-note-card__top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-.summary-type { display: inline-flex; padding: 4px 9px; border-radius: 5px; background: var(--brand-light, #edf4ef); color: var(--brand); font-size: 12px; font-weight: 600; }
+.summary-view { max-width: 1180px; min-width: 0; margin: 0 auto; }
+.learning-eyebrow { margin-bottom: 10px; color: var(--muted); font-size: 13px; font-weight: 500; letter-spacing: .12em; }
+.button-icon { width: 17px; height: 17px; }
+.search-icon { width: 18px; height: 18px; margin-right: 5px; }
+.summary-view .workspace-panel { background: transparent; border: 0; border-radius: 0; overflow: visible; }
+.summary-library-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 0 0 12px; }
+.summary-library-heading h2 { display: flex; align-items: baseline; gap: 12px; margin: 0; font-size: 18px; font-weight: 600; }
+.summary-library-heading h2 span { color: var(--muted); font-size: 14px; font-weight: 400; font-variant-numeric: tabular-nums; }
+.summary-view .workspace-filter-bar--summary { display: grid; grid-template-columns: minmax(200px, 1.6fr) minmax(150px, .8fr) minmax(130px, .7fr) auto; gap: 12px; width: 100%; margin-bottom: 0; }
+.summary-view .workspace-toolbar { margin: 0; padding: 0 0 26px; border-bottom: 1px solid var(--line); background: transparent; }
+.summary-view .workspace-filter-bar :deep(.el-input__wrapper), .summary-view .workspace-filter-bar :deep(.el-select__wrapper) { min-height: 46px; padding-inline: 16px; border-radius: 999px; background: transparent; box-shadow: none; }
+.summary-view .workspace-filter-bar :deep(.el-input__wrapper) { background: var(--bg-secondary); }
+.summary-view .workspace-filter-bar :deep(.el-select__wrapper:hover) { background: var(--bg-secondary); }
+.summary-view .workspace-filter-bar :deep(.el-input__wrapper.is-focus), .summary-view .workspace-filter-bar :deep(.el-select__wrapper.is-focused) { box-shadow: 0 0 0 2px var(--brand); }
+.summary-view .workspace-body { padding: 0; }
+.generation-notice { margin-top: 20px; }
+.summary-loading { display: grid; gap: 24px; padding: 40px 0; color: var(--muted); font-size: 14px; }
+.summary-card-grid { display: grid; grid-template-columns: minmax(0, 1fr); }
+.summary-note-card { display: grid; grid-template-columns: 46px minmax(0, 1fr) 184px; gap: 26px; align-items: start; min-width: 0; padding: 30px 0; border-bottom: 1px solid var(--line); }
+.summary-note-card__number { padding-top: 4px; color: #b0b8aa; font-size: 25px; font-weight: 400; font-variant-numeric: tabular-nums; letter-spacing: -.04em; }
+.summary-note-card__content { min-width: 0; }
+.summary-note-card__top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; }
+.summary-type { display: inline-flex; color: var(--brand); font-size: 12px; font-weight: 500; letter-spacing: .04em; }
 .summary-note-card__date { font-size: 12px; color: var(--muted); }
-.summary-note-card__title { width: fit-content; max-width: 100%; margin: 18px 0 0; padding: 0; border: 0; background: none; color: var(--text); font: inherit; font-size: 17px; font-weight: 650; line-height: 1.6; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
+.summary-note-card__title { width: fit-content; max-width: 100%; min-height: 44px; margin: 9px 0 0; padding: 4px 0; border: 0; background: none; color: var(--text); font: inherit; font-size: 20px; font-weight: 600; line-height: 1.6; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
 .summary-note-card__title:hover { color: var(--brand); }
 .summary-note-card__title:focus-visible { outline: 2px solid var(--brand); outline-offset: 5px; border-radius: 3px; }
-.summary-note-card__excerpt { flex: 1; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; min-height: 72px; margin: 10px 0 20px; overflow: hidden; color: var(--muted); font-size: 13px; line-height: 1.85; overflow-wrap: anywhere; }
-.summary-note-card__actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 14px; border-top: 1px solid var(--line); }
-.summary-note-card__actions > div { display: flex; gap: 12px; }
+.summary-note-card__excerpt { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; margin: 8px 0 0; overflow: hidden; color: var(--muted); font-size: 15px; line-height: 1.85; overflow-wrap: anywhere; }
+.summary-note-card__actions { display: flex; flex-direction: column; align-items: flex-end; justify-content: center; gap: 3px; align-self: center; }
+.summary-note-card__actions > div { display: flex; gap: 14px; }
 .summary-note-card__actions :deep(.el-button + .el-button) { margin-left: 0; }
-.summary-note-card__actions :deep(.el-button) { min-height: 32px; font-size: 12px; }
+.summary-note-card__actions :deep(.el-button) { min-height: 44px; font-size: 13px; }
+.summary-note-card__actions > :deep(.el-button) { font-size: 15px; }
 .summary-note-card__actions :deep(.el-button span) { gap: 6px; }
-.learning-empty { display: grid; justify-items: center; align-content: center; min-height: 340px; padding: 40px 20px; text-align: center; }
-.learning-empty__icon { display: grid; place-items: center; width: 64px; height: 64px; margin-bottom: 20px; border: 1px solid var(--line); border-radius: 16px; color: var(--brand); background: var(--bg); }
-.learning-empty__icon svg { width: 29px; height: 29px; }
-.learning-empty h3 { margin: 0 0 10px; color: var(--text); font-size: 18px; font-weight: 600; }
-.learning-empty p { max-width: 430px; margin: 0 0 24px; color: var(--muted); font-size: 14px; line-height: 1.8; }
+.summary-view .workspace-pagination { border-top: 0; margin-top: 0; padding-top: 26px; }
+.summary-view .workspace-pagination :deep(.el-pager li), .summary-view .workspace-pagination :deep(.btn-prev), .summary-view .workspace-pagination :deep(.btn-next) { min-width: 44px; height: 44px; border-radius: 50%; background: transparent; }
+.summary-view .workspace-pagination :deep(.el-pager li.is-active) { color: var(--brand); background: var(--brand-soft); }
+.learning-empty { display: grid; justify-items: center; align-content: center; min-height: 370px; padding: 52px 20px; text-align: center; }
+.learning-empty__icon { display: grid; place-items: center; width: 72px; height: 72px; margin-bottom: 24px; border-radius: 50%; color: var(--brand); background: var(--brand-soft); }
+.learning-empty__icon svg { width: 30px; height: 30px; }
+.learning-empty h3 { margin: 0 0 12px; color: var(--text); font-size: 21px; font-weight: 500; line-height: 1.5; }
+.learning-empty p { max-width: 440px; margin: 0 0 26px; color: var(--muted); font-size: 15px; line-height: 1.9; }
 .learning-empty--compact { min-height: 200px; }
 .summary-mode-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; width: 100%; }
 .summary-mode-options :deep(.el-radio.is-bordered) { height: auto; min-height: 100px; margin: 0; padding: 16px 12px; border-radius: 9px; white-space: normal; align-items: flex-start; }
@@ -495,22 +517,33 @@ onMounted(async () => {
 .summary-form-note { margin: 12px 0; color: var(--muted); font-size: 12px; line-height: 1.8; }
 .summary-reader__title { margin-top: 13px; overflow-wrap: anywhere; }
 .summary-reader__body { padding: 10px 0 24px; }
-.summary-reader__body .summary-block { color: var(--text); font-size: 15px; line-height: 2; overflow-wrap: anywhere; }
+.summary-reader__body .summary-block { color: var(--text); font-size: 16px; line-height: 2; overflow-wrap: anywhere; }
 .summary-sources { padding-top: 20px; border-top: 1px solid var(--line); }
 .summary-sources summary { padding-bottom: 18px; color: var(--text); font-size: 14px; font-weight: 600; cursor: pointer; }
 .summary-sources summary span { margin-left: 6px; color: var(--muted); font-size: 12px; font-weight: 400; }
 .summary-material-meta { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; color: var(--muted); font-size: 13px; }
-.summary-preview-card { border-radius: 10px; background: var(--bg); }
+.summary-preview-card { padding: 24px 0; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: transparent; }
 @media (max-width: 1000px) {
-  .summary-card-grid { grid-template-columns: 1fr; }
-  .summary-view .workspace-filter-bar--summary { grid-template-columns: 1fr 1fr; }
+  .summary-note-card { grid-template-columns: 40px minmax(0, 1fr); gap: 12px 22px; }
+  .summary-note-card__actions { grid-column: 2; flex-direction: row; align-items: center; justify-content: space-between; gap: 10px; }
+  .summary-view .workspace-filter-bar--summary { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
+  .summary-view .workspace-filter-bar__search { grid-column: 1 / -1; }
 }
 @media (max-width: 600px) {
-  .summary-library-heading { padding: 18px 16px 0; align-items: flex-start; }
-  .summary-library-heading p { max-width: 230px; line-height: 1.7; }
-  .summary-view .workspace-filter-bar--summary { grid-template-columns: minmax(0, 1fr); }
-  .summary-note-card { padding: 18px; }
+  .summary-view .page-header { flex-direction: column; align-items: stretch; gap: 24px; }
+  .summary-view .page-header > .el-button { align-self: flex-start; }
+  .summary-library-heading { padding-bottom: 8px; }
+  .summary-view .workspace-filter-bar--summary { gap: 10px 4px; }
+  .summary-view .workspace-filter-bar :deep(.el-select__wrapper) { padding-inline: 10px; }
+  .summary-view .workspace-toolbar { padding-bottom: 20px; }
+  .summary-note-card { grid-template-columns: 28px minmax(0, 1fr); padding-block: 24px; gap: 12px 14px; }
+  .summary-note-card__number { font-size: 20px; }
+  .summary-note-card__title { font-size: 18px; }
+  .summary-note-card__excerpt { font-size: 14px; }
   .summary-note-card__actions { flex-wrap: wrap; }
+  .summary-note-card__actions > div { gap: 12px; }
+  .learning-empty { padding-inline: 8px; min-height: 330px; }
+  .learning-empty h3 { font-size: 19px; }
   .summary-mode-options { grid-template-columns: 1fr; }
   .summary-mode-options :deep(.el-radio.is-bordered) { min-height: 75px; }
 }

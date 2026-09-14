@@ -2,16 +2,14 @@
   <main class="login-page">
     <div class="login-shell" :class="{ 'login-shell--register': isRegister }">
       <section class="login-form-panel" aria-labelledby="login-form-title">
-        <div class="login-brand" aria-label="AI 学习助手">
-          <span class="login-brand__mark"><AppIcon name="book-open" :size="23" /></span>
-          <span class="login-brand__name">AI 学习助手</span>
+        <div class="login-brand">
+          <BrandLogo class="login-brand__logo" />
         </div>
 
         <div class="login-form-content">
           <header class="login-form-heading">
-            <p class="login-form-eyebrow">{{ isRegister ? 'A NEW CHAPTER' : 'WELCOME BACK' }}</p>
-            <h1 id="login-form-title">{{ isRegister ? '开启学习新一页' : '欢迎回来' }}</h1>
-            <p class="login-form-description">{{ isRegister ? '创建你的账号，让好奇心在这里生根。' : '登录你的学习空间，继续探索与积累。' }}</p>
+            <p v-if="!isRegister" class="login-form-eyebrow">WELCOME BACK</p>
+            <h1 id="login-form-title">{{ isRegister ? '注册' : '欢迎回来' }}</h1>
           </header>
 
           <p v-if="registrationNotice" class="auth-notice auth-notice--success" role="status">{{ registrationNotice }}</p>
@@ -61,24 +59,6 @@
               </div>
             </div>
 
-            <div v-if="isRegister" class="auth-field">
-              <label for="auth-email">邮箱 <span>选填</span></label>
-              <input
-                id="auth-email"
-                v-model="form.email"
-                name="email"
-                type="email"
-                inputmode="email"
-                autocomplete="email"
-                :disabled="submitting"
-                placeholder="name@example.com"
-                :aria-invalid="Boolean(errors.email)"
-                :aria-describedby="errors.email ? 'auth-email-error' : undefined"
-                @blur="validateField('email')"
-              >
-              <p v-if="errors.email" id="auth-email-error" class="auth-field-error">{{ errors.email }}</p>
-            </div>
-
             <div class="auth-field">
               <label for="auth-password">密码</label>
               <div class="auth-password">
@@ -89,11 +69,12 @@
                   name="password"
                   :type="passwordVisible ? 'text' : 'password'"
                   :autocomplete="isRegister ? 'new-password' : 'current-password'"
+                  :minlength="isRegister ? 8 : undefined"
                   :maxlength="isRegister ? 20 : undefined"
                   :disabled="submitting"
-                  :placeholder="isRegister ? '设置 6–20 位密码' : '请输入你的密码'"
+                  :placeholder="isRegister ? '设置密码' : '请输入你的密码'"
                   :aria-invalid="Boolean(errors.password)"
-                  :aria-describedby="errors.password ? 'auth-password-error' : undefined"
+                  :aria-describedby="passwordDescription"
                   required
                   @blur="validateField('password')"
                 >
@@ -105,23 +86,48 @@
                   :aria-pressed="passwordVisible"
                   @click="passwordVisible = !passwordVisible"
                 >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-                    <template v-if="passwordVisible">
-                      <path d="m3 3 18 18M10.6 10.6a2 2 0 0 0 2.8 2.8M9.8 5.3A10.2 10.2 0 0 1 12 5c6 0 10 7 10 7a18 18 0 0 1-3.2 3.8M6.2 6.2A20 20 0 0 0 2 12s4 7 10 7a11 11 0 0 0 5.1-1.4" />
-                    </template>
-                    <template v-else>
-                      <path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z" />
-                      <circle cx="12" cy="12" r="3" />
-                    </template>
-                  </svg>
+                  <AppIcon :name="passwordVisible ? 'eye-off' : 'eye'" :size="19" />
                 </button>
               </div>
+              <p v-if="isRegister" id="auth-password-hint" class="auth-field-hint">8–20 位，至少包含字母和数字，可使用符号。</p>
               <p v-if="errors.password" id="auth-password-error" class="auth-field-error">{{ errors.password }}</p>
+            </div>
+
+            <div v-if="isRegister" class="auth-field">
+              <label for="auth-confirmPassword">确认密码</label>
+              <div class="auth-password">
+                <input
+                  id="auth-confirmPassword"
+                  v-model="form.confirmPassword"
+                  name="confirmPassword"
+                  :type="confirmPasswordVisible ? 'text' : 'password'"
+                  autocomplete="new-password"
+                  minlength="8"
+                  maxlength="20"
+                  :disabled="submitting"
+                  placeholder="再次输入密码"
+                  :aria-invalid="Boolean(errors.confirmPassword)"
+                  :aria-describedby="errors.confirmPassword ? 'auth-confirmPassword-error' : undefined"
+                  required
+                  @blur="validateField('confirmPassword')"
+                >
+                <button
+                  type="button"
+                  class="auth-password__toggle"
+                  :disabled="submitting"
+                  :aria-label="confirmPasswordVisible ? '隐藏确认密码' : '显示确认密码'"
+                  :aria-pressed="confirmPasswordVisible"
+                  @click="confirmPasswordVisible = !confirmPasswordVisible"
+                >
+                  <AppIcon :name="confirmPasswordVisible ? 'eye-off' : 'eye'" :size="19" />
+                </button>
+              </div>
+              <p v-if="errors.confirmPassword" id="auth-confirmPassword-error" class="auth-field-error">{{ errors.confirmPassword }}</p>
             </div>
 
             <button class="auth-submit" type="submit" :disabled="submitting">
               <span v-if="submitting" class="auth-submit__spinner" aria-hidden="true" />
-              <span>{{ submitting ? (isRegister ? '正在创建账号…' : '正在登录…') : (isRegister ? '创建账号' : '登录学习空间') }}</span>
+              <span>{{ submitting ? (isRegister ? '正在创建账号…' : '正在登录…') : (isRegister ? '创建账号' : '登录') }}</span>
               <AppIcon v-if="!submitting" name="arrow-right" :size="18" />
             </button>
           </form>
@@ -134,8 +140,6 @@
             </button>
           </div>
         </div>
-
-        <p class="login-form-footnote"><span aria-hidden="true" />从一份资料开始，积累属于你的知识</p>
       </section>
 
       <aside class="login-visual" aria-labelledby="login-visual-title">
@@ -149,40 +153,52 @@
           decoding="async"
           draggable="false"
         >
-        <div class="login-visual__copy">
-          <p class="login-visual__eyebrow"><span aria-hidden="true" />LEARNING IS GROWING</p>
-          <h2 id="login-visual-title">让好奇，<br>慢慢生长。</h2>
-          <p class="login-visual__description">在这里，把每一份知识学成自己的。</p>
-        </div>
-        <p class="login-visual__footnote">按自己的节奏，每天多懂一点。</p>
+        <figure class="login-visual__copy" aria-live="polite" aria-atomic="true">
+          <blockquote class="login-visual__quote">
+            <p id="login-visual-title">{{ dailyQuote.text }}</p>
+          </blockquote>
+          <figcaption class="login-visual__attribution">
+            <span>— {{ dailyQuote.author }}</span>
+            <cite>《{{ dailyQuote.source }}》</cite>
+          </figcaption>
+        </figure>
       </aside>
     </div>
   </main>
 </template>
 
 <script setup lang="ts">
-import { nextTick, reactive, ref } from 'vue'
+import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { loginApi, registerApi } from '@/api/modules/auth'
 import { useUserStore } from '@/stores/user'
+import { useDailyQuote } from '@/composables/useDailyQuote'
+import { APP_NAME } from '@/config/brand'
 import AppIcon from '@/components/AppIcon.vue'
+import BrandLogo from '@/components/BrandLogo.vue'
 import botanicalPhoto from '@/assets/auth/botanical-study.webp'
 
-type AuthField = 'username' | 'nickname' | 'email' | 'password'
+type AuthField = 'username' | 'nickname' | 'password' | 'confirmPassword'
 
 const router = useRouter()
 const route = useRoute()
 const userStore = useUserStore()
+const dailyQuote = useDailyQuote()
 const isRegister = ref(false)
 const submitting = ref(false)
 const passwordVisible = ref(false)
+const confirmPasswordVisible = ref(false)
 const submitError = ref('')
 const registrationNotice = ref('')
 const usernameInput = ref<HTMLInputElement | null>(null)
 const passwordInput = ref<HTMLInputElement | null>(null)
-const form = reactive({ username: '', password: '', nickname: '', email: '' })
-const errors = reactive<Record<AuthField, string>>({ username: '', nickname: '', email: '', password: '' })
+const form = reactive({ username: '', password: '', confirmPassword: '', nickname: '' })
+const errors = reactive<Record<AuthField, string>>({ username: '', nickname: '', password: '', confirmPassword: '' })
+const passwordDescription = computed(() => [
+  isRegister.value ? 'auth-password-hint' : '',
+  errors.password ? 'auth-password-error' : ''
+].filter(Boolean).join(' ') || undefined)
 const validateField = (field: AuthField) => {
   let message = ''
   const value = form[field].trim()
@@ -191,12 +207,14 @@ const validateField = (field: AuthField) => {
     else if (isRegister.value && (value.length < 4 || value.length > 20)) message = '用户名需要 4–20 个字符。'
   } else if (field === 'password') {
     if (!value) message = '请输入密码。'
-    else if (isRegister.value && (form.password.length < 6 || form.password.length > 20)) message = '密码需要 6–20 个字符。'
+    else if (isRegister.value && (form.password.length < 8 || form.password.length > 20)) message = '密码需要 8–20 个字符。'
+    else if (isRegister.value && (!/[A-Za-z]/.test(form.password) || !/[0-9]/.test(form.password))) message = '密码需同时包含字母和数字。'
+  } else if (field === 'confirmPassword' && isRegister.value) {
+    if (!value) message = '请再次输入密码。'
+    else if (form.confirmPassword !== form.password) message = '两次输入的密码不一致。'
   } else if (field === 'nickname' && isRegister.value) {
     if (!value) message = '请填写用于展示的昵称。'
     else if (value.length > 20) message = '昵称请保持在 20 个字符以内。'
-  } else if (field === 'email' && isRegister.value && value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
-    message = '请检查邮箱格式，例如 name@example.com。'
   }
   errors[field] = message
   return !message
@@ -206,6 +224,9 @@ const toggleMode = async (value: boolean) => {
   if (submitting.value) return
   isRegister.value = value
   passwordVisible.value = false
+  confirmPasswordVisible.value = false
+  form.password = ''
+  form.confirmPassword = ''
   submitError.value = ''
   registrationNotice.value = ''
   for (const field of Object.keys(errors) as AuthField[]) errors[field] = ''
@@ -216,7 +237,7 @@ const toggleMode = async (value: boolean) => {
 const submit = async () => {
   if (submitting.value) return
   submitError.value = ''
-  const fields: AuthField[] = isRegister.value ? ['username', 'nickname', 'email', 'password'] : ['username', 'password']
+  const fields: AuthField[] = isRegister.value ? ['username', 'nickname', 'password', 'confirmPassword'] : ['username', 'password']
   const invalidFields = fields.filter((field) => !validateField(field))
   if (invalidFields.length) {
     await nextTick()
@@ -227,11 +248,13 @@ const submit = async () => {
   submitting.value = true
   try {
     if (isRegister.value) {
-      await registerApi({ username: form.username.trim(), password: form.password, nickname: form.nickname.trim(), email: form.email.trim() })
+      await registerApi({ username: form.username.trim(), password: form.password, confirmPassword: form.confirmPassword, nickname: form.nickname.trim() })
       isRegister.value = false
       passwordVisible.value = false
+      confirmPasswordVisible.value = false
       form.password = ''
-      registrationNotice.value = '账号已创建。输入密码，开始你的学习之旅。'
+      form.confirmPassword = ''
+      registrationNotice.value = '注册成功，请登录。'
       return
     }
 
@@ -254,6 +277,14 @@ const submit = async () => {
     }
   }
 }
+
+watch(() => form.password, () => {
+  if (isRegister.value && form.confirmPassword) validateField('confirmPassword')
+})
+
+watch(isRegister, (registering) => {
+  document.title = `${registering ? '注册' : '登录'} · ${APP_NAME}`
+}, { immediate: true })
 </script>
 
 <style scoped>
@@ -294,20 +325,10 @@ const submit = async () => {
 .login-brand {
   display: flex;
   align-items: center;
-  gap: 11px;
   width: min(352px, 100%);
   margin-inline: auto;
 }
-.login-brand__mark {
-  display: grid;
-  place-items: center;
-  width: 37px;
-  height: 37px;
-  border-radius: 11px;
-  color: #fffefa;
-  background: var(--auth-green);
-}
-.login-brand__name { font-size: 16px; font-weight: 600; letter-spacing: .2px; }
+.login-brand__logo { width: 184px; max-width: 100%; }
 .login-form-content { width: min(352px, 100%); margin: auto; padding: 48px 0; }
 .login-form-heading { margin-bottom: 32px; }
 .login-form-eyebrow {
@@ -317,7 +338,6 @@ const submit = async () => {
   letter-spacing: 2.1px;
 }
 .login-form-heading h1 { margin: 0; font-size: 32px; font-weight: 600; line-height: 1.45; letter-spacing: -1px; }
-.login-form-description { margin: 12px 0 0; color: var(--auth-muted); font-size: 13px; line-height: 1.9; }
 
 .auth-form { display: grid; grid-template-columns: minmax(0, 1fr); gap: 23px; padding: 0; }
 .auth-name-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
@@ -365,6 +385,7 @@ const submit = async () => {
 .auth-password__toggle svg { width: 19px; height: 19px; }
 .auth-password__toggle:hover { color: var(--auth-green); background: #f0f3ea; }
 .auth-field-error { margin: 7px 0 0; color: #a13c35; font-size: 12px; line-height: 1.65; }
+.auth-field-hint { margin: 8px 0 0; color: var(--auth-muted); font-size: 12px; line-height: 1.65; }
 .auth-notice { margin: 0 0 22px; padding: 12px 14px; border-radius: 8px; font-size: 13px; line-height: 1.75; }
 .auth-notice--error { color: #a13c35; background: #faeeea; }
 .auth-notice--success { color: #28503a; background: #edf3e8; }
@@ -398,8 +419,6 @@ const submit = async () => {
 .auth-switch button:hover { background: #edf3e8; }
 .auth-switch button:disabled, .auth-password__toggle:disabled { cursor: wait; opacity: .6; }
 .auth-switch button:focus-visible, .auth-password__toggle:focus-visible, .auth-submit:focus-visible { outline: 3px solid #7e9d79; outline-offset: 3px; }
-.login-form-footnote { display: flex; align-items: center; justify-content: center; gap: 7px; margin: 0; color: #899181; font-size: 10px; line-height: 1.8; text-align: center; }
-.login-form-footnote > span { width: 4px; height: 4px; flex: 0 0 auto; border-radius: 50%; background: #9baa8f; }
 
 .login-visual {
   position: relative;
@@ -412,12 +431,11 @@ const submit = async () => {
 .login-visual__image { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 52% center; mix-blend-mode: multiply; filter: saturate(.82); }
 .login-visual::after { position: absolute; z-index: -1; inset: 0; background: linear-gradient(180deg, rgb(239 241 230 / 30%), transparent 42%, transparent 78%, rgb(236 239 226 / 24%)); content: ""; }
 .login-visual__image { z-index: -2; }
-.login-visual__copy { position: relative; padding: 47px 42px; }
-.login-visual__eyebrow { display: flex; align-items: center; gap: 10px; margin: 0 0 24px; color: #5d7455; font: 500 9px/1.5 "Segoe UI", sans-serif; letter-spacing: 2.1px; }
-.login-visual__eyebrow > span { width: 24px; height: 1px; background: currentColor; }
-.login-visual__copy h2 { margin: 0; color: #2d4e36; font-family: "Noto Serif SC", "Songti SC", "STSong", "SimSun", serif; font-size: clamp(35px, 3.25vw, 46px); font-weight: 400; line-height: 1.5; letter-spacing: 2px; }
-.login-visual__description { margin: 20px 0 0; color: #5c7052; font-size: 12px; line-height: 1.8; letter-spacing: .5px; }
-.login-visual__footnote { position: absolute; right: 36px; bottom: 25px; left: 42px; margin: 0; color: #5f7356; font-size: 11px; line-height: 1.8; letter-spacing: .8px; }
+.login-visual__copy { position: relative; margin: 0; padding: 47px 42px; }
+.login-visual__quote { margin: 0; }
+.login-visual__quote p { margin: 0; color: #2d4e36; font-family: "Noto Serif SC", "Songti SC", "STSong", "SimSun", serif; font-size: clamp(27px, 2.6vw, 36px); font-weight: 400; line-height: 1.7; letter-spacing: .7px; text-wrap: balance; overflow-wrap: anywhere; }
+.login-visual__attribution { display: flex; flex-wrap: wrap; gap: 4px 8px; margin-top: 20px; color: #4e644a; font-size: 12px; line-height: 1.8; }
+.login-visual__attribution cite { font-style: normal; }
 .login-shell--register .login-form-content { padding-block: 30px; }
 .login-shell--register .login-form-heading { margin-bottom: 25px; }
 .login-shell--register .auth-form { gap: 18px; }
@@ -430,9 +448,7 @@ const submit = async () => {
   .login-page { padding: 28px; }
   .login-form-panel { padding: 32px 30px 25px; }
   .login-visual__copy { padding: 45px 32px; }
-  .login-visual__copy h2 { font-size: 38px; }
-  .login-visual__description { font-size: 11px; letter-spacing: 0; }
-  .login-visual__footnote { left: 32px; font-size: 10px; }
+  .login-visual__quote p { font-size: 30px; }
 }
 
 @media (max-width: 760px) {
@@ -449,10 +465,8 @@ const submit = async () => {
   .login-page { padding: 16px; }
   .login-shell { min-height: min(720px, calc(100svh - 32px)); border-radius: 20px; }
   .login-form-panel { padding: 30px 25px 25px; }
-  .login-brand__name { font-size: 15px; }
+  .login-brand__logo { width: 168px; }
   .login-form-heading h1 { font-size: 30px; }
-  .login-form-description { font-size: 12px; }
-  .login-form-footnote { font-size: 10px; }
   .auth-name-row { gap: 13px; }
 }
 

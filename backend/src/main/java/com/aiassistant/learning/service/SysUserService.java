@@ -1,5 +1,6 @@
 package com.aiassistant.learning.service;
 
+import com.aiassistant.learning.dto.user.UpdateProfileRequest;
 import com.aiassistant.learning.entity.SysUser;
 import com.aiassistant.learning.vo.user.UserProfileVO;
 import com.baomidou.mybatisplus.extension.service.IService;
@@ -36,6 +37,15 @@ public interface SysUserService extends IService<SysUser> {
      * @return 返回给前端展示的用户资料
      */
     UserProfileVO getCurrentUserProfile(Long userId);
+
+    /**
+     * 修改当前登录用户的昵称和可选邮箱。
+     *
+     * @param userId 从登录上下文中取得的用户 ID
+     * @param request 可修改的个人信息
+     * @return 更新后的完整用户资料
+     */
+    UserProfileVO updateCurrentUserProfile(Long userId, UpdateProfileRequest request);
 
     /**
      * Upload and update the current user's avatar.

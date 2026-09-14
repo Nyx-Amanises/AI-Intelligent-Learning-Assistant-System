@@ -2,11 +2,13 @@ package com.aiassistant.learning.service.impl;
 
 import com.aiassistant.learning.common.exception.BusinessException;
 import com.aiassistant.learning.config.FileStorageProperties;
+import com.aiassistant.learning.dto.user.UpdateProfileRequest;
 import com.aiassistant.learning.entity.SysUser;
 import com.aiassistant.learning.mapper.SysUserMapper;
 import com.aiassistant.learning.service.SysUserService;
 import com.aiassistant.learning.vo.user.UserProfileVO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import java.io.IOException;
 import java.io.InputStream;
@@ -113,6 +115,22 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    public UserProfileVO updateCurrentUserProfile(Long userId, UpdateProfileRequest request) {
+        if (userId == null) {
+            throw new BusinessException(401, "请先登录");
+        }
+        this.getRequiredById(userId);
+
+        // 显式设置可编辑列，保证空邮箱会写入 NULL，也不会覆盖头像、权限等字段。
+        this.update(new LambdaUpdateWrapper<SysUser>()
+                .eq(SysUser::getId, userId)
+                .set(SysUser::getNickname, request.getNickname())
+                .set(SysUser::getEmail, request.getEmail()));
+        return this.getCurrentUserProfile(userId);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
     public UserProfileVO uploadAvatar(Long userId, MultipartFile file) {
         if (file == null || file.isEmpty()) {
             throw new BusinessException("\u5934\u50cf\u6587\u4ef6\u4e0d\u80fd\u4e3a\u7a7a");
@@ -137,9 +155,10 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
             throw new BusinessException(500, "\u5934\u50cf\u4fdd\u5b58\u5931\u8d25");
         }
 
-        SysUser user = this.getRequiredById(userId);
-        user.setAvatarUrl(AVATAR_PUBLIC_PATH + storedFilename);
-        this.updateById(user);
+        this.getRequiredById(userId);
+        this.update(new LambdaUpdateWrapper<SysUser>()
+                .eq(SysUser::getId, userId)
+                .set(SysUser::getAvatarUrl, AVATAR_PUBLIC_PATH + storedFilename));
         return this.getCurrentUserProfile(userId);
     }
 

@@ -2,6 +2,7 @@ package com.aiassistant.learning.dto.auth;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
@@ -22,11 +23,19 @@ public class RegisterRequest {
     private String username;
 
     /**
-     * 密码，不能为空，长度限制为 6 到 20 位。
+     * 密码，长度为 8 到 20 位，至少包含英文字母和数字。
      */
     @NotBlank(message = "密码不能为空")
-    @Size(min = 6, max = 20, message = "密码长度需在6到20位之间")
+    @Size(min = 8, max = 20, message = "密码长度需在8到20位之间")
+    @Pattern(regexp = "^(?=.*[A-Za-z])(?=.*[0-9]).+$", message = "密码需同时包含字母和数字")
     private String password;
+
+    /**
+     * 确认密码，必须与密码完全一致。
+     */
+    @NotBlank(message = "请再次输入密码")
+    @Size(min = 8, max = 20, message = "确认密码长度需在8到20位之间")
+    private String confirmPassword;
 
     /**
      * 昵称，不能为空，页面展示时使用。
@@ -39,5 +48,6 @@ public class RegisterRequest {
      * 邮箱地址。允许为空，但如果填写就必须符合邮箱格式。
      */
     @Email(message = "邮箱格式不正确")
+    @Size(max = 100, message = "邮箱长度不能超过100位")
     private String email;
 }
