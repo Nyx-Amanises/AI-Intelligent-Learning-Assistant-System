@@ -24,11 +24,14 @@
             :key="item.path"
             :to="item.path"
             class="workspace-nav-item"
-            :aria-label="item.label"
+            :aria-label="item.description ? `${item.label}，${item.description}` : item.label"
             @click="emit('navigate')"
           >
             <AppIcon :name="item.icon" :size="20" />
-            <span>{{ item.label }}</span>
+            <span class="workspace-nav-item__text">
+              <span>{{ item.label }}</span>
+              <small v-if="item.description">{{ item.description }}</small>
+            </span>
             <AppIcon class="workspace-nav-item__arrow" name="chevron-right" :size="16" />
           </RouterLink>
         </section>
@@ -140,6 +143,8 @@ const emit = defineEmits<{
   transition: color .18s ease, background-color .18s ease;
 }
 .workspace-nav-item__arrow { margin-left: auto; color: var(--muted); opacity: .6; }
+.workspace-nav-item__text { display: grid; gap: 4px; }
+.workspace-nav-item__text small { color: var(--muted); font-size: 12px; font-weight: 400; }
 .workspace-nav-item:hover { color: var(--text); background: var(--bg-secondary); }
 .workspace-nav-item.router-link-active { color: var(--brand); font-weight: 600; background: var(--brand-light); }
 .workspace-nav-item.router-link-active .workspace-nav-item__arrow { color: var(--brand); opacity: 1; }

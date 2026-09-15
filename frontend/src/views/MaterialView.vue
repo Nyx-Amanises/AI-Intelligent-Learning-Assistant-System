@@ -18,6 +18,15 @@
       </div>
     </header>
 
+    <aside class="material-library__retrieval" aria-labelledby="material-retrieval-title">
+      <AppIcon name="search" :size="22" />
+      <div>
+        <h2 id="material-retrieval-title">向量检索</h2>
+        <p>让 AI 按含义查找资料片段。解析资料后，点击“生成向量”建立检索索引。</p>
+      </div>
+      <RouterLink to="/ai-config#vector-model">配置向量模型<AppIcon name="arrow-up-right" :size="16" /></RouterLink>
+    </aside>
+
     <div class="material-library__filters" role="search" aria-label="筛选学习资料">
       <el-input
         v-model="searchKeyword"
@@ -81,16 +90,17 @@
         <div class="material-library-card__content">
           <div class="material-library-card__top">
             <h3 :title="row.title"><button type="button" @click="viewDetail(row.id)">{{ row.title }}</button></h3>
-            <el-dropdown trigger="click" :disabled="actionLoadingId === row.id" @command="(command: string) => handleMaterialCommand(command, row)">
-            <button type="button" class="material-library-card__more" :disabled="actionLoadingId === row.id" :aria-label="`${row.title}的更多操作`" :aria-busy="actionLoadingId === row.id">
-              <span v-if="actionLoadingId === row.id" class="material-library__spinner" aria-label="正在处理"></span>
-              <AppIcon v-else name="more-horizontal" :size="20" />
-            </button>
+            <el-dropdown class="material-library-card__menu" trigger="click" :disabled="actionLoadingId === row.id" @command="(command: string) => handleMaterialCommand(command, row)">
+              <button type="button" class="material-library-card__more" :disabled="actionLoadingId === row.id" :aria-label="`${row.title}的更多操作`" :aria-busy="actionLoadingId === row.id">
+                <span v-if="actionLoadingId === row.id" class="material-library__spinner" aria-label="正在处理"></span>
+                <AppIcon v-else name="more-horizontal" :size="20" />
+                <span>更多操作</span>
+              </button>
             <template #dropdown>
               <el-dropdown-menu class="material-library-menu">
                 <el-dropdown-item command="rename">重命名</el-dropdown-item>
                 <el-dropdown-item command="parse">{{ row.parseStatus === 'SUCCESS' ? '重新解析资料' : '解析资料' }}</el-dropdown-item>
-                <el-dropdown-item command="embedding">生成检索索引</el-dropdown-item>
+                <el-dropdown-item command="embedding" :disabled="row.parseStatus !== 'SUCCESS' || row.embeddingStatus === 'RUNNING'">{{ getEmbeddingActionLabel(row) }}</el-dropdown-item>
                 <el-dropdown-item command="retrieval">检索预览</el-dropdown-item>
                 <el-dropdown-item command="delete" divided class="material-library-menu__danger">删除资料</el-dropdown-item>
               </el-dropdown-menu>
@@ -102,6 +112,19 @@
             <span v-for="tag in getTags(row.tags).slice(0, 3)" :key="tag" class="material-library-card__tag" :title="tag">{{ tag }}</span>
             <span v-if="getTags(row.tags).length > 3" class="material-library-card__tag" :title="getTags(row.tags).slice(3).join('、')">+{{ getTags(row.tags).length - 3 }}</span>
             <span v-if="!getTags(row.tags).length" class="material-library-card__untagged">{{ formatDifficulty(row.difficultyLevel) }}</span>
+          </div>
+          <div class="material-library-card__vector">
+            <span class="material-library-status" :class="`material-library-status--${getStatusTone(row.embeddingStatus)}`" :title="formatEmbeddingProgress(row)"><i></i>向量{{ formatEmbeddingStatus(row.embeddingStatus) }}</span>
+            <RouterLink v-if="row.embeddingStatus === 'RUNNING'" to="/ai-tasks">查看进度</RouterLink>
+            <button
+              v-else
+              type="button"
+              :disabled="actionLoadingId === row.id || row.parseStatus !== 'SUCCESS'"
+              :title="row.parseStatus === 'SUCCESS' ? `使用当前配置的向量模型${getEmbeddingActionLabel(row)}` : '请先解析这份资料'"
+              :aria-label="`为${row.title}${getEmbeddingActionLabel(row)}`"
+              @click="generateEmbedding(row)"
+            >{{ actionLoadingId === row.id ? '正在处理…' : getEmbeddingActionLabel(row) }}</button>
+            <button type="button" :disabled="row.parseStatus !== 'SUCCESS'" :aria-label="`检索${row.title}的内容`" @click="openRetrievalPreview(row)">检索预览</button>
           </div>
         </div>
         <div class="material-library-card__aside">
@@ -217,7 +240,7 @@
           <div><dt>内容长度</dt><dd>{{ formatCharacters(detail.totalCharacters) }}</dd></div>
           <div><dt>内容解析</dt><dd>{{ formatParseStatus(detail.parseStatus) }}</dd></div>
           <div><dt>学习摘要</dt><dd>{{ formatSummaryStatus(detail.summaryStatus) }}</dd></div>
-          <div><dt>资料检索</dt><dd>{{ formatEmbeddingStatus(detail.embeddingStatus) }} · {{ formatEmbeddingProgress(detail) }}</dd></div>
+          <div><dt>向量索引</dt><dd>{{ formatEmbeddingStatus(detail.embeddingStatus) }} · {{ formatEmbeddingProgress(detail) }}</dd></div>
           <div><dt>资料标签</dt><dd>{{ getTags(detail.tags).join('、') || '暂无标签' }}</dd></div>
         </dl>
         <div class="material-library-detail__actions">
@@ -225,6 +248,18 @@
           <el-button v-else type="primary" @click="goSummary(detail.id)"><AppIcon name="summary" :size="16" />生成或查看摘要</el-button>
           <el-button @click="goQuiz(detail.id)"><AppIcon name="quiz" :size="16" />生成练习</el-button>
         </div>
+        <section class="material-library-detail__retrieval" aria-labelledby="material-detail-retrieval-title">
+          <div class="material-library-detail__retrieval-heading">
+            <h3 id="material-detail-retrieval-title">向量检索</h3>
+            <RouterLink to="/ai-config#vector-model">配置向量模型<AppIcon name="arrow-up-right" :size="14" /></RouterLink>
+          </div>
+          <p>{{ detail.parseStatus === 'SUCCESS' ? '生成向量后，可按问题的含义查找这份资料中的相关片段。' : '先解析资料，再生成向量，即可查找相关片段。' }}</p>
+          <div class="material-library-detail__actions">
+            <el-button :disabled="detail.parseStatus !== 'SUCCESS' || detail.embeddingStatus === 'RUNNING'" :loading="actionLoadingId === detail.id" @click="generateEmbedding(detail)">{{ getEmbeddingActionLabel(detail) }}</el-button>
+            <el-button :disabled="detail.parseStatus !== 'SUCCESS'" @click="openRetrievalPreview(detail)"><AppIcon name="search" :size="16" />检索预览</el-button>
+            <RouterLink v-if="detail.embeddingStatus === 'RUNNING'" class="material-library-detail__task-link" to="/ai-tasks">查看生成进度</RouterLink>
+          </div>
+        </section>
         <div v-if="detail.segments?.length" class="material-library-detail__segments">
           <h3>资料内容 <span>{{ detail.segments.length }} 个片段</span></h3>
           <article v-for="segment in detail.segments" :key="segment.id" class="material-library-detail__segment">
@@ -297,7 +332,7 @@
 import { computed, onUnmounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadRequestOptions } from 'element-plus'
-import { useRoute, useRouter } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import AppIcon from '@/components/AppIcon.vue'
 import { useAutoListQuery } from '@/composables/useAutoListQuery'
 import {
@@ -447,8 +482,8 @@ const formatSummaryStatus = (value?: string) => ({
 const getStatusTone = (value?: string) => {
   const status = (value || '').toUpperCase()
   if (status === 'SUCCESS') return 'ready'
-  if (status === 'FAILED') return 'failed'
-  if (status === 'PROCESSING' || status === 'RUNNING') return 'processing'
+  if (['FAILED', 'PARTIAL_FAILED', 'PARSE_FAILED'].includes(status)) return 'failed'
+  if (['PROCESSING', 'RUNNING', 'PARSING', 'PARTIAL'].includes(status)) return 'processing'
   return 'pending'
 }
 
@@ -516,6 +551,11 @@ const formatEmbeddingProgress = (row: MaterialPageItem) => {
   if (parseStatus === 'SUCCESS') return '暂无资料片段'
   return '需先解析后生成'
 }
+
+const shouldRegenerateEmbedding = (row: MaterialPageItem) =>
+  Number(row.embeddedSegmentCount || 0) > 0 || ['SUCCESS', 'PARTIAL', 'PARTIAL_FAILED', 'FAILED'].includes(String(row.embeddingStatus || '').toUpperCase())
+
+const getEmbeddingActionLabel = (row: MaterialPageItem) => shouldRegenerateEmbedding(row) ? '重新生成向量' : '生成向量'
 
 const resetForm = () => {
   form.title = ''
@@ -606,13 +646,37 @@ const parseMaterial = async (id: number) => {
 }
 
 const generateEmbedding = async (row: MaterialPageItem) => {
+  if (actionLoadingId.value === row.id) return
+  if (row.parseStatus !== 'SUCCESS') {
+    ElMessage.warning('请先解析这份资料，再生成向量')
+    return
+  }
+  if (row.embeddingStatus === 'RUNNING') {
+    ElMessage.info('向量正在生成，请在任务中心查看进度')
+    return
+  }
+
+  const forceRegenerate = shouldRegenerateEmbedding(row)
+  if (forceRegenerate) {
+    try {
+      await ElMessageBox.confirm(`将使用当前配置的向量模型，重新生成“${row.title}”的全部向量。已有向量会被更新。`, '重新生成向量', {
+        type: 'warning',
+        confirmButtonText: '重新生成',
+        cancelButtonText: '取消'
+      })
+    } catch {
+      return
+    }
+  }
+
   actionLoadingId.value = row.id
   try {
-    await submitEmbeddingTaskApi(row.id, {})
-    ElMessage.success('检索索引已开始生成，可在任务中心查看进度')
+    await submitEmbeddingTaskApi(row.id, { forceRegenerate })
+    ElMessage.success('向量索引已开始生成，可在任务中心查看进度')
     await loadMaterials()
+    if (drawerVisible.value && detailId.value === row.id) await viewDetail(row.id)
   } catch (error: any) {
-    ElMessage.error(getErrorMessage(error, '生成检索索引失败，请稍后重试。'))
+    ElMessage.error(getErrorMessage(error, '生成向量索引失败，请稍后重试。'))
   } finally {
     actionLoadingId.value = null
   }
@@ -832,6 +896,14 @@ void loadMaterials()
 .material-library :deep(.el-button) { min-height: 44px; }
 .material-library__header-actions :deep(.el-button) { margin: 0; padding-inline: 22px; }
 .material-library :deep(.el-button > span), .material-library-detail :deep(.el-button > span) { gap: 7px; }
+.material-library__retrieval { display: flex; align-items: center; gap: 16px; margin-bottom: 28px; padding: 20px 22px; border-radius: 12px; background: var(--brand-light); color: var(--brand); }
+.material-library__retrieval > .app-icon { flex: 0 0 auto; }
+.material-library__retrieval > div { flex: 1; min-width: 0; }
+.material-library__retrieval h2 { margin: 0 0 5px; color: var(--text); font-size: 15px; font-weight: 600; }
+.material-library__retrieval p { margin: 0; color: var(--text-secondary); font-size: 13px; line-height: 1.8; }
+.material-library__retrieval a, .material-library-detail__retrieval a { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; border-radius: 6px; color: var(--brand); font-size: 13px; text-decoration: none; }
+.material-library__retrieval > a { flex: 0 0 auto; }
+.material-library__retrieval a:hover, .material-library-detail__retrieval a:hover { color: var(--brand-hover); text-decoration: underline; text-underline-offset: 4px; }
 .material-library__filters { display: grid; grid-template-columns: minmax(180px, 1fr) 158px 150px 64px; gap: 12px; align-items: center; padding-bottom: 26px; border-bottom: 1px solid var(--line); }
 .material-library__filters :deep(.el-select), .material-library__filters :deep(.el-input) { min-width: 0; width: 100%; }
 .material-library__filters :deep(.el-input__wrapper), .material-library__filters :deep(.el-select__wrapper) { min-height: 46px; background: transparent; box-shadow: none; border-radius: 999px; padding-inline: 16px; }
@@ -858,9 +930,10 @@ void loadMaterials()
 .material-library-card__file { display: grid; place-items: center; flex: 0 0 auto; width: 50px; height: 54px; border-radius: 10px; background: var(--bg); }
 .material-library-card__content, .material-library-card__aside { min-width: 0; }
 .material-library-card__top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
-.material-library-card__more { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--muted); cursor: pointer; }
-.material-library-card__more:hover { background: var(--bg-secondary); color: var(--text); }
-.material-library-card__more:disabled { cursor: wait; }
+.material-library-card__menu { flex-shrink: 0; }
+.material-library-card__more { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 0 12px; border: 1px solid color-mix(in srgb, var(--brand) 28%, var(--line)); border-radius: 8px; background: var(--brand-light); color: var(--brand); font: inherit; font-size: 13px; font-weight: 600; line-height: 1; white-space: nowrap; cursor: pointer; transition: background .18s, border-color .18s, color .18s; }
+.material-library-card__more:hover:not(:disabled), .material-library-card__more[aria-expanded="true"] { border-color: var(--brand); background: color-mix(in srgb, var(--brand) 10%, var(--brand-light)); color: var(--brand-hover); }
+.material-library-card__more:disabled { cursor: wait; opacity: .6; }
 .material-library-card h3 { min-width: 0; margin: 0; color: var(--text); font-size: 18px; font-weight: 600; line-height: 1.65; overflow-wrap: anywhere; }
 .material-library-card h3 button { display: block; max-width: 100%; min-height: 44px; padding: 5px 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
 .material-library-card h3 button:hover { color: var(--brand); }
@@ -870,6 +943,10 @@ void loadMaterials()
 .material-library-card__tag { max-width: 14em; overflow: hidden; color: var(--muted); font-size: 12px; line-height: 1.6; text-overflow: ellipsis; white-space: nowrap; }
 .material-library-card__tag::before { content: '#'; margin-right: 2px; opacity: .65; }
 .material-library-card__untagged { color: var(--muted); font-size: 12px; }
+.material-library-card__vector { display: flex; align-items: center; flex-wrap: wrap; gap: 0 16px; margin-top: 7px; }
+.material-library-card__vector button, .material-library-card__vector a { display: inline-flex; align-items: center; min-height: 44px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: var(--brand); font: inherit; font-size: 12px; text-decoration: none; cursor: pointer; }
+.material-library-card__vector button:hover, .material-library-card__vector a:hover { color: var(--brand-hover); text-decoration: underline; text-underline-offset: 4px; }
+.material-library-card__vector button:disabled { color: var(--muted); opacity: .6; cursor: not-allowed; text-decoration: none; }
 .material-library-card__status-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; margin-bottom: 14px; }
 .material-library-status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; line-height: 1.5; white-space: nowrap; }
 .material-library-status i { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
@@ -931,6 +1008,11 @@ void loadMaterials()
 .material-library-detail__meta dd { margin: 0; color: var(--text); font-size: 13px; line-height: 1.7; overflow-wrap: anywhere; }
 .material-library-detail__actions { display: flex; flex-wrap: wrap; gap: 10px; }
 .material-library-detail :deep(.el-button) { min-height: 44px; margin: 0; }
+.material-library-detail__retrieval { margin-top: 24px; padding: 18px 20px; border-radius: 12px; background: var(--bg); }
+.material-library-detail__retrieval-heading { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0 14px; }
+.material-library-detail__retrieval h3 { margin: 0; color: var(--text); font-size: 15px; font-weight: 600; }
+.material-library-detail__retrieval p { margin: 6px 0 16px; color: var(--muted); font-size: 13px; line-height: 1.8; }
+.material-library-detail__task-link { padding-inline: 8px; }
 .material-library-detail__segments { margin-top: 30px; }
 .material-library-detail__segments > h3 { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 0 16px; font-size: 16px; color: var(--text); }
 .material-library-detail__segments > h3 span { color: var(--muted); font-size: 12px; font-weight: 400; }
@@ -942,7 +1024,7 @@ void loadMaterials()
 :global(.material-library-menu .el-dropdown-menu__item) { min-height: 44px; font-size: 13px; }
 :global(.material-library-menu .material-library-menu__danger) { color: color-mix(in srgb, var(--red) 70%, var(--text)); }
 :global(.material-library-modal .el-dialog__headerbtn), :global(.material-library-modal .el-drawer__close-btn) { min-width: 44px; min-height: 44px; }
-.material-library button:focus-visible, .material-library-upload :deep(.el-upload:focus-visible) { outline: 2px solid var(--brand); outline-offset: 3px; }
+.material-library button:focus-visible, .material-library a:focus-visible, .material-library-detail a:focus-visible, .material-library-upload :deep(.el-upload:focus-visible) { outline: 2px solid var(--brand); outline-offset: 3px; }
 
 @media (max-width: 920px) {
   .material-library__header { flex-wrap: wrap; }
@@ -962,10 +1044,16 @@ void loadMaterials()
   .material-library__header-actions { width: 100%; }
   .material-library__header-actions :deep(.el-button) { flex: 1; padding-inline: 14px; }
   .material-library__description { font-size: 14px; }
+  .material-library__retrieval { align-items: flex-start; flex-wrap: wrap; gap: 8px 12px; padding: 18px; }
+  .material-library__retrieval > .app-icon { margin-top: 2px; }
+  .material-library__retrieval > div { flex-basis: calc(100% - 34px); }
+  .material-library__retrieval > a { margin-left: 34px; }
   .material-library__filters { gap: 10px 4px; padding-bottom: 18px; }
   .material-library__filters :deep(.el-select__wrapper) { padding-inline: 10px; }
   .material-library__section-heading { margin-top: 18px; }
   .material-library-card { padding-block: 24px; gap: 16px; }
+  .material-library-card__top { flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+  .material-library-card__top h3 { flex-basis: 100%; }
   .material-library-card h3 { font-size: 17px; }
   .material-library-card__meta { font-size: 12px; gap: 4px 8px; }
   .material-library-card__meta span + span::before { margin-right: 8px; }
@@ -984,7 +1072,7 @@ void loadMaterials()
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .material-library-card, .material-library-card__actions button { transition: none; }
+  .material-library-card, .material-library-card__actions button, .material-library-card__more { transition: none; }
   .material-library__skeleton, .material-library__spinner { animation: none; }
 }
 </style>

@@ -2,6 +2,7 @@ export interface NavigationItem {
   path: string
   label: string
   icon: string
+  description?: string
 }
 
 export interface PrimaryNavigationItem extends NavigationItem {
@@ -49,7 +50,7 @@ export const navigationGroups: { label: string; items: NavigationItem[] }[] = [
     items: [
       { path: '/ai-tasks', label: '任务中心', icon: 'tasks' },
       { path: '/rag-eval', label: '检索评测', icon: 'eval' },
-      { path: '/ai-config', label: '模型与设置', icon: 'config' },
+      { path: '/ai-config', label: 'AI 配置', icon: 'config', description: '对话模型与向量模型' },
       { path: '/profile', label: '个人信息', icon: 'user' }
     ]
   }

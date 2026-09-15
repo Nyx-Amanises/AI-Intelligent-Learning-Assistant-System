@@ -191,11 +191,16 @@ public class AiTaskServiceImpl implements AiTaskService {
     }
 
     /**
-     * 创建资料向量化任务。
+     * 创建资料向量化任务；已有等待或运行中的任务时直接复用。
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public AiTaskDetailVO submitEmbeddingTask(Long userId, Long materialId, EmbeddingTaskRequest request) {
+        AiTask existingTask = findActiveTask(userId, "EMBEDDING", "MATERIAL", materialId);
+        if (existingTask != null) {
+            return cacheTaskDetail(existingTask);
+        }
+
         EmbeddingTaskPayload payload = new EmbeddingTaskPayload();
         payload.setMaterialId(materialId);
         payload.setModelName(request.getModelName());

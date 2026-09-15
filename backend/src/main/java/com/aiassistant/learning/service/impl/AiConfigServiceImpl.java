@@ -11,6 +11,7 @@ import com.aiassistant.learning.mapper.SysUserMapper;
 import com.aiassistant.learning.service.AiConfigService;
 import com.aiassistant.learning.vo.ai.AiConfigVO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -219,6 +220,9 @@ public class AiConfigServiceImpl implements AiConfigService {
         if (!hasText(config.apiKey())) {
             throw new BusinessException("请填写当前配置作用域自己的 AI API Key。普通用户不填写个人 Key 时，只有接口地址、路径和模型与共享配置一致，才会复用管理员共享 Key。");
         }
+        if (!hasText(config.embeddingApiKey())) {
+            throw new BusinessException("向量配置与共享配置不一致，请填写自己的向量 API Key。");
+        }
     }
 
     private void upsertConfig(AiConfig existing, String scope, Long userId, ConfigDraft draft) {
@@ -230,12 +234,12 @@ public class AiConfigServiceImpl implements AiConfigService {
         entity.setChatProviderType(normalizeText(draft.chatProviderType, true));
         entity.setBaseUrl(normalizeText(draft.baseUrl, false));
         entity.setChatPath(normalizeText(draft.chatPath, false));
-        entity.setApiKey(normalizeText(draft.apiKey, false));
+        entity.setApiKey(normalizeSecret(draft.apiKey));
         entity.setDefaultModel(normalizeText(draft.defaultModel, false));
         entity.setEmbeddingProviderType(normalizeText(draft.embeddingProviderType, true));
         entity.setEmbeddingBaseUrl(normalizeText(draft.embeddingBaseUrl, false));
         entity.setEmbeddingPath(normalizeText(draft.embeddingPath, false));
-        entity.setEmbeddingApiKey(normalizeText(draft.embeddingApiKey, false));
+        entity.setEmbeddingApiKey(normalizeSecret(draft.embeddingApiKey));
         entity.setDefaultEmbeddingModel(normalizeText(draft.defaultEmbeddingModel, false));
 
         if (existing == null) {
@@ -315,9 +319,9 @@ public class AiConfigServiceImpl implements AiConfigService {
                     : "/v1/embeddings";
         }
 
-        String apiKey = normalizeText(draft.apiKey, false);
-        String embeddingApiKey = normalizeText(draft.embeddingApiKey, false);
-        if (!hasText(embeddingApiKey)) {
+        String apiKey = normalizeSecret(draft.apiKey);
+        String embeddingApiKey = normalizeSecret(draft.embeddingApiKey);
+        if (!hasText(embeddingApiKey) && !draft.sharedChatKeyInherited) {
             embeddingApiKey = apiKey;
         }
 
@@ -371,6 +375,8 @@ public class AiConfigServiceImpl implements AiConfigService {
                 && hasText(sharedResolved.apiKey())
                 && usesSameChatEndpoint(result, sharedConfig)) {
             result.apiKey = sharedResolved.apiKey();
+            // 继承的聊天 Key 不能绕过下面的向量端点匹配，流向自定义向量服务。
+            result.sharedChatKeyInherited = true;
         }
         if (!hasText(result.embeddingApiKey)
                 && hasText(sharedResolved.embeddingApiKey())
@@ -407,6 +413,7 @@ public class AiConfigServiceImpl implements AiConfigService {
         target.baseUrl = source.baseUrl;
         target.chatPath = source.chatPath;
         target.apiKey = source.apiKey;
+        target.sharedChatKeyInherited = source.sharedChatKeyInherited;
         target.defaultModel = source.defaultModel;
         target.embeddingProviderType = source.embeddingProviderType;
         target.embeddingBaseUrl = source.embeddingBaseUrl;
@@ -605,7 +612,18 @@ public class AiConfigServiceImpl implements AiConfigService {
     }
 
     private String pickSecret(String... values) {
-        return pickText(values);
+        for (String value : values) {
+            String secret = normalizeSecret(value);
+            if (hasText(secret)) {
+                return secret;
+            }
+        }
+        return null;
+    }
+
+    private String normalizeSecret(String value) {
+        String normalized = normalizeText(value, false);
+        return "replace-with-your-api-key".equalsIgnoreCase(normalized) ? null : normalized;
     }
 
     private boolean hasText(String value) {
@@ -659,6 +677,8 @@ public class AiConfigServiceImpl implements AiConfigService {
         private String baseUrl;
         private String chatPath;
         private String apiKey;
+        @JsonIgnore
+        private boolean sharedChatKeyInherited;
         private String defaultModel;
         private String embeddingProviderType;
         private String embeddingBaseUrl;

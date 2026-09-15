@@ -1,0 +1,56 @@
+- main [ref=e3]:
+  - generic [ref=e4]:
+    - region [ref=e5]:
+      - generic [ref=e10]:
+        - strong [ref=e11]: AI 学习助手
+        - generic [ref=e12]: 让知识，成为自己的
+      - generic [ref=e13]:
+        - text: 每一次学习，都更进一步
+        - heading "把知识， 学成自己的。" [level=1] [ref=e14]: 把知识，学成自己的。
+        - paragraph [ref=e15]: 让资料有条理，让复习有方向。在一个专注的空间里，理解、练习、慢慢掌握。
+      - generic "学习路径" [ref=e16]:
+        - generic [ref=e17]: 从读懂，到会用
+        - generic [ref=e23]:
+          - generic [ref=e28]:
+            - strong [ref=e29]: 把资料读清楚
+            - paragraph [ref=e30]: 整理课程资料，用 AI 提炼核心知识。
+          - generic [ref=e31]: "01"
+        - generic [ref=e32]:
+          - generic [ref=e38]:
+            - strong [ref=e39]: 让理解更扎实
+            - paragraph [ref=e40]: 围绕学习内容出题，在练习中检验理解。
+          - generic [ref=e41]: "02"
+        - generic [ref=e42]:
+          - generic [ref=e46]:
+            - strong [ref=e47]: 把薄弱点补起来
+            - paragraph [ref=e48]: 回看错题与掌握度，找到下一步方向。
+          - generic [ref=e49]: "03"
+      - paragraph [ref=e50]:
+        - text: 资料
+        - generic [aria-hidden] [ref=e51]: →
+        - text: 总结
+        - generic [aria-hidden] [ref=e52]: →
+        - text: 练习
+        - generic [aria-hidden] [ref=e53]: →
+        - text: 复盘
+    - region [ref=e54]:
+      - generic [ref=e55]:
+        - text: 你的个人学习空间
+        - heading "欢迎回来" [level=2] [ref=e56]
+        - paragraph [ref=e57]: 登录后，继续上一次的思考与探索。
+        - generic [ref=e58]:
+          - generic [ref=e59]:
+            - generic [ref=e60]: 用户名
+            - textbox "用户名" [ref=e61]:
+              - /placeholder: 输入你的用户名
+          - generic [ref=e62]:
+            - generic [ref=e63]: 密码
+            - generic [ref=e64]:
+              - textbox "密码" [ref=e65]:
+                - /placeholder: 输入你的密码
+              - button "显示密码" [ref=e66] [cursor=pointer]: 显示
+          - button "登录学习空间" [ref=e67] [cursor=pointer]
+        - generic [ref=e71]:
+          - generic [ref=e72]: 第一次来到这里？
+          - button "创建账号" [ref=e73] [cursor=pointer]
+      - paragraph [ref=e74]: 从一份资料开始，积累属于你的知识。
