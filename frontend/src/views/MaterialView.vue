@@ -88,54 +88,52 @@
           <span>{{ row.materialType === 'MARKDOWN' ? 'MD' : row.materialType }}</span>
         </button>
         <div class="material-library-card__content">
-          <div class="material-library-card__top">
-            <h3 :title="row.title"><button type="button" @click="viewDetail(row.id)">{{ row.title }}</button></h3>
+          <h3 :title="row.title"><button type="button" @click="viewDetail(row.id)">{{ row.title }}</button></h3>
+          <p class="material-library-card__meta"><span>{{ formatDate(row.createdAt) }}</span><span>{{ formatCharacters(row.totalCharacters) }}</span></p>
+          <div class="material-library-card__status-row">
+            <span class="material-library-status" :class="`material-library-status--${getStatusTone(row.parseStatus)}`"><i></i>{{ formatParseStatus(row.parseStatus) }}</span>
+            <span class="material-library-status" :class="`material-library-status--${getStatusTone(row.summaryStatus)}`"><i></i>{{ formatSummaryStatus(row.summaryStatus) }}</span>
+            <span class="material-library-status" :class="`material-library-status--${getStatusTone(row.embeddingStatus)}`" :title="formatEmbeddingProgress(row)"><i></i>向量{{ formatEmbeddingStatus(row.embeddingStatus) }}</span>
+          </div>
+          <div v-if="getTags(row.tags).length" class="material-library-card__tags">
+            <span v-for="tag in getTags(row.tags).slice(0, 3)" :key="tag" class="material-library-card__tag" :title="tag">{{ tag }}</span>
+            <span v-if="getTags(row.tags).length > 3" class="material-library-card__tag" :title="getTags(row.tags).slice(3).join('、')">+{{ getTags(row.tags).length - 3 }}</span>
+          </div>
+        </div>
+        <div class="material-library-card__aside" role="group" :aria-label="`${row.title}的操作`">
+          <div class="material-library-card__actions">
+            <button type="button" class="material-library-card__open" @click="viewDetail(row.id)">阅读<AppIcon name="arrow-right" :size="16" /></button>
+            <button type="button" class="material-library-card__study" :aria-label="`${row.title}的 AI 总结`" @click="goSummary(row.id)">摘要</button>
+            <button type="button" class="material-library-card__study" :aria-label="`根据${row.title}生成练习`" @click="goQuiz(row.id)">出题</button>
+          </div>
+          <div class="material-library-card__secondary-actions">
+            <RouterLink v-if="row.embeddingStatus === 'RUNNING'" class="material-library-card__utility" to="/ai-tasks">查看进度</RouterLink>
+            <button
+              v-else
+              type="button"
+              class="material-library-card__utility"
+              :disabled="actionLoadingId === row.id || row.parseStatus !== 'SUCCESS'"
+              :title="row.parseStatus === 'SUCCESS' ? `使用当前配置的向量模型${getEmbeddingActionLabel(row)}` : '请先解析这份资料'"
+              :aria-label="`为${row.title}${getEmbeddingActionLabel(row)}`"
+              @click="generateEmbedding(row)"
+            >{{ actionLoadingId === row.id ? '正在处理…' : getEmbeddingActionLabel(row) }}</button>
+            <button type="button" class="material-library-card__utility" :disabled="row.parseStatus !== 'SUCCESS'" :aria-label="`检索${row.title}的内容`" @click="openRetrievalPreview(row)">检索预览</button>
             <el-dropdown class="material-library-card__menu" trigger="click" :disabled="actionLoadingId === row.id" @command="(command: string) => handleMaterialCommand(command, row)">
               <button type="button" class="material-library-card__more" :disabled="actionLoadingId === row.id" :aria-label="`${row.title}的更多操作`" :aria-busy="actionLoadingId === row.id">
                 <span v-if="actionLoadingId === row.id" class="material-library__spinner" aria-label="正在处理"></span>
                 <AppIcon v-else name="more-horizontal" :size="20" />
                 <span>更多操作</span>
               </button>
-            <template #dropdown>
-              <el-dropdown-menu class="material-library-menu">
-                <el-dropdown-item command="rename">重命名</el-dropdown-item>
-                <el-dropdown-item command="parse">{{ row.parseStatus === 'SUCCESS' ? '重新解析资料' : '解析资料' }}</el-dropdown-item>
-                <el-dropdown-item command="embedding" :disabled="row.parseStatus !== 'SUCCESS' || row.embeddingStatus === 'RUNNING'">{{ getEmbeddingActionLabel(row) }}</el-dropdown-item>
-                <el-dropdown-item command="retrieval">检索预览</el-dropdown-item>
-                <el-dropdown-item command="delete" divided class="material-library-menu__danger">删除资料</el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
+              <template #dropdown>
+                <el-dropdown-menu class="material-library-menu">
+                  <el-dropdown-item command="rename">重命名</el-dropdown-item>
+                  <el-dropdown-item command="parse">{{ row.parseStatus === 'SUCCESS' ? '重新解析资料' : '解析资料' }}</el-dropdown-item>
+                  <el-dropdown-item command="embedding" :disabled="row.parseStatus !== 'SUCCESS' || row.embeddingStatus === 'RUNNING'">{{ getEmbeddingActionLabel(row) }}</el-dropdown-item>
+                  <el-dropdown-item command="retrieval">检索预览</el-dropdown-item>
+                  <el-dropdown-item command="delete" divided class="material-library-menu__danger">删除资料</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
             </el-dropdown>
-          </div>
-          <p class="material-library-card__meta"><span>{{ formatDate(row.createdAt) }}</span><span>{{ formatCharacters(row.totalCharacters) }}</span></p>
-          <div class="material-library-card__tags">
-            <span v-for="tag in getTags(row.tags).slice(0, 3)" :key="tag" class="material-library-card__tag" :title="tag">{{ tag }}</span>
-            <span v-if="getTags(row.tags).length > 3" class="material-library-card__tag" :title="getTags(row.tags).slice(3).join('、')">+{{ getTags(row.tags).length - 3 }}</span>
-            <span v-if="!getTags(row.tags).length" class="material-library-card__untagged">{{ formatDifficulty(row.difficultyLevel) }}</span>
-          </div>
-          <div class="material-library-card__vector">
-            <span class="material-library-status" :class="`material-library-status--${getStatusTone(row.embeddingStatus)}`" :title="formatEmbeddingProgress(row)"><i></i>向量{{ formatEmbeddingStatus(row.embeddingStatus) }}</span>
-            <RouterLink v-if="row.embeddingStatus === 'RUNNING'" to="/ai-tasks">查看进度</RouterLink>
-            <button
-              v-else
-              type="button"
-              :disabled="actionLoadingId === row.id || row.parseStatus !== 'SUCCESS'"
-              :title="row.parseStatus === 'SUCCESS' ? `使用当前配置的向量模型${getEmbeddingActionLabel(row)}` : '请先解析这份资料'"
-              :aria-label="`为${row.title}${getEmbeddingActionLabel(row)}`"
-              @click="generateEmbedding(row)"
-            >{{ actionLoadingId === row.id ? '正在处理…' : getEmbeddingActionLabel(row) }}</button>
-            <button type="button" :disabled="row.parseStatus !== 'SUCCESS'" :aria-label="`检索${row.title}的内容`" @click="openRetrievalPreview(row)">检索预览</button>
-          </div>
-        </div>
-        <div class="material-library-card__aside">
-          <div class="material-library-card__status-row">
-            <span class="material-library-status" :class="`material-library-status--${getStatusTone(row.parseStatus)}`"><i></i>{{ formatParseStatus(row.parseStatus) }}</span>
-            <span class="material-library-card__summary">{{ formatSummaryStatus(row.summaryStatus) }}</span>
-          </div>
-          <div class="material-library-card__actions">
-            <button type="button" class="material-library-card__open" @click="viewDetail(row.id)">阅读<AppIcon name="arrow-right" :size="16" /></button>
-            <button type="button" class="material-library-card__study" :aria-label="`${row.title}的 AI 总结`" @click="goSummary(row.id)">摘要</button>
-            <button type="button" class="material-library-card__study" :aria-label="`根据${row.title}生成练习`" @click="goQuiz(row.id)">出题</button>
           </div>
         </div>
       </article>
@@ -914,22 +912,70 @@ void loadMaterials()
 .material-library__reset { margin: 0; }
 .material-library__section-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin: 26px 0 6px; }
 .material-library__section-heading h2 { display: flex; align-items: baseline; gap: 12px; margin: 0; color: var(--text); font-size: 18px; font-weight: 600; }
+.material-library__filters { display: grid; grid-template-columns: minmax(180px, 1fr) 158px 150px 64px; gap: 12px; align-items: center; padding-bottom: 26px; border-bottom: 1px solid var(--line); }
+.material-library__filters :deep(.el-select), .material-library__filters :deep(.el-input) { min-width: 0; width: 100%; }
+.material-library__filters :deep(.el-input__wrapper), .material-library__filters :deep(.el-select__wrapper) { min-height: 46px; background: transparent; box-shadow: none; border-radius: 999px; padding-inline: 16px; }
+.material-library__filters :deep(.el-input__wrapper) { background: var(--bg-secondary); }
+.material-library__filters :deep(.el-select__wrapper:hover) { background: var(--bg-secondary); }
+.material-library__filters :deep(.el-input__wrapper.is-focus), .material-library__filters :deep(.el-select__wrapper.is-focused) { box-shadow: 0 0 0 2px var(--brand); }
+.material-library__search :deep(.el-input__prefix) { margin-right: 6px; color: var(--muted); }
+.material-library__reset { margin: 0; }
+.material-library__section-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin: 26px 0 6px; }
+.material-library__section-heading h2 { display: flex; align-items: baseline; gap: 12px; margin: 0; color: var(--text); font-size: 18px; font-weight: 600; }
 .material-library__section-heading h2 span { color: var(--muted); font-size: 14px; font-weight: 400; font-variant-numeric: tabular-nums; }
 .material-library__refresh { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 44px; padding: 0 10px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font: inherit; font-size: 14px; cursor: pointer; }
 .material-library__refresh:hover { color: var(--brand); background: var(--bg-secondary); }
 .material-library__refresh:disabled { cursor: wait; opacity: .55; }
 .material-library__grid { display: grid; grid-template-columns: minmax(0, 1fr); }
-.material-library-card { display: grid; grid-template-columns: 74px minmax(0, 1fr) 224px; align-items: center; gap: 24px; min-width: 0; padding: 26px 0; border-bottom: 1px solid var(--line); }
-.material-library-card__cover { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; width: 74px; height: 104px; padding: 14px 6px 12px 10px; border: 0; border-left: 5px solid #bacbbc; border-radius: 2px 7px 7px 2px; background: #e5eae0; color: #506651; font: inherit; cursor: pointer; box-shadow: 2px 3px 0 #eeeee6; transition: background .18s; }
+.material-library-card {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr) 304px;
+  align-items: center;
+  gap: 24px;
+  min-width: 0;
+  padding: 22px 18px;
+  border-radius: var(--radius);
+  border: 1px solid transparent;
+  border-bottom: 1px solid var(--line);
+  transition: all .25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.material-library-card:hover {
+  background: #ffffff;
+  border-color: rgba(56, 90, 74, 0.12);
+  box-shadow: 0 8px 24px -4px rgba(35, 55, 38, 0.06);
+  transform: translateY(-2px);
+}
+.material-library-card__cover {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 74px;
+  height: 104px;
+  padding: 14px 6px 12px 10px;
+  border: 0;
+  border-left: 5px solid #bacbbc;
+  border-radius: 2px 8px 8px 2px;
+  background: #e5eae0;
+  color: #506651;
+  font: inherit;
+  cursor: pointer;
+  box-shadow: 2px 4px 8px rgba(35, 55, 38, 0.08);
+  transition: all .22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.material-library-card__cover:hover {
+  transform: translateY(-2px);
+  box-shadow: 2px 6px 14px rgba(35, 55, 38, 0.14);
+}
 .material-library-card__cover[data-kind="PDF"] { background: #ede1d7; color: #956952; border-left-color: #d3baaa; }
 .material-library-card__cover[data-kind="DOC"], .material-library-card__cover[data-kind="DOCX"], .material-library-card__cover[data-kind="WORD"] { background: #e1e8e9; color: #577477; border-left-color: #b7cbd0; }
 .material-library-card__cover span { max-width: 100%; color: inherit; font-size: 10px; letter-spacing: .02em; text-align: center; overflow-wrap: anywhere; }
 .material-library-card__cover :deep(.app-icon path[stroke]) { stroke: currentColor; }
 .material-library-card__cover :deep(.app-icon path[fill-opacity]), .material-library-card__cover :deep(.app-icon rect) { fill: currentColor; }
-.material-library-card__cover:hover { filter: brightness(.97); }
 .material-library-card__file { display: grid; place-items: center; flex: 0 0 auto; width: 50px; height: 54px; border-radius: 10px; background: var(--bg); }
 .material-library-card__content, .material-library-card__aside { min-width: 0; }
-.material-library-card__top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.material-library-card__aside { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
 .material-library-card__menu { flex-shrink: 0; }
 .material-library-card__more { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 0 12px; border: 1px solid color-mix(in srgb, var(--brand) 28%, var(--line)); border-radius: 8px; background: var(--brand-light); color: var(--brand); font: inherit; font-size: 13px; font-weight: 600; line-height: 1; white-space: nowrap; cursor: pointer; transition: background .18s, border-color .18s, color .18s; }
 .material-library-card__more:hover:not(:disabled), .material-library-card__more[aria-expanded="true"] { border-color: var(--brand); background: color-mix(in srgb, var(--brand) 10%, var(--brand-light)); color: var(--brand-hover); }
@@ -939,26 +985,26 @@ void loadMaterials()
 .material-library-card h3 button:hover { color: var(--brand); }
 .material-library-card__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 2px 0 10px; color: var(--muted); font-size: 13px; line-height: 1.65; font-variant-numeric: tabular-nums; }
 .material-library-card__meta span + span::before { content: '·'; margin-right: 12px; }
-.material-library-card__tags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; min-height: 22px; }
+.material-library-card__tags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-top: 10px; }
 .material-library-card__tag { max-width: 14em; overflow: hidden; color: var(--muted); font-size: 12px; line-height: 1.6; text-overflow: ellipsis; white-space: nowrap; }
 .material-library-card__tag::before { content: '#'; margin-right: 2px; opacity: .65; }
-.material-library-card__untagged { color: var(--muted); font-size: 12px; }
-.material-library-card__vector { display: flex; align-items: center; flex-wrap: wrap; gap: 0 16px; margin-top: 7px; }
-.material-library-card__vector button, .material-library-card__vector a { display: inline-flex; align-items: center; min-height: 44px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: var(--brand); font: inherit; font-size: 12px; text-decoration: none; cursor: pointer; }
-.material-library-card__vector button:hover, .material-library-card__vector a:hover { color: var(--brand-hover); text-decoration: underline; text-underline-offset: 4px; }
-.material-library-card__vector button:disabled { color: var(--muted); opacity: .6; cursor: not-allowed; text-decoration: none; }
-.material-library-card__status-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; margin-bottom: 14px; }
-.material-library-status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; line-height: 1.5; white-space: nowrap; }
+.material-library-card__secondary-actions { display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 4px 16px; max-width: 100%; }
+.material-library-card__utility { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: var(--brand); font: inherit; font-size: 13px; white-space: nowrap; text-decoration: none; cursor: pointer; }
+.material-library-card__utility:hover { color: var(--brand-hover); text-decoration: underline; text-underline-offset: 4px; }
+.material-library-card__utility:disabled { color: var(--muted); opacity: .6; cursor: not-allowed; text-decoration: none; }
+.material-library-card__status-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+.material-library-status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; line-height: 1.5; white-space: nowrap; padding: 2px 9px; border-radius: 999px; background: var(--bg-secondary); }
 .material-library-status i { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
-.material-library-status--ready { color: var(--brand); }
-.material-library-status--pending { color: var(--muted); }
-.material-library-status--processing { color: #956931; }
-.material-library-status--failed { color: var(--red); }
-.material-library-card__summary { color: var(--muted); font-size: 12px; }
-.material-library-card__actions { display: grid; grid-template-columns: minmax(0, 1fr) 50px 50px; align-items: center; gap: 4px; }
-.material-library-card__actions button { min-width: 0; min-height: 44px; padding: 0 8px; border: 0; border-radius: 999px; font: inherit; font-size: 14px; font-weight: 500; cursor: pointer; transition: background .18s ease, color .18s ease; }
-.material-library-card__open { display: inline-flex; align-items: center; justify-content: center; gap: 10px; background: var(--brand-soft); color: var(--brand); }
-.material-library-card__open:hover { background: #d8e3d7; }
+.material-library-status--ready { color: var(--brand); background: var(--brand-light); }
+.material-library-status--pending { color: var(--muted); background: var(--bg-secondary); }
+.material-library-status--processing { color: #956931; background: var(--accent-soft); }
+.material-library-status--processing i { animation: pulse-dot 1.8s infinite ease-in-out; }
+.material-library-status--failed { color: var(--red); background: var(--red-soft); }
+.material-library-card__actions { display: grid; grid-template-columns: 108px 50px 50px; align-items: center; gap: 8px; }
+.material-library-card__actions button { min-width: 0; min-height: 42px; padding: 0 8px; border: 0; border-radius: 999px; font: inherit; font-size: 14px; font-weight: 500; cursor: pointer; transition: background .18s ease, color .18s ease, box-shadow .18s ease, transform .12s ease; }
+.material-library-card__actions button:active { transform: scale(0.97); }
+.material-library-card__open { display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: var(--brand-soft); color: var(--brand); font-weight: 600; box-shadow: 0 2px 6px rgba(56, 90, 74, 0.08); }
+.material-library-card__open:hover { background: var(--brand); color: #ffffff; box-shadow: 0 4px 12px rgba(56, 90, 74, 0.22); }
 .material-library-card__study { color: var(--muted); background: transparent; }
 .material-library-card__study:hover { color: var(--brand); background: var(--bg-secondary); }
 .material-library__state { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; min-height: 370px; padding: 52px 24px; text-align: center; }
@@ -966,8 +1012,7 @@ void loadMaterials()
 .material-library__state h2 { margin: 4px 0 0; font-size: 21px; font-weight: 500; color: var(--text); line-height: 1.5; }
 .material-library__state p { max-width: 430px; margin: 0 0 5px; color: var(--muted); font-size: 15px; line-height: 1.9; overflow-wrap: anywhere; }
 .material-library__text-link { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font: inherit; font-size: 14px; cursor: pointer; }
-.material-library__text-link:hover { color: var(--brand); }
-.material-library-card--loading { grid-template-columns: 74px minmax(0, 1fr) 224px; min-height: 150px; gap: 14px 24px; }
+.material-library-card--loading { min-height: 150px; gap: 14px 24px; }
 .material-library__skeleton { border-radius: 6px; background: color-mix(in srgb, var(--muted) 10%, var(--panel)); animation: materialLibraryPulse 1.7s ease-in-out infinite; }
 .material-library__skeleton--icon { width: 74px; height: 104px; grid-row: 1 / 3; }
 .material-library__skeleton--title { width: 76%; height: 22px; align-self: end; }
@@ -1032,9 +1077,7 @@ void loadMaterials()
   .material-library__search { grid-column: 1 / -1; }
   .material-library-card { grid-template-columns: 64px minmax(0, 1fr); gap: 14px 20px; }
   .material-library-card__cover { width: 64px; height: 90px; }
-  .material-library-card__aside { grid-column: 2; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px 20px; }
-  .material-library-card__status-row { justify-content: flex-start; margin-bottom: 0; }
-  .material-library-card__actions { flex: 0 0 214px; margin-left: auto; }
+  .material-library-card__aside { grid-column: 2; }
   .material-library-card--loading { grid-template-columns: 64px minmax(0, 1fr); }
   .material-library__skeleton--icon { width: 64px; height: 90px; }
   .material-library__skeleton--footer { display: none; }
@@ -1052,13 +1095,10 @@ void loadMaterials()
   .material-library__filters :deep(.el-select__wrapper) { padding-inline: 10px; }
   .material-library__section-heading { margin-top: 18px; }
   .material-library-card { padding-block: 24px; gap: 16px; }
-  .material-library-card__top { flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
-  .material-library-card__top h3 { flex-basis: 100%; }
   .material-library-card h3 { font-size: 17px; }
   .material-library-card__meta { font-size: 12px; gap: 4px 8px; }
   .material-library-card__meta span + span::before { margin-right: 8px; }
   .material-library-card__aside { grid-column: 1 / -1; }
-  .material-library-card__actions { flex-basis: 190px; }
   .material-library__state { min-height: 330px; padding-inline: 12px; }
   .material-library__state h2 { font-size: 19px; }
   .material-library__pagination { gap: 12px; }

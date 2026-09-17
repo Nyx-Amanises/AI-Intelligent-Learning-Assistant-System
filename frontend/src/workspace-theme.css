@@ -26,10 +26,11 @@
   --orange-soft: #faf1e3;
   --red: #b65348;
   --red-soft: #faeeea;
-  --shadow-sm: 0 2px 4px rgba(37,42,37,.015);
-  --shadow: 0 5px 16px rgba(37,42,37,.03);
-  --shadow-lg: 0 12px 30px rgba(37,42,37,.06);
-  --shadow-xl: 0 24px 70px rgba(28,45,32,.16);
+  --shadow-sm: 0 2px 6px rgba(35, 55, 38, 0.04);
+  --shadow: 0 6px 20px -3px rgba(35, 55, 38, 0.06), 0 2px 6px -1px rgba(35, 55, 38, 0.03);
+  --shadow-md: 0 10px 28px -4px rgba(35, 55, 38, 0.09), 0 4px 10px -2px rgba(35, 55, 38, 0.04);
+  --shadow-lg: 0 16px 36px -6px rgba(35, 55, 38, 0.11), 0 6px 14px -3px rgba(35, 55, 38, 0.05);
+  --shadow-xl: 0 24px 70px -10px rgba(28, 45, 32, 0.18);
   --radius-sm: 10px;
   --radius: 14px;
   --radius-lg: 20px;
@@ -95,11 +96,24 @@ button:focus-visible, a:focus-visible, [tabindex="0"]:focus-visible { outline: 3
 .list-row:hover { border-color: var(--line); box-shadow: none; background: var(--panel-hover); }
 .list-row__title { font-size: 16px; }
 .list-row__meta { font-size: 13px; line-height: 1.8; }
-.el-button { font-weight: 500; border-radius: 999px; transition: color .18s, background-color .18s, border-color .18s; }
+.el-button {
+  font-weight: 500;
+  border-radius: 999px;
+  transition: color .18s ease, background-color .18s ease, border-color .18s ease, box-shadow .18s ease, transform .12s ease;
+}
 .el-button:not(.is-link):not(.is-text) { min-height: 44px; padding-inline: 21px; }
-.el-button--primary:not(.is-plain) { box-shadow: none; }
+.el-button:active:not(:disabled) { transform: scale(0.98); }
+.el-button--primary:not(.is-plain) {
+  box-shadow: 0 4px 14px rgba(56, 90, 74, 0.22);
+}
+.el-button--primary:not(.is-plain):hover {
+  box-shadow: 0 6px 18px rgba(56, 90, 74, 0.32);
+}
 .el-button > span { gap: 7px; }
-.el-input__wrapper, .el-select__wrapper, .el-textarea__inner { border-radius: 12px; }
+.el-input__wrapper, .el-select__wrapper, .el-textarea__inner {
+  border-radius: 12px;
+  transition: border-color .18s ease, box-shadow .18s ease, background-color .18s ease;
+}
 .el-input__inner, .el-select__placeholder, .el-textarea__inner { font-size: 15px; }
 .el-form-item__label { font-weight: 500; color: var(--text-secondary); }
 .el-dialog { max-width: calc(100vw - 32px); border-radius: 24px; padding: 30px; box-shadow: var(--shadow-xl); }
@@ -111,8 +125,24 @@ button:focus-visible, a:focus-visible, [tabindex="0"]:focus-visible { outline: 3
 .el-drawer__header { margin-bottom: 0; padding: 24px; border-bottom: 1px solid var(--line); color: var(--text); font-size: 18px; }
 .el-drawer__body { padding: 24px; }
 .workspace-mobile-nav .el-drawer__body { padding: 0; overflow: hidden; }
-.el-dropdown-menu { padding: 7px; }
-.el-dropdown-menu__item { border-radius: 8px; line-height: 40px; }
+.el-dropdown-menu {
+  padding: 8px !important;
+  border-radius: 14px !important;
+  border: 1px solid rgba(56, 90, 74, 0.08) !important;
+  box-shadow: 0 14px 34px -4px rgba(35, 55, 38, 0.12), 0 4px 12px rgba(35, 55, 38, 0.05) !important;
+}
+.el-dropdown-menu__item {
+  border-radius: 8px;
+  line-height: 38px;
+  padding: 0 14px;
+  font-size: 14px;
+  color: var(--text-secondary);
+  transition: all 0.15s ease;
+}
+.el-dropdown-menu__item:hover {
+  color: var(--brand) !important;
+  background-color: var(--brand-light) !important;
+}
 .el-dropdown-menu__item--divided { margin-top: 5px; }
 .el-pagination { max-width: 100%; flex-wrap: wrap; }
 .el-pagination button, .el-pager li { border-radius: 7px; }
@@ -185,3 +215,35 @@ button:focus-visible, a:focus-visible, [tabindex="0"]:focus-visible { outline: 3
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
 }
+
+/* Custom modern slim scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(85, 94, 84, 0.22);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(85, 94, 84, 0.42);
+}
+
+/* Micro-interaction & Keyframe animations */
+@keyframes pulse-dot {
+  0% { transform: scale(0.9); opacity: 0.7; }
+  50% { transform: scale(1.25); opacity: 1; }
+  100% { transform: scale(0.9); opacity: 0.7; }
+}
+
+.status-dot--pulsing {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  animation: pulse-dot 1.8s infinite ease-in-out;
+}
+

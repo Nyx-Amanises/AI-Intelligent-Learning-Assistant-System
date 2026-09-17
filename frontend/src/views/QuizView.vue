@@ -15,7 +15,7 @@
     <div class="workspace-panel">
       <div class="quiz-library-heading">
         <div><h2>全部题集 <span>{{ total }}</span></h2></div>
-        <el-button text :loading="questionSetLoading" @click="loadQuestionSets">刷新</el-button>
+        <el-button text :loading="questionSetLoading" @click="loadQuestionSets()">刷新</el-button>
       </div>
       <div class="workspace-toolbar">
         <div class="workspace-filter-bar quiz-filter-bar">
@@ -23,7 +23,10 @@
             <template #prefix><svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 4 4" stroke-linecap="round" /></svg></template>
           </el-input>
           <el-select v-model="filters.status" clearable placeholder="全部状态" aria-label="筛选题集状态">
-            <el-option label="可练习" value="ACTIVE" />
+            <el-option label="生成中" value="GENERATING" />
+            <el-option label="可练习" value="PUBLISHED" />
+            <el-option label="生成失败" value="FAILED" />
+            <el-option label="已取消" value="CANCELLED" />
             <el-option label="已停用" value="DISABLED" />
           </el-select>
           <el-select v-model="filters.difficultyLevel" clearable placeholder="全部难度" aria-label="筛选难度">
@@ -50,26 +53,30 @@
             <div class="quiz-set-card__content">
               <div class="quiz-set-card__top">
                 <span class="quiz-set-card__category">学习自测</span>
-                <span class="quiz-status" :class="{ 'quiz-status--disabled': item.status === 'DISABLED' }">{{ formatSetStatus(item.status) }}</span>
+                <span class="quiz-status" :class="{ 'quiz-status--generating': item.status === 'GENERATING', 'quiz-status--failed': item.status === 'FAILED', 'quiz-status--disabled': ['DISABLED', 'CANCELLED', 'DRAFT'].includes(item.status) }" role="status">{{ formatSetStatus(item.status) }}</span>
               </div>
-              <button type="button" class="quiz-set-card__title" @click="viewQuestionSet(item)">{{ item.title }}</button>
+              <button type="button" class="quiz-set-card__title" :disabled="!canPreviewQuestionSet(item.status)" @click="viewQuestionSet(item)">{{ item.title }}</button>
               <div class="quiz-set-card__meta">
-                <span>{{ item.questionCount }} 道题目</span>
-                <span>满分 {{ item.totalScore }} 分</span>
+                <span>{{ canPreviewQuestionSet(item.status) ? '' : '计划 ' }}{{ item.questionCount }} 道题目</span>
+                <span v-if="canPreviewQuestionSet(item.status)">满分 {{ item.totalScore }} 分</span>
                 <span>{{ formatDifficulty(item.difficultyLevel) }}</span>
                 <span class="quiz-set-card__date">{{ formatDateTime(item.createdAt).slice(0, 10) }}</span>
               </div>
+              <p v-if="item.status === 'GENERATING'" class="quiz-set-card__hint">题目正在生成，完成后可预览和练习。</p>
+              <p v-else-if="item.status === 'FAILED'" class="quiz-set-card__hint">生成未完成，可到任务中心查看原因并重试。</p>
+              <p v-else-if="item.status === 'CANCELLED'" class="quiz-set-card__hint">本次生成已取消，可重新生成题集。</p>
             </div>
             <div class="quiz-set-card__actions">
               <div class="quiz-set-card__secondary">
-                <el-button link @click="viewQuestionSet(item)">预览题目</el-button>
-                <el-dropdown trigger="click" @command="removeQuestionSet(item.id)">
-                  <el-button text :loading="actionLoadingId === item.id" aria-label="题集更多操作" class="quiz-more-button">···</el-button>
+                <el-button v-if="['FAILED', 'CANCELLED'].includes(item.status)" link @click="router.push('/ai-tasks')">查看任务</el-button>
+                <el-button v-else link :disabled="!canPreviewQuestionSet(item.status)" @click="viewQuestionSet(item)">预览题目</el-button>
+                <el-dropdown trigger="click" :disabled="item.status === 'GENERATING'" @command="removeQuestionSet(item.id)">
+                  <el-button text :loading="actionLoadingId === item.id" :disabled="item.status === 'GENERATING'" aria-label="题集更多操作" class="quiz-more-button">···</el-button>
                   <template #dropdown><el-dropdown-menu><el-dropdown-item command="delete">删除题集</el-dropdown-item></el-dropdown-menu></template>
                 </el-dropdown>
               </div>
-              <el-button type="primary" plain :loading="startingQuestionSetId === item.id" :disabled="item.status === 'DISABLED' || (startingQuestionSetId !== null && startingQuestionSetId !== item.id)" @click="startPractice(item.id)">
-                {{ item.status === 'DISABLED' ? '暂不可练习' : '开始练习' }} <span v-if="item.status !== 'DISABLED'" class="quiz-action-arrow" aria-hidden="true">→</span>
+              <el-button type="primary" plain :loading="item.status === 'GENERATING' || startingQuestionSetId === item.id" :disabled="!canPracticeQuestionSet(item.status) || (startingQuestionSetId !== null && startingQuestionSetId !== item.id)" @click="startPractice(item.id)">
+                {{ item.status === 'GENERATING' ? '生成中' : canPracticeQuestionSet(item.status) ? '开始练习' : '暂不可练习' }} <span v-if="canPracticeQuestionSet(item.status)" class="quiz-action-arrow" aria-hidden="true">→</span>
               </el-button>
             </div>
           </article>
@@ -77,7 +84,7 @@
 
         <div v-if="total" class="workspace-pagination">
           <div class="workspace-pagination__meta">共 {{ total }} 套题集</div>
-          <el-pagination v-model:current-page="page.current" v-model:page-size="page.size" :page-sizes="[10, 20, 50]" layout="sizes, prev, pager, next" :total="total" @current-change="loadQuestionSets" @size-change="loadQuestionSets" />
+          <el-pagination v-model:current-page="page.current" v-model:page-size="page.size" :page-sizes="[10, 20, 50]" layout="sizes, prev, pager, next" :total="total" @current-change="loadQuestionSets()" @size-change="loadQuestionSets()" />
         </div>
       </div>
     </div>
@@ -153,14 +160,14 @@
       </template>
       <template #footer>
         <el-button @click="drawerVisible = false">关闭预览</el-button>
-        <el-button v-if="questionSetDetail" type="primary" :loading="startingQuestionSetId === questionSetDetail.id" :disabled="questionSetDetail.status === 'DISABLED'" @click="startPractice(questionSetDetail.id)">开始练习</el-button>
+        <el-button v-if="questionSetDetail" type="primary" :loading="startingQuestionSetId === questionSetDetail.id" :disabled="!canPracticeQuestionSet(questionSetDetail.status)" @click="startPractice(questionSetDetail.id)">开始练习</el-button>
       </template>
     </el-drawer>
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { getAiConfigApi, submitQuestionGenerateTaskApi, type AiTaskDetail } from '@/api/modules/ai'
@@ -194,6 +201,9 @@ const actionLoadingId = ref<number | null>(null)
 const startingQuestionSetId = ref<number | null>(null)
 const currentTask = ref<AiTaskDetail | null>(null)
 const pendingQuestionContext = ref<AssistantQuestionContext | null>(null)
+let viewDisposed = false
+let questionSetRequestId = 0
+let questionSetRefreshTimer: number | undefined
 
 const aiConfig = ref({
   enabled: true,
@@ -222,7 +232,12 @@ const filters = reactive({
 const hasFilters = computed(() => Boolean(filters.keyword || filters.status || filters.difficultyLevel))
 const difficultyMarks: Record<number, string> = { 1: '入门', 2: '基础', 3: '适中', 4: '进阶', 5: '挑战' }
 const formatDifficulty = (level?: number) => difficultyMarks[level || 3] || '适中'
-const formatSetStatus = (value?: string) => value === 'DISABLED' ? '已停用' : '可练习'
+const canPracticeQuestionSet = (status?: string) => status === 'PUBLISHED'
+const canPreviewQuestionSet = (status?: string) => canPracticeQuestionSet(status) || status === 'DISABLED'
+const formatSetStatus = (value?: string) => {
+  const labels: Record<string, string> = { GENERATING: '生成中', PUBLISHED: '可练习', FAILED: '生成失败', CANCELLED: '已取消', DISABLED: '已停用', DRAFT: '草稿' }
+  return labels[value || ''] || '暂不可练习'
+}
 const formatQuestionType = (value?: string) => {
   const labels: Record<string, string> = { SINGLE: '单选题', MULTI: '多选题', JUDGE: '判断题', SHORT: '简答题', SHORT_ANSWER: '简答题' }
   return labels[value || ''] || '练习题'
@@ -305,17 +320,11 @@ watch(
 )
 
 const taskStatusText = computed(() => {
-  if (!currentTask.value) {
+  if (!generating.value || !currentTask.value || isAiTaskTerminal(currentTask.value.status)) {
     return ''
   }
   const materialLabel = materials.value.find((item) => item.id === currentTask.value?.bizId)?.title
-  if (generating.value) {
-    return `正在生成题集${materialLabel ? `：${materialLabel}` : ''}，完成后将自动打开预览。`
-  }
-  if (!isAiTaskTerminal(currentTask.value.status)) {
-    return '题集仍在生成中，可以稍后刷新，或到任务中心查看进度。'
-  }
-  return ''
+  return `正在生成题集${materialLabel ? `：${materialLabel}` : ''}，完成后将自动打开预览。`
 })
 
 const formatDateTime = (value?: string) => {
@@ -356,6 +365,7 @@ const syncDefaultQuestionSetTitle = () => {
 }
 
 async function syncAssistantQuestionContext(questionSetId?: number, materialId?: number) {
+  if (viewDisposed) return
   const currentQuestionSetId = Number(route.query[ASSISTANT_QUESTION_SET_QUERY_KEY] || 0) || undefined
   const currentMaterialId = Number(route.query[ASSISTANT_MATERIAL_QUERY_KEY] || 0) || undefined
   if (currentQuestionSetId === questionSetId && currentMaterialId === materialId) {
@@ -420,8 +430,21 @@ const loadMaterials = async () => {
   }
 }
 
-const loadQuestionSets = async () => {
-  questionSetLoading.value = true
+const stopQuestionSetRefresh = () => {
+  window.clearTimeout(questionSetRefreshTimer)
+  questionSetRefreshTimer = undefined
+}
+
+const scheduleQuestionSetRefresh = () => {
+  stopQuestionSetRefresh()
+  if (viewDisposed || !questionSets.value.some((item) => item.status === 'GENERATING')) return
+  questionSetRefreshTimer = window.setTimeout(() => void loadQuestionSets(true), 3000)
+}
+
+const loadQuestionSets = async (background = false) => {
+  stopQuestionSetRefresh()
+  const requestId = ++questionSetRequestId
+  if (!background) questionSetLoading.value = true
   try {
     const res = await getQuestionSetPageApi({
       current: page.current,
@@ -430,16 +453,23 @@ const loadQuestionSets = async () => {
       status: filters.status || undefined,
       difficultyLevel: filters.difficultyLevel
     })
+    if (viewDisposed || requestId !== questionSetRequestId) return
     questionSets.value = res.data.data.records || []
     total.value = res.data.data.total || 0
   } catch (error: any) {
-    ElMessage.error(error.message || '加载题集失败')
+    if (!viewDisposed && requestId === questionSetRequestId && !background) {
+      ElMessage.error(error.message || '加载题集失败')
+    }
   } finally {
-    questionSetLoading.value = false
+    if (!viewDisposed && requestId === questionSetRequestId) {
+      questionSetLoading.value = false
+      scheduleQuestionSetRefresh()
+    }
   }
 }
 
 const generateQuestionSet = async () => {
+  if (generating.value) return
   if (!form.materialId) {
     ElMessage.warning('请先选择资料')
     return
@@ -454,6 +484,7 @@ const generateQuestionSet = async () => {
   }
 
   generating.value = true
+  currentTask.value = null
   try {
     const submitRes = await submitQuestionGenerateTaskApi(form.materialId, {
       modelName: form.modelName.trim() || undefined,
@@ -465,23 +496,25 @@ const generateQuestionSet = async () => {
       difficultyLevel: form.difficultyLevel
     })
     const submittedTask = submitRes.data.data as AiTaskDetail
+    if (viewDisposed) return
     currentTask.value = submittedTask
     const taskId = submittedTask.id
     generateDialogVisible.value = false
+    resetFilters()
     ElMessage.success('AI 出题任务已提交')
 
-    const finishedTask = await waitForAiTask(taskId)
-    currentTask.value = finishedTask
-    if (!isAiTaskTerminal(finishedTask.status)) {
-      ElMessage.info('题集任务仍在处理中，可稍后刷新列表查看结果')
-      return
+    let finishedTask = submittedTask
+    while (!viewDisposed && !isAiTaskTerminal(finishedTask.status)) {
+      finishedTask = await waitForAiTask(taskId, 30000)
     }
+    if (viewDisposed) return
+    currentTask.value = finishedTask
+    await loadQuestionSets(true)
+    if (viewDisposed) return
     if (!isAiTaskSuccess(finishedTask.status)) {
       throw new Error(finishedTask.errorMessage || 'AI 出题任务执行失败')
     }
 
-    page.current = 1
-    await loadQuestionSets()
     const taskResult = parseAiTaskResult<any>(finishedTask)
     if (taskResult) {
       questionSetDetail.value = taskResult
@@ -493,13 +526,17 @@ const generateQuestionSet = async () => {
     }
     ElMessage.success(aiConfig.value.mockMode ? '演示题集已生成' : '题集已生成')
   } catch (error: any) {
-    ElMessage.error(error.message || '题集任务失败')
+    if (!viewDisposed) {
+      ElMessage.error(error.message || '题集任务失败')
+      if (currentTask.value && !isAiTaskTerminal(currentTask.value.status)) await loadQuestionSets(true)
+    }
   } finally {
     generating.value = false
   }
 }
 
 const viewQuestionSet = async (item: any) => {
+  if (!canPreviewQuestionSet(item.status)) return
   drawerVisible.value = true
   detailLoading.value = true
   questionSetDetail.value = null
@@ -509,6 +546,7 @@ const viewQuestionSet = async (item: any) => {
   }
   try {
     const res = await getQuestionSetDetailApi(item.id)
+    if (viewDisposed) return
     questionSetDetail.value = res.data.data
   } catch (error: any) {
     questionSetDetail.value = null
@@ -563,11 +601,17 @@ const removeQuestionSet = async (id: number) => {
 
 onMounted(async () => {
   await Promise.all([loadAiConfig(), loadMaterials(), loadQuestionSets()])
+  if (viewDisposed) return
   const queryId = Number(route.query.materialId)
   if (queryId && materials.value.some((item) => item.id === queryId)) {
     form.materialId = queryId
   }
   syncDefaultQuestionSetTitle()
+})
+
+onUnmounted(() => {
+  viewDisposed = true
+  stopQuestionSetRefresh()
 })
 </script>
 
@@ -590,33 +634,50 @@ onMounted(async () => {
 .quiz-notice { margin-block: 20px; }
 .quiz-loading { display: grid; gap: 24px; padding: 40px 0; color: var(--muted); font-size: 14px; }
 .quiz-card-grid { display: grid; grid-template-columns: minmax(0, 1fr); }
-.quiz-set-card { display: grid; grid-template-columns: 46px minmax(0, 1fr) 272px; gap: 26px; align-items: center; min-width: 0; padding: 30px 0; border-bottom: 1px solid var(--line); }
+.quiz-set-card {
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr) 272px;
+  gap: 26px;
+  align-items: center;
+  min-width: 0;
+  padding: 24px 20px;
+  border-radius: var(--radius);
+  border: 1px solid transparent;
+  border-bottom: 1px solid var(--line);
+  transition: all .25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.quiz-set-card:hover {
+  background: #ffffff;
+  border-color: rgba(56, 90, 74, 0.12);
+  box-shadow: 0 8px 24px -4px rgba(35, 55, 38, 0.06);
+  transform: translateY(-2px);
+}
 .quiz-set-card__number { align-self: start; padding-top: 4px; color: #b0b8aa; font-size: 25px; font-weight: 400; font-variant-numeric: tabular-nums; letter-spacing: -.04em; }
 .quiz-set-card__content { min-width: 0; }
-.quiz-set-card__top { display: flex; align-items: center; flex-wrap: wrap; gap: 18px; }
+.quiz-set-card__top { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; }
 .quiz-set-card__category { font-size: 12px; color: var(--muted); letter-spacing: .04em; }
-.quiz-status { display: inline-flex; align-items: center; gap: 6px; color: var(--brand); font-size: 12px; }
+.quiz-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--brand);
+  font-size: 12px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--brand-light);
+}
 .quiz-status::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
-.quiz-status--disabled { color: var(--muted); }
-.quiz-set-card__title { width: fit-content; max-width: 100%; min-height: 44px; margin: 9px 0 0; padding: 4px 0; border: 0; background: none; color: var(--text); font: inherit; font-size: 20px; font-weight: 600; line-height: 1.6; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
-.quiz-set-card__title:hover { color: var(--brand); }
+.quiz-status--disabled { color: var(--muted); background: var(--bg-secondary); }
+.quiz-status--generating { color: #896627; background: var(--accent-soft); }
+.quiz-status--generating::before { animation: pulse-dot 1.8s infinite ease-in-out; }
+.quiz-status--failed { color: var(--el-color-danger); background: var(--red-soft); }
+.quiz-set-card__title { width: fit-content; max-width: 100%; min-height: 44px; margin: 9px 0 0; padding: 4px 0; border: 0; background: none; color: var(--text); font: inherit; font-size: 20px; font-weight: 600; line-height: 1.6; text-align: left; overflow-wrap: anywhere; cursor: pointer; transition: color .18s ease; }
+.quiz-set-card__title:hover:not(:disabled) { color: var(--brand); }
+.quiz-set-card__title:disabled { cursor: default; }
 .quiz-set-card__title:focus-visible { outline: 2px solid var(--brand); outline-offset: 5px; border-radius: 3px; }
 .quiz-set-card__meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; margin-top: 9px; color: var(--muted); font-size: 13px; line-height: 1.7; }
 .quiz-set-card__meta > span + span::before { content: '·'; margin-right: 14px; color: #a7afa2; }
-.quiz-set-card__actions { display: flex; align-items: center; justify-content: flex-end; gap: 14px; }
-.quiz-set-card__secondary { display: flex; align-items: center; gap: 4px; }
-.quiz-set-card__secondary :deep(.el-button) { min-height: 44px; font-size: 13px; }
-.quiz-set-card__actions > :deep(.el-button) { min-height: 46px; border-color: transparent; background: var(--brand-soft); color: var(--brand); }
-.quiz-set-card__actions > :deep(.el-button:hover:not(.is-disabled)) { background: #d8e3d7; }
-.quiz-set-card__actions > :deep(.el-button.is-disabled) { opacity: .5; }
-.quiz-set-card__secondary :deep(.quiz-more-button) { min-width: 44px; font-size: 21px; letter-spacing: .06em; }
-.quiz-action-arrow { margin-left: 4px; }
-.quiz-view .workspace-pagination { border-top: 0; margin-top: 0; padding-top: 26px; }
-.quiz-view .workspace-pagination :deep(.el-pager li), .quiz-view .workspace-pagination :deep(.btn-prev), .quiz-view .workspace-pagination :deep(.btn-next) { min-width: 44px; height: 44px; border-radius: 50%; background: transparent; }
-.quiz-view .workspace-pagination :deep(.el-pager li.is-active) { color: var(--brand); background: var(--brand-soft); }
-.learning-empty { display: grid; justify-items: center; align-content: center; min-height: 370px; padding: 52px 20px; text-align: center; }
-.learning-empty__icon { display: grid; place-items: center; width: 72px; height: 72px; margin-bottom: 24px; border-radius: 50%; color: var(--brand); background: var(--brand-soft); }
-.learning-empty__icon svg { width: 30px; height: 30px; }
+.quiz-set-card__hint { margin: 10px 0 0; color: var(--muted); font-size: 12px; line-height: 1.8; }
 .learning-empty h3 { margin: 0 0 12px; color: var(--text); font-size: 21px; font-weight: 500; line-height: 1.5; }
 .learning-empty p { max-width: 440px; margin: 0 0 26px; color: var(--muted); font-size: 15px; line-height: 1.9; }
 .learning-empty--compact { min-height: 200px; }
