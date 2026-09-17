@@ -38,6 +38,10 @@ public class AiConfig extends BaseEntity {
 
     private Boolean mockMode;
 
+    private Boolean autoSummary;
+
+    private Boolean autoEmbedding;
+
     private String chatProviderType;
 
     private String baseUrl;

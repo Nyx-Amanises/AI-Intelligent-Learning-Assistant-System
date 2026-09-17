@@ -168,6 +168,8 @@ public class AiConfigServiceImpl implements AiConfigService {
         ConfigDraft target = new ConfigDraft();
         target.enabled = request.getEnabled() == null ? firstNonNull(bool(existing, "enabled"), fallback.enabled) : request.getEnabled();
         target.mockMode = request.getMockMode() == null ? firstNonNull(bool(existing, "mockMode"), fallback.mockMode) : request.getMockMode();
+        target.autoSummary = request.getAutoSummary() == null ? firstNonNull(bool(existing, "autoSummary"), fallback.autoSummary, Boolean.TRUE) : request.getAutoSummary();
+        target.autoEmbedding = request.getAutoEmbedding() == null ? firstNonNull(bool(existing, "autoEmbedding"), fallback.autoEmbedding, Boolean.TRUE) : request.getAutoEmbedding();
         target.chatProviderType = pickText(request.getChatProviderType(), text(existing, "chatProviderType"), fallback.chatProviderType);
         target.baseUrl = pickText(request.getBaseUrl(), text(existing, "baseUrl"), fallback.baseUrl);
         target.chatPath = pickText(request.getChatPath(), text(existing, "chatPath"), fallback.chatPath);
@@ -231,6 +233,8 @@ public class AiConfigServiceImpl implements AiConfigService {
         entity.setUserId(userId);
         entity.setEnabled(draft.enabled);
         entity.setMockMode(draft.mockMode);
+        entity.setAutoSummary(draft.autoSummary == null ? Boolean.TRUE : draft.autoSummary);
+        entity.setAutoEmbedding(draft.autoEmbedding == null ? Boolean.TRUE : draft.autoEmbedding);
         entity.setChatProviderType(normalizeText(draft.chatProviderType, true));
         entity.setBaseUrl(normalizeText(draft.baseUrl, false));
         entity.setChatPath(normalizeText(draft.chatPath, false));
@@ -254,6 +258,8 @@ public class AiConfigServiceImpl implements AiConfigService {
         return AiConfigVO.builder()
                 .enabled(Boolean.TRUE.equals(resolvedConfig.enabled()))
                 .mockMode(Boolean.TRUE.equals(resolvedConfig.mockMode()))
+                .autoSummary(Boolean.TRUE.equals(resolvedConfig.autoSummary()))
+                .autoEmbedding(Boolean.TRUE.equals(resolvedConfig.autoEmbedding()))
                 .configSource(effectiveConfig.source)
                 .canManageGlobal(isAdmin(userId))
                 .personalConfigured(userId != null && findConfig(SCOPE_USER, userId) != null)
@@ -333,6 +339,8 @@ public class AiConfigServiceImpl implements AiConfigService {
         return new ResolvedAiConfig(
                 draft.enabled,
                 draft.mockMode,
+                draft.autoSummary == null ? Boolean.TRUE : draft.autoSummary,
+                draft.autoEmbedding == null ? Boolean.TRUE : draft.autoEmbedding,
                 chatProviderType,
                 baseUrl,
                 chatPath,
@@ -352,6 +360,8 @@ public class AiConfigServiceImpl implements AiConfigService {
         ConfigDraft safeFallback = fallback == null ? new ConfigDraft() : fallback;
         result.enabled = firstNonNull(safeOverride.enabled, safeFallback.enabled);
         result.mockMode = firstNonNull(safeOverride.mockMode, safeFallback.mockMode);
+        result.autoSummary = firstNonNull(safeOverride.autoSummary, safeFallback.autoSummary, Boolean.TRUE);
+        result.autoEmbedding = firstNonNull(safeOverride.autoEmbedding, safeFallback.autoEmbedding, Boolean.TRUE);
         result.chatProviderType = pickText(safeOverride.chatProviderType, safeFallback.chatProviderType);
         result.baseUrl = pickText(safeOverride.baseUrl, safeFallback.baseUrl);
         result.chatPath = pickText(safeOverride.chatPath, safeFallback.chatPath);
@@ -409,6 +419,8 @@ public class AiConfigServiceImpl implements AiConfigService {
         ConfigDraft target = new ConfigDraft();
         target.enabled = source.enabled;
         target.mockMode = source.mockMode;
+        target.autoSummary = source.autoSummary;
+        target.autoEmbedding = source.autoEmbedding;
         target.chatProviderType = source.chatProviderType;
         target.baseUrl = source.baseUrl;
         target.chatPath = source.chatPath;
@@ -474,6 +486,8 @@ public class AiConfigServiceImpl implements AiConfigService {
         ConfigDraft draft = new ConfigDraft();
         draft.enabled = entity.getEnabled();
         draft.mockMode = entity.getMockMode();
+        draft.autoSummary = entity.getAutoSummary();
+        draft.autoEmbedding = entity.getAutoEmbedding();
         draft.chatProviderType = entity.getChatProviderType();
         draft.baseUrl = entity.getBaseUrl();
         draft.chatPath = entity.getChatPath();
@@ -491,6 +505,8 @@ public class AiConfigServiceImpl implements AiConfigService {
         ConfigDraft draft = new ConfigDraft();
         draft.enabled = aiProperties.getEnabled();
         draft.mockMode = aiProperties.getMockMode();
+        draft.autoSummary = true;
+        draft.autoEmbedding = true;
         draft.chatProviderType = aiProperties.getChatProviderType();
         draft.baseUrl = aiProperties.getBaseUrl();
         draft.chatPath = aiProperties.getChatPath();
@@ -644,7 +660,13 @@ public class AiConfigServiceImpl implements AiConfigService {
         if (draft == null) {
             return null;
         }
-        return "enabled".equals(fieldName) ? draft.enabled : draft.mockMode;
+        return switch (fieldName) {
+            case "enabled" -> draft.enabled;
+            case "mockMode" -> draft.mockMode;
+            case "autoSummary" -> draft.autoSummary;
+            case "autoEmbedding" -> draft.autoEmbedding;
+            default -> null;
+        };
     }
 
     private String text(ConfigDraft draft, String fieldName) {
@@ -673,6 +695,8 @@ public class AiConfigServiceImpl implements AiConfigService {
 
         private Boolean enabled;
         private Boolean mockMode;
+        private Boolean autoSummary;
+        private Boolean autoEmbedding;
         private String chatProviderType;
         private String baseUrl;
         private String chatPath;
@@ -700,6 +724,22 @@ public class AiConfigServiceImpl implements AiConfigService {
 
         public void setMockMode(Boolean mockMode) {
             this.mockMode = mockMode;
+        }
+
+        public Boolean getAutoSummary() {
+            return autoSummary;
+        }
+
+        public void setAutoSummary(Boolean autoSummary) {
+            this.autoSummary = autoSummary;
+        }
+
+        public Boolean getAutoEmbedding() {
+            return autoEmbedding;
+        }
+
+        public void setAutoEmbedding(Boolean autoEmbedding) {
+            this.autoEmbedding = autoEmbedding;
         }
 
         public String getChatProviderType() {

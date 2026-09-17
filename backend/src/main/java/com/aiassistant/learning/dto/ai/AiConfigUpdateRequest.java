@@ -21,6 +21,16 @@ public class AiConfigUpdateRequest {
     private Boolean mockMode;
 
     /**
+     * 上传资料后是否自动生成摘要。
+     */
+    private Boolean autoSummary;
+
+    /**
+     * 上传资料后是否自动生成向量。
+     */
+    private Boolean autoEmbedding;
+
+    /**
      * 聊天模型服务提供方类型。
      */
     private String chatProviderType;

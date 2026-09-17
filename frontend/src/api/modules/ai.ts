@@ -20,6 +20,8 @@ export interface QuestionGeneratePayload {
 export interface AiConfigPayload {
   enabled: boolean
   mockMode: boolean
+  autoSummary?: boolean
+  autoEmbedding?: boolean
   chatProviderType?: string
   baseUrl: string
   chatPath: string

@@ -4,6 +4,8 @@ CREATE TABLE IF NOT EXISTS ai_config (
     user_id BIGINT NOT NULL DEFAULT 0 COMMENT 'GLOBAL uses 0; USER uses sys_user.id',
     enabled TINYINT(1) NOT NULL DEFAULT 1 COMMENT 'Whether AI is enabled',
     mock_mode TINYINT(1) NOT NULL DEFAULT 1 COMMENT 'Whether mock mode is enabled',
+    auto_summary TINYINT(1) NOT NULL DEFAULT 1 COMMENT 'Auto generate summary after upload',
+    auto_embedding TINYINT(1) NOT NULL DEFAULT 1 COMMENT 'Auto generate embedding after upload',
     chat_provider_type VARCHAR(50) NOT NULL DEFAULT 'OPENAI_COMPATIBLE' COMMENT 'Chat provider',
     base_url VARCHAR(500) DEFAULT NULL COMMENT 'Chat base URL',
     chat_path VARCHAR(255) DEFAULT NULL COMMENT 'Chat API path',

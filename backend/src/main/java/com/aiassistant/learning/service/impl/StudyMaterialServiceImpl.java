@@ -9,6 +9,12 @@ import com.aiassistant.learning.entity.StudyMaterial;
 import com.aiassistant.learning.mapper.MaterialSegmentMapper;
 import com.aiassistant.learning.service.StudyMaterialService;
 import com.aiassistant.learning.service.VectorStoreService;
+import com.aiassistant.learning.service.AiConfigService;
+import com.aiassistant.learning.service.AiConfigService.ResolvedAiConfig;
+import com.aiassistant.learning.service.AiTaskService;
+import com.aiassistant.learning.dto.ai.SummaryGenerateRequest;
+import com.aiassistant.learning.dto.ai.EmbeddingTaskRequest;
+import org.springframework.context.annotation.Lazy;
 import com.aiassistant.learning.vo.material.MaterialDetailVO;
 import com.aiassistant.learning.vo.material.MaterialPageVO;
 import com.aiassistant.learning.vo.material.MaterialSegmentVO;
@@ -73,22 +79,21 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
     private final MaterialSegmentMapper materialSegmentMapper;
     private final FileStorageProperties fileStorageProperties;
     private final VectorStoreService vectorStoreService;
+    private final AiTaskService aiTaskService;
+    private final AiConfigService aiConfigService;
 
-    /**
-     * 构造方法注入依赖。
-     *
-     * @param materialSegmentMapper 资料分段 Mapper
-     * @param fileStorageProperties 文件上传目录配置
-     * @param vectorStoreService 向量库服务，用于清理资料对应的向量
-     */
     public StudyMaterialServiceImpl(
             MaterialSegmentMapper materialSegmentMapper,
             FileStorageProperties fileStorageProperties,
-            VectorStoreService vectorStoreService
+            VectorStoreService vectorStoreService,
+            @Lazy AiTaskService aiTaskService,
+            AiConfigService aiConfigService
     ) {
         this.materialSegmentMapper = materialSegmentMapper;
         this.fileStorageProperties = fileStorageProperties;
         this.vectorStoreService = vectorStoreService;
+        this.aiTaskService = aiTaskService;
+        this.aiConfigService = aiConfigService;
     }
 
     /**
@@ -125,6 +130,7 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
         segment.setTokenEstimate(Math.max(1, request.getContentText().length() / 4));
         segment.setEmbeddingStatus("PENDING");
         materialSegmentMapper.insert(segment);
+        dispatchAutoTasksAfterReady(userId, material.getId());
         return material.getId();
     }
 
@@ -170,6 +176,23 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
         material.setDifficultyLevel(3);
         material.setDeleted(0);
         this.save(material);
+
+        try {
+            ParsedContent parsedContent = parseFile(material);
+            cleanupMaterialVectors(userId, material.getId());
+            saveSegments(material.getId(), parsedContent.segments());
+            material.setParseStatus("SUCCESS");
+            material.setTotalPages(parsedContent.totalPages());
+            material.setTotalCharacters(parsedContent.text().length());
+            this.updateById(material);
+
+            dispatchAutoTasksAfterReady(userId, material.getId());
+        } catch (Exception exception) {
+            log.error("资料上传后自动解析失败: {}", exception.getMessage(), exception);
+            material.setParseStatus("FAILED");
+            this.updateById(material);
+        }
+
         return material.getId();
     }
 
@@ -395,6 +418,7 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
             material.setTotalPages(parsedContent.totalPages());
             material.setTotalCharacters(parsedContent.text().length());
             this.updateById(material);
+            dispatchAutoTasksAfterReady(userId, materialId);
         } catch (Exception exception) {
             material.setParseStatus("FAILED");
             this.updateById(material);
@@ -418,6 +442,58 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
         materialSegmentMapper.delete(Wrappers.<MaterialSegment>lambdaQuery()
                 .eq(MaterialSegment::getMaterialId, material.getId()));
         this.removeById(material.getId());
+    }
+
+    /**
+     * 资料就绪（切片入库）后，根据用户配置自动派发后续任务（生成摘要、生成向量索引）。
+     */
+    private void dispatchAutoTasksAfterReady(Long userId, Long materialId) {
+        if (aiTaskService == null || aiConfigService == null) {
+            return;
+        }
+        try {
+            ResolvedAiConfig config = aiConfigService.getResolvedConfig(userId);
+            // 1. 自动生成摘要（默认开启）
+            if (config != null && config.isAutoSummary()) {
+                try {
+                    SummaryGenerateRequest summaryRequest = new SummaryGenerateRequest();
+                    summaryRequest.setSummaryType("KEY_POINTS");
+                    summaryRequest.setSaveAsNote(false);
+                    summaryRequest.setTemperature(0.5);
+                    aiTaskService.submitSummaryTask(userId, materialId, summaryRequest);
+                    log.info("已为资料 [{}] 自动派发 AI 摘要生成任务", materialId);
+                } catch (Exception ex) {
+                    log.warn("资料 [{}] 自动生成摘要派发失败: {}", materialId, ex.getMessage());
+                }
+            }
+
+            // 2. 自动生成向量索引（默认开启，若未配置向量服务则优雅跳过）
+            if (config != null && config.isAutoEmbedding()) {
+                if (isEmbeddingServiceReady(config)) {
+                    try {
+                        aiTaskService.submitEmbeddingTask(userId, materialId, new EmbeddingTaskRequest());
+                        log.info("已为资料 [{}] 自动派发向量索引任务", materialId);
+                    } catch (Exception ex) {
+                        log.warn("资料 [{}] 自动向量化任务派发失败: {}", materialId, ex.getMessage());
+                    }
+                } else {
+                    log.info("当前未配置有效向量模型或向量服务未就绪，自动跳过资料 [{}] 的向量化", materialId);
+                }
+            }
+        } catch (Exception ex) {
+            log.warn("资料 [{}] 自动化流水线执行异常: {}", materialId, ex.getMessage());
+        }
+    }
+
+    private boolean isEmbeddingServiceReady(ResolvedAiConfig config) {
+        if (config == null || !Boolean.TRUE.equals(config.enabled())) {
+            return false;
+        }
+        if (Boolean.TRUE.equals(config.mockMode())) {
+            return true;
+        }
+        return StringUtils.hasText(config.defaultEmbeddingModel())
+                && (StringUtils.hasText(config.embeddingApiKey()) || StringUtils.hasText(config.apiKey()));
     }
 
     /**

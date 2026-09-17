@@ -49,6 +49,8 @@ public interface AiConfigService {
     record ResolvedAiConfig(
             Boolean enabled,
             Boolean mockMode,
+            Boolean autoSummary,
+            Boolean autoEmbedding,
             String chatProviderType,
             String baseUrl,
             String chatPath,
@@ -60,5 +62,44 @@ public interface AiConfigService {
             String defaultModel,
             String defaultEmbeddingModel
     ) {
+        public ResolvedAiConfig(
+                Boolean enabled,
+                Boolean mockMode,
+                String chatProviderType,
+                String baseUrl,
+                String chatPath,
+                String embeddingProviderType,
+                String embeddingBaseUrl,
+                String embeddingPath,
+                String apiKey,
+                String embeddingApiKey,
+                String defaultModel,
+                String defaultEmbeddingModel
+        ) {
+            this(
+                    enabled,
+                    mockMode,
+                    Boolean.TRUE,
+                    Boolean.TRUE,
+                    chatProviderType,
+                    baseUrl,
+                    chatPath,
+                    embeddingProviderType,
+                    embeddingBaseUrl,
+                    embeddingPath,
+                    apiKey,
+                    embeddingApiKey,
+                    defaultModel,
+                    defaultEmbeddingModel
+            );
+        }
+
+        public boolean isAutoSummary() {
+            return autoSummary == null || autoSummary;
+        }
+
+        public boolean isAutoEmbedding() {
+            return autoEmbedding == null || autoEmbedding;
+        }
     }
 }

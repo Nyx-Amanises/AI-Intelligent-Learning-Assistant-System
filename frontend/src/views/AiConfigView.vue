@@ -43,6 +43,34 @@
             </div>
           </section>
 
+          <section class="page-card config-section" aria-labelledby="automation-title">
+            <div class="config-section__heading">
+              <span class="config-section__icon"><AppIcon name="refresh" :size="22" /></span>
+              <div>
+                <h2 id="automation-title">自动化处理</h2>
+                <p>上传或写入资料后，自动流转后续 AI 处理流水线。</p>
+              </div>
+            </div>
+
+            <div class="config-automation-list">
+              <div class="config-automation-item">
+                <div class="config-automation-item__info">
+                  <label for="auto-summary-switch" class="config-automation-item__title">上传后自动生成摘要</label>
+                  <p class="config-automation-item__desc">资料解析完成后，后台自动调度 AI 生成核心要点与学习总结。</p>
+                </div>
+                <el-switch id="auto-summary-switch" v-model="form.autoSummary" aria-label="上传后自动生成摘要" />
+              </div>
+
+              <div class="config-automation-item">
+                <div class="config-automation-item__info">
+                  <label for="auto-embedding-switch" class="config-automation-item__title">上传后自动建立向量索引</label>
+                  <p class="config-automation-item__desc">自动将资料切片索引至向量库以便语义检索；若未配置向量模型则安全跳过。</p>
+                </div>
+                <el-switch id="auto-embedding-switch" v-model="form.autoEmbedding" aria-label="上传后自动建立向量索引" />
+              </div>
+            </div>
+          </section>
+
           <section class="page-card config-section" aria-labelledby="chat-model-title">
             <div class="config-section__heading">
               <span class="config-section__icon"><AppIcon name="assistant" :size="22" /></span>
@@ -216,6 +244,7 @@ let loadSequence = 0
 
 const form = reactive<ConfigForm>({
   enabled: true, mockMode: true,
+  autoSummary: true, autoEmbedding: true,
   chatProviderType: 'OPENAI_COMPATIBLE', baseUrl: '', chatPath: '', defaultModel: '', apiKey: '',
   embeddingProviderType: 'OPENAI_COMPATIBLE', embeddingBaseUrl: '', embeddingPath: '', defaultEmbeddingModel: '', embeddingApiKey: ''
 })
@@ -296,6 +325,8 @@ function applyEmbeddingPreset() {
 function applyLoadedConfig(data: AiConfigResponse) {
   Object.assign(form, {
     enabled: Boolean(data.enabled), mockMode: Boolean(data.mockMode),
+    autoSummary: data.autoSummary !== false,
+    autoEmbedding: data.autoEmbedding !== false,
     chatProviderType: data.chatProviderType || 'OPENAI_COMPATIBLE',
     baseUrl: data.baseUrl || '', chatPath: data.chatPath || '', defaultModel: data.defaultModel || '', apiKey: '',
     embeddingProviderType: data.embeddingProviderType || 'OPENAI_COMPATIBLE',
@@ -516,6 +547,11 @@ onBeforeUnmount(() => {
 .config-note { margin: -3px 0 20px; color: var(--muted); font-size: 12px; line-height: 1.8; }
 .config-vector__rebuild-note { margin: 18px 0 0; color: var(--muted); font-size: 12px; line-height: 1.8; }
 .config-error { margin: 18px 0 0; padding: 13px 17px; border-radius: 12px; color: var(--red); background: var(--red-light, #fdf0ed); font-size: 13px; line-height: 1.7; }
+.config-automation-list { display: flex; flex-direction: column; gap: 12px; }
+.config-automation-item { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 16px 20px; border-radius: 12px; background: var(--bg-secondary); border: 1px solid var(--line); }
+.config-automation-item__info { flex: 1; min-width: 0; }
+.config-automation-item__title { display: block; font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 4px; cursor: pointer; }
+.config-automation-item__desc { margin: 0; font-size: 12px; color: var(--muted); line-height: 1.6; }
 .config-save-bar { position: sticky; bottom: 18px; z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 16px 22px; margin-top: 22px; border: 1px solid var(--line); border-radius: 16px; background: var(--panel); box-shadow: 0 6px 24px rgb(35 49 38 / 5%); }
 .config-save-bar > p { display: flex; align-items: center; gap: 7px; margin: 0; color: var(--muted); font-size: 12px; }
 .config-save-bar > div { display: flex; gap: 10px; }

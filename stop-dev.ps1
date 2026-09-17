@@ -20,4 +20,4 @@ foreach ($conn in $frontendConns) {
 }
 
 Write-Host "本地前端和后端服务已停止。" -ForegroundColor Green
-Write-Host "注：Docker 数据库容器（MySQL、Redis、Qdrant）仍保持运行。如需关闭 Docker 容器，可运行：docker compose stop" -ForegroundColor Gray
+Write-Host "注：Docker 数据库容器仍保持运行。如需关闭 Docker 容器，可运行：docker compose stop" -ForegroundColor Gray

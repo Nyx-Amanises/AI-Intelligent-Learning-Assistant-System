@@ -24,6 +24,16 @@ public class AiConfigVO {
     private Boolean mockMode;
 
     /**
+     * 上传资料后是否自动生成摘要。
+     */
+    private Boolean autoSummary;
+
+    /**
+     * 上传资料后是否自动生成向量。
+     */
+    private Boolean autoEmbedding;
+
+    /**
      * Effective source: USER / GLOBAL / LEGACY / ENV.
      */
     private String configSource;

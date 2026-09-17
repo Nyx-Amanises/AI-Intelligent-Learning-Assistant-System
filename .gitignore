@@ -15,3 +15,4 @@ Thumbs.db
 /backend/src/main/java/com/aiassistant/learning/mapper/Main.java
 
 .playwright-mcp/
+tmp/
