@@ -313,22 +313,22 @@ onUnmounted(() => { isActive = false })
   gap: 18px;
   min-width: 0;
   padding: 18px 22px;
-  border: 1px solid rgba(227, 229, 220, 0.6);
+  border: 1px solid var(--line);
   border-radius: var(--radius);
   color: var(--brand);
-  background: #ffffff;
+  background: var(--panel);
   text-align: left;
   font: inherit;
   cursor: pointer;
-  box-shadow: 0 2px 8px rgba(35, 55, 38, 0.03);
+  box-shadow: var(--shadow-sm);
   transition: all .25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .daily-explore__item:first-child { padding-left: 22px; }
 .daily-explore__item:last-child { padding-right: 22px; }
 .daily-explore__item:hover {
-  background: #ffffff;
-  border-color: rgba(56, 90, 74, 0.25);
-  box-shadow: 0 10px 24px -4px rgba(35, 55, 38, 0.08);
+  background: var(--panel-hover);
+  border-color: var(--brand);
+  box-shadow: var(--shadow);
   transform: translateY(-2px);
 }
 .daily-explore__item > span { flex: 1; min-width: 0; }

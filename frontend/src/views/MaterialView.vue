@@ -1004,9 +1004,9 @@ void loadMaterials()
   transition: all .25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .material-library-card:hover {
-  background: #ffffff;
-  border-color: rgba(56, 90, 74, 0.12);
-  box-shadow: 0 8px 24px -4px rgba(35, 55, 38, 0.06);
+  background: var(--panel-hover);
+  border-color: var(--line);
+  box-shadow: var(--shadow);
   transform: translateY(-2px);
 }
 .material-library-card__cover {

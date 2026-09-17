@@ -37,6 +37,33 @@
             <span>{{ ASSISTANT_NAME }}</span>
           </button>
 
+          <el-dropdown class="workspace-theme__dropdown" trigger="click" @command="handleThemeCommand">
+            <button
+              type="button"
+              class="workspace-theme-trigger"
+              :aria-label="'当前主题：' + currentThemeOption.label + '，点击切换风格'"
+              :title="'主题风格：' + currentThemeOption.label"
+            >
+              <AppIcon :name="currentThemeOption.icon" :size="18" />
+            </button>
+            <template #dropdown>
+              <el-dropdown-menu class="workspace-theme-menu">
+                <el-dropdown-item
+                  v-for="opt in themeOptions"
+                  :key="opt.key"
+                  :command="opt.key"
+                  :class="{ 'is-active': currentTheme === opt.key }"
+                >
+                  <span class="theme-menu-item">
+                    <span class="theme-menu-item__dot" :style="{ backgroundColor: opt.color }"></span>
+                    <span class="theme-menu-item__label">{{ opt.label }}</span>
+                    <AppIcon v-if="currentTheme === opt.key" name="check" :size="16" class="theme-menu-item__check" />
+                  </span>
+                </el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+
           <div class="workspace-account">
             <RouterLink to="/profile" class="workspace-user" :aria-label="displayName + '，个人信息'" title="个人信息">
               <img v-if="avatarSrc && !avatarLoadFailed" :src="avatarSrc" alt="" class="workspace-user__avatar" @error="avatarLoadFailed = true">
@@ -151,9 +178,11 @@ import { mobileNavigationItems, moreNavigationItems, navigationItems, primaryNav
 import { useUserStore } from '@/stores/user'
 import { resolveAvatarUrl } from '@/utils/avatar'
 import { usePageProgress } from '@/composables/usePageProgress'
+import { useTheme, type ThemeMode } from '@/composables/useTheme'
 
 const userStore = useUserStore()
 const pageProgress = usePageProgress()
+const { currentTheme, themeOptions, currentThemeOption, setTheme } = useTheme()
 const router = useRouter()
 const route = useRoute()
 const assistantVisible = ref(false)
@@ -244,6 +273,10 @@ function searchMaterials() {
   searchVisible.value = false
   void router.push({ path: '/materials', query: keyword ? { keyword } : {} })
 }
+function handleThemeCommand(command: string) {
+  setTheme(command as ThemeMode)
+  ElMessage.success(`已切换为${currentThemeOption.value.label}`)
+}
 function handleUserCommand(command: string) {
   if (command === 'profile') void router.push('/profile')
   if (command === 'avatar') avatarInputRef.value?.click()
@@ -314,10 +347,10 @@ onUnmounted(() => {
   top: 0;
   z-index: 30;
   height: var(--shell-header-height);
-  background: rgba(247, 247, 242, 0.88);
+  background: var(--topbar-bg, rgba(255, 255, 255, 0.88));
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border-bottom: 1px solid rgba(227, 229, 220, 0.7);
+  border-bottom: 1px solid var(--line);
   transition: background-color .2s ease, border-color .2s ease, box-shadow .2s ease;
 }
 .workspace-topbar__inner {
@@ -369,7 +402,7 @@ onUnmounted(() => {
   padding: 0 13px;
   border: 1px solid var(--line);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.65);
+  background: var(--panel);
   color: var(--text-secondary);
   font-size: 13px;
   white-space: nowrap;
@@ -378,18 +411,60 @@ onUnmounted(() => {
 }
 .workspace-search-trigger:hover {
   color: var(--text);
-  background: #ffffff;
-  border-color: rgba(56, 90, 74, 0.3);
-  box-shadow: 0 2px 8px rgba(35, 55, 38, 0.06);
+  background: var(--panel-hover);
+  border-color: var(--brand);
+  box-shadow: var(--shadow-sm);
 }
 .workspace-search-trigger kbd {
   padding: 2px 6px;
-  border: 1px solid rgba(227, 229, 220, 0.9);
+  border: 1px solid var(--line);
   border-radius: 6px;
-  background: rgba(247, 247, 242, 0.85);
+  background: var(--bg-secondary);
   color: var(--muted);
   font: inherit;
   font-size: 11px;
+}
+.workspace-theme-trigger {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--panel);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all .2s ease;
+}
+.workspace-theme-trigger:hover {
+  color: var(--brand);
+  border-color: var(--brand);
+  background: var(--brand-light);
+  transform: translateY(-1px);
+}
+.workspace-theme-menu {
+  min-width: 170px;
+}
+.theme-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+.theme-menu-item__dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  flex-shrink: 0;
+}
+.theme-menu-item__label {
+  flex: 1;
+  font-weight: 500;
+}
+.theme-menu-item__check {
+  margin-left: auto;
+  color: var(--brand);
 }
 .workspace-assistant-trigger {
   display: flex;

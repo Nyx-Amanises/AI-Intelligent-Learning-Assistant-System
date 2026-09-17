@@ -1,5 +1,76 @@
 /* Shared visual language for the learning workspace and its Element Plus controls. */
-:root {
+:root,
+[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f8f9fa;
+  --bg-secondary: #f1f3f5;
+  --sidebar-bg: #ffffff;
+  --panel: #ffffff;
+  --panel-hover: #f8fafc;
+  --line: #e9ecef;
+  --text: #1a1f2c;
+  --text-secondary: #4a5568;
+  --muted: #718096;
+  --brand: #1f7a5a;
+  --brand-hover: #166147;
+  --brand-soft: #e6f6ef;
+  --brand-light: #f0faf5;
+  --topbar-bg: rgba(255, 255, 255, 0.92);
+  --cinnabar: #c2410c;
+  --accent: #d97706;
+  --accent-soft: #fef3c7;
+  --blue: #2563eb;
+  --blue-soft: #eff6ff;
+  --green: #10b981;
+  --green-soft: #ecfdf5;
+  --purple: #7c3aed;
+  --purple-soft: #f5f3ff;
+  --orange: #ea580c;
+  --orange-soft: #fff7ed;
+  --red: #dc2626;
+  --red-soft: #fef2f2;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
+  --shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 10px 24px -4px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 16px 36px -6px rgba(0, 0, 0, 0.1);
+  --shadow-xl: 0 24px 60px -10px rgba(0, 0, 0, 0.14);
+  --radius-sm: 10px;
+  --radius: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 24px;
+  --el-color-primary: var(--brand);
+  --el-color-primary-light-3: #5ea48a;
+  --el-color-primary-light-5: #8fcaa4;
+  --el-color-primary-light-7: #bfe5cf;
+  --el-color-primary-light-8: #dcf2e6;
+  --el-color-primary-light-9: #f0faf5;
+  --el-color-primary-dark-2: var(--brand-hover);
+  --el-color-success: #10b981;
+  --el-color-success-light-9: #ecfdf5;
+  --el-color-warning: #d97706;
+  --el-color-warning-light-9: #fffbeb;
+  --el-color-danger: #dc2626;
+  --el-color-danger-light-9: #fef2f2;
+  --el-color-info: #718096;
+  --el-border-color: #e2e8f0;
+  --el-border-color-light: var(--line);
+  --el-border-color-lighter: #f1f3f5;
+  --el-text-color-primary: var(--text);
+  --el-text-color-regular: var(--text-secondary);
+  --el-text-color-secondary: var(--muted);
+  --el-text-color-placeholder: var(--muted);
+  --el-fill-color-light: #f8f9fa;
+  --el-fill-color-blank: #ffffff;
+  --el-bg-color-page: var(--bg);
+  --el-border-radius-base: 12px;
+  --el-component-size: 44px;
+  --el-font-size-base: 15px;
+  --el-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --el-box-shadow-light: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="eye-care"] {
+  color-scheme: light;
   --bg: #f7f7f2;
   --bg-secondary: #efefea;
   --sidebar-bg: #f7f7f2;
@@ -13,6 +84,7 @@
   --brand-hover: #284738;
   --brand-soft: #e5ece4;
   --brand-light: #eff3ec;
+  --topbar-bg: rgba(247, 247, 242, 0.88);
   --cinnabar: #a6503b;
   --accent: #ae7b35;
   --accent-soft: #f5ecd9;
@@ -31,10 +103,6 @@
   --shadow-md: 0 10px 28px -4px rgba(35, 55, 38, 0.09), 0 4px 10px -2px rgba(35, 55, 38, 0.04);
   --shadow-lg: 0 16px 36px -6px rgba(35, 55, 38, 0.11), 0 6px 14px -3px rgba(35, 55, 38, 0.05);
   --shadow-xl: 0 24px 70px -10px rgba(28, 45, 32, 0.18);
-  --radius-sm: 10px;
-  --radius: 14px;
-  --radius-lg: 20px;
-  --radius-xl: 24px;
   --el-color-primary: var(--brand);
   --el-color-primary-light-3: #708c7a;
   --el-color-primary-light-5: #a0b2a5;
@@ -59,11 +127,65 @@
   --el-fill-color-light: #f3f4ee;
   --el-fill-color-blank: #fff;
   --el-bg-color-page: var(--bg);
-  --el-border-radius-base: 12px;
-  --el-component-size: 44px;
-  --el-font-size-base: 15px;
-  --el-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
   --el-box-shadow-light: 0 8px 28px rgba(35,55,38,.1);
+}
+
+[data-theme="dark"],
+html.dark {
+  color-scheme: dark;
+  --bg: #0f172a;
+  --bg-secondary: #1e293b;
+  --sidebar-bg: #0b1120;
+  --panel: #1e293b;
+  --panel-hover: #27354a;
+  --line: #334155;
+  --text: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --muted: #94a3b8;
+  --brand: #34d399;
+  --brand-hover: #6ee7b7;
+  --brand-soft: rgba(52, 211, 153, 0.18);
+  --brand-light: rgba(52, 211, 153, 0.12);
+  --topbar-bg: rgba(15, 23, 42, 0.88);
+  --cinnabar: #f87171;
+  --accent: #fbbf24;
+  --accent-soft: rgba(251, 191, 36, 0.18);
+  --blue: #60a5fa;
+  --blue-soft: rgba(96, 165, 250, 0.18);
+  --green: #34d399;
+  --green-soft: rgba(52, 211, 153, 0.18);
+  --purple: #c084fc;
+  --purple-soft: rgba(192, 132, 252, 0.18);
+  --orange: #fb923c;
+  --orange-soft: rgba(251, 146, 60, 0.18);
+  --red: #f87171;
+  --red-soft: rgba(248, 113, 113, 0.18);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.6);
+  --shadow-lg: 0 16px 36px rgba(0, 0, 0, 0.7);
+  --shadow-xl: 0 24px 60px rgba(0, 0, 0, 0.8);
+  --el-color-primary: #34d399;
+  --el-color-primary-light-3: #6ee7b7;
+  --el-color-primary-light-5: #a7f3d0;
+  --el-color-primary-light-7: #c6f6d5;
+  --el-color-primary-light-8: rgba(52, 211, 153, 0.25);
+  --el-color-primary-light-9: rgba(52, 211, 153, 0.15);
+  --el-color-primary-dark-2: #10b981;
+  --el-bg-color-page: #0f172a;
+  --el-bg-color: #1e293b;
+  --el-bg-color-overlay: #1e293b;
+  --el-text-color-primary: #f8fafc;
+  --el-text-color-regular: #cbd5e1;
+  --el-text-color-secondary: #94a3b8;
+  --el-text-color-placeholder: #64748b;
+  --el-border-color: #334155;
+  --el-border-color-light: #2c3a4f;
+  --el-border-color-lighter: #243042;
+  --el-fill-color-light: #243042;
+  --el-fill-color-blank: #1e293b;
+  --el-mask-color: rgba(0, 0, 0, 0.75);
+  --el-box-shadow-light: 0 8px 28px rgba(0, 0, 0, 0.5);
 }
 
 html { scrollbar-gutter: stable; }
@@ -116,20 +238,21 @@ button:focus-visible, a:focus-visible, [tabindex="0"]:focus-visible { outline: 3
 }
 .el-input__inner, .el-select__placeholder, .el-textarea__inner { font-size: 15px; }
 .el-form-item__label { font-weight: 500; color: var(--text-secondary); }
-.el-dialog { max-width: calc(100vw - 32px); border-radius: 24px; padding: 30px; box-shadow: var(--shadow-xl); }
+.el-dialog { max-width: calc(100vw - 32px); border-radius: 24px; padding: 30px; box-shadow: var(--shadow-xl); background: var(--panel) !important; border: 1px solid var(--line); }
 .el-dialog__title { font-size: 20px; font-weight: 600; color: var(--text); }
 .el-dialog__header { padding-bottom: 20px; }
 .el-dialog__headerbtn { width: 48px; height: 48px; }
 .el-dialog__body { color: var(--text-secondary); }
-.el-drawer { max-width: 100vw; }
+.el-drawer { max-width: 100vw; background: var(--panel) !important; }
 .el-drawer__header { margin-bottom: 0; padding: 24px; border-bottom: 1px solid var(--line); color: var(--text); font-size: 18px; }
 .el-drawer__body { padding: 24px; }
 .workspace-mobile-nav .el-drawer__body { padding: 0; overflow: hidden; }
 .el-dropdown-menu {
   padding: 8px !important;
   border-radius: 14px !important;
-  border: 1px solid rgba(56, 90, 74, 0.08) !important;
-  box-shadow: 0 14px 34px -4px rgba(35, 55, 38, 0.12), 0 4px 12px rgba(35, 55, 38, 0.05) !important;
+  background: var(--panel) !important;
+  border: 1px solid var(--line) !important;
+  box-shadow: var(--shadow-lg) !important;
 }
 .el-dropdown-menu__item {
   border-radius: 8px;
@@ -143,7 +266,7 @@ button:focus-visible, a:focus-visible, [tabindex="0"]:focus-visible { outline: 3
   color: var(--brand) !important;
   background-color: var(--brand-light) !important;
 }
-.el-dropdown-menu__item--divided { margin-top: 5px; }
+.el-dropdown-menu__item--divided { margin-top: 5px; border-top-color: var(--line) !important; }
 .el-pagination { max-width: 100%; flex-wrap: wrap; }
 .el-pagination button, .el-pager li { border-radius: 7px; }
 .el-empty__description p { color: var(--muted); }
@@ -246,4 +369,35 @@ button:focus-visible, a:focus-visible, [tabindex="0"]:focus-visible { outline: 3
   border-radius: 50%;
   animation: pulse-dot 1.8s infinite ease-in-out;
 }
+
+/* Dark theme component overrides */
+html.dark .el-button:not(.el-button--primary):not(.is-link):not(.is-text) {
+  background: var(--panel);
+  border-color: var(--line);
+  color: var(--text);
+}
+html.dark .el-button:not(.el-button--primary):not(.is-link):not(.is-text):hover {
+  background: var(--panel-hover);
+  border-color: var(--brand);
+  color: var(--brand);
+}
+html.dark .el-input__wrapper,
+html.dark .el-select__wrapper,
+html.dark .el-textarea__inner {
+  background: var(--panel) !important;
+  box-shadow: 0 0 0 1px var(--line) inset !important;
+}
+html.dark .el-input__wrapper.is-focus,
+html.dark .el-select__wrapper.is-focused,
+html.dark .el-textarea__inner:focus {
+  box-shadow: 0 0 0 1px var(--brand) inset !important;
+}
+html.dark .workspace-topbar {
+  background: rgba(15, 23, 42, 0.88);
+  border-bottom-color: var(--line);
+}
+html.dark .brand-logo {
+  filter: brightness(1.75) contrast(1.1);
+}
+
 

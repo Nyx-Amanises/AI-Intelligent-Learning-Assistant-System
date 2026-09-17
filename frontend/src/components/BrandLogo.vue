@@ -28,5 +28,11 @@ withDefaults(defineProps<{ variant?: 'horizontal' | 'mark' }>(), {
   height: auto;
   object-fit: contain;
   user-select: none;
+  transition: filter .2s ease;
+}
+
+:global(html.dark) .brand-logo,
+:global([data-theme="dark"]) .brand-logo {
+  filter: brightness(1.65) contrast(1.1);
 }
 </style>
