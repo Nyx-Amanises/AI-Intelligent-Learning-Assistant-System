@@ -10,9 +10,10 @@
     <script>
       (function() {
         try {
-          var t = localStorage.getItem('ai-learning-theme') || 'light';
+          var t = localStorage.getItem('ai-learning-theme');
+          if (t !== 'eye-care') t = 'light';
           document.documentElement.setAttribute('data-theme', t);
-          if (t === 'dark') document.documentElement.classList.add('dark');
+          document.documentElement.classList.remove('dark');
         } catch (e) {}
       })();
     </script>
