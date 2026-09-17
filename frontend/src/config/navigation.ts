@@ -3,6 +3,7 @@ export interface NavigationItem {
   label: string
   icon: string
   description?: string
+  divided?: boolean
 }
 
 export interface PrimaryNavigationItem extends NavigationItem {
@@ -24,6 +25,16 @@ export const mobileNavigationItems: PrimaryNavigationItem[] = [
   },
   primaryNavigationItems[3],
   { path: '/profile', label: '我的', icon: 'user', activePaths: ['/profile', '/ai-config'] }
+]
+
+export const moreNavigationItems: NavigationItem[] = [
+  { path: '/summary', label: '学习笔记', icon: 'summary' },
+  { path: '/practice', label: '练习记录', icon: 'practice' },
+  { path: '/wrong-questions', label: '错题复习', icon: 'wrong' },
+  { path: '/mastery', label: '知识掌握', icon: 'mastery' },
+  { path: '/ai-tasks', label: '任务中心', icon: 'tasks', divided: true },
+  { path: '/rag-eval', label: '检索评测', icon: 'eval' },
+  { path: '/ai-config', label: 'AI 配置', icon: 'config', description: '对话模型与向量模型' }
 ]
 
 export const navigationGroups: { label: string; items: NavigationItem[] }[] = [

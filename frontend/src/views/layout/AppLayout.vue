@@ -51,15 +51,33 @@
             </el-dropdown>
           </div>
 
-          <button
-            type="button"
-            class="workspace-more-trigger"
-            :class="{ 'is-active': moreNavigationActive }"
-            aria-label="更多功能"
-            aria-haspopup="dialog"
-            :aria-expanded="navigationVisible"
-            @click="navigationVisible = true"
-          ><AppIcon name="menu" :size="22" /></button>
+          <el-dropdown class="workspace-more__dropdown" trigger="click" @command="handleMoreCommand">
+            <button
+              type="button"
+              class="workspace-more-trigger"
+              :class="{ 'is-active': moreNavigationActive }"
+              aria-label="更多功能"
+              title="更多功能"
+            >
+              <AppIcon name="menu" :size="20" />
+            </button>
+            <template #dropdown>
+              <el-dropdown-menu class="workspace-more-menu">
+                <el-dropdown-item
+                  v-for="item in moreNavigationItems"
+                  :key="item.path"
+                  :command="item.path"
+                  :divided="item.divided"
+                  :class="{ 'is-current': route.path === item.path }"
+                >
+                  <span class="workspace-more-item">
+                    <AppIcon :name="item.icon" :size="16" />
+                    <span>{{ item.label }}</span>
+                  </span>
+                </el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
 
           <input ref="avatarInputRef" type="file" accept="image/jpeg,image/png,image/webp,image/gif" class="visually-hidden" tabindex="-1" aria-hidden="true" @change="handleAvatarChange">
         </div>
@@ -85,22 +103,6 @@
       </RouterLink>
     </nav>
 
-    <el-drawer
-      v-model="navigationVisible"
-      direction="rtl"
-      size="380px"
-      :with-header="false"
-      class="workspace-more-nav"
-      aria-label="更多功能"
-    >
-      <WorkspaceNavigation
-        :avatar-uploading="avatarUploading"
-        @navigate="navigationVisible = false"
-        @close="navigationVisible = false"
-        @open-assistant="openAssistant"
-        @user-command="handleUserCommand"
-      />
-    </el-drawer>
 
     <el-dialog v-model="searchVisible" title="搜索学习资料" width="520px" class="workspace-search-dialog" @opened="searchInputRef?.focus()">
       <form @submit.prevent="searchMaterials">
@@ -123,9 +125,8 @@ import { getProfileApi, uploadAvatarApi } from '@/api/modules/auth'
 import AssistantDrawer from '@/components/AssistantDrawer.vue'
 import AppIcon from '@/components/AppIcon.vue'
 import BrandLogo from '@/components/BrandLogo.vue'
-import WorkspaceNavigation from '@/components/WorkspaceNavigation.vue'
 import { APP_NAME, ASSISTANT_NAME } from '@/config/brand'
-import { mobileNavigationItems, navigationItems, primaryNavigationItems } from '@/config/navigation'
+import { mobileNavigationItems, moreNavigationItems, navigationItems, primaryNavigationItems } from '@/config/navigation'
 import { useUserStore } from '@/stores/user'
 import { resolveAvatarUrl } from '@/utils/avatar'
 
@@ -133,7 +134,6 @@ const userStore = useUserStore()
 const router = useRouter()
 const route = useRoute()
 const assistantVisible = ref(false)
-const navigationVisible = ref(false)
 const searchVisible = ref(false)
 const searchKeyword = ref('')
 const searchInputRef = ref<{ focus: () => void }>()
@@ -145,14 +145,14 @@ const avatarText = computed(() => Array.from(displayName.value)[0]?.toUpperCase(
 const currentPage = computed(() => navigationItems.find((item) => item.path === route.path) || navigationItems[0])
 const avatarSrc = computed(() => resolveAvatarUrl(userStore.profile?.avatarUrl))
 const isHome = computed(() => route.path === '/dashboard')
-const moreNavigationActive = computed(() => ['/ai-tasks', '/rag-eval', '/ai-config'].includes(route.path))
+const moreNavigationActive = computed(() =>
+  moreNavigationItems.some((item) => item.path === route.path)
+)
 
 function openSearch() {
-  navigationVisible.value = false
   searchVisible.value = true
 }
 function openAssistant() {
-  navigationVisible.value = false
   searchVisible.value = false
   assistantVisible.value = true
 }
@@ -162,11 +162,13 @@ function searchMaterials() {
   void router.push({ path: '/materials', query: keyword ? { keyword } : {} })
 }
 function handleUserCommand(command: string) {
-  navigationVisible.value = false
   if (command === 'profile') void router.push('/profile')
   if (command === 'avatar') avatarInputRef.value?.click()
   if (command === 'settings') void router.push('/ai-config')
   if (command === 'logout') { userStore.logout(); void router.push('/login') }
+}
+function handleMoreCommand(path: string) {
+  void router.push(path)
 }
 async function handleAvatarChange(event: Event) {
   const input = event.target as HTMLInputElement
@@ -193,12 +195,10 @@ async function handleAvatarChange(event: Event) {
 function handleShortcut(event: KeyboardEvent) {
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k' && !assistantVisible.value) {
     event.preventDefault()
-    navigationVisible.value = false
     searchVisible.value = !searchVisible.value
   }
 }
 watch(() => route.path, () => {
-  navigationVisible.value = false
   document.title = currentPage.value.label + ' · ' + APP_NAME
 })
 watch(avatarSrc, () => { avatarLoadFailed.value = false })
@@ -368,8 +368,25 @@ onUnmounted(() => {
 .workspace-search-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px; }
 .workspace-topbar a:focus-visible, .workspace-topbar button:focus-visible,
 .workspace-bottom-nav a:focus-visible { outline: 2px solid var(--brand); outline-offset: 3px; }
-:global(.workspace-more-nav.el-drawer) { width: min(380px, 100vw) !important; }
-:global(.workspace-more-nav .el-drawer__body) { padding: 0; overflow: hidden; }
+.workspace-more-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 110px;
+}
+.workspace-more-item :deep(.app-icon) {
+  color: var(--muted);
+  flex-shrink: 0;
+  transition: color .18s ease;
+}
+:deep(.el-dropdown-menu__item:hover) .workspace-more-item :deep(.app-icon),
+:deep(.el-dropdown-menu__item.is-current) .workspace-more-item :deep(.app-icon) {
+  color: var(--brand);
+}
+:deep(.el-dropdown-menu__item.is-current) {
+  color: var(--brand);
+  font-weight: 600;
+}
 
 @media (max-width: 1180px) {
   .workspace-topbar__inner { gap: 30px; padding-inline: 32px; }
