@@ -399,5 +399,15 @@ html.dark .workspace-topbar {
 html.dark .brand-logo {
   filter: brightness(1.75) contrast(1.1);
 }
+html.dark .knowledge-overview,
+html.dark .statistics-sheet {
+  background: var(--panel) !important;
+  border: 1px solid var(--line);
+}
+html.dark .statistics-periods button.is-active {
+  color: var(--brand) !important;
+  background: var(--panel-hover) !important;
+}
+
 
 

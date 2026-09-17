@@ -16,24 +16,24 @@ export const DEFAULT_THEME: ThemeMode = 'light'
 export const THEME_OPTIONS: ThemeOption[] = [
   {
     key: 'light',
-    label: '白天纯白',
-    hint: '经典纯白明亮基调，清晰干练',
+    label: '白天',
+    hint: '经典明亮，清晰干练',
     icon: 'sun',
     color: '#ffffff'
   },
   {
-    key: 'eye-care',
-    label: '护眼纸质',
-    hint: '柔和豆沙绿与护眼纸质，久看不累',
-    icon: 'eye',
-    color: '#edf2eb'
-  },
-  {
     key: 'dark',
-    label: '黑夜暗色',
-    hint: '沉浸夜间深色，低眩光舒适自习',
+    label: '黑夜',
+    hint: '沉浸深色，低眩光舒适',
     icon: 'moon',
     color: '#131c2e'
+  },
+  {
+    key: 'eye-care',
+    label: '护眼',
+    hint: '柔和豆沙绿，久看舒适',
+    icon: 'eye',
+    color: '#edf2eb'
   }
 ]
 

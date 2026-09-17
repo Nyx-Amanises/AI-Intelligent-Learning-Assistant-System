@@ -48,7 +48,7 @@
               <span class="config-section__icon"><AppIcon :name="currentThemeOption.icon" :size="22" /></span>
               <div>
                 <h2 id="theme-title">外观与主题风格</h2>
-                <p>支持白天（纯白）、护眼与黑夜模式，随时切换适宜的阅读光线。</p>
+                <p>支持白天、黑夜与护眼模式，随时切换适宜的阅读光线。</p>
               </div>
             </div>
 
