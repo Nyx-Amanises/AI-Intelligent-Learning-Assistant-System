@@ -1,5 +1,11 @@
 <template>
   <div class="learning-shell">
+    <div
+      v-if="pageProgress.visible.value"
+      class="workspace-progress-bar"
+      :style="{ width: `${pageProgress.progress.value}%`, opacity: pageProgress.progress.value === 100 ? 0 : 1 }"
+      aria-hidden="true"
+    />
     <a class="skip-to-content" href="#workspace-content">跳到主要内容</a>
 
     <header class="workspace-topbar">
@@ -84,8 +90,23 @@
       </div>
     </header>
 
-    <main id="workspace-content" class="workspace-content" :class="{ 'workspace-content--home': isHome }" tabindex="-1">
-      <RouterView v-slot="{ Component }"><component :is="Component" @open-assistant="openAssistant" /></RouterView>
+    <main
+      id="workspace-content"
+      class="workspace-content"
+      :class="{ 'workspace-content--home': isHome }"
+      tabindex="-1"
+      @touchstart.passive="handleTouchStart"
+      @touchend.passive="handleTouchEnd"
+    >
+      <div class="workspace-view-container">
+        <RouterView v-slot="{ Component, route }">
+          <Transition :name="transitionName">
+            <div :key="route.path" class="workspace-view-page">
+              <component :is="Component" @open-assistant="openAssistant" />
+            </div>
+          </Transition>
+        </RouterView>
+      </div>
       <footer class="workspace-footer"><span>{{ APP_NAME }}</span><span>让每一次学习，都有所收获。</span></footer>
     </main>
 
@@ -129,8 +150,10 @@ import { APP_NAME, ASSISTANT_NAME } from '@/config/brand'
 import { mobileNavigationItems, moreNavigationItems, navigationItems, primaryNavigationItems } from '@/config/navigation'
 import { useUserStore } from '@/stores/user'
 import { resolveAvatarUrl } from '@/utils/avatar'
+import { usePageProgress } from '@/composables/usePageProgress'
 
 const userStore = useUserStore()
+const pageProgress = usePageProgress()
 const router = useRouter()
 const route = useRoute()
 const assistantVisible = ref(false)
@@ -148,6 +171,66 @@ const isHome = computed(() => route.path === '/dashboard')
 const moreNavigationActive = computed(() =>
   moreNavigationItems.some((item) => item.path === route.path)
 )
+
+const ROUTE_ORDER: Record<string, number> = {
+  '/dashboard': 10,
+  '/materials': 20,
+  '/summary': 25,
+  '/rag-eval': 28,
+  '/quiz': 30,
+  '/practice': 35,
+  '/wrong-questions': 37,
+  '/mastery': 39,
+  '/analytics': 40,
+  '/ai-tasks': 50,
+  '/profile': 60,
+  '/ai-config': 70
+}
+
+const transitionName = ref('slide-left')
+
+watch(
+  () => route.path,
+  (toPath, fromPath) => {
+    if (!fromPath) {
+      transitionName.value = 'slide-left'
+      return
+    }
+    const toOrder = ROUTE_ORDER[toPath] ?? 99
+    const fromOrder = ROUTE_ORDER[fromPath] ?? 99
+    transitionName.value = toOrder < fromOrder ? 'slide-right' : 'slide-left'
+  }
+)
+
+let touchStartX = 0
+let touchStartY = 0
+let touchStartTime = 0
+
+function handleTouchStart(e: TouchEvent) {
+  if (e.touches.length !== 1) return
+  touchStartX = e.touches[0].clientX
+  touchStartY = e.touches[0].clientY
+  touchStartTime = Date.now()
+}
+
+function handleTouchEnd(e: TouchEvent) {
+  if (e.changedTouches.length !== 1) return
+  const deltaX = e.changedTouches[0].clientX - touchStartX
+  const deltaY = e.changedTouches[0].clientY - touchStartY
+  const duration = Date.now() - touchStartTime
+
+  if (duration < 400 && Math.abs(deltaX) > 50 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5) {
+    const mainTabs = primaryNavigationItems.map((item) => item.path)
+    const currentIndex = mainTabs.indexOf(route.path)
+    if (currentIndex !== -1) {
+      if (deltaX < 0 && currentIndex < mainTabs.length - 1) {
+        void router.push(mainTabs[currentIndex + 1])
+      } else if (deltaX > 0 && currentIndex > 0) {
+        void router.push(mainTabs[currentIndex - 1])
+      }
+    }
+  }
+}
 
 function openSearch() {
   searchVisible.value = true
@@ -385,6 +468,7 @@ onUnmounted(() => {
   padding: 42px 48px 30px;
   outline: none;
   scroll-margin-top: calc(var(--shell-header-height) + 20px);
+  overflow-x: clip;
 }
 .workspace-content--home { max-width: 1440px; padding: 0 0 30px; }
 .workspace-footer {
@@ -496,9 +580,87 @@ onUnmounted(() => {
   .workspace-topbar__actions { gap: 1px; }
   .workspace-footer { flex-wrap: wrap; }
 }
+/* 顶栏微光流光进度条 */
+.workspace-progress-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 2.5px;
+  background: linear-gradient(90deg, var(--brand) 0%, #4f7964 60%, var(--accent) 100%);
+  box-shadow: 0 0 10px rgba(174, 123, 53, 0.45);
+  z-index: 10000;
+  pointer-events: none;
+  transition: width 0.22s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.28s ease;
+}
+
+/* 页面视口容器：水平裁剪超出的滑动元素，防止横向滚动条闪烁 */
+.workspace-view-container {
+  position: relative;
+  width: 100%;
+  overflow-x: clip;
+  min-height: calc(100dvh - var(--shell-header-height) - 140px);
+}
+
+.workspace-view-page {
+  width: 100%;
+}
+
+/* 动效核心：手机原生左右滑动手感（iOS UINavigationController 视差推进阻尼曲线） */
+.slide-left-enter-active,
+.slide-left-leave-active,
+.slide-right-enter-active,
+.slide-right-leave-active {
+  transition: transform 0.36s cubic-bezier(0.25, 1, 0.5, 1),
+              opacity 0.36s cubic-bezier(0.25, 1, 0.5, 1);
+  will-change: transform, opacity;
+}
+
+/* 离场组件脱离文档流置底，使得进场组件天然决定高度并无缝滑过 */
+.slide-left-leave-active,
+.slide-right-leave-active {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.slide-left-enter-active,
+.slide-right-enter-active {
+  position: relative;
+  z-index: 2;
+}
+
+/* 1. 向左滑动 (Next / 前进)：新页面从右侧 100% 滑入，旧页面向左偏移 28% 视差淡出 */
+.slide-left-enter-from {
+  transform: translateX(100%);
+  opacity: 0.85;
+}
+.slide-left-leave-to {
+  transform: translateX(-28%);
+  opacity: 0;
+}
+
+/* 2. 向右滑动 (Back / 返回)：旧页面向右侧 100% 滑出，新页面从左侧 -28% 视差滑入 */
+.slide-right-enter-from {
+  transform: translateX(-28%);
+  opacity: 0;
+}
+.slide-right-leave-to {
+  transform: translateX(100%);
+  opacity: 0.85;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .workspace-primary-nav__item, .workspace-primary-nav__item::after,
   .workspace-search-trigger, .workspace-assistant-trigger, .workspace-account__menu,
   .workspace-more-trigger, .workspace-bottom-nav__item { transition: none; }
+  .slide-left-enter-active, .slide-left-leave-active,
+  .slide-right-enter-active, .slide-right-leave-active { transition: opacity 0.1s ease; }
+  .slide-left-enter-from, .slide-left-leave-to,
+  .slide-right-enter-from, .slide-right-leave-to { opacity: 0; transform: none; }
+  .workspace-progress-bar { transition: none; }
 }
 </style>

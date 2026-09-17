@@ -94,7 +94,7 @@ public class QuestionSetServiceImpl extends ServiceImpl<com.aiassistant.learning
                         .like(StringUtils.hasText(normalizedKeyword), QuestionSet::getTitle, normalizedKeyword)
                         .eq(StringUtils.hasText(normalizedStatus), QuestionSet::getStatus, normalizedStatus)
                         .eq(difficultyLevel != null, QuestionSet::getDifficultyLevel, difficultyLevel)
-                        .orderByDesc(QuestionSet::getCreatedAt)
+                        .orderByDesc(QuestionSet::getCreatedAt, QuestionSet::getId)
         );
 
         List<QuestionSetPageVO> records = page.getRecords().stream()
@@ -331,9 +331,12 @@ public class QuestionSetServiceImpl extends ServiceImpl<com.aiassistant.learning
         QuestionSet questionSet = this.getOne(new LambdaQueryWrapper<QuestionSet>()
                 .eq(QuestionSet::getId, questionSetId)
                 .eq(QuestionSet::getUserId, userId)
-                .last("limit 1"));
+                .last("limit 1 for update"));
         if (questionSet == null) {
             throw new BusinessException(404, "题集不存在");
+        }
+        if ("GENERATING".equals(questionSet.getStatus())) {
+            throw new BusinessException("题集正在生成，请完成后再删除");
         }
 
         List<Long> sessionIds = practiceSessionMapper.selectList(new LambdaQueryWrapper<PracticeSession>()

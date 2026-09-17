@@ -175,6 +175,10 @@ public class PracticeServiceImpl implements PracticeService {
     @Transactional(rollbackFor = Exception.class)
     public PracticeDetailVO startPractice(Long userId, PracticeStartRequest request) {
         QuestionSet questionSet = getOwnedQuestionSet(userId, request.getQuestionSetId());
+        if (!"PUBLISHED".equals(questionSet.getStatus())) {
+            throw new BusinessException("GENERATING".equals(questionSet.getStatus())
+                    ? "题集正在生成，请完成后再开始练习" : "当前题集不可练习，请先完成题集生成");
+        }
         List<QuestionItem> questions = listQuestionItems(questionSet.getId());
         if (questions.isEmpty()) {
             throw new BusinessException("当前题集没有题目，无法开始练习");

@@ -64,7 +64,7 @@ public class QuestionSet extends BaseLogicEntity {
     private Integer difficultyLevel;
 
     /**
-     * 题集状态，例如 DRAFT、READY、FAILED 等。
+     * 题集状态：GENERATING、PUBLISHED、FAILED、CANCELLED 或 DRAFT。
      */
     private String status;
 }

@@ -1,8 +1,20 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useUserStore } from '@/stores/user'
+import { usePageProgress } from '@/composables/usePageProgress'
 
 const router = createRouter({
   history: createWebHistory(),
+  scrollBehavior(to, from, savedPosition) {
+    if (savedPosition) {
+      return savedPosition
+    }
+    if (to.hash) {
+      return { el: to.hash, behavior: 'smooth' }
+    }
+    if (to.path !== from.path) {
+      return { top: 0, left: 0 }
+    }
+  },
   routes: [
     { path: '/login', name: 'login', component: () => import('@/views/LoginView.vue') },
     {
@@ -39,8 +51,11 @@ const isDynamicImportError = (error: unknown) => {
   ].some((text) => message.includes(text))
 }
 
-router.beforeEach((to) => {
+router.beforeEach((to, from) => {
   const userStore = useUserStore()
+  if (to.path !== from.path) {
+    usePageProgress().start()
+  }
   if (to.path !== '/login' && !userStore.token) {
     return '/login'
   }
@@ -51,10 +66,12 @@ router.beforeEach((to) => {
 })
 
 router.afterEach(() => {
+  usePageProgress().finish()
   sessionStorage.removeItem(DYNAMIC_IMPORT_RELOAD_KEY)
 })
 
 router.onError((error, to) => {
+  usePageProgress().finish()
   if (!isDynamicImportError(error)) {
     return
   }

@@ -14,10 +14,13 @@ import com.aiassistant.learning.dto.ai.EmbeddingTaskRequest;
 import com.aiassistant.learning.entity.AiTask;
 import com.aiassistant.learning.entity.StudyMaterial;
 import com.aiassistant.learning.mapper.AiTaskMapper;
+import com.aiassistant.learning.mapper.AiGenerationRecordMapper;
 import com.aiassistant.learning.mapper.PracticeSessionMapper;
 import com.aiassistant.learning.mapper.QuestionSetMapper;
 import com.aiassistant.learning.mapper.StudyMaterialMapper;
 import com.aiassistant.learning.service.AiTaskService;
+import com.aiassistant.learning.service.AiQuestionService;
+import com.aiassistant.learning.service.AiSummaryService;
 import com.aiassistant.learning.service.cache.AiTaskRedisCacheService;
 import com.aiassistant.learning.vo.ai.AiTaskDetailVO;
 import com.baomidou.mybatisplus.core.MybatisConfiguration;
@@ -50,6 +53,9 @@ class AiTaskServiceImplTest {
             mock(StudyMaterialMapper.class),
             mock(PracticeSessionMapper.class),
             mock(QuestionSetMapper.class),
+            mock(AiQuestionService.class),
+            mock(AiGenerationRecordMapper.class),
+            mock(AiSummaryService.class),
             List.of(),
             objectMapper,
             cache,

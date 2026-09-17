@@ -75,7 +75,7 @@ public class AiGenerationRecord implements Serializable {
     private String outputText;
 
     /**
-     * 生成状态，例如 SUCCESS、FAILED。
+     * 生成状态：GENERATING、SUCCESS、FAILED 或 CANCELLED。
      */
     private String status;
 

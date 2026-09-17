@@ -15,7 +15,7 @@
     <div class="workspace-panel">
       <div class="summary-library-heading">
         <div><h2>全部总结 <span>{{ summaryHistory.length }}</span></h2></div>
-        <el-button text :loading="historyLoading" @click="loadSummaryHistory">刷新</el-button>
+        <el-button text :loading="historyLoading" @click="loadSummaryHistory()">刷新</el-button>
       </div>
       <div class="workspace-toolbar">
         <div class="workspace-filter-bar workspace-filter-bar--summary">
@@ -54,16 +54,22 @@
             <div class="summary-note-card__content">
               <div class="summary-note-card__top">
                 <span class="summary-type">{{ formatSummaryType(item.summaryType) }}</span>
+                <span class="summary-status" :class="{ 'summary-status--generating': getSummaryStatus(item) === 'GENERATING', 'summary-status--failed': getSummaryStatus(item) === 'FAILED', 'summary-status--cancelled': getSummaryStatus(item) === 'CANCELLED' }" role="status">{{ formatSummaryStatus(item) }}</span>
                 <span class="summary-note-card__date">{{ formatDateTime(item.createdAt).slice(0, 10) }}</span>
               </div>
-              <button type="button" class="summary-note-card__title" @click="openSummaryDialog(item)">{{ item.materialTitle || '未命名资料' }}</button>
-              <p class="summary-note-card__excerpt">{{ buildExcerpt(item.summaryText, 160) }}</p>
+              <button type="button" class="summary-note-card__title" :disabled="!isSummaryReady(item)" @click="openSummaryDialog(item)">{{ item.materialTitle || '未命名资料' }}</button>
+              <p v-if="getSummaryStatus(item) === 'GENERATING'" class="summary-note-card__excerpt">正在整理资料，完成后即可阅读总结。</p>
+              <p v-else-if="getSummaryStatus(item) === 'FAILED'" class="summary-note-card__excerpt">生成未完成，可到任务中心查看原因并重试。</p>
+              <p v-else-if="getSummaryStatus(item) === 'CANCELLED'" class="summary-note-card__excerpt">本次生成已取消，可以重新生成总结。</p>
+              <p v-else class="summary-note-card__excerpt">{{ buildExcerpt(item.summaryText, 160) }}</p>
             </div>
             <div class="summary-note-card__actions">
-              <el-button link type="primary" @click="openSummaryDialog(item)">阅读总结 <span aria-hidden="true">→</span></el-button>
+              <el-button v-if="isSummaryReady(item)" link type="primary" @click="openSummaryDialog(item)">阅读总结 <span aria-hidden="true">→</span></el-button>
+              <el-button v-else-if="getSummaryStatus(item) === 'GENERATING'" link type="primary" loading disabled>生成中</el-button>
+              <el-button v-else link type="primary" @click="router.push('/ai-tasks')">查看任务</el-button>
               <div>
                 <el-button link @click="previewMaterial(item)">原始资料</el-button>
-                <el-button link :disabled="generating" @click="quickGenerateForMaterial(item.materialId)">重新生成</el-button>
+                <el-button link :disabled="generating || getSummaryStatus(item) === 'GENERATING'" @click="quickGenerateForMaterial(item.materialId)">重新生成</el-button>
               </div>
             </div>
           </article>
@@ -160,7 +166,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { getAllSummaryHistoryApi, submitSummaryTaskApi, type AiTaskDetail } from '@/api/modules/ai'
@@ -193,6 +199,9 @@ const detailLoading = ref(false)
 const generating = ref(false)
 const historyLoading = ref(false)
 const currentTask = ref<AiTaskDetail | null>(null)
+let viewDisposed = false
+let historyRequestId = 0
+let historyRefreshTimer: number | undefined
 const pagination = reactive({
   current: 1,
   size: 10
@@ -237,17 +246,11 @@ const preferredAssistantMaterialId = computed(() => {
 })
 
 const taskStatusText = computed(() => {
-  if (!currentTask.value) {
+  if (!generating.value || !currentTask.value || isAiTaskTerminal(currentTask.value.status)) {
     return ''
   }
   const materialLabel = materials.value.find((item) => item.id === currentTask.value?.bizId)?.title
-  if (generating.value) {
-    return `正在整理总结${materialLabel ? `：${materialLabel}` : ''}，完成后将自动打开。`
-  }
-  if (!isAiTaskTerminal(currentTask.value.status)) {
-    return '总结仍在生成中，可以稍后刷新，或到任务中心查看进度。'
-  }
-  return ''
+  return `正在整理总结${materialLabel ? `：${materialLabel}` : ''}，完成后将自动打开。`
 })
 
 watch([filterMaterialId, filterSummaryType, keyword], () => {
@@ -271,6 +274,13 @@ const formatSummaryType = (value?: string) => {
     default:
       return '标准总结'
   }
+}
+
+const getSummaryStatus = (item: any) => String(item?.status || (item?.summaryText ? 'SUCCESS' : '')).toUpperCase()
+const isSummaryReady = (item: any) => getSummaryStatus(item) === 'SUCCESS'
+const formatSummaryStatus = (item: any) => {
+  const labels: Record<string, string> = { GENERATING: '生成中', SUCCESS: '已生成', FAILED: '生成失败', CANCELLED: '已取消' }
+  return labels[getSummaryStatus(item)] || '暂不可阅读'
 }
 
 const formatDateTime = (value?: string) => {
@@ -332,16 +342,35 @@ const loadMaterials = async () => {
   }
 }
 
-const loadSummaryHistory = async () => {
-  historyLoading.value = true
+const stopHistoryRefresh = () => {
+  window.clearTimeout(historyRefreshTimer)
+  historyRefreshTimer = undefined
+}
+
+const scheduleHistoryRefresh = () => {
+  stopHistoryRefresh()
+  if (viewDisposed || !summaryHistory.value.some((item) => getSummaryStatus(item) === 'GENERATING')) return
+  historyRefreshTimer = window.setTimeout(() => void loadSummaryHistory(true), 3000)
+}
+
+const loadSummaryHistory = async (background = false) => {
+  if (viewDisposed) return
+  stopHistoryRefresh()
+  const requestId = ++historyRequestId
+  if (!background) historyLoading.value = true
   try {
     const res = await getAllSummaryHistoryApi()
+    if (viewDisposed || requestId !== historyRequestId) return
     summaryHistory.value = res.data.data || []
   } catch (error: any) {
-    summaryHistory.value = []
-    ElMessage.error(error.message || '加载总结列表失败')
+    if (!viewDisposed && requestId === historyRequestId && !background) {
+      ElMessage.error(error.message || '加载总结列表失败')
+    }
   } finally {
-    historyLoading.value = false
+    if (!viewDisposed && requestId === historyRequestId) {
+      historyLoading.value = false
+      scheduleHistoryRefresh()
+    }
   }
 }
 
@@ -362,9 +391,11 @@ const resetFilters = () => {
   filterMaterialId.value = undefined
   filterSummaryType.value = ''
   keyword.value = ''
+  pagination.current = 1
 }
 
 async function syncAssistantMaterialContext(targetMaterialId?: number) {
+  if (viewDisposed) return
   const currentMaterialId = Number(route.query[ASSISTANT_MATERIAL_QUERY_KEY] || 0) || undefined
   if (currentMaterialId === targetMaterialId) {
     return
@@ -389,6 +420,7 @@ const openGenerateDialog = () => {
 }
 
 const openSummaryDialog = (item: any) => {
+  if (!isSummaryReady(item)) return
   activeSummary.value = item
   summaryDialogVisible.value = true
   void syncAssistantMaterialContext(item?.materialId)
@@ -396,6 +428,7 @@ const openSummaryDialog = (item: any) => {
 
 const previewMaterial = async (item: any) => {
   await loadMaterialDetail(item.materialId)
+  if (viewDisposed) return
   previewDialogVisible.value = true
   void syncAssistantMaterialContext(item?.materialId)
 }
@@ -406,34 +439,41 @@ const quickGenerateForMaterial = (id: number) => {
 }
 
 const generateSummary = async () => {
+  if (generating.value) return
   if (!materialId.value) {
     ElMessage.warning('请先选择资料')
     return
   }
 
   generating.value = true
+  currentTask.value = null
+  const generatingMaterialId = materialId.value
   try {
-    const submitRes = await submitSummaryTaskApi(materialId.value, {
+    const submitRes = await submitSummaryTaskApi(generatingMaterialId, {
       summaryType: summaryType.value,
       saveAsNote: true
     })
     const submittedTask = submitRes.data.data as AiTaskDetail
+    if (viewDisposed) return
     currentTask.value = submittedTask
     const taskId = submittedTask.id
     generateDialogVisible.value = false
+    resetFilters()
     ElMessage.success('AI 总结任务已提交')
+    await loadSummaryHistory()
 
-    const finishedTask = await waitForAiTask(taskId)
-    currentTask.value = finishedTask
-    if (!isAiTaskTerminal(finishedTask.status)) {
-      ElMessage.info('总结任务仍在处理中，可稍后刷新列表查看结果')
-      return
+    let finishedTask = submittedTask
+    while (!viewDisposed && !isAiTaskTerminal(finishedTask.status)) {
+      finishedTask = await waitForAiTask(taskId, 30000)
     }
+    if (viewDisposed) return
+    currentTask.value = finishedTask
+    await loadSummaryHistory(true)
+    if (viewDisposed) return
     if (!isAiTaskSuccess(finishedTask.status)) {
       throw new Error(finishedTask.errorMessage || 'AI 总结任务执行失败')
     }
 
-    await loadSummaryHistory()
     const taskResult = parseAiTaskResult<any>(finishedTask)
     const created =
       (taskResult?.recordId
@@ -442,12 +482,17 @@ const generateSummary = async () => {
       taskResult
 
     if (created) {
-      activeSummary.value = created
-      summaryDialogVisible.value = true
+      openSummaryDialog({
+        ...created,
+        materialTitle: created.materialTitle || materials.value.find((item) => item.id === generatingMaterialId)?.title
+      })
     }
     ElMessage.success('AI 总结生成完成')
   } catch (error: any) {
-    ElMessage.error(error.message || 'AI 总结任务失败')
+    if (!viewDisposed) {
+      ElMessage.error(error.message || 'AI 总结任务失败')
+      if (currentTask.value && !isAiTaskTerminal(currentTask.value.status)) await loadSummaryHistory(true)
+    }
   } finally {
     generating.value = false
   }
@@ -455,11 +500,17 @@ const generateSummary = async () => {
 
 onMounted(async () => {
   await Promise.all([loadMaterials(), loadSummaryHistory()])
+  if (viewDisposed) return
   const queryId = Number(route.query.materialId)
   if (queryId) {
     filterMaterialId.value = queryId
     if (materials.value.some((item) => item.id === queryId)) materialId.value = queryId
   }
+})
+
+onUnmounted(() => {
+  viewDisposed = true
+  stopHistoryRefresh()
 })
 </script>
 
@@ -487,9 +538,15 @@ onMounted(async () => {
 .summary-note-card__content { min-width: 0; }
 .summary-note-card__top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; }
 .summary-type { display: inline-flex; color: var(--brand); font-size: 12px; font-weight: 500; letter-spacing: .04em; }
+.summary-status { display: inline-flex; align-items: center; gap: 6px; color: var(--brand); font-size: 12px; }
+.summary-status::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+.summary-status--generating { color: #896627; }
+.summary-status--failed { color: var(--el-color-danger); }
+.summary-status--cancelled { color: var(--muted); }
 .summary-note-card__date { font-size: 12px; color: var(--muted); }
 .summary-note-card__title { width: fit-content; max-width: 100%; min-height: 44px; margin: 9px 0 0; padding: 4px 0; border: 0; background: none; color: var(--text); font: inherit; font-size: 20px; font-weight: 600; line-height: 1.6; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
-.summary-note-card__title:hover { color: var(--brand); }
+.summary-note-card__title:hover:not(:disabled) { color: var(--brand); }
+.summary-note-card__title:disabled { cursor: default; }
 .summary-note-card__title:focus-visible { outline: 2px solid var(--brand); outline-offset: 5px; border-radius: 3px; }
 .summary-note-card__excerpt { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; margin: 8px 0 0; overflow: hidden; color: var(--muted); font-size: 15px; line-height: 1.85; overflow-wrap: anywhere; }
 .summary-note-card__actions { display: flex; flex-direction: column; align-items: flex-end; justify-content: center; gap: 3px; align-self: center; }

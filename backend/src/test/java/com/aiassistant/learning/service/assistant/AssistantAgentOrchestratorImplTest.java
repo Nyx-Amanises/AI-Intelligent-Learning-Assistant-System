@@ -624,7 +624,7 @@ class AssistantAgentOrchestratorImplTest {
                 orchestrator.prepare(1L, new AssistantSession(), userMessage, "gpt-test");
 
         assertFalse(preparedResult.useModel());
-        assertTrue(preparedResult.fallbackReply().contains("我先需要知道你说的是哪份资料"));
+        assertTrue(preparedResult.fallbackReply().contains("请先告诉我资料标题"));
         assertEquals(1, preparedResult.toolExecutions().size());
         verifyNoInteractions(structuredIntentExtractor);
     }

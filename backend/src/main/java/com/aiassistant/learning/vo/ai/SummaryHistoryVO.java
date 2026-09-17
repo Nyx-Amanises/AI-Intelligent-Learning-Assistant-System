@@ -44,6 +44,16 @@ public class SummaryHistoryVO {
     private String summaryType;
 
     /**
+     * 总结状态：GENERATING、SUCCESS、FAILED 或 CANCELLED。
+     */
+    private String status;
+
+    /**
+     * 生成失败时的错误信息。
+     */
+    private String errorMessage;
+
+    /**
      * 摘要正文。
      */
     private String summaryText;

@@ -118,7 +118,7 @@
                 link
                 type="danger"
                 :loading="deletingTaskId === item.id"
-                @click="removeTask(item.id, false, item.status)"
+                @click="removeTask(item.id, false, item.status, item.taskType)"
               >
                 删除记录
               </el-button>
@@ -205,7 +205,7 @@
             type="danger"
             plain
             :loading="deletingTaskId === taskDetail.id"
-            @click="removeTask(taskDetail.id, true, taskDetail.status)"
+            @click="removeTask(taskDetail.id, true, taskDetail.status, taskDetail.taskType)"
           >
             删除记录
           </el-button>
@@ -516,10 +516,14 @@ const dispatchTask = async (taskId: number, reloadDetail = false) => {
   }
 }
 
-const removeTask = async (taskId: number, closeDetail = false, status?: string) => {
+const removeTask = async (taskId: number, closeDetail = false, status?: string, taskType?: string) => {
   const normalizedStatus = String(status || '').toUpperCase()
+  const generationLabel = taskType === 'QUESTION_GENERATE' ? '题集' : taskType === 'SUMMARY' ? '总结' : ''
+  const cancelsGeneration = generationLabel && ['PENDING', 'RUNNING'].includes(normalizedStatus)
   const confirmMessage =
-    normalizedStatus === 'RUNNING'
+    cancelsGeneration
+      ? `删除这条任务记录后，仍在生成中的${generationLabel}将标记为“已取消”，后续返回的内容不再保存。确定继续吗？`
+      : normalizedStatus === 'RUNNING'
       ? '删除后只会移除这条任务记录，不会中断已经发出的 AI 请求，确定继续吗？'
       : '删除后将只移除任务记录，不会删除已经生成的业务结果，确定继续吗？'
   try {

@@ -14,6 +14,11 @@ public class QuestionGenerateTaskPayload {
     private Long materialId;
 
     /**
+     * 提交任务时创建的题集 ID；旧任务允许为空。
+     */
+    private Long questionSetId;
+
+    /**
      * 模型名称。
      */
     private String modelName;
@@ -47,4 +52,16 @@ public class QuestionGenerateTaskPayload {
      * 难度等级。
      */
     private Integer difficultyLevel;
+
+    public QuestionGenerateRequest toRequest() {
+        QuestionGenerateRequest request = new QuestionGenerateRequest();
+        request.setModelName(modelName);
+        request.setTitle(title);
+        request.setQuestionCount(questionCount);
+        request.setSingleCount(singleCount);
+        request.setJudgeCount(judgeCount);
+        request.setShortAnswerCount(shortAnswerCount);
+        request.setDifficultyLevel(difficultyLevel);
+        return request;
+    }
 }

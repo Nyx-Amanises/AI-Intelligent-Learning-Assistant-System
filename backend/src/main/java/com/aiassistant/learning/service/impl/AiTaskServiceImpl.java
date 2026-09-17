@@ -11,14 +11,18 @@ import com.aiassistant.learning.dto.ai.QuestionGenerateTaskPayload;
 import com.aiassistant.learning.dto.ai.SummaryGenerateRequest;
 import com.aiassistant.learning.dto.ai.SummaryTaskPayload;
 import com.aiassistant.learning.entity.AiTask;
+import com.aiassistant.learning.entity.AiGenerationRecord;
 import com.aiassistant.learning.entity.PracticeSession;
 import com.aiassistant.learning.entity.QuestionSet;
 import com.aiassistant.learning.entity.StudyMaterial;
 import com.aiassistant.learning.mapper.AiTaskMapper;
+import com.aiassistant.learning.mapper.AiGenerationRecordMapper;
 import com.aiassistant.learning.mapper.PracticeSessionMapper;
 import com.aiassistant.learning.mapper.QuestionSetMapper;
 import com.aiassistant.learning.mapper.StudyMaterialMapper;
 import com.aiassistant.learning.service.AiTaskService;
+import com.aiassistant.learning.service.AiQuestionService;
+import com.aiassistant.learning.service.AiSummaryService;
 import com.aiassistant.learning.service.cache.AiTaskRedisCacheService;
 import com.aiassistant.learning.service.task.AiTaskProcessor;
 import com.aiassistant.learning.vo.ai.AiTaskDetailVO;
@@ -63,6 +67,9 @@ public class AiTaskServiceImpl implements AiTaskService {
     private final StudyMaterialMapper studyMaterialMapper;
     private final PracticeSessionMapper practiceSessionMapper;
     private final QuestionSetMapper questionSetMapper;
+    private final AiQuestionService aiQuestionService;
+    private final AiGenerationRecordMapper aiGenerationRecordMapper;
+    private final AiSummaryService aiSummaryService;
     /** Spring 会自动注入所有 AiTaskProcessor 实现，用来按任务类型分发。 */
     private final List<AiTaskProcessor> taskProcessors;
     /** 将任务参数对象转换成 JSON 保存。 */
@@ -76,6 +83,9 @@ public class AiTaskServiceImpl implements AiTaskService {
             StudyMaterialMapper studyMaterialMapper,
             PracticeSessionMapper practiceSessionMapper,
             QuestionSetMapper questionSetMapper,
+            AiQuestionService aiQuestionService,
+            AiGenerationRecordMapper aiGenerationRecordMapper,
+            AiSummaryService aiSummaryService,
             List<AiTaskProcessor> taskProcessors,
             ObjectMapper objectMapper,
             AiTaskRedisCacheService aiTaskRedisCacheService,
@@ -85,6 +95,9 @@ public class AiTaskServiceImpl implements AiTaskService {
         this.studyMaterialMapper = studyMaterialMapper;
         this.practiceSessionMapper = practiceSessionMapper;
         this.questionSetMapper = questionSetMapper;
+        this.aiQuestionService = aiQuestionService;
+        this.aiGenerationRecordMapper = aiGenerationRecordMapper;
+        this.aiSummaryService = aiSummaryService;
         this.taskProcessors = taskProcessors;
         this.objectMapper = objectMapper;
         this.aiTaskRedisCacheService = aiTaskRedisCacheService;
@@ -97,7 +110,7 @@ public class AiTaskServiceImpl implements AiTaskService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public AiTaskDetailVO createTask(Long userId, AiTaskCreateRequest request) {
-        return cacheTaskDetail(createTaskRecord(
+        AiTask task = createTaskRecord(
                 userId,
                 request.getTaskType(),
                 request.getBizType(),
@@ -105,7 +118,17 @@ public class AiTaskServiceImpl implements AiTaskService {
                 request.getPriority(),
                 request.getModelName(),
                 request.getPayloadJson()
-        ));
+        );
+        if ("QUESTION_GENERATE".equals(task.getTaskType())
+                && readQuestionGenerationPayload(task).getQuestionSetId() != null) {
+            throw new BusinessException("新出题任务不能关联已有题集，请重新发起生成");
+        }
+        if ("SUMMARY".equals(task.getTaskType()) && readSummaryPayload(task).getRecordId() != null) {
+            throw new BusinessException("新总结任务不能关联已有总结，请重新发起生成");
+        }
+        prepareQuestionGenerationTask(task, false);
+        prepareSummaryGenerationTask(task, false);
+        return cacheTaskDetail(task);
     }
 
     /**
@@ -114,10 +137,12 @@ public class AiTaskServiceImpl implements AiTaskService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public AiTaskDetailVO submitSummaryTask(Long userId, Long materialId, SummaryGenerateRequest request) {
+        AiGenerationRecord record = aiSummaryService.createGeneratingSummaryRecord(userId, materialId, request);
         SummaryTaskPayload payload = new SummaryTaskPayload();
         payload.setMaterialId(materialId);
-        payload.setModelName(request.getModelName());
-        payload.setSummaryType(request.getSummaryType());
+        payload.setRecordId(record.getId());
+        payload.setModelName(record.getModelName());
+        payload.setSummaryType(record.getSummaryType());
         payload.setSaveAsNote(request.getSaveAsNote());
         payload.setTemperature(request.getTemperature());
 
@@ -127,7 +152,7 @@ public class AiTaskServiceImpl implements AiTaskService {
                 "MATERIAL",
                 materialId,
                 5,
-                request.getModelName(),
+                record.getModelName(),
                 toJson(payload)
         );
         scheduleExecuteAfterCommit(task.getId());
@@ -140,8 +165,10 @@ public class AiTaskServiceImpl implements AiTaskService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public AiTaskDetailVO submitQuestionGenerateTask(Long userId, Long materialId, QuestionGenerateRequest request) {
+        QuestionSet questionSet = aiQuestionService.createGeneratingQuestionSet(userId, materialId, request);
         QuestionGenerateTaskPayload payload = new QuestionGenerateTaskPayload();
         payload.setMaterialId(materialId);
+        payload.setQuestionSetId(questionSet.getId());
         payload.setModelName(request.getModelName());
         payload.setTitle(request.getTitle());
         payload.setQuestionCount(request.getQuestionCount());
@@ -281,10 +308,12 @@ public class AiTaskServiceImpl implements AiTaskService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public AiTaskDetailVO dispatchTask(Long userId, Long taskId) {
-        AiTask task = getOwnedTask(userId, taskId);
+        AiTask task = getOwnedTaskForUpdate(userId, taskId);
         if (!STATUS_PENDING.equals(task.getStatus())) {
             throw new BusinessException("只有等待中的任务才能重新派发");
         }
+        prepareQuestionGenerationTask(task, false);
+        prepareSummaryGenerationTask(task, false);
         scheduleExecuteAfterCommit(task.getId());
         return cacheTaskDetail(task);
     }
@@ -295,11 +324,13 @@ public class AiTaskServiceImpl implements AiTaskService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public AiTaskDetailVO retryTask(Long userId, Long taskId) {
-        AiTask task = getOwnedTask(userId, taskId);
+        AiTask task = getOwnedTaskForUpdate(userId, taskId);
         if (!STATUS_FAILED.equals(task.getStatus())) {
             throw new BusinessException("只有失败任务才能重试");
         }
 
+        prepareQuestionGenerationTask(task, true);
+        prepareSummaryGenerationTask(task, true);
         task.setStatus(STATUS_PENDING);
         task.setProgressRate(0);
         task.setErrorMessage(null);
@@ -328,9 +359,14 @@ public class AiTaskServiceImpl implements AiTaskService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteTask(Long userId, Long taskId) {
-        AiTask task = getOwnedTask(userId, taskId);
+        AiTask task = getOwnedTaskForUpdate(userId, taskId);
+        if ("QUESTION_GENERATE".equals(task.getTaskType())) {
+            // 删除任务同时取消生成，晚到的 AI 结果会被题集状态条件挡住。
+            markGeneratingQuestionSet(task, STATUS_FAILED.equals(task.getStatus()) ? "FAILED" : "CANCELLED");
+        }
+        markGeneratingSummary(task, STATUS_FAILED.equals(task.getStatus()) ? "FAILED" : "CANCELLED", task.getErrorMessage());
         aiTaskMapper.deleteById(task.getId());
-        aiTaskRedisCacheService.evictTaskDetail(task.getUserId(), task.getId());
+        evictTaskDetailAfterCommit(task);
     }
 
     /**
@@ -350,14 +386,18 @@ public class AiTaskServiceImpl implements AiTaskService {
         task.setProgressRate(10);
         task.setStartedAt(LocalDateTime.now());
         task.setErrorMessage(null);
-        aiTaskMapper.update(null, new LambdaUpdateWrapper<AiTask>()
+        int claimed = aiTaskMapper.update(null, new LambdaUpdateWrapper<AiTask>()
                 .eq(AiTask::getId, task.getId())
+                .eq(AiTask::getStatus, STATUS_PENDING)
                 .set(AiTask::getStatus, task.getStatus())
                 .set(AiTask::getProgressRate, task.getProgressRate())
                 .set(AiTask::getStartedAt, task.getStartedAt())
                 .set(AiTask::getErrorMessage, null)
                 .set(AiTask::getUpdatedAt, LocalDateTime.now()));
-        cacheTaskDetail(task);
+        if (claimed == 0) {
+            return;
+        }
+        aiTaskRedisCacheService.evictTaskDetail(task.getUserId(), task.getId());
 
         UserContext.setCurrentUserId(task.getUserId());
         try {
@@ -374,20 +414,16 @@ public class AiTaskServiceImpl implements AiTaskService {
             task.setErrorMessage(null);
             aiTaskMapper.update(null, new LambdaUpdateWrapper<AiTask>()
                     .eq(AiTask::getId, task.getId())
+                    .eq(AiTask::getStatus, STATUS_RUNNING)
                     .set(AiTask::getStatus, task.getStatus())
                     .set(AiTask::getProgressRate, task.getProgressRate())
                     .set(AiTask::getResultJson, task.getResultJson())
                     .set(AiTask::getErrorMessage, null)
                     .set(AiTask::getFinishedAt, task.getFinishedAt())
                     .set(AiTask::getUpdatedAt, LocalDateTime.now()));
-            cacheTaskDetail(task);
+            aiTaskRedisCacheService.evictTaskDetail(task.getUserId(), task.getId());
         } catch (Exception exception) {
-            task.setStatus(STATUS_FAILED);
-            task.setProgressRate(100);
-            task.setErrorMessage(truncateErrorMessage(exception.getMessage()));
-            task.setFinishedAt(LocalDateTime.now());
-            aiTaskMapper.updateById(task);
-            cacheTaskDetail(task);
+            failTask(task, exception);
         } finally {
             UserContext.clear();
         }
@@ -397,14 +433,205 @@ public class AiTaskServiceImpl implements AiTaskService {
      * 查询任务时同时校验用户归属，防止用户访问别人的任务。
      */
     private AiTask getOwnedTask(Long userId, Long taskId) {
+        return getOwnedTask(userId, taskId, false);
+    }
+
+    private AiTask getOwnedTaskForUpdate(Long userId, Long taskId) {
+        return getOwnedTask(userId, taskId, true);
+    }
+
+    private AiTask getOwnedTask(Long userId, Long taskId, boolean lock) {
         AiTask task = aiTaskMapper.selectOne(new LambdaQueryWrapper<AiTask>()
                 .eq(AiTask::getId, taskId)
                 .eq(AiTask::getUserId, userId)
-                .last("limit 1"));
+                .last(lock ? "limit 1 for update" : "limit 1"));
         if (task == null) {
             throw new BusinessException(404, "任务不存在");
         }
         return task;
+    }
+
+    private void prepareQuestionGenerationTask(AiTask task, boolean retry) {
+        if (!"QUESTION_GENERATE".equals(task.getTaskType())) {
+            return;
+        }
+        QuestionGenerateTaskPayload payload = readQuestionGenerationPayload(task);
+        if (payload.getQuestionSetId() == null) {
+            QuestionSet questionSet = aiQuestionService.createGeneratingQuestionSet(
+                    task.getUserId(), payload.getMaterialId(), payload.toRequest());
+            payload.setQuestionSetId(questionSet.getId());
+            task.setPayloadJson(toJson(payload));
+            aiTaskMapper.update(null, new LambdaUpdateWrapper<AiTask>()
+                    .eq(AiTask::getId, task.getId())
+                    .set(AiTask::getPayloadJson, task.getPayloadJson()));
+            return;
+        }
+
+        QuestionSet questionSet = questionSetMapper.selectOne(new LambdaQueryWrapper<QuestionSet>()
+                .eq(QuestionSet::getId, payload.getQuestionSetId())
+                .eq(QuestionSet::getUserId, task.getUserId())
+                .eq(QuestionSet::getMaterialId, payload.getMaterialId())
+                .last("limit 1 for update"));
+        if (questionSet == null) {
+            throw new BusinessException("关联题集已删除，请重新生成题集");
+        }
+        if ("PUBLISHED".equals(questionSet.getStatus()) || "GENERATING".equals(questionSet.getStatus())) {
+            return;
+        }
+        if (!retry || !"FAILED".equals(questionSet.getStatus())) {
+            throw new BusinessException("当前题集状态不支持生成");
+        }
+        questionSetMapper.update(null, new LambdaUpdateWrapper<QuestionSet>()
+                .eq(QuestionSet::getId, questionSet.getId())
+                .eq(QuestionSet::getUserId, task.getUserId())
+                .eq(QuestionSet::getStatus, "FAILED")
+                .set(QuestionSet::getStatus, "GENERATING")
+                .set(QuestionSet::getUpdatedAt, LocalDateTime.now()));
+    }
+
+    private QuestionGenerateTaskPayload readQuestionGenerationPayload(AiTask task) {
+        QuestionGenerateTaskPayload payload;
+        try {
+            payload = objectMapper.readValue(task.getPayloadJson(), QuestionGenerateTaskPayload.class);
+        } catch (Exception exception) {
+            throw new BusinessException("题集生成参数无效");
+        }
+        if (payload == null || payload.getMaterialId() == null) {
+            throw new BusinessException("请选择出题资料");
+        }
+        return payload;
+    }
+
+    private void prepareSummaryGenerationTask(AiTask task, boolean retry) {
+        if (!"SUMMARY".equals(task.getTaskType())) {
+            return;
+        }
+        SummaryTaskPayload payload = readSummaryPayload(task);
+        if (payload.getRecordId() == null) {
+            AiGenerationRecord record = aiSummaryService.createGeneratingSummaryRecord(
+                    task.getUserId(), payload.getMaterialId(), payload.toRequest());
+            payload.setRecordId(record.getId());
+            payload.setModelName(record.getModelName());
+            payload.setSummaryType(record.getSummaryType());
+            task.setPayloadJson(toJson(payload));
+            task.setModelName(record.getModelName());
+            aiTaskMapper.update(null, new LambdaUpdateWrapper<AiTask>()
+                    .eq(AiTask::getId, task.getId())
+                    .set(AiTask::getPayloadJson, task.getPayloadJson())
+                    .set(AiTask::getModelName, task.getModelName()));
+            return;
+        }
+
+        AiGenerationRecord record = aiGenerationRecordMapper.selectOne(new LambdaQueryWrapper<AiGenerationRecord>()
+                .eq(AiGenerationRecord::getId, payload.getRecordId())
+                .eq(AiGenerationRecord::getUserId, task.getUserId())
+                .eq(AiGenerationRecord::getMaterialId, payload.getMaterialId())
+                .eq(AiGenerationRecord::getTaskType, "SUMMARY")
+                .last("limit 1 for update"));
+        if (record == null) {
+            throw new BusinessException("关联总结不存在，请重新生成总结");
+        }
+        if ("SUCCESS".equals(record.getStatus()) || "GENERATING".equals(record.getStatus())) {
+            return;
+        }
+        if (!retry || !"FAILED".equals(record.getStatus())) {
+            throw new BusinessException("当前总结状态不支持生成");
+        }
+        aiGenerationRecordMapper.update(null, new LambdaUpdateWrapper<AiGenerationRecord>()
+                .eq(AiGenerationRecord::getId, record.getId())
+                .eq(AiGenerationRecord::getUserId, task.getUserId())
+                .eq(AiGenerationRecord::getTaskType, "SUMMARY")
+                .eq(AiGenerationRecord::getStatus, "FAILED")
+                .set(AiGenerationRecord::getStatus, "GENERATING")
+                .set(AiGenerationRecord::getErrorMessage, null));
+    }
+
+    private SummaryTaskPayload readSummaryPayload(AiTask task) {
+        SummaryTaskPayload payload;
+        try {
+            payload = objectMapper.readValue(task.getPayloadJson(), SummaryTaskPayload.class);
+        } catch (Exception exception) {
+            throw new BusinessException("总结生成参数无效");
+        }
+        if (payload == null || payload.getMaterialId() == null) {
+            throw new BusinessException("请选择总结资料");
+        }
+        return payload;
+    }
+
+    private void markGeneratingSummary(AiTask task, String status, String errorMessage) {
+        if (!"SUMMARY".equals(task.getTaskType())) {
+            return;
+        }
+        SummaryTaskPayload payload;
+        try {
+            payload = readSummaryPayload(task);
+        } catch (BusinessException exception) {
+            return;
+        }
+        if (payload.getRecordId() == null) {
+            return;
+        }
+        aiGenerationRecordMapper.update(null, new LambdaUpdateWrapper<AiGenerationRecord>()
+                .eq(AiGenerationRecord::getId, payload.getRecordId())
+                .eq(AiGenerationRecord::getUserId, task.getUserId())
+                .eq(AiGenerationRecord::getMaterialId, payload.getMaterialId())
+                .eq(AiGenerationRecord::getTaskType, "SUMMARY")
+                .eq(AiGenerationRecord::getStatus, "GENERATING")
+                .set(AiGenerationRecord::getStatus, status)
+                .set(AiGenerationRecord::getErrorMessage, "FAILED".equals(status) ? truncateErrorMessage(errorMessage) : null));
+    }
+
+    private void markGeneratingQuestionSet(AiTask task, String status) {
+        if (!"QUESTION_GENERATE".equals(task.getTaskType()) || !StringUtils.hasText(task.getPayloadJson())) {
+            return;
+        }
+        Long questionSetId;
+        try {
+            questionSetId = objectMapper.readValue(task.getPayloadJson(), QuestionGenerateTaskPayload.class).getQuestionSetId();
+        } catch (Exception exception) {
+            return;
+        }
+        if (questionSetId == null) {
+            return;
+        }
+        questionSetMapper.update(null, new LambdaUpdateWrapper<QuestionSet>()
+                .eq(QuestionSet::getId, questionSetId)
+                .eq(QuestionSet::getUserId, task.getUserId())
+                .eq(QuestionSet::getStatus, "GENERATING")
+                .set(QuestionSet::getStatus, status)
+                .set(QuestionSet::getUpdatedAt, LocalDateTime.now()));
+    }
+
+    private void failTask(AiTask task, Exception exception) {
+        markGeneratingQuestionSet(task, "FAILED");
+        markGeneratingSummary(task, "FAILED", exception.getMessage());
+        task.setStatus(STATUS_FAILED);
+        task.setProgressRate(100);
+        task.setErrorMessage(truncateErrorMessage(exception.getMessage()));
+        task.setFinishedAt(LocalDateTime.now());
+        aiTaskMapper.update(null, new LambdaUpdateWrapper<AiTask>()
+                .eq(AiTask::getId, task.getId())
+                .eq(AiTask::getStatus, STATUS_RUNNING)
+                .set(AiTask::getStatus, STATUS_FAILED)
+                .set(AiTask::getProgressRate, task.getProgressRate())
+                .set(AiTask::getErrorMessage, task.getErrorMessage())
+                .set(AiTask::getFinishedAt, task.getFinishedAt())
+                .set(AiTask::getUpdatedAt, LocalDateTime.now()));
+        aiTaskRedisCacheService.evictTaskDetail(task.getUserId(), task.getId());
+    }
+
+    private void evictTaskDetailAfterCommit(AiTask task) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    aiTaskRedisCacheService.evictTaskDetail(task.getUserId(), task.getId());
+                }
+            });
+            return;
+        }
+        aiTaskRedisCacheService.evictTaskDetail(task.getUserId(), task.getId());
     }
 
     /**

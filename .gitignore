@@ -13,3 +13,5 @@ Thumbs.db
 
 # Local Java exercise draft
 /backend/src/main/java/com/aiassistant/learning/mapper/Main.java
+
+.playwright-mcp/

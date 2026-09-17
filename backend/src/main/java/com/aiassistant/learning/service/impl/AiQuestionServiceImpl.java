@@ -21,6 +21,7 @@ import com.aiassistant.learning.vo.rag.RetrievedSegmentVO;
 import com.aiassistant.learning.vo.question.QuestionItemVO;
 import com.aiassistant.learning.vo.question.QuestionSetDetailVO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -116,17 +117,69 @@ public class AiQuestionServiceImpl implements AiQuestionService {
     }
 
     /**
-     * 根据资料内容生成一套题，并写入题集表和题目表。
+     * 在提交异步任务的短事务中创建题集，使列表立即显示生成状态。
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public QuestionSetDetailVO generateQuestionSet(Long userId, Long materialId, QuestionGenerateRequest request) {
+    public QuestionSet createGeneratingQuestionSet(Long userId, Long materialId, QuestionGenerateRequest request) {
+        StudyMaterial material = getOwnedMaterial(userId, materialId);
+        QuestionPlan plan = resolveQuestionPlan(request);
+        QuestionSet questionSet = new QuestionSet();
+        questionSet.setUserId(userId);
+        questionSet.setMaterialId(materialId);
+        questionSet.setTitle(resolveQuestionSetTitle(material, request));
+        questionSet.setSourceType("AI");
+        questionSet.setQuestionCount(plan.totalCount());
+        questionSet.setTotalScore(0);
+        questionSet.setDifficultyLevel(request.getDifficultyLevel() == null ? 3 : request.getDifficultyLevel());
+        questionSet.setStatus("GENERATING");
+        questionSet.setDeleted(0);
+        questionSetMapper.insert(questionSet);
+        return questionSet;
+    }
+
+    private StudyMaterial getOwnedMaterial(Long userId, Long materialId) {
         StudyMaterial material = studyMaterialService.getOne(new LambdaQueryWrapper<StudyMaterial>()
                 .eq(StudyMaterial::getId, materialId)
                 .eq(StudyMaterial::getUserId, userId)
                 .last("limit 1"));
         if (material == null) {
             throw new BusinessException(404, "资料不存在");
+        }
+        return material;
+    }
+
+    /**
+     * 保留同步 API 和未关联题集的历史任务入口。
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public QuestionSetDetailVO generateQuestionSet(Long userId, Long materialId, QuestionGenerateRequest request) {
+        return generateQuestionSet(userId, materialId, request, null);
+    }
+
+    /**
+     * 根据资料内容生成题目，并原子保存到题集。
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public QuestionSetDetailVO generateQuestionSet(
+            Long userId, Long materialId, QuestionGenerateRequest request, Long questionSetId
+    ) {
+        StudyMaterial material = getOwnedMaterial(userId, materialId);
+        QuestionSet questionSet = null;
+        if (questionSetId != null) {
+            questionSet = questionSetMapper.selectOne(new LambdaQueryWrapper<QuestionSet>()
+                    .eq(QuestionSet::getId, questionSetId)
+                    .eq(QuestionSet::getUserId, userId)
+                    .eq(QuestionSet::getMaterialId, materialId)
+                    .last("limit 1"));
+            if (questionSet == null) {
+                throw new BusinessException(404, "题集不存在");
+            }
+            if (!"GENERATING".equals(questionSet.getStatus())) {
+                throw new BusinessException("当前题集不处于生成状态");
+            }
         }
 
         List<MaterialSegment> segments = materialSegmentMapper.selectList(new LambdaQueryWrapper<MaterialSegment>()
@@ -137,11 +190,10 @@ public class AiQuestionServiceImpl implements AiQuestionService {
         }
 
         QuestionPlan questionPlan = resolveQuestionPlan(request);
-        int questionCount = questionPlan.totalCount();
         int difficultyLevel = request.getDifficultyLevel() == null ? 3 : request.getDifficultyLevel();
         String defaultModel = aiConfigService.getResolvedConfig().defaultModel();
-            String modelName = StringUtils.hasText(request.getModelName()) ? request.getModelName() : defaultModel;
-            String promptText = buildQuestionSystemPrompt();
+        String modelName = StringUtils.hasText(request.getModelName()) ? request.getModelName() : defaultModel;
+        String promptText = buildQuestionSystemPrompt();
         List<MaterialSegment> contextSegments = resolveQuestionContextSegments(
                 userId,
                 material,
@@ -161,17 +213,34 @@ public class AiQuestionServiceImpl implements AiQuestionService {
                 modelName
         );
 
-        QuestionSet questionSet = new QuestionSet();
-        questionSet.setUserId(userId);
-        questionSet.setMaterialId(materialId);
-        questionSet.setTitle(resolveQuestionSetTitle(material, request));
-        questionSet.setSourceType("AI");
+        if (questionSet == null) {
+            questionSet = new QuestionSet();
+            questionSet.setUserId(userId);
+            questionSet.setMaterialId(materialId);
+            questionSet.setTitle(resolveQuestionSetTitle(material, request));
+            questionSet.setSourceType("AI");
+            questionSet.setDeleted(0);
+        }
         questionSet.setQuestionCount(generatedQuestions.size());
         questionSet.setTotalScore(generatedQuestions.stream().mapToInt(GeneratedQuestion::score).sum());
         questionSet.setDifficultyLevel(difficultyLevel);
         questionSet.setStatus("PUBLISHED");
-        questionSet.setDeleted(0);
-        questionSetMapper.insert(questionSet);
+        if (questionSetId == null) {
+            questionSetMapper.insert(questionSet);
+        } else {
+            int updated = questionSetMapper.update(null, new LambdaUpdateWrapper<QuestionSet>()
+                    .eq(QuestionSet::getId, questionSetId)
+                    .eq(QuestionSet::getUserId, userId)
+                    .eq(QuestionSet::getStatus, "GENERATING")
+                    .set(QuestionSet::getQuestionCount, questionSet.getQuestionCount())
+                    .set(QuestionSet::getTotalScore, questionSet.getTotalScore())
+                    .set(QuestionSet::getDifficultyLevel, difficultyLevel)
+                    .set(QuestionSet::getStatus, "PUBLISHED")
+                    .set(QuestionSet::getUpdatedAt, LocalDateTime.now()));
+            if (updated == 0) {
+                throw new BusinessException("题集状态已变化，生成结果未保存");
+            }
+        }
 
         List<QuestionItemVO> questionItems = new ArrayList<>();
         int sortNo = 1;

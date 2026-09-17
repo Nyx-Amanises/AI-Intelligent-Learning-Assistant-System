@@ -1,5 +1,11 @@
 <template>
   <section class="practice-view">
+    <nav class="practice-navigation" aria-label="练习导航">
+      <RouterLink to="/quiz" class="practice-back-link" @click="savePracticeDraft">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m10 5-7 7 7 7M3 12h18" stroke-linecap="round" stroke-linejoin="round" /></svg>
+        <span>返回题集列表</span>
+      </RouterLink>
+    </nav>
     <div class="page-header">
       <div>
         <div class="learning-eyebrow">练习与复盘</div>
@@ -8,7 +14,6 @@
       </div>
       <div class="toolbar" style="margin-bottom: 0">
         <el-button :loading="historyLoading" @click="loadHistory">刷新记录</el-button>
-        <el-button type="primary" @click="router.push('/quiz')">选择题集</el-button>
       </div>
     </div>
 
@@ -124,6 +129,7 @@
               <div class="page-card practice-submit-card">
                 <div><h3>{{ isSubmittedPractice() ? '让复习形成闭环' : '准备好提交了吗？' }}</h3><p>{{ isSubmittedPractice() ? '回顾错题，或再练一次，看看自己进步了多少。' : (unansweredCount ? '还有 ' + unansweredCount + ' 道题未作答，提交前再检查一下。' : '所有题目已作答，提交后即可查看成绩与解析。') }}</p></div>
                 <div class="practice-submit-actions">
+                  <el-button @click="returnToQuiz">返回题集列表</el-button>
                   <el-button v-if="!isSubmittedPractice()" type="primary" :loading="submitting" @click="submitPractice">提交练习</el-button>
                   <template v-else>
                     <el-button @click="router.push('/wrong-questions')">查看错题本</el-button>
@@ -203,6 +209,7 @@ const currentReviewTask = ref<AiTaskDetail | null>(null)
 const reviewTaskWaiting = ref(false)
 const renameDialogVisible = ref(false)
 let reviewTaskWaitAborted = false
+let isViewActive = true
 const page = reactive({
   current: 1,
   size: 10
@@ -372,6 +379,11 @@ const savePracticeDraft = () => {
 
   window.localStorage.setItem(getPracticeDraftKey(sessionId), JSON.stringify(answerForm.value))
   window.localStorage.setItem(PRACTICE_ACTIVE_DRAFT_KEY, String(sessionId))
+}
+
+const returnToQuiz = () => {
+  savePracticeDraft()
+  void router.push('/quiz')
 }
 
 const restorePracticeDraft = () => {
@@ -554,9 +566,11 @@ const loadHistory = async () => {
 }
 
 const loadPracticeDetail = async (sessionId: number, silent = false) => {
+  if (!isViewActive) return
   detailLoading.value = true
   try {
     const res = await getPracticeDetailApi(sessionId)
+    if (!isViewActive) return
     practiceDetail.value = res.data.data
     syncAnswerForm()
     if (isSubmittedPractice()) {
@@ -577,6 +591,7 @@ const loadPracticeDetail = async (sessionId: number, silent = false) => {
       currentReviewTask.value = null
     }
   } catch (error: any) {
+    if (!isViewActive) return
     practiceDetail.value = null
     ElMessage.error(error.message || '加载练习详情失败')
   } finally {
@@ -724,6 +739,7 @@ const submitPractice = async () => {
 
 onMounted(async () => {
   await loadHistory()
+  if (!isViewActive) return
   const sessionId = Number(route.query.sessionId)
   if (sessionId) {
     await loadPracticeDetail(sessionId)
@@ -737,12 +753,18 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  isViewActive = false
   savePracticeDraft()
   resetReviewTaskWaiting()
 })
 </script>
 
 <style scoped>
+.practice-navigation { display: flex; margin-bottom: 18px; }
+.practice-back-link { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; color: var(--muted); font-size: 14px; line-height: 1.5; text-decoration: none; }
+.practice-back-link svg { width: 18px; height: 18px; flex: none; }
+.practice-back-link:hover { color: var(--brand); }
+.practice-back-link:focus-visible { outline: 2px solid var(--brand); outline-offset: 4px; border-radius: 4px; }
 .learning-eyebrow { margin-bottom: 8px; color: var(--brand); font-size: 12px; font-weight: 650; letter-spacing: .12em; }
 .practice-tab-count { margin-left: 6px; opacity: .7; font-size: 12px; font-variant-numeric: tabular-nums; }
 .practice-status { display: inline-flex; align-items: center; width: fit-content; padding: 4px 9px; border-radius: 5px; background: var(--brand-light, #edf4ef); color: var(--brand); font-size: 12px; white-space: nowrap; }
@@ -849,6 +871,8 @@ onUnmounted(() => {
   .practice-record__main { grid-column: 1 / -1; }
 }
 @media (max-width: 600px) {
+  .practice-navigation { margin-bottom: 12px; }
+  .practice-back-link { min-height: 44px; }
   .practice-view .practice-paper-section { padding: 19px 16px; }
   .practice-paper-hero__head { padding: 20px 16px; gap: 12px; }
   .practice-paper-hero__title { font-size: 18px; }

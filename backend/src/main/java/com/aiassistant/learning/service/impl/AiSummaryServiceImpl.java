@@ -19,11 +19,13 @@ import com.aiassistant.learning.vo.ai.SummaryHistoryVO;
 import com.aiassistant.learning.vo.ai.SummaryResultVO;
 import com.aiassistant.learning.vo.rag.RetrievedSegmentVO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -78,17 +80,82 @@ public class AiSummaryServiceImpl implements AiSummaryService {
     }
 
     /**
-     * 生成某份资料的 AI 总结。
+     * 在提交任务的短事务中创建总结记录，列表可立即展示生成状态。
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public SummaryResultVO generateMaterialSummary(Long userId, Long materialId, SummaryGenerateRequest request) {
+    public AiGenerationRecord createGeneratingSummaryRecord(Long userId, Long materialId, SummaryGenerateRequest request) {
+        getOwnedMaterial(userId, materialId);
+        AiGenerationRecord record = new AiGenerationRecord();
+        record.setUserId(userId);
+        record.setMaterialId(materialId);
+        record.setTaskType("SUMMARY");
+        record.setSummaryType(resolveSummaryType(request));
+        record.setModelName(resolveModelName(userId, request));
+        record.setStatus("GENERATING");
+        record.setTokenUsed(0);
+        record.setResponseTimeMs(0);
+        aiGenerationRecordMapper.insert(record);
+        return record;
+    }
+
+    private StudyMaterial getOwnedMaterial(Long userId, Long materialId) {
         StudyMaterial material = studyMaterialService.getOne(new LambdaQueryWrapper<StudyMaterial>()
                 .eq(StudyMaterial::getId, materialId)
                 .eq(StudyMaterial::getUserId, userId)
                 .last("limit 1"));
         if (material == null) {
             throw new BusinessException(404, "资料不存在");
+        }
+        return material;
+    }
+
+    private String resolveSummaryType(SummaryGenerateRequest request) {
+        return StringUtils.hasText(request.getSummaryType())
+                ? request.getSummaryType().trim().toUpperCase(Locale.ROOT) : "STANDARD";
+    }
+
+    private String resolveModelName(Long userId, SummaryGenerateRequest request) {
+        return StringUtils.hasText(request.getModelName())
+                ? request.getModelName().trim() : aiConfigService.getResolvedConfig(userId).defaultModel();
+    }
+
+    /**
+     * 保留同步 API 和未关联记录的历史任务入口。
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public SummaryResultVO generateMaterialSummary(Long userId, Long materialId, SummaryGenerateRequest request) {
+        return generateMaterialSummary(userId, materialId, request, null);
+    }
+
+    /**
+     * 生成总结，并在同一事务中保存结果和可选笔记。
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public SummaryResultVO generateMaterialSummary(
+            Long userId, Long materialId, SummaryGenerateRequest request, Long recordId
+    ) {
+        StudyMaterial material = getOwnedMaterial(userId, materialId);
+        AiGenerationRecord record = null;
+        if (recordId != null) {
+            record = aiGenerationRecordMapper.selectOne(new LambdaQueryWrapper<AiGenerationRecord>()
+                    .eq(AiGenerationRecord::getId, recordId)
+                    .eq(AiGenerationRecord::getUserId, userId)
+                    .eq(AiGenerationRecord::getMaterialId, materialId)
+                    .eq(AiGenerationRecord::getTaskType, "SUMMARY")
+                    .last("limit 1"));
+            if (record == null) {
+                throw new BusinessException(404, "总结记录不存在");
+            }
+            if ("SUCCESS".equals(record.getStatus()) && StringUtils.hasText(record.getOutputText())) {
+                // 总结已提交、任务结果写入失败时，只恢复结果，避免重复保存笔记。
+                return toSummaryResult(userId, material, record);
+            }
+            if (!"GENERATING".equals(record.getStatus())) {
+                throw new BusinessException("当前总结不处于生成状态");
+            }
         }
 
         List<MaterialSegment> segments = materialSegmentMapper.selectList(new LambdaQueryWrapper<MaterialSegment>()
@@ -99,44 +166,60 @@ public class AiSummaryServiceImpl implements AiSummaryService {
         }
 
         // 优先用语义检索得到更相关的片段，失败时回退到全部片段。
-        String summaryType = StringUtils.hasText(request.getSummaryType()) ? request.getSummaryType() : "STANDARD";
-        String defaultModel = aiConfigService.getResolvedConfig().defaultModel();
-        String modelName = StringUtils.hasText(request.getModelName()) ? request.getModelName() : defaultModel;
+        String summaryType = resolveSummaryType(request);
+        String modelName = resolveModelName(userId, request);
         List<MaterialSegment> contextSegments = resolveSummaryContextSegments(userId, material, segments, summaryType);
         String inputText = buildInputText(material, contextSegments);
         String promptText = buildPrompt(summaryType);
 
         LocalDateTime start = LocalDateTime.now();
         String summaryText;
-        String status = "SUCCESS";
-        String errorMessage = null;
 
         try {
             summaryText = callAiOrMock(promptText, inputText, modelName, request.getTemperature());
         } catch (Exception exception) {
-            status = "FAILED";
-            errorMessage = truncateErrorMessage(exception.getMessage());
-            summaryText = null;
+            throw new BusinessException(500, "AI 总结生成失败: " + truncateErrorMessage(exception.getMessage()));
+        }
+        if (!StringUtils.hasText(summaryText)) {
+            throw new BusinessException(500, "AI 总结生成失败: 模型未返回总结内容");
         }
 
-        // 无论成功失败都写一条生成记录，便于排查 AI 调用问题。
-        AiGenerationRecord record = new AiGenerationRecord();
-        record.setUserId(userId);
-        record.setMaterialId(materialId);
-        record.setTaskType("SUMMARY");
+        if (record == null) {
+            record = new AiGenerationRecord();
+            record.setUserId(userId);
+            record.setMaterialId(materialId);
+            record.setTaskType("SUMMARY");
+        }
         record.setSummaryType(summaryType);
         record.setModelName(modelName);
         record.setPromptText(promptText);
         record.setInputText(inputText);
         record.setOutputText(summaryText);
-        record.setStatus(status);
-        record.setErrorMessage(errorMessage);
+        record.setStatus("SUCCESS");
+        record.setErrorMessage(null);
         record.setTokenUsed(estimateTokens(inputText, summaryText));
         record.setResponseTimeMs((int) Duration.between(start, LocalDateTime.now()).toMillis());
-        aiGenerationRecordMapper.insert(record);
-
-        if (!"SUCCESS".equals(status) || !StringUtils.hasText(summaryText)) {
-            throw new BusinessException(500, "AI 总结生成失败: " + errorMessage);
+        if (recordId == null) {
+            aiGenerationRecordMapper.insert(record);
+        } else {
+            int updated = aiGenerationRecordMapper.update(null, new LambdaUpdateWrapper<AiGenerationRecord>()
+                    .eq(AiGenerationRecord::getId, recordId)
+                    .eq(AiGenerationRecord::getUserId, userId)
+                    .eq(AiGenerationRecord::getMaterialId, materialId)
+                    .eq(AiGenerationRecord::getTaskType, "SUMMARY")
+                    .eq(AiGenerationRecord::getStatus, "GENERATING")
+                    .set(AiGenerationRecord::getSummaryType, summaryType)
+                    .set(AiGenerationRecord::getModelName, modelName)
+                    .set(AiGenerationRecord::getPromptText, promptText)
+                    .set(AiGenerationRecord::getInputText, inputText)
+                    .set(AiGenerationRecord::getOutputText, summaryText)
+                    .set(AiGenerationRecord::getStatus, "SUCCESS")
+                    .set(AiGenerationRecord::getErrorMessage, null)
+                    .set(AiGenerationRecord::getTokenUsed, record.getTokenUsed())
+                    .set(AiGenerationRecord::getResponseTimeMs, record.getResponseTimeMs()));
+            if (updated == 0) {
+                throw new BusinessException("总结状态已变化，生成结果未保存");
+            }
         }
 
         Long noteId = null;
@@ -154,11 +237,16 @@ public class AiSummaryServiceImpl implements AiSummaryService {
             studyNoteMapper.insert(note);
             noteId = note.getId();
             record.setNoteId(noteId);
-            aiGenerationRecordMapper.updateById(record);
+            aiGenerationRecordMapper.update(null, new LambdaUpdateWrapper<AiGenerationRecord>()
+                    .eq(AiGenerationRecord::getId, record.getId())
+                    .eq(AiGenerationRecord::getUserId, userId)
+                    .set(AiGenerationRecord::getNoteId, noteId));
         }
 
-        material.setSummaryStatus("SUCCESS");
-        studyMaterialService.updateById(material);
+        studyMaterialService.update(new LambdaUpdateWrapper<StudyMaterial>()
+                .eq(StudyMaterial::getId, materialId)
+                .eq(StudyMaterial::getUserId, userId)
+                .set(StudyMaterial::getSummaryStatus, "SUCCESS"));
 
         return SummaryResultVO.builder()
                 .materialId(materialId)
@@ -190,14 +278,18 @@ public class AiSummaryServiceImpl implements AiSummaryService {
                 .eq(AiGenerationRecord::getMaterialId, materialId)
                 .eq(AiGenerationRecord::getTaskType, "SUMMARY")
                 .eq(AiGenerationRecord::getStatus, "SUCCESS")
-                .orderByDesc(AiGenerationRecord::getCreatedAt)
+                .orderByDesc(AiGenerationRecord::getCreatedAt, AiGenerationRecord::getId)
                 .last("limit 1"));
         if (record == null || !StringUtils.hasText(record.getOutputText())) {
             throw new BusinessException(404, "当前资料还没有 AI 总结记录");
         }
 
+        return toSummaryResult(userId, material, record);
+    }
+
+    private SummaryResultVO toSummaryResult(Long userId, StudyMaterial material, AiGenerationRecord record) {
         return SummaryResultVO.builder()
-                .materialId(materialId)
+                .materialId(record.getMaterialId())
                 .recordId(record.getId())
                 .noteId(record.getNoteId())
                 .modelName(record.getModelName())
@@ -237,6 +329,8 @@ public class AiSummaryServiceImpl implements AiSummaryService {
                         .noteId(record.getNoteId())
                         .modelName(record.getModelName())
                         .summaryType(record.getSummaryType())
+                        .status(record.getStatus())
+                        .errorMessage(record.getErrorMessage())
                         .summaryText(record.getOutputText())
                         .sourceSegments(resolveSummarySourceSegments(
                                 userId,
@@ -257,8 +351,7 @@ public class AiSummaryServiceImpl implements AiSummaryService {
         List<AiGenerationRecord> records = aiGenerationRecordMapper.selectList(new LambdaQueryWrapper<AiGenerationRecord>()
                 .eq(AiGenerationRecord::getUserId, userId)
                 .eq(AiGenerationRecord::getTaskType, "SUMMARY")
-                .eq(AiGenerationRecord::getStatus, "SUCCESS")
-                .orderByDesc(AiGenerationRecord::getCreatedAt));
+                .orderByDesc(AiGenerationRecord::getCreatedAt, AiGenerationRecord::getId));
 
         if (records.isEmpty()) {
             return List.of();
@@ -281,10 +374,10 @@ public class AiSummaryServiceImpl implements AiSummaryService {
                             .noteId(record.getNoteId())
                             .modelName(record.getModelName())
                             .summaryType(record.getSummaryType())
+                            .status(record.getStatus())
+                            .errorMessage(record.getErrorMessage())
                             .summaryText(record.getOutputText())
-                            .sourceSegments(resolveSummarySourceSegments(
-                                    userId,
-                                    material,
+                            .sourceSegments(loadSummaryHistorySourceSegments(
                                     record,
                                     record.getNoteId() == null ? null : noteMap.get(record.getNoteId())
                             ))
@@ -292,6 +385,14 @@ public class AiSummaryServiceImpl implements AiSummaryService {
                             .build();
                 })
                 .toList();
+    }
+
+    private List<RetrievedSegmentVO> loadSummaryHistorySourceSegments(AiGenerationRecord record, StudyNote note) {
+        if (!"SUCCESS".equals(record.getStatus())) {
+            return List.of();
+        }
+        // 历史列表会轮询；仅加载已保存的来源，避免每次刷新重新调用外部检索。
+        return loadSegmentsByIds(note == null ? null : note.getSourceSegmentIds());
     }
 
     /**
@@ -489,6 +590,9 @@ public class AiSummaryServiceImpl implements AiSummaryService {
             AiGenerationRecord record,
             StudyNote note
     ) {
+        if (!"SUCCESS".equals(record.getStatus())) {
+            return List.of();
+        }
         List<RetrievedSegmentVO> noteSegments = loadSegmentsByIds(note == null ? null : note.getSourceSegmentIds());
         if (!noteSegments.isEmpty()) {
             return noteSegments;

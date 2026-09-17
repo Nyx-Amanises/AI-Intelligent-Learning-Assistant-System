@@ -1,7 +1,6 @@
 package com.aiassistant.learning.service.task;
 
 import com.aiassistant.learning.common.exception.BusinessException;
-import com.aiassistant.learning.dto.ai.SummaryGenerateRequest;
 import com.aiassistant.learning.dto.ai.SummaryTaskPayload;
 import com.aiassistant.learning.entity.AiTask;
 import com.aiassistant.learning.service.AiSummaryService;
@@ -9,7 +8,6 @@ import com.aiassistant.learning.vo.ai.SummaryResultVO;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
 
 /**
  * 学习资料总结任务处理器。
@@ -45,13 +43,10 @@ public class SummaryTaskProcessor implements AiTaskProcessor {
             throw new BusinessException("materialId is required for summary task");
         }
 
-        SummaryGenerateRequest request = new SummaryGenerateRequest();
-        request.setModelName(payload.getModelName());
-        request.setSummaryType(StringUtils.hasText(payload.getSummaryType()) ? payload.getSummaryType() : "STANDARD");
-        request.setSaveAsNote(payload.getSaveAsNote() == null ? Boolean.TRUE : payload.getSaveAsNote());
-        request.setTemperature(payload.getTemperature() == null ? 0.7 : payload.getTemperature());
-
-        SummaryResultVO result = aiSummaryService.generateMaterialSummary(task.getUserId(), payload.getMaterialId(), request);
+        SummaryResultVO result = payload.getRecordId() == null
+                ? aiSummaryService.generateMaterialSummary(task.getUserId(), payload.getMaterialId(), payload.toRequest())
+                : aiSummaryService.generateMaterialSummary(
+                        task.getUserId(), payload.getMaterialId(), payload.toRequest(), payload.getRecordId());
         return new TaskExecutionResult(writeJson(result), 100);
     }
 
