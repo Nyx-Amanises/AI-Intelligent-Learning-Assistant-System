@@ -171,65 +171,6 @@ onUnmounted(() => { isActive = false })
   --home-loading-color: #e6e9df;
 }
 
-:global(html.dark) .daily-home,
-:global([data-theme="dark"]) .daily-home {
-  --home-ink: #f8fafc;
-  --home-muted: #94a3b8;
-  --home-scene-bg: #0b1120;
-  --home-veil: linear-gradient(90deg, rgb(11 17 32 / 98%) 0%, rgb(11 17 32 / 93%) 32%, rgb(11 17 32 / 65%) 56%, rgb(11 17 32 / 20%) 78%, transparent 100%), linear-gradient(0deg, rgb(15 23 42 / 95%) 0%, transparent 42%);
-  --home-actions-bg: rgba(30, 41, 59, 0.85);
-  --home-actions-border: rgba(255, 255, 255, 0.12);
-  --home-actions-shadow: 0 16px 36px -8px rgba(0, 0, 0, 0.6), 0 4px 12px rgba(0, 0, 0, 0.35);
-  --home-action-hover: rgba(51, 65, 85, 0.75);
-  --home-action-divider: rgba(255, 255, 255, 0.12);
-  --home-welcome-bg: rgba(30, 41, 59, 0.85);
-  --home-welcome-color: #cbd5e1;
-  --home-welcome-border: rgba(255, 255, 255, 0.12);
-  --home-scroll-bg: rgba(30, 41, 59, 0.85);
-  --home-scroll-color: #cbd5e1;
-  --home-scroll-border: rgba(255, 255, 255, 0.12);
-  --home-scroll-hover: rgba(51, 65, 85, 0.95);
-  --home-img-filter: brightness(0.68) saturate(0.85) contrast(1.08);
-  --home-arrow-learn-bg: var(--brand);
-  --home-arrow-learn-color: #0b1120;
-  --home-arrow-learn-border: var(--brand);
-  --home-arrow-review-border: rgba(255, 255, 255, 0.2);
-  --home-arrow-review-color: #cbd5e1;
-  --home-notes-photo-bg: #1e293b;
-  --home-notes-badge-bg: #1e293b;
-  --home-notes-badge-color: #f8fafc;
-  --home-loading-color: #334155;
-}
-
-:global([data-theme="eye-care"]) .daily-home {
-  --home-ink: #252a25;
-  --home-muted: #6b7368;
-  --home-scene-bg: #dce7e4;
-  --home-veil: linear-gradient(90deg, rgb(247 247 242 / 97%) 0%, rgb(247 247 242 / 87%) 27%, rgb(245 245 238 / 37%) 51%, transparent 74%), linear-gradient(0deg, rgb(18 51 40 / 20%), transparent 36%);
-  --home-actions-bg: rgba(255, 255, 250, 0.88);
-  --home-actions-border: rgba(255, 255, 255, 0.65);
-  --home-actions-shadow: 0 16px 36px -8px rgba(35, 55, 38, 0.12), 0 4px 12px rgba(35, 55, 38, 0.04);
-  --home-action-hover: rgba(255, 255, 255, 0.95);
-  --home-action-divider: #d4ddd3;
-  --home-welcome-bg: rgb(251 252 249 / 87%);
-  --home-welcome-color: #43544a;
-  --home-welcome-border: rgba(255, 255, 255, 0.5);
-  --home-scroll-bg: rgba(255, 255, 250, 0.9);
-  --home-scroll-color: #355348;
-  --home-scroll-border: rgba(255, 255, 255, 0.5);
-  --home-scroll-hover: #ffffff;
-  --home-img-filter: none;
-  --home-arrow-learn-bg: #385a4a;
-  --home-arrow-learn-color: #ffffff;
-  --home-arrow-learn-border: #385a4a;
-  --home-arrow-review-border: #b5c2b6;
-  --home-arrow-review-color: inherit;
-  --home-notes-photo-bg: #e1e6dc;
-  --home-notes-badge-bg: #fafcf4;
-  --home-notes-badge-color: #364c3f;
-  --home-loading-color: #e6e9df;
-}
-
 .daily-scene {
   position: relative;
   min-height: 650px;
@@ -487,14 +428,6 @@ onUnmounted(() => { isActive = false })
   .daily-scene__picture img { object-position: center 48%; }
   .daily-scene__veil { background: linear-gradient(180deg, rgb(235 242 238 / 95%) 0%, rgb(235 242 238 / 75%) 27%, rgb(235 242 238 / 12%) 54%, rgb(22 55 44 / 8%) 76%, rgb(21 44 36 / 13%) 100%); }
   .daily-scene--long-quote .daily-scene__veil { background: linear-gradient(180deg, rgb(235 242 238 / 98%) 0%, rgb(235 242 238 / 92%) 32%, rgb(235 242 238 / 75%) 47%, rgb(235 242 238 / 12%) 65%, rgb(21 44 36 / 13%) 100%); }
-  :global(html.dark) .daily-scene__veil,
-  :global([data-theme="dark"]) .daily-scene__veil {
-    background: linear-gradient(180deg, rgba(11, 17, 32, 0.96) 0%, rgba(11, 17, 32, 0.88) 35%, rgba(11, 17, 32, 0.45) 60%, rgba(15, 23, 42, 0.9) 100%) !important;
-  }
-  :global(html.dark) .daily-scene--long-quote .daily-scene__veil,
-  :global([data-theme="dark"]) .daily-scene--long-quote .daily-scene__veil {
-    background: linear-gradient(180deg, rgba(11, 17, 32, 0.98) 0%, rgba(11, 17, 32, 0.92) 32%, rgba(11, 17, 32, 0.72) 48%, rgba(11, 17, 32, 0.38) 65%, rgba(15, 23, 42, 0.9) 100%) !important;
-  }
   .daily-scene__inner { padding: 29px 23px 28px; }
   .daily-scene__eyebrow { font-size: 11px; gap: 8px; letter-spacing: 2px; }
   .daily-scene__welcome { padding: 0; background: transparent; border: none; max-width: 170px; color: var(--home-muted); font-size: 11px; }

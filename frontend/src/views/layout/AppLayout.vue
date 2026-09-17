@@ -196,7 +196,12 @@ const displayName = computed(() => userStore.profile?.nickname || userStore.prof
 const avatarText = computed(() => Array.from(displayName.value)[0]?.toUpperCase() || '学')
 const currentPage = computed(() => navigationItems.find((item) => item.path === route.path) || navigationItems[0])
 const avatarSrc = computed(() => resolveAvatarUrl(userStore.profile?.avatarUrl))
-const isHome = computed(() => route.path === '/dashboard')
+const isHome = computed(() =>
+  route.name === 'dashboard' ||
+  route.path === '/dashboard' ||
+  route.path === '/' ||
+  route.path === ''
+)
 const moreNavigationActive = computed(() =>
   moreNavigationItems.some((item) => item.path === route.path)
 )
@@ -545,7 +550,11 @@ onUnmounted(() => {
   scroll-margin-top: calc(var(--shell-header-height) + 20px);
   overflow-x: clip;
 }
-.workspace-content--home { max-width: 100%; padding: 0 0 30px; }
+.workspace-content--home,
+.workspace-content:has(.daily-home) {
+  max-width: 100% !important;
+  padding: 0 0 30px !important;
+}
 .workspace-footer {
   display: flex;
   justify-content: space-between;
@@ -557,7 +566,8 @@ onUnmounted(() => {
   font-size: 12px;
   letter-spacing: .06em;
 }
-.workspace-content--home .workspace-footer {
+.workspace-content--home .workspace-footer,
+.workspace-content:has(.daily-home) .workspace-footer {
   max-width: 1296px;
   margin: 64px auto 0;
   padding-inline: 48px;

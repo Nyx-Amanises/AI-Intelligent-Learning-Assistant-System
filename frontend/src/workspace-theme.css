@@ -409,5 +409,167 @@ html.dark .statistics-periods button.is-active {
   background: var(--panel-hover) !important;
 }
 
+/* ==========================================================================
+   Home Page / Dashboard Theme Overrides (Full Width & Themes)
+   ========================================================================== */
+.workspace-content--home,
+.workspace-content:has(.daily-home) {
+  max-width: 100% !important;
+  padding: 0 0 30px !important;
+}
+
+/* Eye-Care Theme Dashboard Overrides */
+[data-theme="eye-care"] .daily-scene__veil {
+  background:
+    linear-gradient(90deg, rgb(247 247 242 / 97%) 0%, rgb(247 247 242 / 87%) 27%, rgb(245 245 238 / 37%) 51%, transparent 74%),
+    linear-gradient(0deg, rgb(18 51 40 / 20%), transparent 36%) !important;
+}
+
+/* Dark Theme Dashboard Overrides - Guarantee 100% night view */
+html.dark .daily-scene,
+[data-theme="dark"] .daily-scene {
+  background: #0f172a !important;
+}
+
+html.dark .daily-scene__veil,
+[data-theme="dark"] .daily-scene__veil {
+  background:
+    linear-gradient(90deg,
+      rgba(15, 23, 42, 0.98) 0%,
+      rgba(15, 23, 42, 0.93) 32%,
+      rgba(15, 23, 42, 0.65) 56%,
+      rgba(15, 23, 42, 0.20) 78%,
+      transparent 100%),
+    linear-gradient(0deg,
+      rgba(15, 23, 42, 0.95) 0%,
+      transparent 42%) !important;
+}
+
+html.dark .daily-scene__picture img,
+[data-theme="dark"] .daily-scene__picture img {
+  filter: brightness(0.65) saturate(0.85) contrast(1.08) !important;
+}
+
+html.dark .daily-scene__inner,
+[data-theme="dark"] .daily-scene__inner {
+  color: #f8fafc !important;
+}
+
+html.dark .daily-scene__eyebrow,
+[data-theme="dark"] .daily-scene__eyebrow {
+  color: var(--brand) !important;
+}
+
+html.dark .daily-scene__welcome,
+[data-theme="dark"] .daily-scene__welcome {
+  background: rgba(30, 41, 59, 0.85) !important;
+  color: #cbd5e1 !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+}
+
+html.dark .daily-scene__quote h1,
+[data-theme="dark"] .daily-scene__quote h1 {
+  color: #f8fafc !important;
+}
+
+html.dark .daily-scene__source,
+[data-theme="dark"] .daily-scene__source {
+  color: #94a3b8 !important;
+}
+
+html.dark .daily-scene__source cite,
+[data-theme="dark"] .daily-scene__source cite {
+  color: #f8fafc !important;
+}
+
+html.dark .daily-actions,
+[data-theme="dark"] .daily-actions {
+  background: rgba(30, 41, 59, 0.85) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  box-shadow: 0 16px 36px -8px rgba(0, 0, 0, 0.6), 0 4px 12px rgba(0, 0, 0, 0.35) !important;
+}
+
+html.dark .daily-action,
+[data-theme="dark"] .daily-action {
+  color: #f8fafc !important;
+}
+
+html.dark .daily-action:hover,
+[data-theme="dark"] .daily-action:hover {
+  background: rgba(51, 65, 85, 0.75) !important;
+}
+
+html.dark .daily-action--review::before,
+[data-theme="dark"] .daily-action--review::before {
+  background: rgba(255, 255, 255, 0.12) !important;
+}
+
+html.dark .daily-action strong,
+[data-theme="dark"] .daily-action strong {
+  color: #f8fafc !important;
+}
+
+html.dark .daily-action small,
+[data-theme="dark"] .daily-action small {
+  color: #94a3b8 !important;
+}
+
+html.dark .daily-action__arrow,
+[data-theme="dark"] .daily-action__arrow {
+  border-color: rgba(255, 255, 255, 0.2) !important;
+  color: #cbd5e1 !important;
+}
+
+html.dark .daily-action--learn .daily-action__arrow,
+[data-theme="dark"] .daily-action--learn .daily-action__arrow {
+  color: #0f172a !important;
+  border-color: var(--brand) !important;
+  background: var(--brand) !important;
+}
+
+html.dark .daily-scene__scroll,
+[data-theme="dark"] .daily-scene__scroll {
+  background: rgba(30, 41, 59, 0.85) !important;
+  color: #cbd5e1 !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+}
+
+html.dark .daily-scene__scroll:hover,
+[data-theme="dark"] .daily-scene__scroll:hover {
+  background: rgba(51, 65, 85, 0.95) !important;
+  color: #f8fafc !important;
+}
+
+html.dark .daily-notes__photo,
+[data-theme="dark"] .daily-notes__photo {
+  background: #1e293b !important;
+}
+
+html.dark .daily-notes__badge,
+[data-theme="dark"] .daily-notes__badge {
+  color: #f8fafc !important;
+  background: #1e293b !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+}
+
+html.dark .daily-loading__row > span,
+html.dark .daily-loading__row i,
+[data-theme="dark"] .daily-loading__row > span,
+[data-theme="dark"] .daily-loading__row i {
+  background: #334155 !important;
+}
+
+@media (max-width: 760px) {
+  html.dark .daily-scene__veil,
+  [data-theme="dark"] .daily-scene__veil {
+    background: linear-gradient(180deg, rgba(15, 23, 42, 0.96) 0%, rgba(15, 23, 42, 0.88) 35%, rgba(15, 23, 42, 0.45) 60%, rgba(15, 23, 42, 0.95) 100%) !important;
+  }
+  html.dark .daily-scene--long-quote .daily-scene__veil,
+  [data-theme="dark"] .daily-scene--long-quote .daily-scene__veil {
+    background: linear-gradient(180deg, rgba(15, 23, 42, 0.98) 0%, rgba(15, 23, 42, 0.92) 32%, rgba(15, 23, 42, 0.72) 48%, rgba(15, 23, 42, 0.38) 65%, rgba(15, 23, 42, 0.95) 100%) !important;
+  }
+}
+
+
 
 
