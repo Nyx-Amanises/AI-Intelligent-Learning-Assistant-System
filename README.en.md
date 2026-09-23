@@ -103,7 +103,7 @@ AI-Intelligent-Learning-Assistant-System
 │  ├─ src/components/         # Shared components
 │  ├─ src/views/              # Page views
 │  └─ Dockerfile
-├─ db/                        # Database schema and migration scripts
+├─ db/                        # Legacy schema dump (reference only; schema is managed by Flyway)
 ├─ docker/mysql/init/         # MySQL container initialization scripts
 ├─ docs/deploy-render-aiven-qdrant.md
 │                              # Free cloud deployment guide
@@ -177,6 +177,8 @@ docker run -d --name qdrant -p 6333:6333 -p 6334:6334 -v qdrant_storage:/qdrant/
 ```
 
 ## Core Configuration
+
+Database schema is managed by Flyway (`backend/src/main/resources/db/migration`) and applied automatically on backend startup; existing databases are baselined at version 1, so no manual SQL import is needed.
 
 The backend supports overriding configuration through environment variables. `SPRING_DATASOURCE_PASSWORD` and `APP_JWT_SECRET` have **no default value**: the backend refuses to start when either is missing or the JWT secret is shorter than 32 characters. Export both before starting manually (see `.env.example`).
 

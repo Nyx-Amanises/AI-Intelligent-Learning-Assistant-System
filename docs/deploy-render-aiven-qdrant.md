@@ -28,14 +28,9 @@ SPRING_DATASOURCE_USERNAME=<AIVEN_MYSQL_USER>
 SPRING_DATASOURCE_PASSWORD=<AIVEN_MYSQL_PASSWORD>
 ```
 
-For a fresh database, initialize schema with:
+No manual schema setup is needed: the backend runs Flyway on startup and creates all tables from `backend/src/main/resources/db/migration`.
 
-```text
-db/ai_learning_assistant.sql
-db/migrations/2026-04-30_create_ai_config_table.sql
-```
-
-If data is migrated from an old Railway database, import the dump first, then run only missing migration files. At minimum, make sure `ai_config` exists.
+If data is migrated from an old database dump, import the dump first; on the next backend start Flyway baselines it at version 1 and applies only the missing migrations (for example `ai_config`).
 
 ## 2. Create Redis/Valkey
 

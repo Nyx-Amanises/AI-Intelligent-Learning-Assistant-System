@@ -1,22 +1,12 @@
 #!/bin/bash
 set -e
 
+# 只负责保证数据库存在且使用 utf8mb4。
+# 表结构与后续变更由后端启动时的 Flyway 自动执行（backend/src/main/resources/db/migration）。
 DB_NAME="${MYSQL_DATABASE:-ai_learning_assistant}"
 
-echo "Initializing ${DB_NAME} schema..."
+echo "Ensuring database ${DB_NAME} exists..."
 mysql --protocol=socket --default-character-set=utf8mb4 -uroot -p"${MYSQL_ROOT_PASSWORD}" \
   -e "CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;"
 
-mysql --protocol=socket --default-character-set=utf8mb4 -uroot -p"${MYSQL_ROOT_PASSWORD}" "${DB_NAME}" < /schema/ai_learning_assistant.sql
-
-if [ "${APPLY_SCHEMA_MIGRATIONS:-false}" = "true" ]; then
-  for migration in /schema/migrations/*.sql; do
-    [ -e "${migration}" ] || continue
-    echo "Applying migration: ${migration}"
-    mysql --protocol=socket --default-character-set=utf8mb4 -uroot -p"${MYSQL_ROOT_PASSWORD}" "${DB_NAME}" < "${migration}"
-  done
-else
-  echo "Skipping schema migrations because the base SQL is a full database dump."
-fi
-
-echo "Database initialization finished."
+echo "Database initialization finished. Schema will be created by Flyway on backend startup."

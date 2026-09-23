@@ -103,8 +103,8 @@ AI-Intelligent-Learning-Assistant-System
 │  ├─ src/components/         # 通用组件
 │  ├─ src/views/              # 页面视图
 │  └─ Dockerfile
-├─ db/                        # 建表与迁移脚本
-├─ docker/mysql/init/         # MySQL 容器初始化脚本
+├─ db/                        # 旧版建表脚本（仅参考，表结构现由 Flyway 管理）
+├─ docker/mysql/init/         # MySQL 容器初始化脚本（只建库）
 ├─ docs/deploy-render-aiven-qdrant.md
 │                              # 免费云部署指南
 ├─ docs/images/               # README 截图和社交预览图
@@ -177,6 +177,8 @@ docker run -d --name qdrant -p 6333:6333 -p 6334:6334 -v qdrant_storage:/qdrant/
 ```
 
 ## 核心配置
+
+数据库表结构由 Flyway 管理，脚本位于 `backend/src/main/resources/db/migration`，后端启动时自动建表或补齐变更；旧库会被自动标记为基线版本 1，无需手工导入 SQL。
 
 后端支持通过环境变量覆盖配置。其中 `SPRING_DATASOURCE_PASSWORD` 与 `APP_JWT_SECRET` **没有默认值**，缺失或 JWT 密钥短于 32 个字符时后端会在启动阶段直接报错退出；本地手动启动前请先在终端导出这两个变量（可参���根目录 `.env.example`）。
 

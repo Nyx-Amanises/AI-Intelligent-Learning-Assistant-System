@@ -9,6 +9,14 @@ spring:
     url: ${SPRING_DATASOURCE_URL:jdbc:mysql://127.0.0.1:3307/ai_learning_assistant?allowPublicKeyRetrieval=true&useSSL=false&useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai}
     username: ${SPRING_DATASOURCE_USERNAME:root}
     password: ${SPRING_DATASOURCE_PASSWORD}
+  flyway:
+    # 启动时自动执行 classpath:db/migration 下的 V*.sql；
+    # 旧库（由 mysqldump 建立、没有 flyway_schema_history）会被标记为版本 1，只补执行之后的脚本。
+    enabled: ${SPRING_FLYWAY_ENABLED:true}
+    baseline-on-migrate: true
+    baseline-version: 1
+    baseline-description: existing-schema-from-dump
+    locations: classpath:db/migration
   data:
     redis:
       host: ${SPRING_REDIS_HOST:127.0.0.1}
