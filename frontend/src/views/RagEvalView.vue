@@ -55,7 +55,7 @@
             </div>
           </div>
 
-          <div v-if="datasetLoading" class="state-block">正在加载评测集...</div>
+          <div v-if="datasetLoading && !datasets.length" class="state-block">正在加载评测集...</div>
           <div v-else-if="!datasets.length" class="state-block empty">
             还没有评测集。可以先为生物学必修 1 新建一个评测集。
           </div>
@@ -131,7 +131,7 @@
           <div v-if="!selectedDataset" class="state-block empty">
             先从左侧选择一个评测集。
           </div>
-          <div v-else-if="sampleLoading" class="state-block">正在加载评测样本...</div>
+          <div v-else-if="sampleLoading && !samples.length" class="state-block">正在加载评测样本...</div>
           <div v-else-if="!samples.length" class="state-block empty">
             还没有样本。建议先打开“资料分段参考”，选 20-50 个问题做第一版评测集。
           </div>

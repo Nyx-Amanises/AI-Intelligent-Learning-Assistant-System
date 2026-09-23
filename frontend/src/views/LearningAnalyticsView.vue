@@ -26,7 +26,7 @@
       <el-button type="primary" :loading="loading" @click="loadAnalytics">重新加载统计</el-button>
     </div>
 
-    <div v-if="loading" class="statistics-loading" role="status"><span class="statistics-loading__line"></span>正在整理学习记录…</div>
+    <div v-if="loading && !hasLoaded" class="statistics-loading" role="status"><span class="statistics-loading__line"></span>正在整理学习记录…</div>
     <template v-else-if="hasLoaded && !loadError">
       <div v-if="!analytics.totalQuestionAttempts" class="statistics-empty-intro">
         <div><h2>{{ filters.days || filters.materialId ? '这个范围内还没有练习记录' : '完成一次练习，留下第一份记录' }}</h2><p>提交练习后，就可以在这里回顾表现与复习重点。</p></div>
@@ -385,6 +385,7 @@ void loadAnalytics()
 .statistics-notice p, .statistics-empty-intro p { margin: 7px 0 0; color: var(--muted); font-size: 12px; line-height: 1.8; }
 .statistics-empty-actions { display: flex; flex-wrap: wrap; gap: 10px; }
 .statistics-empty-actions :deep(.el-button + .el-button) { margin-left: 0; }
+.statistics-page[aria-busy="true"] .statistics-sheet, .statistics-page[aria-busy="true"] .statistics-empty-intro { opacity: .55; transition: opacity .2s ease; pointer-events: none; }
 .statistics-loading { display: grid; justify-items: center; align-content: center; min-height: 380px; gap: 18px; font-size: 13px; color: var(--muted); }
 .statistics-loading__line { width: 42px; height: 3px; border-radius: 3px; background: var(--brand); animation: statistics-pulse 1.2s ease-in-out infinite alternate; }
 .statistics-page button:focus-visible, .statistics-page a:focus-visible { outline: 2px solid var(--brand); outline-offset: 4px; }

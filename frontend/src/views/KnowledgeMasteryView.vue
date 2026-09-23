@@ -10,7 +10,7 @@
 
     <div v-if="materialsError" class="knowledge-notice" role="alert"><div><strong>资料列表暂时无法加载</strong><p>仍可查看知识点，重新加载后即可选择资料。</p></div><el-button :loading="materialsLoading" @click="loadMaterials">重新加载资料</el-button></div>
 
-    <section v-if="hasLoaded && !loading && !loadError" class="knowledge-overview" aria-label="知识点掌握概览">
+    <section v-if="hasLoaded && !loadError" class="knowledge-overview" aria-label="知识点掌握概览">
       <dl class="knowledge-totals">
         <div><dt>平均掌握度</dt><dd>{{ overview.averageMasteryPercent }}<small>%</small></dd><p>{{ overview.totalAttempts }} 次作答记录</p></div>
         <div><dt>已掌握</dt><dd>{{ overview.masteredCount }}</dd><p>掌握度 ≥ 85%</p></div>
@@ -21,7 +21,7 @@
     </section>
 
     <section class="knowledge-library" aria-labelledby="knowledge-list-title">
-      <div class="knowledge-section-heading"><h2 id="knowledge-list-title">我的知识点</h2><span v-if="hasLoaded && !loading && !loadError">{{ total }} 个</span></div>
+      <div class="knowledge-section-heading"><h2 id="knowledge-list-title">我的知识点</h2><span v-if="hasLoaded && !loadError">{{ total }} 个</span></div>
       <div class="knowledge-filters" aria-label="筛选知识点">
         <el-input v-model="filters.keyword" clearable placeholder="搜索知识点、资料或建议" aria-label="搜索知识点、资料或建议" class="knowledge-search"><template #prefix><AppIcon name="search" :size="17" /></template></el-input>
         <el-select v-model="filters.materialId" clearable filterable placeholder="全部资料" aria-label="筛选学习资料" :loading="materialsLoading"><el-option v-for="item in materials" :key="item.id" :label="item.title" :value="item.id" /></el-select>
@@ -30,12 +30,12 @@
         <button type="button" class="knowledge-reset" @click="resetFilters">重置条件</button>
       </div>
 
-      <div v-if="hasLoaded && !loading && !loadError && reviewPoints.length" class="knowledge-priorities">
+      <div v-if="hasLoaded && !loadError && reviewPoints.length" class="knowledge-priorities">
         <span>优先复习</span>
         <div><button v-for="item in reviewPoints" :key="String(item.materialId || 0) + '-' + item.knowledgePoint" type="button" @click="focusKnowledgePoint(item)">{{ item.knowledgePoint }} <small>{{ item.masteryPercent }}%</small></button></div>
       </div>
 
-      <div v-if="loading" class="knowledge-state" role="status">正在整理知识掌握情况…</div>
+      <div v-if="loading && !hasLoaded" class="knowledge-state" role="status">正在整理知识掌握情况…</div>
       <div v-else-if="loadError" class="knowledge-notice" role="alert"><div><strong>{{ loadError }}</strong><p>数据暂时没有读取成功，请重试。</p></div><el-button type="primary" :loading="loading" @click="loadMastery">重新加载统计</el-button></div>
       <div v-else-if="hasLoaded && !records.length" class="knowledge-state knowledge-state--empty">
         <AppIcon name="mastery" :size="34" />
@@ -57,7 +57,7 @@
         </article>
       </div>
 
-      <div v-if="hasLoaded && !loading && !loadError && total" class="knowledge-pagination">
+      <div v-if="hasLoaded && !loadError && total" class="knowledge-pagination">
         <p>共 {{ total }} 个知识点 · 第 {{ page.current }} / {{ Math.max(1, Math.ceil(total / page.size)) }} 页</p>
         <el-pagination v-model:current-page="page.current" v-model:page-size="page.size" :page-sizes="[10, 20, 50]" :pager-count="5" layout="sizes, prev, pager, next" :total="total" @current-change="loadMastery" @size-change="changePageSize" />
       </div>
@@ -366,6 +366,7 @@ void loadMastery()
 .knowledge-notice { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 20px; padding: 24px 0; border-top: 1px solid var(--line); margin-bottom: 24px; }
 .knowledge-notice strong { font-size: 15px; font-weight: 500; }
 .knowledge-notice p { color: var(--muted); font-size: 12px; margin: 8px 0 0; line-height: 1.8; }
+.knowledge-page[aria-busy="true"] .knowledge-overview, .knowledge-page[aria-busy="true"] .knowledge-records, .knowledge-page[aria-busy="true"] .knowledge-priorities { opacity: .55; transition: opacity .2s ease; pointer-events: none; }
 .knowledge-state { display: grid; justify-items: center; align-content: center; gap: 14px; padding: 32px 16px; min-height: 300px; text-align: center; color: var(--muted); font-size: 13px; }
 .knowledge-state .app-icon { color: var(--muted); }
 .knowledge-state h3 { margin: 0; font-size: 17px; font-weight: 500; color: var(--text-secondary); }
