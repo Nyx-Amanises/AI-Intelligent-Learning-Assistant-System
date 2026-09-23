@@ -81,4 +81,12 @@ public interface AiTaskService {
      * @param taskId 要执行的任务 ID
      */
     void executeTask(Long taskId);
+
+    /**
+     * 应用启动时回收上次运行遗留的任务：
+     * RUNNING 的任务已随进程一起消失，标记为 FAILED；PENDING 的任务重新派发。
+     *
+     * @return 被标记为失败的任务数量
+     */
+    int recoverInterruptedTasks();
 }

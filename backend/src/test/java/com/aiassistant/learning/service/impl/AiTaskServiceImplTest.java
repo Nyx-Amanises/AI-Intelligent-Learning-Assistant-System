@@ -8,6 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.isNull;
 
 import com.aiassistant.learning.dto.ai.EmbeddingTaskPayload;
 import com.aiassistant.learning.dto.ai.EmbeddingTaskRequest;
@@ -25,6 +26,7 @@ import com.aiassistant.learning.service.cache.AiTaskRedisCacheService;
 import com.aiassistant.learning.vo.ai.AiTaskDetailVO;
 import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
@@ -33,6 +35,7 @@ import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
@@ -152,5 +155,33 @@ class AiTaskServiceImplTest {
         synchronizations.get(0).afterCommit();
 
         verify(executor).executeTask(22L);
+    }
+
+    @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void startupRecoveryFailsOrphanedRunningTasksAndRedispatchesPendingOnes() {
+        AiTask orphaned = new AiTask();
+        orphaned.setId(31L);
+        orphaned.setUserId(USER_ID);
+        orphaned.setTaskType("SUMMARY");
+        orphaned.setStatus("RUNNING");
+        AiTask pending = new AiTask();
+        pending.setId(32L);
+        pending.setUserId(USER_ID);
+        pending.setTaskType("EMBEDDING");
+        pending.setStatus("PENDING");
+        when(tasks.selectList(any())).thenReturn(List.of(orphaned)).thenReturn(List.of(pending));
+
+        int failed = service.recoverInterruptedTasks();
+
+        assertEquals(1, failed);
+        ArgumentCaptor<LambdaUpdateWrapper<AiTask>> update = ArgumentCaptor.forClass(LambdaUpdateWrapper.class);
+        verify(tasks).update(isNull(), update.capture());
+        update.getValue().getSqlSegment();
+        assertTrue(update.getValue().getParamNameValuePairs().containsValue("FAILED"));
+        assertTrue(update.getValue().getParamNameValuePairs().containsValue(31L));
+        verify(cache).evictTaskDetail(USER_ID, 31L);
+        verify(executor).executeTask(32L);
+        verify(executor, never()).executeTask(31L);
     }
 }

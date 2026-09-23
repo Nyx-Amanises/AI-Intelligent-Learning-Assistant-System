@@ -432,6 +432,35 @@ public class AiTaskServiceImpl implements AiTaskService {
     }
 
     /**
+     * 回收上次进程遗留的任务。
+     *
+     * <p>任务在内存线程池里执行，进程一旦重启，RUNNING 状态的任务不会有人再接手，
+     * 关联的题集 / 总结记录也会永远停在 GENERATING。这里把它们统一标记为 FAILED，
+     * 并把还没开始的 PENDING 任务重新派发。</p>
+     */
+    @Override
+    public int recoverInterruptedTasks() {
+        List<AiTask> runningTasks = aiTaskMapper.selectList(new LambdaQueryWrapper<AiTask>()
+                .eq(AiTask::getStatus, STATUS_RUNNING));
+        for (AiTask task : runningTasks) {
+            failTask(task, new BusinessException(500, "服务重启，任务执行被中断，请重试"));
+        }
+
+        List<AiTask> pendingTasks = aiTaskMapper.selectList(new LambdaQueryWrapper<AiTask>()
+                .eq(AiTask::getStatus, STATUS_PENDING)
+                .orderByAsc(AiTask::getCreatedAt));
+        for (AiTask task : pendingTasks) {
+            selfAiTaskService.executeTask(task.getId());
+        }
+
+        if (!runningTasks.isEmpty() || !pendingTasks.isEmpty()) {
+            log.info("启动时回收遗留任务：{} 个 RUNNING 标记为 FAILED，{} 个 PENDING 重新派发",
+                    runningTasks.size(), pendingTasks.size());
+        }
+        return runningTasks.size();
+    }
+
+    /**
      * 查询任务时同时校验用户归属，防止用户访问别人的任务。
      */
     private AiTask getOwnedTask(Long userId, Long taskId) {

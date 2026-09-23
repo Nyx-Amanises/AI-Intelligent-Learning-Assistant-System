@@ -27,18 +27,16 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import jakarta.annotation.PreDestroy;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.Executor;
 import org.springframework.http.MediaType;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.core.task.TaskRejectedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -71,8 +69,8 @@ public class AssistantServiceImpl implements AssistantService {
     private final AssistantAgentOrchestrator assistantAgentOrchestrator;
     /** JSON 解析工具。 */
     private final ObjectMapper objectMapper;
-    /** 流式回复使用独立线程池，避免阻塞 Web 请求线程。 */
-    private final ExecutorService assistantStreamExecutor = Executors.newCachedThreadPool(new AssistantStreamThreadFactory());
+    /** 流式回复使用独立的有界线程池（见 AsyncExecutorConfig），避免阻塞 Web 请求线程。 */
+    private final Executor assistantStreamExecutor;
 
     public AssistantServiceImpl(
             AssistantSessionMapper assistantSessionMapper,
@@ -80,22 +78,16 @@ public class AssistantServiceImpl implements AssistantService {
             AssistantToolCallMapper assistantToolCallMapper,
             AiChatService aiChatService,
             AssistantAgentOrchestrator assistantAgentOrchestrator,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            @Qualifier("assistantStreamExecutor") Executor assistantStreamExecutor
     ) {
+        this.assistantStreamExecutor = assistantStreamExecutor;
         this.assistantSessionMapper = assistantSessionMapper;
         this.assistantMessageMapper = assistantMessageMapper;
         this.assistantToolCallMapper = assistantToolCallMapper;
         this.aiChatService = aiChatService;
         this.assistantAgentOrchestrator = assistantAgentOrchestrator;
         this.objectMapper = objectMapper;
-    }
-
-    /**
-     * 应用关闭时释放流式回复线程池。
-     */
-    @PreDestroy
-    public void shutdownAssistantStreamExecutor() {
-        assistantStreamExecutor.shutdownNow();
     }
 
     /**
@@ -259,14 +251,21 @@ public class AssistantServiceImpl implements AssistantService {
         );
 
         SseEmitter emitter = new SseEmitter(300000L);
-        assistantStreamExecutor.execute(() -> streamAssistantReply(
-                emitter,
-                userId,
-                session,
-                userMessage,
-                request,
-                preparedResult
-        ));
+        try {
+            assistantStreamExecutor.execute(() -> streamAssistantReply(
+                    emitter,
+                    userId,
+                    session,
+                    userMessage,
+                    request,
+                    preparedResult
+            ));
+        } catch (TaskRejectedException exception) {
+            // 线程池已满：立即告知前端，而不是让请求无限排队。
+            log.warn("助手流式线程池已满，拒绝新的流式请求 userId={} sessionId={}", userId, sessionId);
+            sendStreamError(emitter, "助手当前繁忙，请稍后再试");
+            completeQuietly(emitter);
+        }
         return emitter;
     }
 
@@ -872,24 +871,5 @@ public class AssistantServiceImpl implements AssistantService {
         }
         String normalized = text.replaceAll("\\s+", " ").trim();
         return normalized.length() <= maxLength ? normalized : normalized.substring(0, maxLength) + "...";
-    }
-
-    /**
-     * 流式助手回复线程工厂。
-     */
-    private static final class AssistantStreamThreadFactory implements ThreadFactory {
-
-        /** 线程编号。 */
-        private final AtomicInteger index = new AtomicInteger(1);
-
-        /**
-         * 创建守护线程，避免应用退出时被流式线程阻塞。
-         */
-        @Override
-        public Thread newThread(Runnable runnable) {
-            Thread thread = new Thread(runnable, "assistant-stream-" + index.getAndIncrement());
-            thread.setDaemon(true);
-            return thread;
-        }
     }
 }
