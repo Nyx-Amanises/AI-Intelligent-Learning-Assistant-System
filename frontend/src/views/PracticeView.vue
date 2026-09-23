@@ -461,7 +461,6 @@ onUnmounted(() => {
 .practice-back-link svg { width: 18px; height: 18px; flex: none; }
 .practice-back-link:hover { color: var(--brand); }
 .practice-back-link:focus-visible { outline: 2px solid var(--brand); outline-offset: 4px; border-radius: 4px; }
-.toolbar--flush { margin-bottom: 0; }
 .practice-tab-count { margin-left: 6px; opacity: .7; font-size: 12px; font-variant-numeric: tabular-nums; }
 .practice-loading { display: grid; gap: 24px; padding: 24px; color: var(--muted); font-size: 13px; }
 .practice-paper-layout { grid-template-columns: minmax(0, 1fr) 240px; gap: 22px; }

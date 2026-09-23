@@ -7,7 +7,7 @@
           统一查看 AI 总结、AI 出题、简答题评分和后续 Embedding 任务的执行状态，支持失败重试和业务跳转。
         </p>
       </div>
-      <div class="toolbar" style="margin-bottom: 0">
+      <div class="toolbar toolbar--flush">
         <el-button :loading="loading" @click="loadTasks()">刷新列表</el-button>
       </div>
     </div>

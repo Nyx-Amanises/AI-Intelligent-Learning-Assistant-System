@@ -275,7 +275,6 @@ void loadWrongQuestions()
 </script>
 
 <style scoped>
-.toolbar--flush { margin-bottom: 0; }
 .wrong-view__heading { padding: 24px 24px 0; }
 .wrong-view .workspace-filter-bar--wrong { display: grid; grid-template-columns: minmax(200px, 1.6fr) minmax(150px, 1fr) minmax(130px, .75fr) auto; width: 100%; margin-bottom: 0; }
 .wrong-view .workspace-toolbar { margin-top: 6px; }

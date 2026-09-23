@@ -61,6 +61,5 @@ declare module 'vue' {
     StatTiles: typeof import('./components/StatTiles.vue')['default']
     StatusPill: typeof import('./components/StatusPill.vue')['default']
     TrendLineChart: typeof import('./components/charts/TrendLineChart.vue')['default']
-    WorkspaceNavigation: typeof import('./components/WorkspaceNavigation.vue')['default']
   }
 }

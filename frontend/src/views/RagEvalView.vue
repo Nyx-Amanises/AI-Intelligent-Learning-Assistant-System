@@ -7,7 +7,7 @@
           用人工标注样本批量验证检索质量，观察 Hit@K、Recall@K、MRR 和耗时，后续调分段、混合检索、重排时就有指标可对比。
         </p>
       </div>
-      <div class="toolbar" style="margin-bottom: 0">
+      <div class="toolbar toolbar--flush">
         <el-button type="primary" @click="openDatasetDialog">新建评测集</el-button>
         <el-button type="success" plain @click="openCmrcDialog">导入 CMRC2018</el-button>
         <el-button :loading="datasetLoading" @click="loadDatasets">刷新列表</el-button>
@@ -121,7 +121,7 @@
               </p>
               <p v-else>选择左侧评测集后，在这里维护人工标注样本。</p>
             </div>
-            <div class="toolbar" style="margin-bottom: 0">
+            <div class="toolbar toolbar--flush">
               <el-button :disabled="!selectedDataset" @click="openSegmentDrawer">资料分段参考</el-button>
               <el-button :disabled="!selectedDataset" @click="openBatchDialog">批量导入</el-button>
               <el-button type="primary" :disabled="!selectedDataset" @click="openSampleDialog()">新增样本</el-button>

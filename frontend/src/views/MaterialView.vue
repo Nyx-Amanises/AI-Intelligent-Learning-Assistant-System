@@ -820,7 +820,6 @@ void loadMaterials()
 </script>
 
 <style scoped>
-.toolbar--flush { margin-bottom: 0; flex: 0 0 auto; }
 .material-library :deep(.el-button) { min-height: 44px; }
 .toolbar--flush :deep(.el-button) { margin: 0; padding-inline: 22px; }
 .material-library :deep(.el-button > span), .material-library-detail :deep(.el-button > span) { gap: 7px; }

@@ -1,6 +1,6 @@
 <template>
   <div class="empty-state" :class="[`empty-state--${variant}`]" :role="variant === 'error' ? 'alert' : undefined">
-    <div v-if="icon" class="empty-state__icon"><AppIcon :name="icon" :size="variant === 'compact' ? 24 : 30" /></div>
+    <div v-if="resolvedIcon" class="empty-state__icon"><AppIcon :name="resolvedIcon" :size="variant === 'compact' ? 24 : 30" /></div>
     <h3 v-if="title" class="empty-state__title">{{ title }}</h3>
     <p v-if="description" class="empty-state__description">{{ description }}</p>
     <div v-if="$slots.default" class="empty-state__actions"><slot /></div>
@@ -8,6 +8,7 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import AppIcon from '@/components/AppIcon.vue'
 
 /**
@@ -16,7 +17,7 @@ import AppIcon from '@/components/AppIcon.vue'
  * - compact：对话框内的小尺寸空态
  * - error：加载失败，红色警示图标，容器带 role="alert"
  */
-withDefaults(defineProps<{
+const props = withDefaults(defineProps<{
   icon?: string
   title?: string
   description?: string
@@ -27,6 +28,9 @@ withDefaults(defineProps<{
   description: '',
   variant: 'default'
 })
+
+/** 错误态固定用警示图标，避免各页面传入不相干的图标。 */
+const resolvedIcon = computed(() => (props.variant === 'error' ? 'alert' : props.icon))
 </script>
 
 <style scoped>

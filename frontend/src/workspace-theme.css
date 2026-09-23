@@ -134,8 +134,8 @@ html { scrollbar-gutter: stable; }
 body { font-family: var(--el-font-family); line-height: 1.65; font-size: 16px; background: var(--bg); color: var(--text); }
 button, input, textarea, select { font-family: inherit; }
 button { touch-action: manipulation; }
-button:focus-visible, a:focus-visible, [tabindex="0"]:focus-visible { outline: 3px solid #87a88a; outline-offset: 3px; }
-::selection { color: #163f2a; background: #d6e9cb; }
+button:focus-visible, a:focus-visible, [tabindex="0"]:focus-visible { outline: 3px solid color-mix(in srgb, var(--brand) 55%, var(--panel)); outline-offset: 3px; }
+::selection { color: var(--brand-hover); background: var(--brand-soft); }
 .visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 .page-header { margin-bottom: 36px; gap: 24px; align-items: center; }
 .page-title { color: var(--text); font-size: clamp(28px, 2.6vw, 36px); font-weight: 600; letter-spacing: -.035em; line-height: 1.4; }
@@ -144,8 +144,10 @@ button:focus-visible, a:focus-visible, [tabindex="0"]:focus-visible { outline: 3
 .learning-eyebrow { margin-bottom: 10px; color: var(--brand); font-size: 12px; font-weight: 600; letter-spacing: .12em; }
 /* 学习页面统一的内容宽度。 */
 .learning-page { width: 100%; max-width: 1180px; min-width: 0; margin: 0 auto; }
+/* 页头右侧的操作按钮组：紧贴标题，不带列表工具栏的下边距。 */
+.toolbar--flush { margin-bottom: 0; flex: 0 0 auto; }
 .page-card, .workspace-panel, .section-card { border: 0; border-radius: var(--radius-lg); box-shadow: none; }
-.analytics-card, .mastery-summary-card { border-color: var(--line); border-radius: var(--radius-lg); box-shadow: none; }
+
 .workspace-toolbar { border-color: var(--line); gap: 16px; flex-wrap: wrap; background: transparent; padding: 24px; }
 .workspace-filter-bar { grid-template-columns: minmax(180px,1.5fr) repeat(2,minmax(120px,1fr)) auto; flex: 1; margin-bottom: 0; }
 .workspace-tab { border-color: transparent; border-radius: 999px; font-weight: 500; }
@@ -155,15 +157,12 @@ button:focus-visible, a:focus-visible, [tabindex="0"]:focus-visible { outline: 3
 .workspace-table__row--active { background: var(--brand-light); border-color: var(--line); }
 .workspace-table__title strong { font-size: 16px; font-weight: 600; }
 .workspace-table__title span { font-size: 13px; }
-.workspace-side-note { background: var(--bg); border-color: transparent; }
+
 .workspace-pagination { flex-wrap: wrap; gap: 12px; border-color: var(--line); }
 .state-block.empty { border: 0; background: var(--bg); }
 .state-block { color: var(--muted); }
 .list-stack { gap: 0; }
-.list-row { border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; padding-block: 22px; }
-.list-row:hover { border-color: var(--line); box-shadow: none; background: var(--panel-hover); }
-.list-row__title { font-size: 16px; }
-.list-row__meta { font-size: 13px; line-height: 1.8; }
+
 .el-button {
   font-weight: 500;
   border-radius: 999px;
@@ -172,10 +171,10 @@ button:focus-visible, a:focus-visible, [tabindex="0"]:focus-visible { outline: 3
 .el-button:not(.is-link):not(.is-text) { min-height: 44px; padding-inline: 21px; }
 .el-button:active:not(:disabled) { transform: scale(0.98); }
 .el-button--primary:not(.is-plain) {
-  box-shadow: 0 4px 14px rgba(56, 90, 74, 0.22);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--brand) 22%, transparent);
 }
 .el-button--primary:not(.is-plain):hover {
-  box-shadow: 0 6px 18px rgba(56, 90, 74, 0.32);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--brand) 32%, transparent);
 }
 .el-button > span { gap: 7px; }
 .el-input__wrapper, .el-select__wrapper, .el-textarea__inner {
@@ -192,7 +191,6 @@ button:focus-visible, a:focus-visible, [tabindex="0"]:focus-visible { outline: 3
 .el-drawer { max-width: 100vw; background: var(--panel) !important; }
 .el-drawer__header { margin-bottom: 0; padding: 24px; border-bottom: 1px solid var(--line); color: var(--text); font-size: 18px; }
 .el-drawer__body { padding: 24px; }
-.workspace-mobile-nav .el-drawer__body { padding: 0; overflow: hidden; }
 .el-dropdown-menu {
   padding: 8px !important;
   border-radius: 14px !important;
@@ -220,32 +218,7 @@ button:focus-visible, a:focus-visible, [tabindex="0"]:focus-visible { outline: 3
 .detail-meta-item { border-color: transparent; background: var(--bg); }
 .profile-page .profile-card { border: 0; box-shadow: none; }
 .practice-paper-question__stem { font-size: 17px; line-height: 1.9; }
-.practice-paper-result__answer-row, .practice-paper-result__analysis { font-size: 15px; line-height: 1.85; }
-.analytics-hero__main { min-width: 0; background: var(--brand); border-color: var(--brand); border-radius: var(--radius-lg); box-shadow: none; }
-.analytics-hero__main span, .analytics-hero__main p { color: #dae5d5; }
-.analytics-hero__main strong { color: #fff; }
-.analytics-kpi-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
-.analytics-kpi { border-color: var(--line); border-radius: var(--radius-lg); box-shadow: none; }
-.analytics-kpi--risk { background: var(--accent-soft); border-color: #eee1c9; }
-.analytics-card__head h3 { color: var(--text); font-weight: 600; font-size: 17px; }
-.analytics-card__head p { color: var(--muted); }
-.donut-legend__item { grid-template-columns: 10px minmax(56px,1fr) minmax(20px,auto) 45px; gap: 6px; font-size: 12px; }
-.donut-legend__item > span { white-space: nowrap; }
-.weak-point-card { background: var(--accent-soft); border-color: #eee1c9; }
-.weak-point-card em { color: #895f28; }
-.mastery-level--mastered { color: var(--green); }
-.mastery-level--good { color: var(--blue); }
-.mastery-level--weak { color: var(--accent); }
-.mastery-level--risk { color: var(--red); }
-.bar-fill { background: var(--brand); }
-.bar-fill--warm { background: var(--accent); }
-.trend-line { stroke: var(--brand); }
-.trend-dot { stroke: #fff; fill: var(--brand); }
-.mastery-summary-card--main { background: var(--brand); color: #fff; }
-.mastery-summary-card--main span, .mastery-summary-card--main p { color: #dae5d5; }
-.mastery-summary-card--main strong { color: #fff; }
-.mastery-summary-card--risk { background: var(--accent-soft); border-color: #eee1c9; }
-.mastery-weak-pill { border-color: #e4d7bf; background: #fbf5e9; color: #936b34; }
+
 .detail-meta-item { min-width: 0; }
 .detail-meta-item strong { overflow-wrap: anywhere; }
 
@@ -263,7 +236,7 @@ button:focus-visible, a:focus-visible, [tabindex="0"]:focus-visible { outline: 3
   .workspace-filter-bar { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .workspace-form-grid { grid-template-columns: minmax(0,1fr); }
   .workspace-toolbar, .workspace-body { padding: 18px; }
-  .analytics-grid, .analytics-grid--top, .analytics-grid--bottom { grid-template-columns: minmax(0,1fr); }
+  
 }
 @media (max-width: 760px) {
   html { scrollbar-gutter: auto; }
@@ -275,14 +248,13 @@ button:focus-visible, a:focus-visible, [tabindex="0"]:focus-visible { outline: 3
   .el-input__inner, .el-select__placeholder, .el-textarea__inner { font-size: 16px; }
   .el-dialog { padding: 20px; margin-top: 7vh; max-height: 86dvh; overflow: auto; }
   .el-drawer { max-width: 100vw; }
-  .el-drawer:not(.workspace-more-nav) { min-width: min(100vw, 540px); }
+  .el-drawer { min-width: min(100vw, 540px); }
   .el-drawer__body { padding: 18px; }
-  .workspace-mobile-nav .el-drawer__body { padding: 0; }
   .workspace-table__row--task, .workspace-table__row--mastery, .workspace-table__row--rag-eval, .workspace-table__row--rag-run { grid-template-columns: minmax(0,1fr); }
   .workspace-filter-bar { width: 100%; }
   .el-pagination__sizes, .el-pagination__jump { display: none; }
-  .analytics-hero { grid-template-columns: minmax(0,1fr); }
-  .mastery-summary-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  
+  
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
@@ -311,14 +283,6 @@ button:focus-visible, a:focus-visible, [tabindex="0"]:focus-visible { outline: 3
   100% { transform: scale(0.9); opacity: 0.7; }
 }
 
-.status-dot--pulsing {
-  display: inline-block;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  animation: pulse-dot 1.8s infinite ease-in-out;
-}
-
 /* ==========================================================================
    Home Page / Dashboard Theme Overrides (Full Width & Themes)
    ========================================================================== */
@@ -334,8 +298,4 @@ button:focus-visible, a:focus-visible, [tabindex="0"]:focus-visible { outline: 3
     linear-gradient(90deg, rgb(247 247 242 / 97%) 0%, rgb(247 247 242 / 87%) 27%, rgb(245 245 238 / 37%) 51%, transparent 74%),
     linear-gradient(0deg, rgb(18 51 40 / 20%), transparent 36%) !important;
 }
-
-
-
-
 
