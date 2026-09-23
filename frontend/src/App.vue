@@ -1,10 +1,16 @@
 <template>
-  <router-view v-slot="{ Component }">
-    <transition name="app-crossfade" mode="out-in">
-      <component :is="Component" />
-    </transition>
-  </router-view>
+  <el-config-provider :locale="zhCn" :z-index="3000">
+    <router-view v-slot="{ Component }">
+      <transition name="app-crossfade" mode="out-in">
+        <component :is="Component" />
+      </transition>
+    </router-view>
+  </el-config-provider>
 </template>
+
+<script setup lang="ts">
+import zhCn from 'element-plus/es/locale/lang/zh-cn'
+</script>
 
 <style>
 .app-crossfade-enter-active,
