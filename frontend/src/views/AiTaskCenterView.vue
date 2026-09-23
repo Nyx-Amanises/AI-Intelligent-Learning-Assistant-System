@@ -8,7 +8,7 @@
         </p>
       </div>
       <div class="toolbar" style="margin-bottom: 0">
-        <el-button :loading="loading" @click="loadTasks">刷新列表</el-button>
+        <el-button :loading="loading" @click="loadTasks()">刷新列表</el-button>
       </div>
     </div>
 
@@ -136,8 +136,8 @@
             :page-sizes="[10, 20, 50]"
             layout="total, sizes, prev, pager, next"
             :total="total"
-            @current-change="loadTasks"
-            @size-change="loadTasks"
+            @current-change="loadTasks()"
+            @size-change="loadTasks()"
           />
         </div>
       </div>
@@ -560,7 +560,7 @@ watch(hasActiveTasks, (active) => {
   stopAutoRefresh()
 })
 
-onMounted(loadTasks)
+onMounted(() => loadTasks())
 
 onUnmounted(() => {
   stopAutoRefresh()
