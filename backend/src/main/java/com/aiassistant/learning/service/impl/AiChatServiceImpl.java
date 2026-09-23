@@ -1,5 +1,6 @@
 package com.aiassistant.learning.service.impl;
 
+import lombok.extern.slf4j.Slf4j;
 import com.aiassistant.learning.common.exception.AiStreamAbortedException;
 import com.aiassistant.learning.common.exception.BusinessException;
 import com.aiassistant.learning.service.AiChatService;
@@ -28,6 +29,7 @@ import org.springframework.util.StringUtils;
  *
  * <p>负责把系统提示词和用户提示词组装成 HTTP 请求，并兼容普通 Chat Completions 与 Responses API。</p>
  */
+@Slf4j
 @Service
 public class AiChatServiceImpl implements AiChatService {
 
@@ -69,6 +71,7 @@ public class AiChatServiceImpl implements AiChatService {
         } catch (java.net.http.HttpTimeoutException exception) {
             throw new BusinessException(500, "调用 AI 接口失败: 请求超时，请稍后重试");
         } catch (java.io.IOException exception) {
+            log.error("调用 AI 接口失败，无法连接到 AI 服务: {}", exception.getMessage(), exception);
             throw new BusinessException(
                     500,
                     "调用 AI 接口失败: 无法连接到 AI 服务，请检查接口地址、网络或 TLS 配置"
@@ -78,6 +81,7 @@ public class AiChatServiceImpl implements AiChatService {
             Thread.currentThread().interrupt();
             throw new BusinessException(500, "调用 AI 接口失败: 请求被中断");
         } catch (Exception exception) {
+            log.error("调用 AI 接口失败: {}", exception.getMessage(), exception);
             throw new BusinessException(500, "调用 AI 接口失败: " + extractBestMessage(exception));
         }
     }
@@ -132,6 +136,7 @@ public class AiChatServiceImpl implements AiChatService {
         } catch (java.net.http.HttpTimeoutException exception) {
             throw new BusinessException(500, "调用 AI 接口失败: 请求超时，请稍后重试");
         } catch (java.io.IOException exception) {
+            log.error("调用 AI 接口失败，无法连接到 AI 服务: {}", exception.getMessage(), exception);
             throw new BusinessException(
                     500,
                     "调用 AI 接口失败: 无法连接到 AI 服务，请检查接口地址、网络或 TLS 配置"
@@ -141,6 +146,7 @@ public class AiChatServiceImpl implements AiChatService {
             Thread.currentThread().interrupt();
             throw new BusinessException(500, "调用 AI 接口失败: 请求被中断");
         } catch (Exception exception) {
+            log.error("调用 AI 接口失败: {}", exception.getMessage(), exception);
             throw new BusinessException(500, "调用 AI 接口失败: " + extractBestMessage(exception));
         }
     }

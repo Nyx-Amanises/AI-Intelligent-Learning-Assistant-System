@@ -1,5 +1,6 @@
 package com.aiassistant.learning.service.impl;
 
+import lombok.extern.slf4j.Slf4j;
 import com.aiassistant.learning.common.exception.BusinessException;
 import com.aiassistant.learning.context.UserContext;
 import com.aiassistant.learning.dto.ai.AiTaskCreateRequest;
@@ -48,6 +49,7 @@ import org.springframework.util.StringUtils;
  *
  * <p>它负责创建任务、查询任务、重试任务，并在事务提交后异步执行任务。</p>
  */
+@Slf4j
 @Service
 public class AiTaskServiceImpl implements AiTaskService {
 
@@ -590,6 +592,7 @@ public class AiTaskServiceImpl implements AiTaskService {
         try {
             questionSetId = objectMapper.readValue(task.getPayloadJson(), QuestionGenerateTaskPayload.class).getQuestionSetId();
         } catch (Exception exception) {
+            log.warn("解析出题任务参数失败 taskId={}: {}", task.getId(), exception.getMessage());
             return;
         }
         if (questionSetId == null) {
@@ -604,6 +607,8 @@ public class AiTaskServiceImpl implements AiTaskService {
     }
 
     private void failTask(AiTask task, Exception exception) {
+        log.error("AI 任务执行失败 taskId={} taskType={} userId={}: {}",
+                task.getId(), task.getTaskType(), task.getUserId(), exception.getMessage(), exception);
         markGeneratingQuestionSet(task, "FAILED");
         markGeneratingSummary(task, "FAILED", exception.getMessage());
         task.setStatus(STATUS_FAILED);

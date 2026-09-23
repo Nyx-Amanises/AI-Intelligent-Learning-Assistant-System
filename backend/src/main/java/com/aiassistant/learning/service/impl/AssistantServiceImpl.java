@@ -1,5 +1,6 @@
 package com.aiassistant.learning.service.impl;
 
+import lombok.extern.slf4j.Slf4j;
 import com.aiassistant.learning.common.exception.AiStreamAbortedException;
 import com.aiassistant.learning.common.exception.BusinessException;
 import com.aiassistant.learning.context.UserContext;
@@ -48,6 +49,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
  *
  * <p>负责保存会话消息、调用 Agent 编排器、处理流式 SSE 推送，并记录工具调用。</p>
  */
+@Slf4j
 @Service
 public class AssistantServiceImpl implements AssistantService {
 
@@ -363,6 +365,8 @@ public class AssistantServiceImpl implements AssistantService {
             }
             completeQuietly(emitter);
         } catch (Exception exception) {
+            log.error("助手流式回复失败 userId={} sessionId={}: {}",
+                    userId, session.getId(), exception.getMessage(), exception);
             sendStreamFailureReply(
                     emitter,
                     userId,

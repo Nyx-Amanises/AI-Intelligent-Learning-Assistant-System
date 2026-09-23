@@ -1,5 +1,6 @@
 package com.aiassistant.learning.service.impl;
 
+import lombok.extern.slf4j.Slf4j;
 import com.aiassistant.learning.common.exception.BusinessException;
 import com.aiassistant.learning.service.AiConfigService;
 import com.aiassistant.learning.service.TextEmbeddingService;
@@ -19,6 +20,7 @@ import org.springframework.web.client.RestClientResponseException;
  *
  * <p>负责调用外部 Embedding 接口，也支持 Mock 模式生成稳定的假向量。</p>
  */
+@Slf4j
 @Service
 public class AiTextEmbeddingServiceImpl implements TextEmbeddingService {
 
@@ -124,6 +126,7 @@ public class AiTextEmbeddingServiceImpl implements TextEmbeddingService {
                     "调用 Embedding 接口失败: 无法连接到 AI 服务，请检查接口地址、网络或 TLS 配置" + buildCauseSuffix(exception)
             );
         } catch (Exception exception) {
+            log.error("调用 Embedding 接口失败: {}", exception.getMessage(), exception);
             throw new BusinessException(500, "调用 Embedding 接口失败: " + extractBestMessage(exception));
         }
     }

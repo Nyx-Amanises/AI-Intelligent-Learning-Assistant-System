@@ -1,5 +1,6 @@
 package com.aiassistant.learning.service.impl;
 
+import lombok.extern.slf4j.Slf4j;
 import com.aiassistant.learning.common.exception.BusinessException;
 import com.aiassistant.learning.config.QdrantProperties;
 import com.aiassistant.learning.entity.MaterialSegment;
@@ -25,6 +26,7 @@ import org.springframework.util.StringUtils;
  *
  * <p>它会读取资料分段，调用 Embedding 模型生成向量，再写入向量库。</p>
  */
+@Slf4j
 @Service
 public class AiEmbeddingServiceImpl implements AiEmbeddingService {
 
@@ -174,6 +176,7 @@ public class AiEmbeddingServiceImpl implements AiEmbeddingService {
                 }
             }
         } catch (Exception exception) {
+            log.error("资料向量化失败 taskId={} model={}: {}", taskId, resolvedModel, exception.getMessage(), exception);
             markPendingSegmentsFailed(pendingSegments, resolvedModel, taskId);
             throw exception;
         }

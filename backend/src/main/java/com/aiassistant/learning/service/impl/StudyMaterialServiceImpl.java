@@ -420,6 +420,7 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
             this.updateById(material);
             dispatchAutoTasksAfterReady(userId, materialId);
         } catch (Exception exception) {
+            log.error("资料解析失败 materialId={} userId={}: {}", materialId, userId, exception.getMessage(), exception);
             material.setParseStatus("FAILED");
             this.updateById(material);
             throw new BusinessException(500, "资料解析失败: " + exception.getMessage());
