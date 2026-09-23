@@ -78,16 +78,16 @@
                 <strong>{{ item.name }}</strong>
                 <span>#{{ item.id }} · {{ item.description || '暂无说明' }}</span>
               </div>
-              <div class="task-meta-stack">
+              <div class="task-meta-stack" data-label="资料">
                 <strong>{{ item.materialTitle || `资料 #${item.materialId}` }}</strong>
                 <span>资料 ID #{{ item.materialId }}</span>
               </div>
-              <span>{{ item.sampleCount || 0 }} 条</span>
-              <div class="task-meta-stack">
+              <span data-label="样本">{{ item.sampleCount || 0 }} 条</span>
+              <div class="task-meta-stack" data-label="最近运行">
                 <strong>{{ item.lastRunId ? `#${item.lastRunId}` : '未运行' }}</strong>
                 <span>{{ formatDateTime(item.lastRunAt) }}</span>
               </div>
-              <div class="workspace-action-row workspace-action-row--fit">
+              <div class="workspace-action-row workspace-action-row--fit" data-label="操作">
                 <el-button link type="primary" @click="selectDataset(item)">配置样本</el-button>
                 <el-button link type="success" :disabled="!item.sampleCount" @click="runDataset(item)">运行评测</el-button>
                 <el-button link type="info" :disabled="!item.lastRunId" @click="loadRun(item.lastRunId!)">查看结果</el-button>
@@ -210,7 +210,7 @@
             <span>指标</span>
           </div>
           <div
-            v-for="item in lastRun.items"
+            v-for="item in visibleRunItems"
             :key="item.id"
             class="workspace-table__row workspace-table__row--rag-run"
           >
@@ -218,22 +218,26 @@
               <strong>{{ item.queryText }}</strong>
               <span>样本 #{{ item.sampleId }} · {{ item.latencyMs || 0 }}ms</span>
             </div>
-            <div class="task-meta-stack">
+            <div class="task-meta-stack" data-label="标准">
               <span>段落 {{ formatNumberList(item.expectedSegmentIds) }}</span>
               <span>页码 {{ formatNumberList(item.expectedPageNos) }}</span>
             </div>
-            <div class="task-meta-stack">
+            <div class="task-meta-stack" data-label="实际召回">
               <span>段落 {{ formatNumberList(item.retrievedSegmentIds) }}</span>
               <span>页码 {{ formatNumberList(item.retrievedPageNos) }}</span>
             </div>
-            <strong :class="item.hitRank ? 'rag-hit-rank--hit' : 'rag-hit-rank--miss'">
+            <strong data-label="命中排名" :class="item.hitRank ? 'rag-hit-rank--hit' : 'rag-hit-rank--miss'">
               {{ item.hitRank ? `第 ${item.hitRank} 名` : '未命中' }}
             </strong>
-            <div class="task-meta-stack">
+            <div class="task-meta-stack" data-label="指标">
               <span>R@1 {{ formatMetric(item.recallAt1) }}</span>
               <span>R@3 {{ formatMetric(item.recallAt3) }} · R@5 {{ formatMetric(item.recallAt5) }}</span>
               <span v-if="item.errorMessage" class="rag-error-text">{{ item.errorMessage }}</span>
             </div>
+          </div>
+          <div v-if="lastRun.items.length > visibleRunItems.length" class="rag-run-more">
+            <span>已显示 {{ visibleRunItems.length }} / {{ lastRun.items.length }} 条</span>
+            <el-button @click="runVisibleCount += RUN_VISIBLE_STEP">显示更多</el-button>
           </div>
         </div>
       </div>
@@ -459,7 +463,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadFile } from 'element-plus'
 import {
@@ -488,6 +492,7 @@ import {
 import { useAutoListQuery } from '@/composables/useAutoListQuery'
 import { getErrorMessage } from '@/utils/errorMessage'
 import { useLatestRequest } from '@/composables/useLatestRequest'
+import { formatDateTime, formatSegmentMeta } from '@/utils/format'
 
 interface MaterialSegment {
   id: number
@@ -533,6 +538,8 @@ const importingCmrc = ref(false)
 const INITIAL_SAMPLE_VISIBLE_COUNT = 6
 const SAMPLE_VISIBLE_STEP = 6
 const sampleVisibleCount = ref(INITIAL_SAMPLE_VISIBLE_COUNT)
+const RUN_VISIBLE_STEP = 50
+const runVisibleCount = ref(RUN_VISIBLE_STEP)
 
 const filters = reactive({
   keyword: '',
@@ -595,6 +602,11 @@ const selectedMaterial = computed(() =>
   materials.value.find((item) => item.id === datasetForm.materialId)
 )
 
+const visibleRunItems = computed(() => (lastRun.value?.items || []).slice(0, runVisibleCount.value))
+watch(() => lastRun.value?.id, () => {
+  runVisibleCount.value = RUN_VISIBLE_STEP
+})
+
 const visibleSamples = computed(() =>
   samples.value.slice(0, sampleVisibleCount.value)
 )
@@ -620,13 +632,6 @@ const expandSamples = () => {
 
 const collapseSamples = () => {
   resetSampleVisibleCount()
-}
-
-const formatDateTime = (value?: string) => {
-  if (!value) {
-    return '--'
-  }
-  return value.replace('T', ' ').slice(0, 19)
 }
 
 const formatMetric = (value?: number) => {
@@ -665,16 +670,7 @@ const formatNumberList = (values?: number[]) => {
   return values.join(', ')
 }
 
-const formatSegmentLocation = (segment: { pageNo?: number; segmentNo?: number }) => {
-  const parts = []
-  if (segment.pageNo) {
-    parts.push(`第 ${segment.pageNo} 页`)
-  }
-  if (segment.segmentNo) {
-    parts.push(`段落 #${segment.segmentNo}`)
-  }
-  return parts.length ? parts.join(' · ') : '定位信息暂缺'
-}
+const formatSegmentLocation = (segment: { pageNo?: number; segmentNo?: number }) => formatSegmentMeta(segment)
 
 const formatEmbeddingProgress = (row: MaterialPageItem) => {
   const embedded = Number(row.embeddedSegmentCount || 0)

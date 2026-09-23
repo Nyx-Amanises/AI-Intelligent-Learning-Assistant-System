@@ -33,8 +33,8 @@
 
         <div class="workspace-toolbar__meta">
           <span class="workspace-chip">共 {{ total }} 条任务</span>
-          <span class="workspace-chip">处理中 {{ activeCount }} 条</span>
-          <span class="workspace-chip workspace-chip--brand">失败 {{ failedCount }} 条</span>
+          <span class="workspace-chip">本页处理中 {{ activeCount }} 条</span>
+          <span class="workspace-chip workspace-chip--brand">本页失败 {{ failedCount }} 条</span>
         </div>
       </div>
 
@@ -70,12 +70,12 @@
               <span>任务 #{{ item.id }}<template v-if="isAdmin"> · 优先级 {{ item.priority }}</template></span>
             </div>
 
-            <div class="task-meta-stack">
+            <div class="task-meta-stack" data-label="业务对象">
               <strong>{{ formatBizLabel(item) }}</strong>
               <span>{{ formatBizHint(item) }}</span>
             </div>
 
-            <div class="task-status-cell">
+            <div class="task-status-cell" data-label="状态">
               <div
                 class="task-status-pill"
                 :class="`task-status-pill--${statusVisualClass(item.status)}`"
@@ -90,10 +90,10 @@
               </span>
             </div>
 
-            <span>{{ item.modelName || '--' }}</span>
-            <span>{{ formatDateTime(item.createdAt) }}</span>
+            <span data-label="模型">{{ item.modelName || '--' }}</span>
+            <span data-label="创建时间">{{ formatDateTime(item.createdAt) }}</span>
 
-            <div class="workspace-action-row workspace-action-row--task">
+            <div class="workspace-action-row workspace-action-row--task" data-label="操作">
               <el-button link type="primary" @click="openTaskDetail(item.id)">查看详情</el-button>
               <el-button v-if="canOpenBizPage(item)" link @click="openBizPage(item)">前往业务</el-button>
               <el-button
@@ -248,6 +248,8 @@ import { useAutoListQuery } from '@/composables/useAutoListQuery'
 import { useUserStore } from '@/stores/user'
 import { getErrorMessage } from '@/utils/errorMessage'
 import { useLatestRequest } from '@/composables/useLatestRequest'
+import { formatDateTime } from '@/utils/format'
+import { formatTaskStatus, formatTaskType } from '@/utils/labels'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -291,44 +293,7 @@ const hasActiveTasks = computed(() =>
 )
 let autoRefreshTimer: number | null = null
 
-const formatDateTime = (value?: string) => {
-  if (!value) {
-    return '--'
-  }
-  return value.replace('T', ' ').slice(0, 19)
-}
-
-const formatTaskType = (value?: string) => {
-  switch ((value || '').toUpperCase()) {
-    case 'SUMMARY':
-      return 'AI 总结'
-    case 'QUESTION_GENERATE':
-      return 'AI 出题'
-    case 'PRACTICE_REVIEW':
-      return '简答题评分'
-    case 'EMBEDDING':
-      return 'Embedding'
-    default:
-      return value || '未知任务'
-  }
-}
-
-const formatStatus = (value?: string) => {
-  switch ((value || '').toUpperCase()) {
-    case 'PENDING':
-      return '等待中...'
-    case 'RUNNING':
-      return '执行中...'
-    case 'SUCCESS':
-      return '已完成'
-    case 'FAILED':
-      return '失败'
-    case 'CANCELLED':
-      return '已取消'
-    default:
-      return value || '未知状态'
-  }
-}
+const formatStatus = (value?: string) => formatTaskStatus(value)
 
 const statusVisualClass = (value?: string) => {
   switch ((value || '').toUpperCase()) {

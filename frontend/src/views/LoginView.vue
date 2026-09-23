@@ -144,6 +144,7 @@
 
       <aside class="login-visual" aria-labelledby="login-visual-title">
         <img
+          v-if="showVisualPhoto"
           class="login-visual__image"
           :src="botanicalPhoto"
           alt=""
@@ -168,7 +169,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { loginApi, registerApi } from '@/api/modules/auth'
@@ -179,6 +180,15 @@ import AppIcon from '@/components/AppIcon.vue'
 import BrandLogo from '@/components/BrandLogo.vue'
 import botanicalPhoto from '@/assets/auth/botanical-study.webp'
 import { getErrorMessage } from '@/utils/errorMessage'
+
+// 手机端右侧配图整体隐藏，这里不渲染 <img>，避免白白下载一张大图。
+const visualMediaQuery = typeof window !== 'undefined' ? window.matchMedia('(min-width: 761px)') : null
+const showVisualPhoto = ref(visualMediaQuery ? visualMediaQuery.matches : true)
+const syncVisualPhoto = () => {
+  showVisualPhoto.value = Boolean(visualMediaQuery?.matches)
+}
+onMounted(() => visualMediaQuery?.addEventListener('change', syncVisualPhoto))
+onBeforeUnmount(() => visualMediaQuery?.removeEventListener('change', syncVisualPhoto))
 
 type AuthField = 'username' | 'nickname' | 'password' | 'confirmPassword'
 
