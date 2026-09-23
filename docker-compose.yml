@@ -4,7 +4,7 @@ services:
     container_name: ai-learning-mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123456789}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?请在 .env 中设置 MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-ai_learning_assistant}
       TZ: Asia/Shanghai
     command:
@@ -64,7 +64,7 @@ services:
       SERVER_PORT: 8083
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-ai_learning_assistant}?allowPublicKeyRetrieval=true&useSSL=false&useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai
       SPRING_DATASOURCE_USERNAME: root
-      SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123456789}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD:?请在 .env 中设置 MYSQL_ROOT_PASSWORD}
       SPRING_REDIS_HOST: redis
       SPRING_REDIS_PORT: 6379
       APP_FILE_UPLOAD_DIR: /app/uploads
@@ -84,7 +84,7 @@ services:
       APP_QDRANT_ENABLED: ${APP_QDRANT_ENABLED:-true}
       APP_QDRANT_BASE_URL: http://qdrant:6333
       APP_QDRANT_COLLECTION_NAME: ${APP_QDRANT_COLLECTION_NAME:-material_segment_vectors}
-      APP_JWT_SECRET: ${APP_JWT_SECRET:-replace-with-your-jwt-secret-please-change-32-bytes}
+      APP_JWT_SECRET: ${APP_JWT_SECRET:?请在 .env 中设置至少 32 位的 APP_JWT_SECRET}
     ports:
       - "${BACKEND_HOST_PORT:-8083}:8083"
     volumes:

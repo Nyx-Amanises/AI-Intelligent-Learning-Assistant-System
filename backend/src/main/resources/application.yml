@@ -8,7 +8,7 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: ${SPRING_DATASOURCE_URL:jdbc:mysql://127.0.0.1:3307/ai_learning_assistant?allowPublicKeyRetrieval=true&useSSL=false&useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai}
     username: ${SPRING_DATASOURCE_USERNAME:root}
-    password: ${SPRING_DATASOURCE_PASSWORD:123456789}
+    password: ${SPRING_DATASOURCE_PASSWORD}
   data:
     redis:
       host: ${SPRING_REDIS_HOST:127.0.0.1}
@@ -26,7 +26,6 @@ spring:
 mybatis-plus:
   configuration:
     map-underscore-to-camel-case: true
-    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
   global-config:
     db-config:
       logic-delete-field: deleted
@@ -59,7 +58,7 @@ app:
     upsert-batch-size: ${APP_QDRANT_UPSERT_BATCH_SIZE:16}
     retrieval-limit: ${APP_QDRANT_RETRIEVAL_LIMIT:6}
   file:
-    upload-dir: ${APP_FILE_UPLOAD_DIR:C:/Users/雪/Desktop/AI-Intelligent-Learning-Assistant-System/backend/uploads}
+    upload-dir: ${APP_FILE_UPLOAD_DIR:./uploads}
   jwt:
-    secret: ${APP_JWT_SECRET:replace-with-your-jwt-secret-please-change-32-bytes}
+    secret: ${APP_JWT_SECRET}
     expire-hours: ${APP_JWT_EXPIRE_HOURS:24}

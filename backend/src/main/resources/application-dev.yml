@@ -1,5 +1,5 @@
-spring:
-  datasource:
-    url: jdbc:mysql://127.0.0.1:3307/ai_learning_assistant?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai
-    username: root
-    password: 123456789
+# 开发环境专用配置：只放调试开关，不放任何密码或密钥。
+# 数据库密码、JWT 密钥等一律通过环境变量注入（见项目根目录 .env.example）。
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl

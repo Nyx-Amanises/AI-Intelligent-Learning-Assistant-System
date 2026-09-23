@@ -178,13 +178,13 @@ docker run -d --name qdrant -p 6333:6333 -p 6334:6334 -v qdrant_storage:/qdrant/
 
 ## 核心配置
 
-后端支持通过环境变量覆盖配置：
+后端支持通过环境变量覆盖配置。其中 `SPRING_DATASOURCE_PASSWORD` 与 `APP_JWT_SECRET` **没有默认值**，缺失或 JWT 密钥短于 32 个字符时后端会在启动阶段直接报错退出；本地手动启动前请先在终端导出这两个变量（可参���根目录 `.env.example`）。
 
 | 变量 | 说明 |
 | --- | --- |
 | `SPRING_DATASOURCE_URL` | MySQL 连接地址 |
 | `SPRING_DATASOURCE_USERNAME` | MySQL 用户名 |
-| `SPRING_DATASOURCE_PASSWORD` | MySQL 密码 |
+| `SPRING_DATASOURCE_PASSWORD` | MySQL 密码（必填，无默认值） |
 | `SPRING_REDIS_HOST` | Redis 地址 |
 | `SPRING_REDIS_SSL_ENABLED` | Redis / Valkey 是否启用 TLS |
 | `APP_AI_ENABLED` | 是否启用 AI 能力 |
@@ -200,7 +200,8 @@ docker run -d --name qdrant -p 6333:6333 -p 6334:6334 -v qdrant_storage:/qdrant/
 | `APP_QDRANT_BASE_URL` | Qdrant 地址 |
 | `APP_QDRANT_API_KEY` | Qdrant API Key |
 | `APP_QDRANT_COLLECTION_NAME` | Qdrant Collection 名称 |
-| `APP_JWT_SECRET` | JWT 密钥 |
+| `APP_JWT_SECRET` | JWT 密钥（必填，至少 32 个字符） |
+| `APP_FILE_UPLOAD_DIR` | 上传文件保存目录，默认 `./uploads` |
 | `VITE_API_BASE_URL` | 前端生产环境后端 API 地址 |
 
 AI 配置页面保存的运行时配置默认写入：
