@@ -140,6 +140,10 @@ button:focus-visible, a:focus-visible, [tabindex="0"]:focus-visible { outline: 3
 .page-header { margin-bottom: 36px; gap: 24px; align-items: center; }
 .page-title { color: var(--text); font-size: clamp(28px, 2.6vw, 36px); font-weight: 600; letter-spacing: -.035em; line-height: 1.4; }
 .page-desc { color: var(--muted); font-size: 15px; margin-top: 12px; line-height: 1.8; }
+/* 页面标题上方的小字眉题，所有学习页面共用一种视觉。 */
+.learning-eyebrow { margin-bottom: 10px; color: var(--brand); font-size: 12px; font-weight: 600; letter-spacing: .12em; }
+/* 学习页面统一的内容宽度。 */
+.learning-page { width: 100%; max-width: 1180px; min-width: 0; margin: 0 auto; }
 .page-card, .workspace-panel, .section-card { border: 0; border-radius: var(--radius-lg); box-shadow: none; }
 .analytics-card, .mastery-summary-card { border-color: var(--line); border-radius: var(--radius-lg); box-shadow: none; }
 .workspace-toolbar { border-color: var(--line); gap: 16px; flex-wrap: wrap; background: transparent; padding: 24px; }
@@ -248,7 +252,10 @@ button:focus-visible, a:focus-visible, [tabindex="0"]:focus-visible { outline: 3
 @media (max-width: 1280px) {
   .workspace-table__head--task, .workspace-table__head--mastery, .workspace-table__head--rag-eval, .workspace-table__head--rag-run { display: none; }
   .workspace-table__row--task, .workspace-table__row--mastery, .workspace-table__row--rag-eval, .workspace-table__row--rag-run { grid-template-columns: repeat(2,minmax(0,1fr)); align-items: start; }
-  .workspace-table__row--task > :first-child, .workspace-table__row--mastery > :first-child { grid-column: 1 / -1; }
+  .workspace-table__row--task > :first-child, .workspace-table__row--mastery > :first-child, .workspace-table__row--rag-eval > :first-child, .workspace-table__row--rag-run > :first-child { grid-column: 1 / -1; }
+  /* 表头隐藏后，用 data-label 给每个单元格补上列名，避免手机上只剩孤立的数值。 */
+  .workspace-table__row--task > [data-label], .workspace-table__row--rag-eval > [data-label], .workspace-table__row--rag-run > [data-label] { display: block; }
+  .workspace-table__row--task > [data-label]::before, .workspace-table__row--rag-eval > [data-label]::before, .workspace-table__row--rag-run > [data-label]::before { content: attr(data-label); display: block; margin-bottom: 4px; color: var(--muted); font-size: 11px; font-weight: 500; letter-spacing: .04em; }
   .workspace-filter-bar--mastery, .workspace-filter-bar--task { grid-template-columns: repeat(2,minmax(0,1fr)); }
 }
 @media (max-width: 900px) {

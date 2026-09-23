@@ -55,8 +55,8 @@
           <ol v-else class="daily-reading-list">
             <li v-for="(material, index) in materials" :key="material.id">
               <RouterLink :to="materialDestination(material.id)" class="daily-reading-row">
-                <span class="daily-book" :class="'daily-book--' + index % 4" aria-hidden="true"><i /><small>{{ formatMaterialType(material.materialType) }}</small><b>{{ String(index + 1).padStart(2, '0') }}</b></span>
-                <span class="daily-reading-row__copy"><strong>{{ material.title }}</strong><small>{{ formatMaterialType(material.materialType) }}<i aria-hidden="true">·</i>{{ material.totalCharacters ? material.totalCharacters.toLocaleString() + ' 字' : '学习资料' }}<i aria-hidden="true">·</i>{{ formatMaterialDate(material.createdAt) }}</small></span>
+                <span class="daily-book" :class="'daily-book--' + index % 4" aria-hidden="true"><i /><small>{{ formatMaterialType(material.materialType, '文档') }}</small><b>{{ String(index + 1).padStart(2, '0') }}</b></span>
+                <span class="daily-reading-row__copy"><strong>{{ material.title }}</strong><small>{{ formatMaterialType(material.materialType, '文档') }}<i aria-hidden="true">·</i>{{ material.totalCharacters ? formatCharacters(material.totalCharacters) : '学习资料' }}<i aria-hidden="true">·</i>{{ formatMaterialDate(material.createdAt) }}</small></span>
                 <span class="daily-reading-row__state" :class="{ 'is-error': material.parseStatus === 'FAILED' }">{{ formatParseStatus(material.parseStatus) }}</span>
                 <AppIcon class="daily-reading-row__arrow" name="arrow-up-right" :size="20" />
               </RouterLink>
@@ -92,6 +92,8 @@ import { useUserStore } from '@/stores/user'
 import lakeImage from '@/assets/scenery/quiet-lake.webp'
 import lakeMobile from '@/assets/scenery/quiet-lake-mobile.webp'
 import forestImage from '@/assets/scenery/forest-light.webp'
+import { formatCharacters, formatShortDate } from '@/utils/format'
+import { formatMaterialType } from '@/utils/labels'
 
 const emit = defineEmits<{ openAssistant: [] }>()
 const userStore = useUserStore()
@@ -110,14 +112,7 @@ const learningDestination = computed(() => {
   return readable ? materialDestination(readable.id) : materials.value.length || loading.value || loadError.value ? { path: '/materials' } : uploadDestination
 })
 const learningHint = computed(() => materials.value.length ? '打开资料，读懂新知' : '从一份感兴趣的资料开始')
-function formatMaterialType(type: string) {
-  return ({ PDF: 'PDF', DOCX: 'Word', WORD: 'Word', TEXT: '文本', TXT: 'TXT', MARKDOWN: 'Markdown' } as Record<string, string>)[type?.toUpperCase()] || '文档'
-}
-function formatMaterialDate(value?: string) {
-  if (!value) return '最近添加'
-  const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? '最近添加' : new Intl.DateTimeFormat('zh-CN', { month: 'numeric', day: 'numeric' }).format(date)
-}
+const formatMaterialDate = (value?: string) => formatShortDate(value, '最近添加')
 function formatParseStatus(status: string) {
   return ({ SUCCESS: '继续阅读', FAILED: '需重新解析', PENDING: '等待解析', PROCESSING: '正在解析' } as Record<string, string>)[status?.toUpperCase()] || '查看资料'
 }
