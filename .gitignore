@@ -16,3 +16,4 @@ Thumbs.db
 
 .playwright-mcp/
 tmp/
+.eslintcache
