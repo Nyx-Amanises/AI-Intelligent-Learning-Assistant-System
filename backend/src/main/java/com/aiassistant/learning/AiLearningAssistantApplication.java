@@ -1,5 +1,6 @@
 package com.aiassistant.learning;
 
+import com.aiassistant.learning.config.RequiredEnvironmentValidator;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -24,6 +25,9 @@ public class AiLearningAssistantApplication {
      * @param args 命令行参数，普通本地启动时通常不需要手动传入
      */
     public static void main(String[] args) {
-        SpringApplication.run(AiLearningAssistantApplication.class, args);
+        SpringApplication application = new SpringApplication(AiLearningAssistantApplication.class);
+        // 在创建任何 Bean 之前检查必填的密钥 / 密码是否真的配置了（见 RequiredEnvironmentValidator）。
+        application.addListeners(new RequiredEnvironmentValidator());
+        application.run(args);
     }
 }
