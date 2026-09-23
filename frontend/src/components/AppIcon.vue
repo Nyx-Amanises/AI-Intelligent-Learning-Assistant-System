@@ -162,7 +162,13 @@ const pathMap: Record<string, string[]> = {
   config: ['M12 8.6a3.4 3.4 0 1 0 0 6.8 3.4 3.4 0 0 0 0-6.8Z', 'M19.1 13.2a7.9 7.9 0 0 0 0-2.4l2-1.5-2-3.4-2.4 1a7.4 7.4 0 0 0-2.1-1.2L14.3 3h-4.6l-.3 2.7a7.4 7.4 0 0 0-2.1 1.2l-2.4-1-2 3.4 2 1.5a7.9 7.9 0 0 0 0 2.4l-2 1.5 2 3.4 2.4-1a7.4 7.4 0 0 0 2.1 1.2l.3 2.7h4.6l.3-2.7a7.4 7.4 0 0 0 2.1-1.2l2.4 1 2-3.4-2-1.5Z']
 }
 
-const iconPaths = computed(() => pathMap[props.name] || pathMap.brand)
+const iconPaths = computed(() => {
+  const paths = pathMap[props.name]
+  if (!paths && import.meta.env.DEV && !fileIcon.value && !['google', 'github', 'discord', 'qq'].includes(props.name)) {
+    console.warn(`[AppIcon] 未定义的图标名称 "${props.name}"，已回退为品牌图标`)
+  }
+  return paths || pathMap.brand
+})
 </script>
 
 <style scoped>

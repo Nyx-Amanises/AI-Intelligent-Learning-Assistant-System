@@ -66,13 +66,13 @@
       </div>
     </div>
     <div v-else-if="loadError" class="material-library__state" role="alert">
-      <div class="material-library__state-icon"><AppIcon name="book" :size="30" /></div>
+      <div class="material-library__state-icon"><AppIcon name="book-open" :size="30" /></div>
       <h2>资料加载失败</h2>
       <p>{{ loadError }}</p>
       <el-button type="primary" @click="loadMaterials">重新加载</el-button>
     </div>
     <div v-else-if="!materials.length" class="material-library__state">
-      <div class="material-library__state-icon"><AppIcon name="book" :size="30" /></div>
+      <div class="material-library__state-icon"><AppIcon name="book-open" :size="30" /></div>
       <template v-if="hasActiveFilters">
         <h2>没有找到匹配的资料</h2>
         <p>可以尝试更换关键词或重置筛选条件。</p>

@@ -3687,17 +3687,17 @@ a {
 }
 
 .rag-hit-rank--hit {
-  color: var(--success);
+  color: var(--green);
   font-weight: 600;
 }
 
 .rag-hit-rank--miss {
-  color: var(--danger);
+  color: var(--red);
   font-weight: 600;
 }
 
 .rag-error-text {
-  color: var(--danger);
+  color: var(--red);
   font-size: 12px;
 }
 
