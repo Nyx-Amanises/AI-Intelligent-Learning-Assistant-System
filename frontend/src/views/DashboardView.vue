@@ -143,15 +143,15 @@ onUnmounted(() => { isActive = false })
 
 <style scoped>
 .daily-home {
-  --home-ink: #253b34;
-  --home-muted: #5b6c62;
+  --home-ink: var(--text);
+  --home-muted: var(--text-secondary);
   --home-scene-bg: #dce7e4;
   --home-veil: linear-gradient(90deg, rgb(239 244 236 / 97%) 0%, rgb(239 244 236 / 87%) 27%, rgb(237 242 234 / 37%) 51%, transparent 74%), linear-gradient(0deg, rgb(18 51 40 / 20%), transparent 36%);
   --home-actions-bg: rgba(255, 255, 250, 0.88);
   --home-actions-border: rgba(255, 255, 255, 0.65);
   --home-actions-shadow: 0 16px 36px -8px rgba(35, 55, 38, 0.12), 0 4px 12px rgba(35, 55, 38, 0.04);
   --home-action-hover: rgba(255, 255, 255, 0.95);
-  --home-action-divider: #d4ddd3;
+  --home-action-divider: var(--line);
   --home-welcome-bg: rgb(251 252 249 / 87%);
   --home-welcome-color: #43544a;
   --home-welcome-border: transparent;
@@ -160,15 +160,15 @@ onUnmounted(() => { isActive = false })
   --home-scroll-border: rgba(255, 255, 255, 0.5);
   --home-scroll-hover: #ffffff;
   --home-img-filter: none;
-  --home-arrow-learn-bg: #385a4a;
+  --home-arrow-learn-bg: var(--brand);
   --home-arrow-learn-color: #ffffff;
-  --home-arrow-learn-border: #385a4a;
+  --home-arrow-learn-border: var(--brand);
   --home-arrow-review-border: #b5c2b6;
   --home-arrow-review-color: inherit;
-  --home-notes-photo-bg: #e1e6dc;
+  --home-notes-photo-bg: var(--bg-secondary);
   --home-notes-badge-bg: #fafcf4;
   --home-notes-badge-color: #364c3f;
-  --home-loading-color: #e6e9df;
+  --home-loading-color: var(--bg-secondary);
 }
 
 .daily-scene {
@@ -195,7 +195,7 @@ onUnmounted(() => { isActive = false })
 .daily-scene__inner { display: flex; flex-direction: column; width: min(1296px, 100%); min-height: 650px; margin: 0 auto; padding: 43px 48px 40px; color: var(--home-ink); }
 .daily-scene__opening { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
 .daily-scene__eyebrow { display: inline-flex; align-items: center; gap: 11px; font-size: 12px; font-weight: 500; letter-spacing: 3px; }
-.daily-scene__eyebrow i { width: 6px; height: 6px; border-radius: 50%; background: #a64b38; }
+.daily-scene__eyebrow i { width: 6px; height: 6px; border-radius: 50%; background: var(--cinnabar); }
 .daily-scene__welcome {
   max-width: 230px;
   padding: 7px 13px;
@@ -298,13 +298,13 @@ onUnmounted(() => { isActive = false })
 .daily-scene__scroll:hover {
   background: var(--home-scroll-hover);
   color: var(--home-ink);
-  box-shadow: 0 4px 14px rgba(35, 55, 38, 0.08);
+  box-shadow: var(--shadow);
   transform: translateY(-1px);
 }
 .daily-content { max-width: 1296px; margin: 0 auto; padding: 74px 48px 12px; scroll-margin-top: 105px; }
 .daily-reading-layout { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); align-items: start; gap: 74px; }
 .daily-section-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin-bottom: 23px; }
-.daily-section-index { display: block; margin-bottom: 13px; color: #788175; font-size: 11px; font-weight: 500; letter-spacing: 2px; }
+.daily-section-index { display: block; margin-bottom: 13px; color: var(--muted); font-size: 11px; font-weight: 500; letter-spacing: 2px; }
 .daily-section-heading h2, .daily-notes h2 { margin: 0; color: var(--text); font-size: 29px; font-weight: 550; line-height: 1.5; letter-spacing: -.8px; }
 .daily-text-link { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; padding: 0; border: 0; color: var(--brand); background: transparent; font: inherit; font-size: 13px; white-space: nowrap; cursor: pointer; }
 .daily-text-link:hover { color: var(--brand-hover); text-decoration: underline; text-underline-offset: 5px; }

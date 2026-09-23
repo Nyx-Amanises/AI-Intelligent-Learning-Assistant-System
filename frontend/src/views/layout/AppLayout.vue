@@ -392,7 +392,7 @@ onUnmounted(() => {
 }
 .workspace-primary-nav__item:hover {
   color: var(--text);
-  background: rgba(35, 55, 38, 0.05);
+  background: var(--bg-secondary);
 }
 .workspace-primary-nav__item.is-active {
   color: var(--brand);
@@ -482,9 +482,9 @@ onUnmounted(() => {
   gap: 7px;
   height: 38px;
   padding: 0 15px;
-  border: 1px solid rgba(56, 90, 74, 0.2);
+  border: 1px solid color-mix(in srgb, var(--brand) 25%, transparent);
   border-radius: 999px;
-  background: linear-gradient(135deg, rgba(56, 90, 74, 0.08) 0%, rgba(174, 123, 53, 0.09) 100%);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--brand) 9%, transparent) 0%, color-mix(in srgb, var(--accent) 10%, transparent) 100%);
   color: var(--brand);
   font-size: 13px;
   font-weight: 550;
@@ -493,10 +493,10 @@ onUnmounted(() => {
   transition: all .2s ease;
 }
 .workspace-assistant-trigger:hover {
-  background: linear-gradient(135deg, rgba(56, 90, 74, 0.14) 0%, rgba(174, 123, 53, 0.16) 100%);
-  border-color: rgba(56, 90, 74, 0.35);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--brand) 15%, transparent) 0%, color-mix(in srgb, var(--accent) 17%, transparent) 100%);
+  border-color: color-mix(in srgb, var(--brand) 40%, transparent);
   color: var(--brand-hover);
-  box-shadow: 0 3px 10px rgba(56, 90, 74, 0.12);
+  box-shadow: var(--shadow-sm);
   transform: translateY(-1px);
 }
 .workspace-user {
@@ -513,10 +513,10 @@ onUnmounted(() => {
   place-items: center;
   width: 36px;
   height: 36px;
-  border: 1.5px solid rgba(56, 90, 74, 0.22);
+  border: 1.5px solid color-mix(in srgb, var(--brand) 28%, transparent);
   border-radius: 50%;
   object-fit: cover;
-  background: #ece9df;
+  background: var(--bg-secondary);
   color: var(--brand);
   font-size: 14px;
   font-weight: 600;
@@ -525,7 +525,7 @@ onUnmounted(() => {
 .workspace-user:hover .workspace-user__avatar {
   border-color: var(--brand);
   transform: scale(1.06);
-  box-shadow: 0 2px 8px rgba(56, 90, 74, 0.15);
+  box-shadow: var(--shadow-sm);
 }
 .workspace-account__menu, .workspace-more-trigger {
   display: grid;
@@ -679,8 +679,8 @@ onUnmounted(() => {
   top: 0;
   left: 0;
   height: 2.5px;
-  background: linear-gradient(90deg, var(--brand) 0%, #4f7964 60%, var(--accent) 100%);
-  box-shadow: 0 0 10px rgba(174, 123, 53, 0.45);
+  background: linear-gradient(90deg, var(--brand) 0%, var(--brand) 60%, var(--accent) 100%);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 45%, transparent);
   z-index: 10000;
   pointer-events: none;
   transition: width 0.22s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.28s ease;

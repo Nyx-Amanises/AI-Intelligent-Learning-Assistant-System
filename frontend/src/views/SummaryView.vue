@@ -546,13 +546,13 @@ onUnmounted(() => {
 .summary-loading { display: grid; gap: 24px; padding: 40px 0; color: var(--muted); font-size: 14px; }
 .summary-card-grid { display: grid; grid-template-columns: minmax(0, 1fr); }
 .summary-note-card { display: grid; grid-template-columns: 46px minmax(0, 1fr) 184px; gap: 26px; align-items: start; min-width: 0; padding: 30px 0; border-bottom: 1px solid var(--line); }
-.summary-note-card__number { padding-top: 4px; color: #b0b8aa; font-size: 25px; font-weight: 400; font-variant-numeric: tabular-nums; letter-spacing: -.04em; }
+.summary-note-card__number { padding-top: 4px; color: var(--muted); font-size: 25px; font-weight: 400; font-variant-numeric: tabular-nums; letter-spacing: -.04em; }
 .summary-note-card__content { min-width: 0; }
 .summary-note-card__top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; }
 .summary-type { display: inline-flex; color: var(--brand); font-size: 12px; font-weight: 500; letter-spacing: .04em; }
 .summary-status { display: inline-flex; align-items: center; gap: 6px; color: var(--brand); font-size: 12px; }
 .summary-status::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
-.summary-status--generating { color: #896627; }
+.summary-status--generating { color: var(--accent); }
 .summary-status--failed { color: var(--el-color-danger); }
 .summary-status--cancelled { color: var(--muted); }
 .summary-note-card__date { font-size: 12px; color: var(--muted); }
@@ -583,7 +583,7 @@ onUnmounted(() => {
 .summary-mode-options :deep(.el-radio__label) { min-width: 0; padding-left: 8px; }
 .summary-mode-options strong { display: block; margin-bottom: 7px; font-size: 14px; }
 .summary-mode-options span { display: block; color: var(--muted); font-size: 12px; line-height: 1.7; }
-.summary-mode-options :deep(.is-checked) { background: var(--brand-light, #edf4ef); }
+.summary-mode-options :deep(.is-checked) { background: var(--brand-light); }
 .summary-form-note { margin: 12px 0; color: var(--muted); font-size: 12px; line-height: 1.8; }
 .summary-reader__title { margin-top: 13px; overflow-wrap: anywhere; }
 .summary-reader__body { padding: 10px 0 24px; }
