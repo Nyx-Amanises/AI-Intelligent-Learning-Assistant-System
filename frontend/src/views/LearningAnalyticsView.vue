@@ -39,12 +39,7 @@
       <div class="statistics-sheet">
         <section class="statistics-overview" aria-labelledby="statistics-overview-title">
           <div class="statistics-section-heading statistics-section-heading--overview"><h2 id="statistics-overview-title">{{ periodLabel }}概览</h2><span class="statistics-scope">{{ selectedMaterialTitle }}</span></div>
-          <dl class="statistics-totals">
-            <div><dt>完成练习</dt><dd>{{ formatNumber(analytics.totalPracticeCount) }}<small>次</small></dd></div>
-            <div><dt>累计作答</dt><dd>{{ formatNumber(analytics.totalQuestionAttempts) }}<small>次</small></dd></div>
-            <div><dt>练习时长</dt><dd>{{ studyDuration.value }}<small>{{ studyDuration.unit }}</small></dd></div>
-            <div><dt>平均正确率</dt><dd>{{ formatNumber(analytics.averageAccuracyRate) }}<small>%</small></dd></div>
-          </dl>
+          <StatTiles :items="overviewTiles" />
           <div class="statistics-overview__notes">
             <span>平均得分率 <b>{{ formatNumber(analytics.averageScoreRate) }}%</b></span>
             <span>错题次数 <b>{{ formatNumber(analytics.wrongAttemptCount) }}</b></span>
@@ -60,23 +55,10 @@
             </div>
           </div>
 
-          <figure v-if="analytics.practiceTrend.length" class="statistics-trend-figure">
-            <div class="statistics-chart-frame">
-              <div class="statistics-y-axis" aria-hidden="true"><span v-for="tick in trendAxisTicks" :key="tick.value" :style="{ top: tick.y / 220 * 100 + '%' }">{{ tick.value }}%</span></div>
-              <svg viewBox="0 0 640 220" preserveAspectRatio="none" role="group" :aria-label="'练习' + trendMetricLabel + '趋势，纵轴范围为 0 至 100%，每个点是一份练习记录'">
-                <line v-for="tick in trendAxisTicks" :key="tick.value" x1="12" :y1="tick.y" x2="628" :y2="tick.y" class="statistics-grid-line" aria-hidden="true" />
-                <polyline :points="trendLinePoints" class="statistics-trend-line" aria-hidden="true" />
-                <circle v-for="point in trendPlotPoints" :key="point.sessionId" :cx="point.x" :cy="point.y" :r="activeTrendPoint?.sessionId === point.sessionId ? 5 : 4" class="statistics-trend-dot" :class="{ 'is-active': activeTrendPoint?.sessionId === point.sessionId }" role="img" tabindex="0" :aria-label="formatTrendPoint(point)" @mouseenter="selectedTrendId = point.sessionId" @focus="selectedTrendId = point.sessionId"><title>{{ formatTrendPoint(point) }}</title></circle>
-              </svg>
-            </div>
-            <div class="statistics-x-axis" aria-hidden="true">
-              <span v-for="(point, index) in trendAxisLabels" :key="point.sessionId" :class="{ 'is-first': index === 0 && trendAxisLabels.length > 1, 'is-last': index === trendAxisLabels.length - 1 && trendAxisLabels.length > 1 }" :style="{ left: point.x / 640 * 100 + '%' }">{{ point.label }}</span>
-            </div>
-            <figcaption class="statistics-trend-caption" aria-live="polite" aria-atomic="true">
-              <template v-if="activeTrendPoint"><span>{{ formatDateTime(activeTrendPoint.submitTime) }} · {{ activeTrendPoint.sessionName }}</span><strong>{{ trendMetricLabel }} {{ formatNumber(activeTrendPoint[trendMetric]) }}%</strong></template>
-            </figcaption>
-          </figure>
-          <div v-else class="statistics-empty-chart"><AppIcon name="analytics" :size="32" /><p>练习后，变化会从这里开始。</p></div>
+          <TrendLineChart v-model:selected-id="selectedTrendId" :points="trendPoints" :max="100" unit="%" :aria-label="'练习' + trendMetricLabel + '趋势，纵轴范围为 0 至 100%，每个点是一份练习记录'">
+            <template #caption="{ point }"><span>{{ formatDateTime(point.raw.submitTime) }} · {{ point.raw.sessionName }}</span><strong>{{ trendMetricLabel }} {{ formatNumber(point.raw[trendMetric]) }}%</strong></template>
+            <template #empty><AppIcon name="analytics" :size="32" /><p>练习后，变化会从这里开始。</p></template>
+          </TrendLineChart>
         </section>
       </div>
 
@@ -87,19 +69,14 @@
               <div><h2 id="statistics-mastery-title">知识掌握</h2><p>{{ analytics.totalKnowledgePoints }} 个知识点 · {{ analytics.weakKnowledgePointCount }} 个待复习</p></div>
               <RouterLink class="statistics-text-link" :to="{ path: '/mastery', query: { materialId: filters.materialId ? String(filters.materialId) : undefined } }">全部明细 <AppIcon name="arrow-right" :size="16" /></RouterLink>
             </div>
-            <div class="statistics-mastery-distribution">
-              <div class="statistics-donut" :style="donutStyle" aria-hidden="true"><div><strong>{{ analytics.totalKnowledgePoints }}</strong><span>知识点</span></div></div>
-              <ul class="statistics-mastery-legend" aria-label="知识点掌握度分布"><li v-for="item in masteryLegend" :key="item.level"><i :style="{ background: item.color }" aria-hidden="true"></i><span>{{ item.label }}</span><strong>{{ item.count }}</strong><small>{{ item.percent }}%</small></li></ul>
-            </div>
+            <DonutChart :segments="masterySegments" :total="analytics.totalKnowledgePoints" center-label="知识点" legend-label="知识点掌握度分布" />
           </section>
 
           <section class="statistics-question-types" aria-labelledby="statistics-types-title">
             <div class="statistics-section-heading"><div><h2 id="statistics-types-title">题型表现</h2><p>不同题型的正确率与作答情况。</p></div></div>
             <ul v-if="analytics.questionTypePerformance.length" class="statistics-type-list">
               <li v-for="item in analytics.questionTypePerformance" :key="item.questionType">
-                <div class="statistics-type-list__label"><strong>{{ item.questionTypeLabel }}</strong><span>{{ item.attemptCount }} 次作答 · 错 {{ item.wrongCount }} 次</span><b>{{ item.accuracyRate }}%</b></div>
-                <div class="statistics-bar" aria-hidden="true"><span :style="{ width: clampPercent(item.accuracyRate) + '%' }"></span></div>
-                <small>得分率 {{ item.scoreRate }}%</small>
+                <BarRow :label="item.questionTypeLabel" :meta="item.attemptCount + ' 次作答 · 错 ' + item.wrongCount + ' 次'" :value="item.accuracyRate + '%'" :percent="item.accuracyRate" :note="'得分率 ' + item.scoreRate + '%'" />
               </li>
             </ul>
             <p v-else class="statistics-empty-note">暂无题型记录。</p>
@@ -107,7 +84,7 @@
         </div>
 
         <section class="statistics-review" aria-labelledby="statistics-review-title">
-          <div class="statistics-section-heading"><div><h2 id="statistics-review-title">值得再练一次</h2><p>优先复习掌握度低于 70% 的知识点。</p></div><RouterLink class="statistics-text-link" to="/wrong-questions">查看错题 <AppIcon name="arrow-right" :size="16" /></RouterLink></div>
+          <div class="statistics-section-heading"><div><h2 id="statistics-review-title">值得再练一次</h2><p>优先复习掌握度低于 {{ MASTERY_REVIEW_THRESHOLD }}% 的知识点。</p></div><RouterLink class="statistics-text-link" to="/wrong-questions">查看错题 <AppIcon name="arrow-right" :size="16" /></RouterLink></div>
           <div v-if="reviewPoints.length" class="statistics-review-list">
             <button v-for="(item, index) in reviewPoints" :key="String(item.materialId || 0) + '-' + item.knowledgePoint" type="button" class="statistics-review-row" @click="goMastery(item)">
               <span class="statistics-row-index">{{ String(index + 1).padStart(2, '0') }}</span>
@@ -116,7 +93,7 @@
               <AppIcon name="arrow-up-right" :size="18" />
             </button>
           </div>
-          <p v-else class="statistics-empty-note">目前没有掌握度低于 70% 的知识点，继续保持。</p>
+          <p v-else class="statistics-empty-note">目前没有掌握度低于 {{ MASTERY_REVIEW_THRESHOLD }}% 的知识点，继续保持。</p>
         </section>
 
         <div class="statistics-record-columns">
@@ -140,6 +117,11 @@
 import { computed, onUnmounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import AppIcon from '@/components/AppIcon.vue'
+import StatTiles, { type StatTileItem } from '@/components/StatTiles.vue'
+import TrendLineChart, { type TrendChartPoint } from '@/components/charts/TrendLineChart.vue'
+import DonutChart, { type DonutSegment } from '@/components/charts/DonutChart.vue'
+import BarRow from '@/components/charts/BarRow.vue'
+import { MASTERY_REVIEW_THRESHOLD, masteryColor } from '@/utils/mastery'
 import { getLearningAnalyticsOverviewApi, type LearningAnalyticsOverviewPayload, type PracticeTrendPoint, type WeakKnowledgePointItem } from '@/api/modules/learningAnalytics'
 import { getMaterialPageApi, type MaterialPageItem } from '@/api/modules/material'
 
@@ -158,7 +140,7 @@ const selectedMaterialTitle = computed(() => filters.materialId ? materials.valu
 const trendMetric = ref<'accuracyRate' | 'scoreRate'>('accuracyRate')
 const trendMetrics = [{ key: 'accuracyRate', label: '正确率' }, { key: 'scoreRate', label: '得分率' }] as const
 const trendMetricLabel = computed(() => trendMetric.value === 'accuracyRate' ? '正确率' : '得分率')
-const selectedTrendId = ref<number | null>(null)
+const selectedTrendId = ref<string | number | null>(null)
 let analyticsRequestId = 0
 let materialRequestId = 0
 
@@ -176,34 +158,25 @@ const studyDuration = computed(() => {
     ? { value: formatNumber(seconds), unit: '秒' }
     : { value: formatNumber(Math.floor(seconds / 60)), unit: '分钟' }
 })
-const reviewPoints = computed(() => analytics.weakKnowledgePoints.filter((item) => Number(item.masteryPercent) < 70))
-const masteryColors: Record<string, string> = { MASTERED: 'var(--brand)', GOOD: 'color-mix(in srgb, var(--brand) 55%, var(--panel))', WEAK: 'var(--accent)', RISK: 'var(--red)' }
-const masteryLegend = computed(() => analytics.masteryDistribution.map((item) => ({ ...item, color: masteryColors[item.level] || 'var(--muted)' })))
-const donutStyle = computed(() => {
-  if (!analytics.masteryDistribution.length || !analytics.totalKnowledgePoints) return { background: 'var(--line)' }
-  let current = 0
-  const segments = analytics.masteryDistribution.map((item) => {
-    const start = current
-    current += Number(item.percent || 0)
-    return (masteryColors[item.level] || 'var(--muted)') + ' ' + start + '% ' + current + '%'
-  })
-  return { background: 'conic-gradient(' + segments.join(', ') + ')' }
-})
-
-const trendAxisTicks = [{ value: 100, y: 28 }, { value: 50, y: 108 }, { value: 0, y: 188 }]
-const trendPlotPoints = computed(() => analytics.practiceTrend.map((item, index, list) => ({
-  ...item,
-  x: list.length === 1 ? 320 : 12 + 616 * index / (list.length - 1),
-  y: 188 - 160 * clampPercent(item[trendMetric.value]) / 100,
-  label: item.submitTime ? item.submitTime.slice(5, 10) : '未记录日期'
+const reviewPoints = computed(() => analytics.weakKnowledgePoints.filter((item) => Number(item.masteryPercent) < MASTERY_REVIEW_THRESHOLD))
+const overviewTiles = computed<StatTileItem[]>(() => [
+  { key: 'practice', label: '完成练习', value: formatNumber(analytics.totalPracticeCount), unit: '次' },
+  { key: 'attempts', label: '累计作答', value: formatNumber(analytics.totalQuestionAttempts), unit: '次' },
+  { key: 'duration', label: '练习时长', value: studyDuration.value.value, unit: studyDuration.value.unit },
+  { key: 'accuracy', label: '平均正确率', value: formatNumber(analytics.averageAccuracyRate), unit: '%' }
+])
+const masterySegments = computed<DonutSegment[]>(() => analytics.masteryDistribution.map((item) => ({
+  key: item.level, label: item.label, percent: Number(item.percent || 0), count: item.count, color: masteryColor(item.level)
 })))
-const trendLinePoints = computed(() => trendPlotPoints.value.map((point) => point.x + ',' + point.y).join(' '))
-const trendAxisLabels = computed(() => {
-  const points = trendPlotPoints.value
-  if (points.length <= 3) return points
-  return Array.from({ length: 3 }, (_, index) => points[Math.round(index * (points.length - 1) / 2)])
-})
-const activeTrendPoint = computed(() => analytics.practiceTrend.find((point) => point.sessionId === selectedTrendId.value) || analytics.practiceTrend[analytics.practiceTrend.length - 1])
+
+interface TrendPoint extends TrendChartPoint { raw: PracticeTrendPoint }
+const trendPoints = computed<TrendPoint[]>(() => analytics.practiceTrend.map((item) => ({
+  id: item.sessionId,
+  label: item.submitTime ? item.submitTime.slice(5, 10) : '未记录日期',
+  value: clampPercent(item[trendMetric.value]),
+  ariaLabel: formatTrendPoint(item),
+  raw: item
+})))
 const recentTrend = computed(() => [...analytics.practiceTrend].reverse().slice(0, 5))
 const formatDateTime = (value?: string) => value ? value.replace('T', ' ').slice(0, 16) : '时间未记录'
 const formatTrendPoint = (point: PracticeTrendPoint) => point.sessionName + '，' + formatDateTime(point.submitTime) + '，' + trendMetricLabel.value + ' ' + point[trendMetric.value] + '%，' + point.correctCount + ' / ' + point.totalQuestions + ' 题正确'
@@ -302,13 +275,6 @@ void loadAnalytics()
 .statistics-section-heading p { margin: 8px 0 0; color: var(--muted); font-size: 12px; line-height: 1.7; }
 .statistics-section-heading--overview { margin-bottom: 28px; }
 .statistics-scope { max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 12px; }
-.statistics-totals { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0; }
-.statistics-totals > div { min-width: 0; padding: 0 30px; border-left: 1px solid var(--line); }
-.statistics-totals > div:first-child { padding-left: 0; border-left: 0; }
-.statistics-totals > div:last-child { padding-right: 0; }
-.statistics-totals dt { color: var(--muted); font-size: 13px; }
-.statistics-totals dd { display: flex; align-items: baseline; flex-wrap: wrap; gap: 7px; margin: 13px 0 0; font-size: clamp(30px, 3.8vw, 46px); font-weight: 550; font-variant-numeric: tabular-nums; letter-spacing: -.045em; line-height: 1.15; overflow-wrap: anywhere; }
-.statistics-totals small { color: var(--muted); font-size: 12px; font-weight: 400; letter-spacing: 0; }
 .statistics-overview__notes { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 24px; padding: 24px 0 28px; margin-top: 6px; border-bottom: 1px solid var(--line); font-size: 12px; color: var(--muted); }
 .statistics-overview__notes b { padding-left: 6px; color: var(--text-secondary); font-weight: 500; }
 .statistics-overview__notes > span:last-child { margin-left: auto; font-size: 12px; }
@@ -317,47 +283,10 @@ void loadAnalytics()
 .statistics-metric-switch button { position: relative; min-height: 42px; padding: 0 0 10px; border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; }
 .statistics-metric-switch button.is-active { color: var(--brand); font-weight: 600; }
 .statistics-metric-switch button.is-active::after { position: absolute; right: calc(50% - 7px); bottom: 0; width: 14px; height: 3px; border-radius: 2px; background: var(--accent); content: ''; }
-.statistics-trend-figure { margin: 0; }
-.statistics-chart-frame { position: relative; padding-left: 43px; }
-.statistics-chart-frame svg { display: block; width: 100%; height: 240px; overflow: visible; }
-.statistics-y-axis { position: absolute; inset: 0 auto 0 0; width: 34px; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
-.statistics-y-axis span { position: absolute; right: 0; transform: translateY(-50%); }
-.statistics-grid-line { stroke: var(--line); stroke-width: 1; vector-effect: non-scaling-stroke; }
-.statistics-trend-line { fill: none; stroke: color-mix(in srgb, var(--brand) 45%, transparent); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
-.statistics-trend-dot { fill: color-mix(in srgb, var(--brand) 70%, var(--panel)); stroke: var(--panel); stroke-width: 2; vector-effect: non-scaling-stroke; cursor: crosshair; }
-.statistics-trend-dot.is-active { fill: var(--brand); }
-.statistics-trend-dot:focus { outline: none; stroke: color-mix(in srgb, var(--accent) 45%, transparent); stroke-width: 5; }
-.statistics-x-axis { position: relative; height: 23px; margin: 2px 0 0 43px; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
-.statistics-x-axis span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
-.statistics-x-axis .is-first { transform: none; }
-.statistics-x-axis .is-last { transform: translateX(-100%); }
-.statistics-trend-caption { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 9px 22px; min-height: 44px; padding-top: 15px; color: var(--muted); font-size: 12px; line-height: 1.6; }
-.statistics-trend-caption > span { min-width: 0; overflow-wrap: anywhere; }
-.statistics-trend-caption strong { margin-left: auto; color: var(--text-secondary); font-weight: 500; white-space: nowrap; }
-.statistics-empty-chart { display: grid; min-height: 220px; align-content: center; justify-items: center; gap: 12px; color: var(--muted); }
-.statistics-empty-chart p { margin: 0; color: var(--muted); font-size: 13px; }
 .statistics-breakdowns { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 56px; padding: 44px 0; border-bottom: 1px solid var(--line); }
 .statistics-question-types { padding-left: 44px; border-left: 1px solid var(--line); }
-.statistics-mastery-distribution { display: grid; grid-template-columns: 140px minmax(0, 1fr); align-items: center; gap: 30px; min-height: 165px; }
-.statistics-donut { position: relative; display: grid; width: 140px; height: 140px; place-items: center; border-radius: 50%; }
-.statistics-donut::before { position: absolute; inset: 11px; border-radius: 50%; background: var(--bg); content: ''; }
-.statistics-donut > div { position: relative; display: grid; gap: 3px; justify-items: center; }
-.statistics-donut strong { font-size: 30px; font-weight: 550; font-variant-numeric: tabular-nums; }
-.statistics-donut span { color: var(--muted); font-size: 12px; }
-.statistics-mastery-legend, .statistics-type-list, .statistics-record-list { padding: 0; margin: 0; list-style: none; }
-.statistics-mastery-legend { display: grid; gap: 18px; }
-.statistics-mastery-legend li { display: grid; grid-template-columns: 8px minmax(0, 1fr) auto 38px; align-items: center; gap: 10px; font-size: 12px; }
-.statistics-mastery-legend i { width: 7px; height: 7px; border-radius: 50%; }
-.statistics-mastery-legend strong { font-weight: 600; }
-.statistics-mastery-legend small { text-align: right; color: var(--muted); font-size: 12px; }
+.statistics-type-list, .statistics-record-list { padding: 0; margin: 0; list-style: none; }
 .statistics-type-list { display: grid; gap: 22px; }
-.statistics-type-list__label { display: flex; align-items: baseline; gap: 12px; margin-bottom: 9px; }
-.statistics-type-list__label strong { font-size: 13px; font-weight: 500; }
-.statistics-type-list__label span { color: var(--muted); font-size: 12px; }
-.statistics-type-list__label b { margin-left: auto; font-size: 13px; font-weight: 500; }
-.statistics-type-list > li > small { display: block; margin-top: 6px; color: var(--muted); font-size: 11px; text-align: right; }
-.statistics-bar { height: 5px; overflow: hidden; border-radius: 4px; background: var(--line); }
-.statistics-bar span { display: block; height: 100%; border-radius: inherit; background: var(--brand); }
 .statistics-review { padding: 38px 0 30px; border-bottom: 1px solid var(--line); }
 .statistics-review-list { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 48px; }
 .statistics-review-row { display: flex; align-items: center; width: 100%; min-width: 0; gap: 17px; padding: 20px 0; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: inherit; text-align: left; font: inherit; cursor: pointer; }
@@ -394,28 +323,16 @@ void loadAnalytics()
 @keyframes statistics-spin { to { transform: rotate(360deg); } }
 @media (max-width: 1000px) {
   .statistics-sheet { padding: 28px; }
-  .statistics-totals > div { padding-inline: 22px; }
   .statistics-breakdowns, .statistics-record-columns { gap: 32px; }
   .statistics-question-types { padding-left: 28px; }
-  .statistics-mastery-distribution { grid-template-columns: 114px minmax(0, 1fr); gap: 20px; }
-  .statistics-donut { width: 114px; height: 114px; }
-  .statistics-type-list__label { gap: 8px; flex-wrap: wrap; }
-  .statistics-type-list__label span { order: 3; flex-basis: 100%; }
 }
 @media (max-width: 760px) {
   .statistics-page { padding-top: 4px; }
   .statistics-heading { align-items: start; margin-bottom: 28px; }
   .statistics-heading__actions { gap: 14px; }
-  .statistics-totals { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 27px; }
-  .statistics-totals > div { padding-inline: 22px 0; }
-  .statistics-totals > div:nth-child(odd) { border-left: 0; padding-left: 0; }
-  .statistics-totals dd { font-size: 38px; }
   .statistics-overview__notes > span:last-child { margin-left: 0; flex-basis: 100%; }
   .statistics-breakdowns, .statistics-record-columns { grid-template-columns: minmax(0, 1fr); gap: 34px; }
   .statistics-question-types { padding: 28px 0 0; border-left: 0; border-top: 1px solid var(--line); }
-  .statistics-mastery-distribution { grid-template-columns: 140px minmax(0, 1fr); gap: 32px; }
-  .statistics-donut { width: 140px; height: 140px; }
-  .statistics-type-list__label span { order: 0; flex-basis: auto; }
   .statistics-review-list { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 520px) {
@@ -433,25 +350,11 @@ void loadAnalytics()
   .statistics-section-heading { align-items: start; gap: 10px; margin-bottom: 20px; }
   .statistics-section-heading h2 { font-size: 16px; }
   .statistics-section-heading p { font-size: 12px; }
-  .statistics-totals dt { font-size: 12px; }
-  .statistics-totals dd { font-size: 34px; gap: 5px; margin-top: 11px; }
-  .statistics-totals small { font-size: 12px; }
   .statistics-overview__notes { gap: 10px 18px; padding-bottom: 23px; font-size: 12px; }
   .statistics-trend > .statistics-section-heading { flex-wrap: wrap; }
   .statistics-metric-switch { margin-top: 2px; }
   .statistics-metric-switch button { font-size: 12px; }
-  .statistics-chart-frame { padding-left: 31px; }
-  .statistics-chart-frame svg { height: 210px; }
-  .statistics-y-axis { width: 25px; font-size: 11px; }
-  .statistics-x-axis { margin-left: 31px; font-size: 11px; }
-  .statistics-trend-caption { font-size: 12px; }
-  .statistics-trend-caption > span { flex-basis: 100%; }
-  .statistics-trend-caption strong { margin-left: 0; }
   .statistics-breakdowns { padding: 32px 0; }
-  .statistics-mastery-distribution { grid-template-columns: 122px minmax(0, 1fr); gap: 24px; }
-  .statistics-donut { width: 122px; height: 122px; }
-  .statistics-mastery-legend li { gap: 7px; grid-template-columns: 7px minmax(0, 1fr) auto 34px; font-size: 12px; }
-  .statistics-mastery-legend small { font-size: 11px; }
   .statistics-text-link { font-size: 12px; gap: 5px; min-height: 44px; }
   .statistics-review-row { gap: 12px; }
   .statistics-review-row__main strong { font-size: 13px; }

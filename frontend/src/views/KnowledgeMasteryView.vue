@@ -11,12 +11,7 @@
     <div v-if="materialsError" class="knowledge-notice" role="alert"><div><strong>资料列表暂时无法加载</strong><p>仍可查看知识点，重新加载后即可选择资料。</p></div><el-button :loading="materialsLoading" @click="loadMaterials">重新加载资料</el-button></div>
 
     <section v-if="hasLoaded && !loadError" class="knowledge-overview" aria-label="知识点掌握概览">
-      <dl class="knowledge-totals">
-        <div><dt>平均掌握度</dt><dd>{{ overview.averageMasteryPercent }}<small>%</small></dd><p>{{ overview.totalAttempts }} 次作答记录</p></div>
-        <div><dt>已掌握</dt><dd>{{ overview.masteredCount }}</dd><p>掌握度 ≥ 85%</p></div>
-        <div><dt>待巩固</dt><dd>{{ overview.weakCount }}</dd><p>掌握度 50% – 69%</p></div>
-        <div><dt>薄弱点</dt><dd class="knowledge-totals__risk">{{ overview.riskCount }}</dd><p>掌握度低于 50%</p></div>
-      </dl>
+      <StatTiles :items="overviewTiles" />
       <div class="knowledge-overview__notes"><span>知识点 <b>{{ overview.totalKnowledgePoints }}</b></span><span>基本掌握 <b>{{ overview.goodCount }}</b></span><span>错题次数 <b>{{ overview.wrongAttempts }}</b></span><span>{{ hasFilters ? '当前筛选范围的累计记录' : '全部练习的累计记录' }}</span></div>
     </section>
 
@@ -25,7 +20,7 @@
       <div class="knowledge-filters" aria-label="筛选知识点">
         <el-input v-model="filters.keyword" clearable placeholder="搜索知识点、资料或建议" aria-label="搜索知识点、资料或建议" class="knowledge-search"><template #prefix><AppIcon name="search" :size="17" /></template></el-input>
         <el-select v-model="filters.materialId" clearable filterable placeholder="全部资料" aria-label="筛选学习资料" :loading="materialsLoading"><el-option v-for="item in materials" :key="item.id" :label="item.title" :value="item.id" /></el-select>
-        <el-select v-model="filters.masteryLevel" clearable placeholder="全部掌握状态" aria-label="筛选掌握状态"><el-option label="薄弱" value="RISK" /><el-option label="待巩固" value="WEAK" /><el-option label="基本掌握" value="GOOD" /><el-option label="已掌握" value="MASTERED" /></el-select>
+        <el-select v-model="filters.masteryLevel" clearable placeholder="全部掌握状态" aria-label="筛选掌握状态"><el-option v-for="item in masteryLevelOptions" :key="item.level" :label="item.label" :value="item.level" /></el-select>
         <el-select v-model="filters.questionType" clearable placeholder="全部题型" aria-label="筛选题型"><el-option label="单选题" value="SINGLE" /><el-option label="判断题" value="JUDGE" /><el-option label="简答题" value="SHORT" /></el-select>
         <button type="button" class="knowledge-reset" @click="resetFilters">重置条件</button>
       </div>
@@ -49,7 +44,7 @@
           <div class="knowledge-record__title"><h3>{{ item.knowledgePoint }}</h3><p>{{ item.materialTitle || '未关联资料' }}</p><span>{{ formatQuestionTypes(item.questionTypes) }}</span></div>
           <div class="knowledge-record__mastery">
             <div><strong :class="'knowledge-level--' + item.masteryLevel.toLowerCase()">{{ item.masteryLabel }}</strong><b>{{ item.masteryPercent }}<small>%</small></b></div>
-            <el-progress :percentage="item.masteryPercent" :stroke-width="5" :show-text="false" :color="progressColor(item.masteryPercent)" :aria-label="item.knowledgePoint + '掌握度'" />
+            <el-progress :percentage="item.masteryPercent" :stroke-width="5" :show-text="false" :color="masteryColorByPercent(item.masteryPercent)" :aria-label="item.knowledgePoint + '掌握度'" />
             <span>{{ item.correctCount }} / {{ item.attemptCount }} 次正确</span>
           </div>
           <div class="knowledge-record__context"><p>{{ item.suggestion }}</p><span>得分 {{ item.obtainedScore }} / {{ item.totalScore }} · 错题 {{ item.wrongCount }}</span><span>最近练习 {{ formatDateTime(item.lastPracticeTime) }}</span></div>
@@ -84,10 +79,12 @@
 <script setup lang="ts">
 import { computed, onUnmounted, reactive, ref } from 'vue'
 import AppIcon from '@/components/AppIcon.vue'
+import StatTiles, { type StatTileItem } from '@/components/StatTiles.vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getKnowledgeMasteryOverviewApi, type KnowledgeMasteryItem, type KnowledgeMasteryOverviewPayload } from '@/api/modules/knowledgeMastery'
 import { getMaterialPageApi, type MaterialPageItem } from '@/api/modules/material'
 import { useAutoListQuery } from '@/composables/useAutoListQuery'
+import { MASTERY_LEVELS, MASTERY_REVIEW_THRESHOLD, masteryColorByPercent } from '@/utils/mastery'
 
 const router = useRouter()
 const route = useRoute()
@@ -118,8 +115,18 @@ const overview = reactive({
 })
 
 const reviewPoints = computed(() =>
-  overview.weakestPoints.filter((item) => Number(item.masteryPercent) < 70)
+  overview.weakestPoints.filter((item) => Number(item.masteryPercent) < MASTERY_REVIEW_THRESHOLD)
 )
+
+// 筛选项按掌握度从低到高排列
+const masteryLevelOptions = [...MASTERY_LEVELS].reverse()
+const levelMin = (level: string) => MASTERY_LEVELS.find((item) => item.level === level)?.min ?? 0
+const overviewTiles = computed<StatTileItem[]>(() => [
+  { key: 'average', label: '平均掌握度', value: overview.averageMasteryPercent, unit: '%', note: overview.totalAttempts + ' 次作答记录' },
+  { key: 'mastered', label: '已掌握', value: overview.masteredCount, note: '掌握度 ≥ ' + levelMin('MASTERED') + '%' },
+  { key: 'weak', label: '待巩固', value: overview.weakCount, note: '掌握度 ' + levelMin('WEAK') + '% – ' + (levelMin('GOOD') - 1) + '%' },
+  { key: 'risk', label: '薄弱点', value: overview.riskCount, note: '掌握度低于 ' + levelMin('WEAK') + '%', tone: 'danger' }
+])
 
 const filters = reactive({
   keyword: typeof route.query.keyword === 'string' ? route.query.keyword : '',
@@ -173,19 +180,6 @@ const formatQuestionTypes = (value?: string) => {
       }
     })
   return [...new Set(labels)].join(' / ')
-}
-
-const progressColor = (percent: number) => {
-  if (percent >= 85) {
-    return 'var(--brand)'
-  }
-  if (percent >= 70) {
-    return 'color-mix(in srgb, var(--brand) 55%, var(--panel))'
-  }
-  if (percent >= 50) {
-    return 'var(--accent)'
-  }
-  return 'var(--red)'
 }
 
 const applyOverview = (data: KnowledgeMasteryOverviewPayload) => {
@@ -310,15 +304,6 @@ void loadMastery()
 .knowledge-refresh:hover { background: var(--line); }
 .knowledge-refresh:disabled { opacity: .6; cursor: wait; }
 .knowledge-overview { padding: 32px 36px 23px; margin-bottom: 42px; border-radius: 22px; background: var(--panel); }
-.knowledge-totals { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0; }
-.knowledge-totals > div { min-width: 0; padding: 0 30px; border-left: 1px solid var(--line); }
-.knowledge-totals > div:first-child { padding-left: 0; border-left: 0; }
-.knowledge-totals > div:last-child { padding-right: 0; }
-.knowledge-totals dt { color: var(--muted); font-size: 13px; }
-.knowledge-totals dd { display: flex; align-items: baseline; flex-wrap: wrap; gap: 5px; margin: 13px 0 0; font-size: clamp(30px, 3.8vw, 46px); font-weight: 550; font-variant-numeric: tabular-nums; line-height: 1.15; letter-spacing: -.045em; overflow-wrap: anywhere; }
-.knowledge-totals small { font-size: 18px; color: var(--muted); }
-.knowledge-totals p { margin: 11px 0 0; color: var(--muted); font-size: 11px; line-height: 1.7; }
-.knowledge-totals__risk { color: var(--red); }
 .knowledge-overview__notes { display: flex; flex-wrap: wrap; gap: 11px 24px; padding-top: 21px; margin-top: 23px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
 .knowledge-overview__notes b { padding-left: 5px; color: var(--text-secondary); font-weight: 500; }
 .knowledge-overview__notes > span:last-child { margin-left: auto; }
@@ -393,7 +378,6 @@ void loadMastery()
 }
 @media (max-width: 840px) {
   .knowledge-overview { padding: 27px; }
-  .knowledge-totals > div { padding-inline: 18px; }
   .knowledge-record { grid-template-columns: minmax(0, 1fr) 155px; gap: 20px 28px; }
   .knowledge-record__context { grid-column: 1; }
   .knowledge-record__actions { grid-column: 2; align-self: end; }
@@ -410,13 +394,6 @@ void loadMastery()
   .knowledge-text-link .app-icon { display: none; }
   .knowledge-refresh { height: 40px; width: 40px; }
   .knowledge-overview { padding: 26px 22px 21px; margin-bottom: 32px; border-radius: 19px; }
-  .knowledge-totals { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 26px 0; }
-  .knowledge-totals > div:nth-child(odd) { border-left: 0; padding-left: 0; }
-  .knowledge-totals > div:nth-child(even) { padding-right: 0; padding-left: 22px; }
-  .knowledge-totals dt { font-size: 12px; }
-  .knowledge-totals dd { font-size: 35px; }
-  .knowledge-totals small { font-size: 15px; }
-  .knowledge-totals p { font-size: 11px; }
   .knowledge-overview__notes { font-size: 11px; gap: 10px 16px; }
   .knowledge-section-heading h2 { font-size: 18px; }
   .knowledge-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px; }
