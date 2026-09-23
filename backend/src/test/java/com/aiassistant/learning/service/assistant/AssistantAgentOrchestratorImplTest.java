@@ -44,7 +44,7 @@ class AssistantAgentOrchestratorImplTest {
     private final AiConfigService aiConfigService = Mockito.mock(AiConfigService.class);
     /** 模拟 AI 聊天服务，避免真实调用模型。 */
     private final AiChatService aiChatService = Mockito.mock(AiChatService.class);
-    /** 模拟学习资料服务。 */
+    /** 模拟学习资料服务（供真实的资料搜索工具使用）。 */
     private final StudyMaterialService studyMaterialService = Mockito.mock(StudyMaterialService.class);
     /** 模拟题集服务。 */
     private final QuestionSetService questionSetService = Mockito.mock(QuestionSetService.class);
@@ -636,22 +636,49 @@ class AssistantAgentOrchestratorImplTest {
             AssistantToolRegistry toolRegistry,
             MaterialSearchAssistantTool materialSearchAssistantTool
     ) {
+        AssistantSessionStateSupport sessionState = new AssistantSessionStateSupport(objectMapper, questionSetService);
+        AssistantModelPolicy modelPolicy = new AssistantModelPolicy(aiConfigService);
+        AssistantInteractionModeResolver modeResolver = new AssistantInteractionModeResolver(taskIntentParser, sessionState);
+        AssistantToolExecutionSupport toolExecution = new AssistantToolExecutionSupport(toolRegistry, modelPolicy);
+        AssistantTaskWorkflowExecutor taskWorkflowExecutor = new AssistantTaskWorkflowExecutor(
+                taskIntentParser,
+                sessionState,
+                materialSearchAssistantTool,
+                summaryTaskAssistantTool,
+                questionGenerateTaskAssistantTool
+        );
+        AssistantPendingActionHandler pendingActionHandler = new AssistantPendingActionHandler(
+                taskIntentParser,
+                sessionState,
+                modeResolver,
+                toolExecution,
+                taskWorkflowExecutor,
+                modelPolicy,
+                materialSearchAssistantTool,
+                materialChapterOutlineAssistantTool
+        );
+        AssistantStudyQaWorkflowHandler studyQaWorkflowHandler = new AssistantStudyQaWorkflowHandler(
+                taskIntentParser,
+                sessionState,
+                modeResolver,
+                toolExecution,
+                modelPolicy,
+                materialSearchAssistantTool
+        );
         return new AssistantAgentOrchestratorImpl(
-                toolRegistry,
                 assistantMemoryService,
-                aiConfigService,
                 aiChatService,
-                studyMaterialService,
-                questionSetService,
                 structuredIntentExtractor,
                 toolPlanner,
                 pendingDecisionPlanner,
-                taskIntentParser,
-                materialChapterOutlineAssistantTool,
-                materialSearchAssistantTool,
-                summaryTaskAssistantTool,
-                questionGenerateTaskAssistantTool,
-                objectMapper
+                modeResolver,
+                pendingActionHandler,
+                taskWorkflowExecutor,
+                studyQaWorkflowHandler,
+                toolExecution,
+                new AssistantPromptBuilder(),
+                modelPolicy,
+                sessionState
         );
     }
 
