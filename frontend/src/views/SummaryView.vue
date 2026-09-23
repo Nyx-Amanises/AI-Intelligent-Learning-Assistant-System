@@ -1,34 +1,29 @@
 <template>
-  <section class="summary-view">
+  <section class="learning-page summary-view">
     <div class="page-header">
       <div>
         <div class="learning-eyebrow">我的内容</div>
         <h1 class="page-title">学习总结</h1>
         <p class="page-desc">读过的内容，整理成自己的理解。</p>
       </div>
-      <el-button type="primary" :loading="generating" @click="openGenerateDialog">
-        <svg class="button-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke-linecap="round" /></svg>
+      <el-button type="primary" @click="openGenerateDialog">
+        <AppIcon name="plus" :size="17" />
         生成总结
       </el-button>
     </div>
 
     <div class="workspace-panel">
-      <div class="summary-library-heading">
-        <div><h2>全部总结 <span>{{ summaryHistory.length }}</span></h2></div>
-        <el-button text :loading="historyLoading" @click="loadSummaryHistory()">刷新</el-button>
-      </div>
+      <ListSectionHeading title="全部总结" :count="summaryHistory.length" :loading="historyLoading" @refresh="loadSummaryHistory()" />
       <div class="workspace-toolbar">
         <div class="workspace-filter-bar workspace-filter-bar--summary">
           <el-input v-model="keyword" clearable placeholder="搜索资料名称或总结内容" aria-label="搜索总结" class="workspace-filter-bar__search">
-            <template #prefix><svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 4 4" stroke-linecap="round" /></svg></template>
+            <template #prefix><AppIcon name="search" :size="18" /></template>
           </el-input>
           <el-select v-model="filterMaterialId" clearable filterable placeholder="全部资料" aria-label="筛选资料" :loading="materialsLoading">
             <el-option v-for="item in materials" :key="item.id" :label="item.title" :value="item.id" />
           </el-select>
           <el-select v-model="filterSummaryType" clearable placeholder="全部类型" aria-label="筛选总结类型">
-            <el-option label="标准总结" value="STANDARD" />
-            <el-option label="考试重点" value="EXAM" />
-            <el-option label="结构提纲" value="OUTLINE" />
+            <el-option v-for="mode in summaryModes" :key="mode.value" :label="mode.title" :value="mode.value" />
           </el-select>
           <el-button text @click="resetFilters">重置</el-button>
         </div>
@@ -40,42 +35,38 @@
           <el-skeleton :rows="5" animated />
           <span>正在整理你的总结…</span>
         </div>
-        <div v-else-if="loadError" class="learning-empty learning-empty--error" role="alert">
-          <div class="learning-empty__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M12 9v4M12 16.5h.01M10.3 4.1 2.8 17a2 2 0 0 0 1.7 3h15a2 2 0 0 0 1.7-3L13.7 4.1a2 2 0 0 0-3.4 0Z" stroke-linecap="round" stroke-linejoin="round" /></svg></div>
-          <h3>总结暂时没能加载</h3>
-          <p>{{ loadError }}</p>
+        <EmptyState v-else-if="loadError" variant="error" icon="summary" title="总结暂时没能加载" :description="loadError">
           <el-button type="primary" @click="loadSummaryHistory()">重新加载</el-button>
-        </div>
-        <div v-else-if="!pagedSummaryHistory.length" class="learning-empty">
-          <div class="learning-empty__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M8 3h8l4 4v14H4V3h4ZM14 3v5h6M8 12h8M8 16h5" stroke-linejoin="round" stroke-linecap="round" /></svg></div>
-          <h3>{{ summaryHistory.length ? '没有找到匹配的总结' : '让第一份资料，变成一份清晰的总结' }}</h3>
-          <p>{{ summaryHistory.length ? '试试其他关键词，或清除筛选条件。' : '选择一份已解析的资料，AI 会为你提炼重点，并保留原文出处。' }}</p>
+        </EmptyState>
+        <EmptyState
+          v-else-if="!pagedSummaryHistory.length"
+          icon="summary"
+          :title="summaryHistory.length ? '没有找到匹配的总结' : '让第一份资料，变成一份清晰的总结'"
+          :description="summaryHistory.length ? '试试其他关键词，或清除筛选条件。' : '选择一份已解析的资料，AI 会为你提炼重点，并保留原文出处。'"
+        >
           <el-button v-if="summaryHistory.length" @click="resetFilters">清除筛选</el-button>
-          <el-button v-else-if="materials.length" type="primary" :loading="generating" @click="openGenerateDialog">生成第一份总结</el-button>
+          <el-button v-else-if="materials.length" type="primary" @click="openGenerateDialog">生成第一份总结</el-button>
           <el-button v-else type="primary" @click="router.push('/materials')">前往资料库</el-button>
-        </div>
+        </EmptyState>
         <div v-else class="summary-card-grid">
           <article v-for="(item, index) in pagedSummaryHistory" :key="item.recordId" class="summary-note-card">
-            <span class="summary-note-card__number" aria-hidden="true">{{ String((pagination.current - 1) * pagination.size + index + 1).padStart(2, '0') }}</span>
+            <span class="summary-note-card__number" aria-hidden="true">{{ formatIndex((pagination.current - 1) * pagination.size + index + 1) }}</span>
             <div class="summary-note-card__content">
               <div class="summary-note-card__top">
                 <span class="summary-type">{{ formatSummaryType(item.summaryType) }}</span>
-                <span class="summary-status" :class="{ 'summary-status--generating': getSummaryStatus(item) === 'GENERATING', 'summary-status--failed': getSummaryStatus(item) === 'FAILED', 'summary-status--cancelled': getSummaryStatus(item) === 'CANCELLED' }" role="status">{{ formatSummaryStatus(item) }}</span>
-                <span class="summary-note-card__date">{{ formatDateTime(item.createdAt).slice(0, 10) }}</span>
+                <StatusPill :tone="statusTone(getSummaryStatus(item))" :label="formatSummaryStatus(getSummaryStatus(item))" />
+                <span class="summary-note-card__date">{{ formatDate(item.createdAt) }}</span>
               </div>
               <button type="button" class="summary-note-card__title" :disabled="!isSummaryReady(item)" @click="openSummaryDialog(item)">{{ item.materialTitle || '未命名资料' }}</button>
-              <p v-if="getSummaryStatus(item) === 'GENERATING'" class="summary-note-card__excerpt">正在整理资料，完成后即可阅读总结。</p>
-              <p v-else-if="getSummaryStatus(item) === 'FAILED'" class="summary-note-card__excerpt">生成未完成，可到任务中心查看原因并重试。</p>
-              <p v-else-if="getSummaryStatus(item) === 'CANCELLED'" class="summary-note-card__excerpt">本次生成已取消，可以重新生成总结。</p>
-              <p v-else class="summary-note-card__excerpt">{{ buildExcerpt(item.summaryText, 160) }}</p>
+              <p class="summary-note-card__excerpt">{{ buildCardExcerpt(item) }}</p>
             </div>
             <div class="summary-note-card__actions">
-              <el-button v-if="isSummaryReady(item)" link type="primary" @click="openSummaryDialog(item)">阅读总结 <span aria-hidden="true">→</span></el-button>
+              <el-button v-if="isSummaryReady(item)" link type="primary" @click="openSummaryDialog(item)">阅读总结 <AppIcon name="arrow-right" :size="16" /></el-button>
               <el-button v-else-if="getSummaryStatus(item) === 'GENERATING'" link type="primary" loading disabled>生成中</el-button>
               <el-button v-else link type="primary" @click="router.push('/ai-tasks')">查看任务</el-button>
               <div>
                 <el-button link @click="previewMaterial(item)">原始资料</el-button>
-                <el-button link :disabled="generating || getSummaryStatus(item) === 'GENERATING'" @click="quickGenerateForMaterial(item.materialId)">重新生成</el-button>
+                <el-button link :disabled="getSummaryStatus(item) === 'GENERATING'" @click="quickGenerateForMaterial(item.materialId)">重新生成</el-button>
               </div>
             </div>
           </article>
@@ -89,19 +80,21 @@
     </div>
 
     <el-dialog v-model="generateDialogVisible" title="生成 AI 总结" width="min(680px, calc(100vw - 32px))" destroy-on-close class="summary-dialog">
-      <template #header>
-        <div class="dialog-title">生成 AI 总结</div>
+      <template #header="{ titleId, titleClass }">
+        <h2 :id="titleId" :class="[titleClass, 'dialog-title']">生成 AI 总结</h2>
         <div class="dialog-subtitle">选好资料与整理方式，把复杂内容变得易于理解。</div>
       </template>
-      <div v-if="!materialsLoading && !materials.length" class="learning-empty learning-empty--compact">
-        <h3>先准备一份学习资料</h3>
-        <p>上传并解析资料后，就可以生成总结了。</p>
+      <EmptyState v-if="!materialsLoading && !materialsError && !materials.length" variant="compact" icon="folder" title="先准备一份学习资料" description="上传并解析资料后，就可以生成总结了。">
         <el-button type="primary" @click="router.push('/materials')">前往资料库</el-button>
-      </div>
+      </EmptyState>
       <el-form v-else label-position="top">
+        <p v-if="materialsError" class="summary-form-note summary-form-note--error" role="alert">
+          资料列表加载失败：{{ materialsError }}
+          <el-button link type="primary" :loading="materialsLoading" @click="loadMaterials">重试</el-button>
+        </p>
         <el-form-item label="选择资料">
           <el-select v-model="materialId" filterable style="width: 100%" placeholder="选择要整理的资料" :loading="materialsLoading">
-            <el-option v-for="item in materials" :key="item.id" :label="item.title + ' · ' + (item.totalCharacters || 0) + ' 字'" :value="item.id" />
+            <el-option v-for="item in materials" :key="item.id" :label="item.title + ' · ' + formatCharacters(item.totalCharacters)" :value="item.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="你想怎样整理？">
@@ -120,9 +113,9 @@
     </el-dialog>
 
     <el-dialog v-model="summaryDialogVisible" :title="activeSummary?.materialTitle || '学习总结'" width="min(900px, calc(100vw - 32px))" top="5vh" :close-on-click-modal="false" destroy-on-close class="summary-dialog summary-reader">
-      <template #header>
+      <template #header="{ titleId, titleClass }">
         <span class="summary-type">{{ formatSummaryType(activeSummary?.summaryType) }}</span>
-        <div class="dialog-title summary-reader__title">{{ activeSummary?.materialTitle || '学习总结' }}</div>
+        <h2 :id="titleId" :class="[titleClass, 'dialog-title', 'summary-reader__title']">{{ activeSummary?.materialTitle || '学习总结' }}</h2>
         <div class="dialog-subtitle">{{ formatDateTime(activeSummary?.createdAt) }}</div>
       </template>
       <article class="summary-reader__body">
@@ -130,14 +123,7 @@
       </article>
       <details class="summary-sources">
         <summary>引用资料 <span>{{ activeSummary?.sourceSegments?.length || 0 }} 处</span></summary>
-        <div v-if="activeSummary?.sourceSegments?.length" class="rag-reference-list">
-          <div v-for="segment in activeSummary.sourceSegments" :key="segment.segmentId + '-' + (segment.segmentNo || 0)" class="rag-reference-item">
-            <div class="rag-reference-item__title">{{ segment.sectionTitle || '资料摘录 ' + (segment.segmentNo || segment.segmentId) }}</div>
-            <div class="rag-reference-item__meta">{{ buildSegmentMeta(segment) }}</div>
-            <div class="summary-block">{{ segment.contentText }}</div>
-          </div>
-        </div>
-        <p v-else class="summary-form-note">这份总结暂未记录引用资料。</p>
+        <SourceSegmentList :segments="activeSummary?.sourceSegments" empty-text="这份总结暂未记录引用资料。" />
       </details>
       <template #footer>
         <el-button @click="previewMaterial(activeSummary)">查看原始资料</el-button>
@@ -146,23 +132,23 @@
     </el-dialog>
 
     <el-dialog v-model="previewDialogVisible" title="原始资料" width="min(900px, calc(100vw - 32px))" top="5vh" :close-on-click-modal="false" destroy-on-close class="summary-dialog">
-      <template #header>
-        <div class="dialog-title">原始资料</div>
+      <template #header="{ titleId, titleClass }">
+        <h2 :id="titleId" :class="[titleClass, 'dialog-title']">原始资料</h2>
         <div class="dialog-subtitle">{{ selectedMaterialDetail?.title || '资料预览' }}</div>
       </template>
       <div v-if="detailLoading" class="state-block">正在读取资料内容…</div>
       <template v-else-if="selectedMaterialDetail">
         <div class="summary-material-meta">
-          <span>{{ selectedMaterialDetail.totalCharacters || 0 }} 字</span>
+          <span>{{ formatCharacters(selectedMaterialDetail.totalCharacters) }}</span>
           <span>{{ formatParseStatus(selectedMaterialDetail.parseStatus) }}</span>
           <span v-if="selectedMaterialDetail.tags">{{ selectedMaterialDetail.tags }}</span>
         </div>
         <div v-if="selectedMaterialDetail.segments?.length" class="summary-preview-list">
-          <div v-for="segment in selectedMaterialDetail.segments.slice(0, 8)" :key="segment.id" class="summary-preview-card">
+          <div v-for="segment in selectedMaterialDetail.segments.slice(0, PREVIEW_SEGMENT_LIMIT)" :key="segment.id" class="summary-preview-card">
             <div class="summary-preview-card__label">段落 {{ segment.segmentNo || segment.id }}</div>
             <div class="summary-block">{{ segment.contentText }}</div>
           </div>
-          <p v-if="selectedMaterialDetail.segments.length > 8" class="summary-form-note">此处预览前 8 个段落，完整内容可在资料库查看。</p>
+          <p v-if="selectedMaterialDetail.segments.length > PREVIEW_SEGMENT_LIMIT" class="summary-form-note">此处预览前 {{ PREVIEW_SEGMENT_LIMIT }} 个段落，完整内容可在资料库查看。</p>
         </div>
         <div v-else class="state-block empty">这份资料还没有可预览的内容。</div>
       </template>
@@ -176,216 +162,177 @@ import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { getAllSummaryHistoryApi, submitSummaryTaskApi, type AiTaskDetail } from '@/api/modules/ai'
-import { getMaterialDetailApi, getMaterialPageApi } from '@/api/modules/material'
-import { isAiTaskSuccess, isAiTaskTerminal, parseAiTaskResult, waitForAiTask } from '@/utils/aiTask'
-import LearningNoteContent from '@/components/LearningNoteContent.vue'
+import { getMaterialDetailApi, type MaterialPageItem } from '@/api/modules/material'
+import { isAiTaskSuccess, isAiTaskTerminal, parseAiTaskResult, waitForAiTaskUntilTerminal } from '@/utils/aiTask'
 import { getErrorMessage } from '@/utils/errorMessage'
+import { buildExcerpt, formatCharacters, formatDate, formatDateTime, formatIndex, type SourceSegmentLike } from '@/utils/format'
+import { formatParseStatus, formatSummaryStatus, formatSummaryType, statusTone } from '@/utils/labels'
+import { useAssistantContext } from '@/composables/useAssistantContext'
 import { useLatestRequest } from '@/composables/useLatestRequest'
+import { useParsedMaterials } from '@/composables/useParsedMaterials'
+import { usePolling } from '@/composables/usePolling'
+import AppIcon from '@/components/AppIcon.vue'
+import EmptyState from '@/components/EmptyState.vue'
+import LearningNoteContent from '@/components/LearningNoteContent.vue'
+import ListSectionHeading from '@/components/ListSectionHeading.vue'
+import SourceSegmentList from '@/components/SourceSegmentList.vue'
+import StatusPill from '@/components/StatusPill.vue'
+
+/** 总结历史列表项（/ai/summary-history）。 */
+interface SummaryHistoryItem {
+  recordId: number
+  materialId: number
+  materialTitle?: string
+  summaryType?: string
+  summaryText?: string
+  status?: string
+  createdAt?: string
+  sourceSegments?: SourceSegmentLike[]
+}
+
+/** 总结任务成功后 resultJson 里的内容，字段与历史项一致。 */
+type SummaryTaskResult = Partial<SummaryHistoryItem>
+
+interface MaterialSegment {
+  id: number
+  segmentNo?: number
+  contentText?: string
+}
+
+interface MaterialDetail extends MaterialPageItem {
+  segments?: MaterialSegment[]
+}
+
+const KEYWORD_DEBOUNCE_MS = 300
+const PREVIEW_SEGMENT_LIMIT = 8
 
 const route = useRoute()
 const router = useRouter()
-const ASSISTANT_MATERIAL_QUERY_KEY = 'assistantMaterialId'
-const materialId = ref<number>()
-const summaryType = ref('STANDARD')
+const assistantContext = useAssistantContext()
+const { materials, loading: materialsLoading, error: materialsError, load: loadMaterials } = useParsedMaterials()
+
 const summaryModes = [
   { value: 'STANDARD', title: '标准总结', description: '提炼核心概念与主要结论' },
   { value: 'EXAM', title: '考试重点', description: '聚焦高频考点与易错内容' },
   { value: 'OUTLINE', title: '结构提纲', description: '按层级梳理知识脉络' }
 ]
+
+const materialId = ref<number>()
+const summaryType = ref('STANDARD')
 const filterMaterialId = ref<number>()
 const filterSummaryType = ref('')
 const keyword = ref('')
-const materials = ref<any[]>([])
-const selectedMaterialDetail = ref<any>(null)
-const summaryHistory = ref<any[]>([])
-const activeSummary = ref<any>(null)
+const debouncedKeyword = ref('')
+const selectedMaterialDetail = ref<MaterialDetail | null>(null)
+const summaryHistory = ref<SummaryHistoryItem[]>([])
+const activeSummary = ref<SummaryHistoryItem | null>(null)
 const summaryDialogVisible = ref(false)
 const previewDialogVisible = ref(false)
 const generateDialogVisible = ref(false)
-const materialsLoading = ref(false)
 const detailLoading = ref(false)
 const generating = ref(false)
 const historyLoading = ref(false)
 const loadError = ref('')
 const currentTask = ref<AiTaskDetail | null>(null)
 let viewDisposed = false
-let historyRequestId = 0
-let historyRefreshTimer: number | undefined
+let keywordTimer: number | undefined
 const pagination = reactive({
   current: 1,
   size: 10
 })
 
-const filteredSummaryHistory = computed(() =>
-  summaryHistory.value.filter((item) => {
+const getSummaryStatus = (item?: SummaryHistoryItem | null) =>
+  String(item?.status || (item?.summaryText ? 'SUCCESS' : '')).toUpperCase()
+const isSummaryReady = (item?: SummaryHistoryItem | null) => getSummaryStatus(item) === 'SUCCESS'
+
+const CARD_HINTS: Record<string, string> = {
+  GENERATING: '正在整理资料，完成后即可阅读总结。',
+  FAILED: '生成未完成，可到任务中心查看原因并重试。',
+  CANCELLED: '本次生成已取消，可以重新生成总结。'
+}
+const buildCardExcerpt = (item: SummaryHistoryItem) =>
+  CARD_HINTS[getSummaryStatus(item)] || buildExcerpt(item.summaryText, 160)
+
+const filteredSummaryHistory = computed(() => {
+  const search = debouncedKeyword.value.trim().toLowerCase()
+  return summaryHistory.value.filter((item) => {
     const matchesMaterial = !filterMaterialId.value || item.materialId === filterMaterialId.value
     const matchesType = !filterSummaryType.value || item.summaryType === filterSummaryType.value
-    const text = `${item.materialTitle || ''} ${item.summaryText || ''}`.toLowerCase()
-    const matchesKeyword = !keyword.value || text.includes(keyword.value.toLowerCase())
+    const matchesKeyword = !search || `${item.materialTitle || ''} ${item.summaryText || ''}`.toLowerCase().includes(search)
     return matchesMaterial && matchesType && matchesKeyword
   })
-)
+})
 
 const pagedSummaryHistory = computed(() => {
   const start = (pagination.current - 1) * pagination.size
   return filteredSummaryHistory.value.slice(start, start + pagination.size)
 })
 
+const hasGeneratingSummary = () => summaryHistory.value.some((item) => getSummaryStatus(item) === 'GENERATING')
+
+/** 学习助手应关注的资料：优先正在查看的对话框，其次筛选条件、进行中的任务、列表首项。 */
 const preferredAssistantMaterialId = computed(() => {
-  if (summaryDialogVisible.value && activeSummary.value?.materialId) {
-    return activeSummary.value.materialId as number
-  }
-  if (previewDialogVisible.value && selectedMaterialDetail.value?.id) {
-    return selectedMaterialDetail.value.id as number
-  }
-  if (generateDialogVisible.value && materialId.value) {
-    return materialId.value
-  }
-  if (filterMaterialId.value) {
-    return filterMaterialId.value
-  }
-  if (currentTask.value?.bizId) {
-    return Number(currentTask.value.bizId)
-  }
-  return (
-    pagedSummaryHistory.value[0]?.materialId ||
-    filteredSummaryHistory.value[0]?.materialId ||
-    materials.value[0]?.id
-  )
+  if (summaryDialogVisible.value && activeSummary.value?.materialId) return activeSummary.value.materialId
+  if (previewDialogVisible.value && selectedMaterialDetail.value?.id) return selectedMaterialDetail.value.id
+  if (generateDialogVisible.value && materialId.value) return materialId.value
+  if (filterMaterialId.value) return filterMaterialId.value
+  if (currentTask.value?.bizId) return Number(currentTask.value.bizId)
+  return pagedSummaryHistory.value[0]?.materialId || filteredSummaryHistory.value[0]?.materialId || materials.value[0]?.id
 })
 
 const taskStatusText = computed(() => {
-  if (!generating.value || !currentTask.value || isAiTaskTerminal(currentTask.value.status)) {
-    return ''
-  }
+  if (!generating.value || !currentTask.value || isAiTaskTerminal(currentTask.value.status)) return ''
   const materialLabel = materials.value.find((item) => item.id === currentTask.value?.bizId)?.title
   return `正在整理总结${materialLabel ? `：${materialLabel}` : ''}，完成后将自动打开。`
 })
 
-watch([filterMaterialId, filterSummaryType, keyword], () => {
+// 关键词做 300ms 防抖，避免每次击键都对所有总结正文做全文匹配。
+watch(keyword, (value) => {
+  window.clearTimeout(keywordTimer)
+  keywordTimer = window.setTimeout(() => {
+    debouncedKeyword.value = value
+  }, KEYWORD_DEBOUNCE_MS)
+})
+
+watch([filterMaterialId, filterSummaryType, debouncedKeyword], () => {
   pagination.current = 1
 })
 
+// 只有真实存在的正整数 id 才会写入路由，数据尚未加载时会清掉过期的上下文。
 watch(
   preferredAssistantMaterialId,
-  (materialIdValue) => {
-    void syncAssistantMaterialContext(materialIdValue)
+  (value) => {
+    const id = Number(value)
+    void assistantContext.sync({ materialId: Number.isInteger(id) && id > 0 ? id : undefined })
   },
   { immediate: true }
 )
 
-const formatSummaryType = (value?: string) => {
-  switch ((value || '').toUpperCase()) {
-    case 'EXAM':
-      return '考试重点'
-    case 'OUTLINE':
-      return '结构提纲'
-    default:
-      return '标准总结'
-  }
-}
+const historyRequest = useLatestRequest()
 
-const getSummaryStatus = (item: any) => String(item?.status || (item?.summaryText ? 'SUCCESS' : '')).toUpperCase()
-const isSummaryReady = (item: any) => getSummaryStatus(item) === 'SUCCESS'
-const formatSummaryStatus = (item: any) => {
-  const labels: Record<string, string> = { GENERATING: '生成中', SUCCESS: '已生成', FAILED: '生成失败', CANCELLED: '已取消' }
-  return labels[getSummaryStatus(item)] || '暂不可阅读'
-}
-
-const formatDateTime = (value?: string) => {
-  if (!value) {
-    return '未知时间'
-  }
-  return value.replace('T', ' ').slice(0, 19)
-}
-
-const buildExcerpt = (text?: string, length = 60) => {
-  if (!text) {
-    return '暂无内容'
-  }
-  const normalized = text
-    .replace(/^\s{0,3}(?:#{1,6}\s+|>\s*|[-+*]\s+|\d+[.)]\s+)/gm, '')
-    .replace(/!?\[([^\]]*)\]\([^)]+\)/g, '$1')
-    .replace(/(\*\*|__|~~|`)(.*?)\1/g, '$2')
-    .replace(/\s+/g, ' ')
-    .trim()
-  return normalized.length > length ? `${normalized.slice(0, length)}...` : normalized
-}
-
-const buildSegmentMeta = (segment: any) => {
-  const parts: string[] = []
-  if (segment?.pageNo) {
-    parts.push(`第 ${segment.pageNo} 页`)
-  }
-  if (segment?.segmentNo) {
-    parts.push(`段落 #${segment.segmentNo}`)
-  }
-  return parts.join(' · ') || '资料摘录'
-}
-
-const formatParseStatus = (value?: string) => {
-  const statuses: Record<string, string> = { SUCCESS: '已解析', PENDING: '等待解析', PROCESSING: '解析中', PARSING: '解析中', FAILED: '解析失败' }
-  return statuses[value || ''] || '待处理'
-}
-
-const loadMaterials = async () => {
-  materialsLoading.value = true
-  try {
-    const res = await getMaterialPageApi({ current: 1, size: 50, parseStatus: 'SUCCESS' })
-    const firstPage = res.data.data
-    const records = firstPage.records || []
-    const pageCount = Math.ceil(Number(firstPage.total || records.length) / 50)
-    const remainingPages = await Promise.all(
-      Array.from({ length: Math.max(0, pageCount - 1) }, (_, index) =>
-        getMaterialPageApi({ current: index + 2, size: 50, parseStatus: 'SUCCESS' })
-      )
-    )
-    materials.value = [
-      ...records,
-      ...remainingPages.flatMap((response) => response.data.data.records || [])
-    ].filter((item: any) => item.parseStatus === 'SUCCESS')
-  } catch (error: any) {
-    ElMessage.error(getErrorMessage(error, '加载资料失败'))
-  } finally {
-    materialsLoading.value = false
-  }
-}
-
-const stopHistoryRefresh = () => {
-  window.clearTimeout(historyRefreshTimer)
-  historyRefreshTimer = undefined
-}
-
-const scheduleHistoryRefresh = () => {
-  stopHistoryRefresh()
-  if (viewDisposed || !summaryHistory.value.some((item) => getSummaryStatus(item) === 'GENERATING')) return
-  historyRefreshTimer = window.setTimeout(() => void loadSummaryHistory(true), 3000)
-}
-
-const loadSummaryHistory = async (background = false) => {
+/** `silent` 为 true 时不显示骨架屏、不改动错误态，供轮询与后台刷新使用。 */
+const loadSummaryHistory = async (silent = false) => {
   if (viewDisposed) return
-  stopHistoryRefresh()
-  const requestId = ++historyRequestId
-  if (!background) {
+  const requestId = historyRequest.begin()
+  if (!silent) {
     historyLoading.value = true
     loadError.value = ''
   }
   try {
     const res = await getAllSummaryHistoryApi()
-    if (viewDisposed || requestId !== historyRequestId) return
+    if (viewDisposed || !historyRequest.isLatest(requestId)) return
     summaryHistory.value = res.data.data || []
     loadError.value = ''
-  } catch (error: any) {
-    if (!viewDisposed && requestId === historyRequestId && !background) {
+  } catch (error) {
+    if (!viewDisposed && historyRequest.isLatest(requestId) && !silent) {
       loadError.value = getErrorMessage(error, '总结列表暂时无法加载，请稍后重试。')
     }
   } finally {
-    if (!viewDisposed && requestId === historyRequestId) {
-      historyLoading.value = false
-      scheduleHistoryRefresh()
-    }
+    if (!viewDisposed && historyRequest.isLatest(requestId)) historyLoading.value = false
   }
 }
+
+usePolling(hasGeneratingSummary, () => loadSummaryHistory(true), 3000)
 
 const materialDetailRequest = useLatestRequest()
 
@@ -396,7 +343,7 @@ const loadMaterialDetail = async (id: number) => {
     const res = await getMaterialDetailApi(id)
     if (!materialDetailRequest.isLatest(requestId)) return
     selectedMaterialDetail.value = res.data.data
-  } catch (error: any) {
+  } catch (error) {
     if (!materialDetailRequest.isLatest(requestId)) return
     selectedMaterialDetail.value = null
     ElMessage.error(getErrorMessage(error, '加载资料详情失败'))
@@ -406,26 +353,12 @@ const loadMaterialDetail = async (id: number) => {
 }
 
 const resetFilters = () => {
+  window.clearTimeout(keywordTimer)
   filterMaterialId.value = undefined
   filterSummaryType.value = ''
   keyword.value = ''
+  debouncedKeyword.value = ''
   pagination.current = 1
-}
-
-async function syncAssistantMaterialContext(targetMaterialId?: number) {
-  if (viewDisposed) return
-  const currentMaterialId = Number(route.query[ASSISTANT_MATERIAL_QUERY_KEY] || 0) || undefined
-  if (currentMaterialId === targetMaterialId) {
-    return
-  }
-
-  const nextQuery = { ...route.query }
-  if (targetMaterialId) {
-    nextQuery[ASSISTANT_MATERIAL_QUERY_KEY] = String(targetMaterialId)
-  } else {
-    delete nextQuery[ASSISTANT_MATERIAL_QUERY_KEY]
-  }
-  await router.replace({ path: route.path, query: nextQuery })
 }
 
 const openGenerateDialog = () => {
@@ -437,18 +370,17 @@ const openGenerateDialog = () => {
   generateDialogVisible.value = true
 }
 
-const openSummaryDialog = (item: any) => {
+const openSummaryDialog = (item: SummaryHistoryItem) => {
   if (!isSummaryReady(item)) return
   activeSummary.value = item
   summaryDialogVisible.value = true
-  void syncAssistantMaterialContext(item?.materialId)
 }
 
-const previewMaterial = async (item: any) => {
+const previewMaterial = async (item?: SummaryHistoryItem | null) => {
+  if (!item?.materialId) return
   await loadMaterialDetail(item.materialId)
   if (viewDisposed) return
   previewDialogVisible.value = true
-  void syncAssistantMaterialContext(item?.materialId)
 }
 
 const quickGenerateForMaterial = (id: number) => {
@@ -474,17 +406,19 @@ const generateSummary = async () => {
     const submittedTask = submitRes.data.data as AiTaskDetail
     if (viewDisposed) return
     currentTask.value = submittedTask
-    const taskId = submittedTask.id
     generateDialogVisible.value = false
-    resetFilters()
     ElMessage.success('AI 总结任务已提交')
-    await loadSummaryHistory()
+    // 后台刷新即可：保留用户当前的筛选条件，不闪骨架屏。
+    await loadSummaryHistory(true)
 
-    let finishedTask = submittedTask
-    while (!viewDisposed && !isAiTaskTerminal(finishedTask.status)) {
-      finishedTask = await waitForAiTask(taskId, 30000)
-    }
-    if (viewDisposed) return
+    // 总结慢时持续等待，直到任务结束或用户离开本页；偶发网络错误会自动重试。
+    const finishedTask = await waitForAiTaskUntilTerminal(submittedTask.id, {
+      shouldStop: () => viewDisposed,
+      onProgress: (task) => {
+        currentTask.value = task
+      }
+    })
+    if (viewDisposed || !finishedTask || !isAiTaskTerminal(finishedTask.status)) return
     currentTask.value = finishedTask
     await loadSummaryHistory(true)
     if (viewDisposed) return
@@ -492,21 +426,20 @@ const generateSummary = async () => {
       throw new Error(finishedTask.errorMessage || 'AI 总结任务执行失败')
     }
 
-    const taskResult = parseAiTaskResult<any>(finishedTask)
+    const taskResult = parseAiTaskResult<SummaryTaskResult>(finishedTask)
     const created =
-      (taskResult?.recordId
-        ? summaryHistory.value.find((item) => item.recordId === taskResult.recordId)
-        : null) ||
+      (taskResult?.recordId ? summaryHistory.value.find((item) => item.recordId === taskResult.recordId) : null) ||
       taskResult
-
     if (created) {
       openSummaryDialog({
         ...created,
+        recordId: created.recordId ?? 0,
+        materialId: created.materialId || generatingMaterialId,
         materialTitle: created.materialTitle || materials.value.find((item) => item.id === generatingMaterialId)?.title
       })
     }
     ElMessage.success('AI 总结生成完成')
-  } catch (error: any) {
+  } catch (error) {
     if (!viewDisposed) {
       ElMessage.error(getErrorMessage(error, 'AI 总结任务失败'))
       if (currentTask.value && !isAiTaskTerminal(currentTask.value.status)) await loadSummaryHistory(true)
@@ -528,19 +461,12 @@ onMounted(async () => {
 
 onUnmounted(() => {
   viewDisposed = true
-  stopHistoryRefresh()
+  window.clearTimeout(keywordTimer)
 })
 </script>
 
 <style scoped>
-.summary-view { max-width: 1180px; min-width: 0; margin: 0 auto; }
-.learning-eyebrow { margin-bottom: 10px; color: var(--muted); font-size: 13px; font-weight: 500; letter-spacing: .12em; }
-.button-icon { width: 17px; height: 17px; }
-.search-icon { width: 18px; height: 18px; margin-right: 5px; }
 .summary-view .workspace-panel { background: transparent; border: 0; border-radius: 0; overflow: visible; }
-.summary-library-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 0 0 12px; }
-.summary-library-heading h2 { display: flex; align-items: baseline; gap: 12px; margin: 0; font-size: 18px; font-weight: 600; }
-.summary-library-heading h2 span { color: var(--muted); font-size: 14px; font-weight: 400; font-variant-numeric: tabular-nums; }
 .summary-view .workspace-filter-bar--summary { display: grid; grid-template-columns: minmax(200px, 1.6fr) minmax(150px, .8fr) minmax(130px, .7fr) auto; gap: 12px; width: 100%; margin-bottom: 0; }
 .summary-view .workspace-toolbar { margin: 0; padding: 0 0 26px; border-bottom: 1px solid var(--line); background: transparent; }
 .summary-view .workspace-filter-bar :deep(.el-input__wrapper), .summary-view .workspace-filter-bar :deep(.el-select__wrapper) { min-height: 46px; padding-inline: 16px; border-radius: 999px; background: transparent; box-shadow: none; }
@@ -556,11 +482,6 @@ onUnmounted(() => {
 .summary-note-card__content { min-width: 0; }
 .summary-note-card__top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; }
 .summary-type { display: inline-flex; color: var(--brand); font-size: 12px; font-weight: 500; letter-spacing: .04em; }
-.summary-status { display: inline-flex; align-items: center; gap: 6px; color: var(--brand); font-size: 12px; }
-.summary-status::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
-.summary-status--generating { color: var(--accent); }
-.summary-status--failed { color: var(--el-color-danger); }
-.summary-status--cancelled { color: var(--muted); }
 .summary-note-card__date { font-size: 12px; color: var(--muted); }
 .summary-note-card__title { width: fit-content; max-width: 100%; min-height: 44px; margin: 9px 0 0; padding: 4px 0; border: 0; background: none; color: var(--text); font: inherit; font-size: 20px; font-weight: 600; line-height: 1.6; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
 .summary-note-card__title:hover:not(:disabled) { color: var(--brand); }
@@ -576,13 +497,7 @@ onUnmounted(() => {
 .summary-view .workspace-pagination { border-top: 0; margin-top: 0; padding-top: 26px; }
 .summary-view .workspace-pagination :deep(.el-pager li), .summary-view .workspace-pagination :deep(.btn-prev), .summary-view .workspace-pagination :deep(.btn-next) { min-width: 44px; height: 44px; border-radius: 50%; background: transparent; }
 .summary-view .workspace-pagination :deep(.el-pager li.is-active) { color: var(--brand); background: var(--brand-soft); }
-.learning-empty { display: grid; justify-items: center; align-content: center; min-height: 370px; padding: 52px 20px; text-align: center; }
-.learning-empty__icon { display: grid; place-items: center; width: 72px; height: 72px; margin-bottom: 24px; border-radius: 50%; color: var(--brand); background: var(--brand-soft); }
-.learning-empty__icon svg { width: 30px; height: 30px; }
-.learning-empty h3 { margin: 0 0 12px; color: var(--text); font-size: 21px; font-weight: 500; line-height: 1.5; }
-.learning-empty p { max-width: 440px; margin: 0 0 26px; color: var(--muted); font-size: 15px; line-height: 1.9; }
-.learning-empty--compact { min-height: 200px; }
-.learning-empty--error .learning-empty__icon { color: var(--red); background: var(--red-soft); border-color: transparent; }
+.dialog-title { margin: 0; }
 .summary-mode-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; width: 100%; }
 .summary-mode-options :deep(.el-radio.is-bordered) { height: auto; min-height: 100px; margin: 0; padding: 16px 12px; border-radius: 9px; white-space: normal; align-items: flex-start; }
 .summary-mode-options :deep(.el-radio__input) { margin-top: 3px; }
@@ -591,9 +506,10 @@ onUnmounted(() => {
 .summary-mode-options span { display: block; color: var(--muted); font-size: 12px; line-height: 1.7; }
 .summary-mode-options :deep(.is-checked) { background: var(--brand-light); }
 .summary-form-note { margin: 12px 0; color: var(--muted); font-size: 12px; line-height: 1.8; }
+.summary-form-note--error { margin-top: 0; padding: 10px 14px; border-radius: 8px; color: var(--red); background: var(--red-soft); }
+.summary-form-note--error :deep(.el-button) { margin-left: 6px; font-size: 12px; }
 .summary-reader__title { margin-top: 13px; overflow-wrap: anywhere; }
 .summary-reader__body { padding: 10px 0 24px; }
-.summary-reader__body .summary-block { color: var(--text); font-size: 16px; line-height: 2; overflow-wrap: anywhere; }
 .summary-sources { padding-top: 20px; border-top: 1px solid var(--line); }
 .summary-sources summary { padding-bottom: 18px; color: var(--text); font-size: 14px; font-weight: 600; cursor: pointer; }
 .summary-sources summary span { margin-left: 6px; color: var(--muted); font-size: 12px; font-weight: 400; }
@@ -608,7 +524,6 @@ onUnmounted(() => {
 @media (max-width: 600px) {
   .summary-view .page-header { flex-direction: column; align-items: stretch; gap: 24px; }
   .summary-view .page-header > .el-button { align-self: flex-start; }
-  .summary-library-heading { padding-bottom: 8px; }
   .summary-view .workspace-filter-bar--summary { gap: 10px 4px; }
   .summary-view .workspace-filter-bar :deep(.el-select__wrapper) { padding-inline: 10px; }
   .summary-view .workspace-toolbar { padding-bottom: 20px; }
@@ -618,8 +533,6 @@ onUnmounted(() => {
   .summary-note-card__excerpt { font-size: 14px; }
   .summary-note-card__actions { flex-wrap: wrap; }
   .summary-note-card__actions > div { gap: 12px; }
-  .learning-empty { padding-inline: 8px; min-height: 330px; }
-  .learning-empty h3 { font-size: 19px; }
   .summary-mode-options { grid-template-columns: 1fr; }
   .summary-mode-options :deep(.el-radio.is-bordered) { min-height: 75px; }
 }
