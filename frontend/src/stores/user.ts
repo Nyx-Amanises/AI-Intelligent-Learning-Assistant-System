@@ -23,6 +23,10 @@ export const useUserStore = defineStore('user', {
       ? JSON.parse(localStorage.getItem('profile') as string)
       : null
   }),
+  getters: {
+    /** 是否为管理员；开发者向的页面与操作只对管理员开放。 */
+    isAdmin: (state) => String(state.profile?.roleCode || '').toUpperCase() === 'ADMIN'
+  },
   actions: {
     setLogin(token: string, profile: UserState['profile']) {
       this.token = token

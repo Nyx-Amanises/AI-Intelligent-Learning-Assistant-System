@@ -97,7 +97,7 @@
             <template #dropdown>
               <el-dropdown-menu class="workspace-more-menu">
                 <el-dropdown-item
-                  v-for="item in moreNavigationItems"
+                  v-for="item in visibleMoreNavigationItems"
                   :key="item.path"
                   :command="item.path"
                   :divided="item.divided"
@@ -203,8 +203,11 @@ const isHome = computed(() =>
   route.path === '/' ||
   route.path === ''
 )
+const visibleMoreNavigationItems = computed(() =>
+  moreNavigationItems.filter((item) => !item.adminOnly || userStore.isAdmin)
+)
 const moreNavigationActive = computed(() =>
-  moreNavigationItems.some((item) => item.path === route.path)
+  visibleMoreNavigationItems.value.some((item) => item.path === route.path)
 )
 
 const ROUTE_ORDER: Record<string, number> = {

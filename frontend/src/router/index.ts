@@ -25,7 +25,7 @@ const router = createRouter({
         { path: '/dashboard', name: 'dashboard', component: () => import('@/views/DashboardView.vue') },
         { path: '/materials', name: 'materials', component: () => import('@/views/MaterialView.vue') },
         { path: '/ai-tasks', name: 'ai-tasks', component: () => import('@/views/AiTaskCenterView.vue') },
-        { path: '/rag-eval', name: 'rag-eval', component: () => import('@/views/RagEvalView.vue') },
+        { path: '/rag-eval', name: 'rag-eval', component: () => import('@/views/RagEvalView.vue'), meta: { requiresAdmin: true } },
         { path: '/summary', name: 'summary', component: () => import('@/views/SummaryView.vue') },
         { path: '/quiz', name: 'quiz', component: () => import('@/views/QuizView.vue') },
         { path: '/practice', name: 'practice', component: () => import('@/views/PracticeView.vue') },
@@ -60,6 +60,9 @@ router.beforeEach((to, from) => {
     return '/login'
   }
   if (to.path === '/login' && userStore.token) {
+    return '/dashboard'
+  }
+  if (to.meta.requiresAdmin && !userStore.isAdmin) {
     return '/dashboard'
   }
   return true

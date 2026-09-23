@@ -41,7 +41,7 @@
       <div class="workspace-body">
         <el-alert
           v-if="activeCount > 0"
-          title="当前存在处理中任务。这里会自动同步最新状态；如果是旧的等待中任务长时间不动，可以直接重新派发。"
+          :title="isAdmin ? '当前存在处理中任务。这里会自动同步最新状态；如果是旧的等待中任务长时间不动，可以直接重新派发。' : '当前有任务正在处理，这里会自动同步最新状态，完成后可前往对应页面查看结果。'"
           type="info"
           :closable="false"
           show-icon
@@ -67,7 +67,7 @@
           >
             <div class="workspace-table__title">
               <strong>{{ formatTaskType(item.taskType) }}</strong>
-              <span>任务 #{{ item.id }} · 优先级 {{ item.priority }}</span>
+              <span>任务 #{{ item.id }}<template v-if="isAdmin"> · 优先级 {{ item.priority }}</template></span>
             </div>
 
             <div class="task-meta-stack">
@@ -97,7 +97,7 @@
               <el-button link type="primary" @click="openTaskDetail(item.id)">查看详情</el-button>
               <el-button v-if="canOpenBizPage(item)" link @click="openBizPage(item)">前往业务</el-button>
               <el-button
-                v-if="item.status === 'PENDING'"
+                v-if="isAdmin && item.status === 'PENDING'"
                 link
                 type="warning"
                 :loading="dispatchingTaskId === item.id"
@@ -159,7 +159,7 @@
             <span>业务对象</span>
             <strong>{{ formatBizLabel(taskDetail) }}</strong>
           </div>
-          <div class="detail-meta-item">
+          <div v-if="isAdmin" class="detail-meta-item">
             <span>执行模型</span>
             <strong>{{ taskDetail.modelName || '--' }}</strong>
           </div>
@@ -184,7 +184,7 @@
         <div class="task-detail-actions">
           <el-button v-if="canOpenBizPage(taskDetail)" @click="openBizPage(taskDetail)">前往业务页</el-button>
           <el-button
-            v-if="taskDetail.status === 'PENDING'"
+            v-if="isAdmin && taskDetail.status === 'PENDING'"
             type="warning"
             plain
             :loading="dispatchingTaskId === taskDetail.id"
@@ -212,11 +212,11 @@
         </div>
 
         <div class="task-json-grid">
-          <div class="task-json-card">
+          <div v-if="isAdmin" class="task-json-card">
             <div class="task-json-card__title">请求载荷</div>
             <pre class="task-json-block">{{ formatJsonContent(taskDetail.payloadJson) }}</pre>
           </div>
-          <div class="task-json-card">
+          <div v-if="isAdmin" class="task-json-card">
             <div class="task-json-card__title">任务结果</div>
             <pre class="task-json-block">{{ formatJsonContent(taskDetail.resultJson) }}</pre>
           </div>
@@ -245,9 +245,12 @@ import {
   type AiTaskPagePayload
 } from '@/api/modules/ai'
 import { useAutoListQuery } from '@/composables/useAutoListQuery'
+import { useUserStore } from '@/stores/user'
 import { getErrorMessage } from '@/utils/errorMessage'
 
 const router = useRouter()
+const userStore = useUserStore()
+const isAdmin = computed(() => userStore.isAdmin)
 const loading = ref(false)
 const detailLoading = ref(false)
 const drawerVisible = ref(false)
@@ -346,7 +349,7 @@ const isAnimatedStatus = (value?: string) => ['PENDING', 'RUNNING'].includes(Str
 const buildTaskStatusHint = (task: AiTaskPageItem) => {
   const status = String(task.status || '').toUpperCase()
   if (status === 'PENDING') {
-    return '任务排队中；旧任务如果长时间不动，可以点“重新派发”'
+    return isAdmin.value ? '任务排队中；旧任务如果长时间不动，可以点“重新派发”' : '任务排队中，轮到后会自动开始'
   }
   if (status === 'RUNNING') {
     return '任务执行中，列表会自动刷新'

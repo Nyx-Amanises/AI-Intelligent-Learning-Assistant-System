@@ -137,7 +137,7 @@
                 </el-form-item>
               </div>
 
-              <details class="config-advanced" :open="chatAdvancedOpen" @toggle="chatAdvancedOpen = ($event.target as HTMLDetailsElement).open">
+              <details v-if="showAdvancedSettings" class="config-advanced" :open="chatAdvancedOpen" @toggle="chatAdvancedOpen = ($event.target as HTMLDetailsElement).open">
                 <summary>高级设置 <AppIcon name="chevron-down" :size="16" /></summary>
                 <div class="config-advanced__body">
                   <p>默认接口已自动填写，需要自定义时再修改。</p>
@@ -191,7 +191,7 @@
                 </div>
                 <p v-if="form.chatProviderType === 'DEEPSEEK'" class="config-note">DeepSeek 用于对话；向量检索需选择支持向量模型的服务。</p>
 
-                <details class="config-advanced" :open="embeddingAdvancedOpen" @toggle="embeddingAdvancedOpen = ($event.target as HTMLDetailsElement).open">
+                <details v-if="showAdvancedSettings" class="config-advanced" :open="embeddingAdvancedOpen" @toggle="embeddingAdvancedOpen = ($event.target as HTMLDetailsElement).open">
                   <summary>高级设置 <AppIcon name="chevron-down" :size="16" /></summary>
                   <div class="config-advanced__body">
                     <p>接口路径会随所选服务自动填写，也可以手动调整。</p>
@@ -246,6 +246,7 @@ import {
   type AiConfigResponse
 } from '@/api/modules/ai'
 import { useTheme, type ThemeMode } from '@/composables/useTheme'
+import { useUserStore } from '@/stores/user'
 import { getErrorMessage } from '@/utils/errorMessage'
 
 const { currentTheme, themeOptions, currentThemeOption, setTheme } = useTheme()
@@ -271,6 +272,9 @@ const saveError = ref('')
 const savedFeedback = ref('')
 const saveScope = ref<SaveScope>('USER')
 const canManageGlobal = ref(false)
+const userStore = useUserStore()
+/** 接口路径等高级设置只对管理员展示，普通学生使用预设即可。 */
+const showAdvancedSettings = computed(() => userStore.isAdmin)
 const personalConfigured = ref(false)
 const globalConfigured = ref(false)
 const configSource = ref<AiConfigResponse['configSource']>('ENV')

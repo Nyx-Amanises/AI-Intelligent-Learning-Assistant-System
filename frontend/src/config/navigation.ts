@@ -4,6 +4,8 @@ export interface NavigationItem {
   icon: string
   description?: string
   divided?: boolean
+  /** 仅管理员可见（面向开发者/运维的功能）。 */
+  adminOnly?: boolean
 }
 
 export interface PrimaryNavigationItem extends NavigationItem {
@@ -33,7 +35,7 @@ export const moreNavigationItems: NavigationItem[] = [
   { path: '/wrong-questions', label: '错题复习', icon: 'wrong' },
   { path: '/mastery', label: '知识掌握', icon: 'mastery' },
   { path: '/ai-tasks', label: '任务中心', icon: 'tasks', divided: true },
-  { path: '/rag-eval', label: '检索评测', icon: 'eval' },
+  { path: '/rag-eval', label: '检索评测', icon: 'eval', adminOnly: true },
   { path: '/ai-config', label: 'AI 配置', icon: 'config', description: '对话模型与向量模型' }
 ]
 
@@ -60,7 +62,7 @@ export const navigationGroups: { label: string; items: NavigationItem[] }[] = [
     label: '工具与设置',
     items: [
       { path: '/ai-tasks', label: '任务中心', icon: 'tasks' },
-      { path: '/rag-eval', label: '检索评测', icon: 'eval' },
+      { path: '/rag-eval', label: '检索评测', icon: 'eval', adminOnly: true },
       { path: '/ai-config', label: 'AI 配置', icon: 'config', description: '对话模型与向量模型' },
       { path: '/profile', label: '个人信息', icon: 'user' }
     ]
