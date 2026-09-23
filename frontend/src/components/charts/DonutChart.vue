@@ -1,7 +1,10 @@
 <template>
   <div class="donut-chart">
     <div class="donut-chart__ring" :style="ringStyle" aria-hidden="true">
-      <div><strong>{{ total }}</strong><span>{{ centerLabel }}</span></div>
+      <div>
+        <strong>{{ total }}</strong
+        ><span>{{ centerLabel }}</span>
+      </div>
     </div>
     <slot name="legend" :segments="segments">
       <ul class="donut-chart__legend" :aria-label="legendLabel">
@@ -31,13 +34,16 @@ export interface DonutSegment {
 import { computed } from 'vue'
 
 // 环形占比图：conic-gradient 圆环 + 中心总数 + 图例；图例中的数字即文本形式的数据
-const props = withDefaults(defineProps<{
-  segments: DonutSegment[]
-  total: string | number
-  centerLabel?: string
-  /** 图例的无障碍名称 */
-  legendLabel?: string
-}>(), { centerLabel: '', legendLabel: '占比分布' })
+const props = withDefaults(
+  defineProps<{
+    segments: DonutSegment[]
+    total: string | number
+    centerLabel?: string
+    /** 图例的无障碍名称 */
+    legendLabel?: string
+  }>(),
+  { centerLabel: '', legendLabel: '占比分布' }
+)
 
 const formatPercent = (value: number) => Math.round((Number(value) || 0) * 10) / 10
 
@@ -58,29 +64,107 @@ const ringStyle = computed(() => {
 </script>
 
 <style scoped>
-.donut-chart { display: grid; grid-template-columns: 140px minmax(0, 1fr); align-items: center; gap: 30px; min-height: 165px; }
-.donut-chart__ring { position: relative; display: grid; width: 140px; height: 140px; place-items: center; border-radius: 50%; }
-.donut-chart__ring::before { position: absolute; inset: 11px; border-radius: 50%; background: var(--bg); content: ''; }
-.donut-chart__ring > div { position: relative; display: grid; gap: 3px; justify-items: center; }
-.donut-chart__ring strong { font-size: 30px; font-weight: 550; font-variant-numeric: tabular-nums; }
-.donut-chart__ring span { color: var(--muted); font-size: 12px; }
-.donut-chart__legend { display: grid; gap: 18px; padding: 0; margin: 0; list-style: none; }
-.donut-chart__legend li { display: grid; grid-template-columns: 8px minmax(0, 1fr) auto 38px; align-items: center; gap: 10px; font-size: 12px; }
-.donut-chart__legend i { width: 7px; height: 7px; border-radius: 50%; }
-.donut-chart__legend strong { font-weight: 600; font-variant-numeric: tabular-nums; }
-.donut-chart__legend small { text-align: right; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.donut-chart {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+  align-items: center;
+  gap: 30px;
+  min-height: 165px;
+}
+.donut-chart__ring {
+  position: relative;
+  display: grid;
+  width: 140px;
+  height: 140px;
+  place-items: center;
+  border-radius: 50%;
+}
+.donut-chart__ring::before {
+  position: absolute;
+  inset: 11px;
+  border-radius: 50%;
+  background: var(--bg);
+  content: '';
+}
+.donut-chart__ring > div {
+  position: relative;
+  display: grid;
+  gap: 3px;
+  justify-items: center;
+}
+.donut-chart__ring strong {
+  font-size: 30px;
+  font-weight: 550;
+  font-variant-numeric: tabular-nums;
+}
+.donut-chart__ring span {
+  color: var(--muted);
+  font-size: 12px;
+}
+.donut-chart__legend {
+  display: grid;
+  gap: 18px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+.donut-chart__legend li {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) auto 38px;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+.donut-chart__legend i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+.donut-chart__legend strong {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.donut-chart__legend small {
+  text-align: right;
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
 @media (max-width: 1000px) {
-  .donut-chart { grid-template-columns: 114px minmax(0, 1fr); gap: 20px; }
-  .donut-chart__ring { width: 114px; height: 114px; }
+  .donut-chart {
+    grid-template-columns: 114px minmax(0, 1fr);
+    gap: 20px;
+  }
+  .donut-chart__ring {
+    width: 114px;
+    height: 114px;
+  }
 }
 @media (max-width: 760px) {
-  .donut-chart { grid-template-columns: 140px minmax(0, 1fr); gap: 32px; }
-  .donut-chart__ring { width: 140px; height: 140px; }
+  .donut-chart {
+    grid-template-columns: 140px minmax(0, 1fr);
+    gap: 32px;
+  }
+  .donut-chart__ring {
+    width: 140px;
+    height: 140px;
+  }
 }
 @media (max-width: 520px) {
-  .donut-chart { grid-template-columns: 122px minmax(0, 1fr); gap: 24px; }
-  .donut-chart__ring { width: 122px; height: 122px; }
-  .donut-chart__legend li { gap: 7px; grid-template-columns: 7px minmax(0, 1fr) auto 34px; }
-  .donut-chart__legend small { font-size: 11px; }
+  .donut-chart {
+    grid-template-columns: 122px minmax(0, 1fr);
+    gap: 24px;
+  }
+  .donut-chart__ring {
+    width: 122px;
+    height: 122px;
+  }
+  .donut-chart__legend li {
+    gap: 7px;
+    grid-template-columns: 7px minmax(0, 1fr) auto 34px;
+  }
+  .donut-chart__legend small {
+    font-size: 11px;
+  }
 }
 </style>

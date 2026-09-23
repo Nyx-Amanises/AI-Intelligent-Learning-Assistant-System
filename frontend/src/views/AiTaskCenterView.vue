@@ -41,7 +41,11 @@
       <div class="workspace-body">
         <el-alert
           v-if="activeCount > 0"
-          :title="isAdmin ? '当前存在处理中任务。这里会自动同步最新状态；如果是旧的等待中任务长时间不动，可以直接重新派发。' : '当前有任务正在处理，这里会自动同步最新状态，完成后可前往对应页面查看结果。'"
+          :title="
+            isAdmin
+              ? '当前存在处理中任务。这里会自动同步最新状态；如果是旧的等待中任务长时间不动，可以直接重新派发。'
+              : '当前有任务正在处理，这里会自动同步最新状态，完成后可前往对应页面查看结果。'
+          "
           type="info"
           :closable="false"
           show-icon
@@ -60,14 +64,12 @@
             <span>操作</span>
           </div>
 
-          <div
-            v-for="item in tasks"
-            :key="item.id"
-            class="workspace-table__row workspace-table__row--task"
-          >
+          <div v-for="item in tasks" :key="item.id" class="workspace-table__row workspace-table__row--task">
             <div class="workspace-table__title">
               <strong>{{ formatTaskType(item.taskType) }}</strong>
-              <span>任务 #{{ item.id }}<template v-if="isAdmin"> · 优先级 {{ item.priority }}</template></span>
+              <span
+                >任务 #{{ item.id }}<template v-if="isAdmin"> · 优先级 {{ item.priority }}</template></span
+              >
             </div>
 
             <div class="task-meta-stack" data-label="业务对象">
@@ -76,14 +78,9 @@
             </div>
 
             <div class="task-status-cell" data-label="状态">
-              <div
-                class="task-status-pill"
-                :class="`task-status-pill--${statusVisualClass(item.status)}`"
-              >
+              <div class="task-status-pill" :class="`task-status-pill--${statusVisualClass(item.status)}`">
                 <span class="task-status-pill__text">{{ formatStatus(item.status) }}</span>
-                <span v-if="isAnimatedStatus(item.status)" class="task-status-pill__dots">
-                  <i></i><i></i><i></i>
-                </span>
+                <span v-if="isAnimatedStatus(item.status)" class="task-status-pill__dots"> <i></i><i></i><i></i> </span>
               </div>
               <span class="task-status-cell__meta">
                 {{ buildTaskStatusHint(item) }}
@@ -274,20 +271,15 @@ const page = reactive({
   size: 10
 })
 
-const autoQuery = useAutoListQuery(
-  [() => filters.taskType, () => filters.status],
-  () => {
-    page.current = 1
-    return loadTasks()
-  }
-)
+const autoQuery = useAutoListQuery([() => filters.taskType, () => filters.status], () => {
+  page.current = 1
+  return loadTasks()
+})
 
 const activeCount = computed(
   () => tasks.value.filter((item) => ['PENDING', 'RUNNING'].includes(String(item.status).toUpperCase())).length
 )
-const failedCount = computed(
-  () => tasks.value.filter((item) => String(item.status).toUpperCase() === 'FAILED').length
-)
+const failedCount = computed(() => tasks.value.filter((item) => String(item.status).toUpperCase() === 'FAILED').length)
 const hasActiveTasks = computed(() =>
   tasks.value.some((item) => ['PENDING', 'RUNNING'].includes(String(item.status).toUpperCase()))
 )
@@ -420,7 +412,7 @@ const loadTasks = async (silent = false) => {
     const data = res.data.data as AiTaskPagePayload
     tasks.value = data.records || []
     total.value = data.total || 0
-  } catch (error: any) {
+  } catch (error) {
     if (!taskListRequest.isLatest(requestId) || silent) return
     ElMessage.error(getErrorMessage(error, '加载任务列表失败'))
   } finally {
@@ -449,7 +441,7 @@ const openTaskDetail = async (taskId: number, silent = false) => {
     const res = await getAiTaskDetailApi(taskId)
     if (!taskDetailRequest.isLatest(requestId)) return
     taskDetail.value = res.data.data as AiTaskDetail
-  } catch (error: any) {
+  } catch (error) {
     if (!taskDetailRequest.isLatest(requestId) || silent) return
     taskDetail.value = null
     ElMessage.error(getErrorMessage(error, '加载任务详情失败'))
@@ -471,7 +463,7 @@ const retryTask = async (taskId: number, reloadDetail = false) => {
       taskDetail.value = retriedTask
       drawerVisible.value = true
     }
-  } catch (error: any) {
+  } catch (error) {
     ElMessage.error(getErrorMessage(error, '任务重试失败'))
   } finally {
     retryingTaskId.value = null
@@ -489,7 +481,7 @@ const dispatchTask = async (taskId: number, reloadDetail = false) => {
       taskDetail.value = dispatchedTask
       drawerVisible.value = true
     }
-  } catch (error: any) {
+  } catch (error) {
     ElMessage.error(getErrorMessage(error, '任务重新派发失败'))
   } finally {
     dispatchingTaskId.value = null
@@ -500,10 +492,9 @@ const removeTask = async (taskId: number, closeDetail = false, status?: string, 
   const normalizedStatus = String(status || '').toUpperCase()
   const generationLabel = taskType === 'QUESTION_GENERATE' ? '题集' : taskType === 'SUMMARY' ? '总结' : ''
   const cancelsGeneration = generationLabel && ['PENDING', 'RUNNING'].includes(normalizedStatus)
-  const confirmMessage =
-    cancelsGeneration
-      ? `删除这条任务记录后，仍在生成中的${generationLabel}将标记为“已取消”，后续返回的内容不再保存。确定继续吗？`
-      : normalizedStatus === 'RUNNING'
+  const confirmMessage = cancelsGeneration
+    ? `删除这条任务记录后，仍在生成中的${generationLabel}将标记为“已取消”，后续返回的内容不再保存。确定继续吗？`
+    : normalizedStatus === 'RUNNING'
       ? '删除后只会移除这条任务记录，不会中断已经发出的 AI 请求，确定继续吗？'
       : '删除后将只移除任务记录，不会删除已经生成的业务结果，确定继续吗？'
   try {
@@ -528,7 +519,7 @@ const removeTask = async (taskId: number, closeDetail = false, status?: string, 
       page.current -= 1
     }
     await loadTasks()
-  } catch (error: any) {
+  } catch (error) {
     ElMessage.error(getErrorMessage(error, '删除任务记录失败'))
   } finally {
     deletingTaskId.value = null
@@ -546,7 +537,11 @@ const startAutoRefresh = () => {
   stopAutoRefresh()
   autoRefreshTimer = window.setInterval(() => {
     void loadTasks(true)
-    if (drawerVisible.value && taskDetail.value && ['PENDING', 'RUNNING'].includes(String(taskDetail.value.status).toUpperCase())) {
+    if (
+      drawerVisible.value &&
+      taskDetail.value &&
+      ['PENDING', 'RUNNING'].includes(String(taskDetail.value.status).toUpperCase())
+    ) {
       void openTaskDetail(taskDetail.value.id, true)
     }
   }, 3000)

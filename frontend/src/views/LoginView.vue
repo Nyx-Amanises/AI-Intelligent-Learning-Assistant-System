@@ -12,7 +12,9 @@
             <h1 id="login-form-title">{{ isRegister ? '注册' : '欢迎回来' }}</h1>
           </header>
 
-          <p v-if="registrationNotice" class="auth-notice auth-notice--success" role="status">{{ registrationNotice }}</p>
+          <p v-if="registrationNotice" class="auth-notice auth-notice--success" role="status">
+            {{ registrationNotice }}
+          </p>
           <p v-if="submitError" class="auth-notice auth-notice--error" role="alert">{{ submitError }}</p>
 
           <form class="auth-form" novalidate :aria-busy="submitting" @submit.prevent="submit">
@@ -35,7 +37,7 @@
                   :aria-invalid="Boolean(errors.username)"
                   :aria-describedby="errors.username ? 'auth-username-error' : undefined"
                   @blur="validateField('username')"
-                >
+                />
                 <p v-if="errors.username" id="auth-username-error" class="auth-field-error">{{ errors.username }}</p>
               </div>
 
@@ -54,7 +56,7 @@
                   :aria-invalid="Boolean(errors.nickname)"
                   :aria-describedby="errors.nickname ? 'auth-nickname-error' : undefined"
                   @blur="validateField('nickname')"
-                >
+                />
                 <p v-if="errors.nickname" id="auth-nickname-error" class="auth-field-error">{{ errors.nickname }}</p>
               </div>
             </div>
@@ -77,7 +79,7 @@
                   :aria-describedby="passwordDescription"
                   required
                   @blur="validateField('password')"
-                >
+                />
                 <button
                   type="button"
                   class="auth-password__toggle"
@@ -89,7 +91,9 @@
                   <AppIcon :name="passwordVisible ? 'eye-off' : 'eye'" :size="19" />
                 </button>
               </div>
-              <p v-if="isRegister" id="auth-password-hint" class="auth-field-hint">8–20 位，至少包含字母和数字，可使用符号。</p>
+              <p v-if="isRegister" id="auth-password-hint" class="auth-field-hint">
+                8–20 位，至少包含字母和数字，可使用符号。
+              </p>
               <p v-if="errors.password" id="auth-password-error" class="auth-field-error">{{ errors.password }}</p>
             </div>
 
@@ -110,7 +114,7 @@
                   :aria-describedby="errors.confirmPassword ? 'auth-confirmPassword-error' : undefined"
                   required
                   @blur="validateField('confirmPassword')"
-                >
+                />
                 <button
                   type="button"
                   class="auth-password__toggle"
@@ -122,12 +126,16 @@
                   <AppIcon :name="confirmPasswordVisible ? 'eye-off' : 'eye'" :size="19" />
                 </button>
               </div>
-              <p v-if="errors.confirmPassword" id="auth-confirmPassword-error" class="auth-field-error">{{ errors.confirmPassword }}</p>
+              <p v-if="errors.confirmPassword" id="auth-confirmPassword-error" class="auth-field-error">
+                {{ errors.confirmPassword }}
+              </p>
             </div>
 
             <button class="auth-submit" type="submit" :disabled="submitting">
               <span v-if="submitting" class="auth-submit__spinner" aria-hidden="true" />
-              <span>{{ submitting ? (isRegister ? '正在创建账号…' : '正在登录…') : (isRegister ? '创建账号' : '登录') }}</span>
+              <span>{{
+                submitting ? (isRegister ? '正在创建账号…' : '正在登录…') : isRegister ? '创建账号' : '登录'
+              }}</span>
               <AppIcon v-if="!submitting" name="arrow-right" :size="18" />
             </button>
           </form>
@@ -153,7 +161,7 @@
           fetchpriority="high"
           decoding="async"
           draggable="false"
-        >
+        />
         <figure class="login-visual__copy" aria-live="polite" aria-atomic="true">
           <blockquote class="login-visual__quote">
             <p id="login-visual-title">{{ dailyQuote.text }}</p>
@@ -206,10 +214,12 @@ const usernameInput = ref<HTMLInputElement | null>(null)
 const passwordInput = ref<HTMLInputElement | null>(null)
 const form = reactive({ username: '', password: '', confirmPassword: '', nickname: '' })
 const errors = reactive<Record<AuthField, string>>({ username: '', nickname: '', password: '', confirmPassword: '' })
-const passwordDescription = computed(() => [
-  isRegister.value ? 'auth-password-hint' : '',
-  errors.password ? 'auth-password-error' : ''
-].filter(Boolean).join(' ') || undefined)
+const passwordDescription = computed(
+  () =>
+    [isRegister.value ? 'auth-password-hint' : '', errors.password ? 'auth-password-error' : '']
+      .filter(Boolean)
+      .join(' ') || undefined
+)
 const validateField = (field: AuthField) => {
   let message = ''
   const value = form[field].trim()
@@ -218,8 +228,10 @@ const validateField = (field: AuthField) => {
     else if (isRegister.value && (value.length < 4 || value.length > 20)) message = '用户名需要 4–20 个字符。'
   } else if (field === 'password') {
     if (!value) message = '请输入密码。'
-    else if (isRegister.value && (form.password.length < 8 || form.password.length > 20)) message = '密码需要 8–20 个字符。'
-    else if (isRegister.value && (!/[A-Za-z]/.test(form.password) || !/[0-9]/.test(form.password))) message = '密码需同时包含字母和数字。'
+    else if (isRegister.value && (form.password.length < 8 || form.password.length > 20))
+      message = '密码需要 8–20 个字符。'
+    else if (isRegister.value && (!/[A-Za-z]/.test(form.password) || !/[0-9]/.test(form.password)))
+      message = '密码需同时包含字母和数字。'
   } else if (field === 'confirmPassword' && isRegister.value) {
     if (!value) message = '请再次输入密码。'
     else if (form.confirmPassword !== form.password) message = '两次输入的密码不一致。'
@@ -248,7 +260,9 @@ const toggleMode = async (value: boolean) => {
 const submit = async () => {
   if (submitting.value) return
   submitError.value = ''
-  const fields: AuthField[] = isRegister.value ? ['username', 'nickname', 'password', 'confirmPassword'] : ['username', 'password']
+  const fields: AuthField[] = isRegister.value
+    ? ['username', 'nickname', 'password', 'confirmPassword']
+    : ['username', 'password']
   const invalidFields = fields.filter((field) => !validateField(field))
   if (invalidFields.length) {
     await nextTick()
@@ -259,7 +273,12 @@ const submit = async () => {
   submitting.value = true
   try {
     if (isRegister.value) {
-      await registerApi({ username: form.username.trim(), password: form.password, confirmPassword: form.confirmPassword, nickname: form.nickname.trim() })
+      await registerApi({
+        username: form.username.trim(),
+        password: form.password,
+        confirmPassword: form.confirmPassword,
+        nickname: form.nickname.trim()
+      })
       isRegister.value = false
       passwordVisible.value = false
       confirmPasswordVisible.value = false
@@ -272,11 +291,19 @@ const submit = async () => {
     const loginRes = await loginApi({ username: form.username.trim(), password: form.password })
     const loginData = loginRes.data?.data
     if (!loginData?.token) throw new Error('暂时无法完成登录，请重试。')
-    userStore.setLogin(loginData.token, { id: loginData.userId, username: loginData.username, nickname: loginData.nickname })
+    userStore.setLogin(loginData.token, {
+      id: loginData.userId,
+      username: loginData.username,
+      nickname: loginData.nickname
+    })
     ElMessage.success('登录成功')
-    const redirect = typeof route.query.redirect === 'string' && route.query.redirect.startsWith('/') && !route.query.redirect.startsWith('//') && route.query.redirect !== '/login'
-      ? route.query.redirect
-      : '/dashboard'
+    const redirect =
+      typeof route.query.redirect === 'string' &&
+      route.query.redirect.startsWith('/') &&
+      !route.query.redirect.startsWith('//') &&
+      route.query.redirect !== '/login'
+        ? route.query.redirect
+        : '/dashboard'
     await router.replace(redirect)
   } catch (error) {
     submitError.value = getErrorMessage(error, '操作失败，请稍后重试。')
@@ -289,13 +316,20 @@ const submit = async () => {
   }
 }
 
-watch(() => form.password, () => {
-  if (isRegister.value && form.confirmPassword) validateField('confirmPassword')
-})
+watch(
+  () => form.password,
+  () => {
+    if (isRegister.value && form.confirmPassword) validateField('confirmPassword')
+  }
+)
 
-watch(isRegister, (registering) => {
-  document.title = `${registering ? '注册' : '登录'} · ${APP_NAME}`
-}, { immediate: true })
+watch(
+  isRegister,
+  (registering) => {
+    document.title = `${registering ? '注册' : '登录'} · ${APP_NAME}`
+  },
+  { immediate: true }
+)
 </script>
 
 <style scoped>
@@ -310,7 +344,7 @@ watch(isRegister, (registering) => {
   padding: 40px 32px;
   background: var(--bg);
   color: var(--auth-ink);
-  font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif;
+  font-family: 'Microsoft YaHei', 'PingFang SC', 'Segoe UI', sans-serif;
 }
 
 .login-shell {
@@ -323,7 +357,7 @@ watch(isRegister, (registering) => {
   border-radius: 28px;
   background: var(--panel);
   box-shadow: var(--shadow-lg);
-  animation: auth-reveal .5s ease-out both;
+  animation: auth-reveal 0.5s ease-out both;
 }
 
 .login-form-panel {
@@ -339,23 +373,64 @@ watch(isRegister, (registering) => {
   width: min(352px, 100%);
   margin-inline: auto;
 }
-.login-brand__logo { width: 184px; max-width: 100%; }
-.login-form-content { width: min(352px, 100%); margin: auto; padding: 48px 0; }
-.login-form-heading { margin-bottom: 32px; }
+.login-brand__logo {
+  width: 184px;
+  max-width: 100%;
+}
+.login-form-content {
+  width: min(352px, 100%);
+  margin: auto;
+  padding: 48px 0;
+}
+.login-form-heading {
+  margin-bottom: 32px;
+}
 .login-form-eyebrow {
   margin: 0 0 12px;
   color: var(--auth-muted);
-  font: 500 10px/1.5 "Segoe UI", sans-serif;
+  font:
+    500 10px/1.5 'Segoe UI',
+    sans-serif;
   letter-spacing: 2.1px;
 }
-.login-form-heading h1 { margin: 0; font-size: 32px; font-weight: 600; line-height: 1.45; letter-spacing: -1px; }
+.login-form-heading h1 {
+  margin: 0;
+  font-size: 32px;
+  font-weight: 600;
+  line-height: 1.45;
+  letter-spacing: -1px;
+}
 
-.auth-form { display: grid; grid-template-columns: minmax(0, 1fr); gap: 23px; padding: 0; }
-.auth-name-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
-.auth-name-row--register { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.auth-field { min-width: 0; }
-.auth-field label { display: block; margin-bottom: 9px; color: var(--text-secondary); font-size: 13px; font-weight: 500; }
-.auth-field label > span { margin-left: 5px; color: var(--auth-muted); font-size: 11px; font-weight: 400; }
+.auth-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 23px;
+  padding: 0;
+}
+.auth-name-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+}
+.auth-name-row--register {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.auth-field {
+  min-width: 0;
+}
+.auth-field label {
+  display: block;
+  margin-bottom: 9px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+}
+.auth-field label > span {
+  margin-left: 5px;
+  color: var(--auth-muted);
+  font-size: 11px;
+  font-weight: 400;
+}
 .auth-field input {
   width: 100%;
   height: 50px;
@@ -367,16 +442,39 @@ watch(isRegister, (registering) => {
   color: var(--auth-ink);
   font: inherit;
   font-size: 13px;
-  transition: border-color .18s ease, box-shadow .18s ease, background-color .18s ease;
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    background-color 0.18s ease;
 }
-.auth-field input::placeholder { color: var(--auth-muted); }
-.auth-field input:hover { border-color: color-mix(in srgb, var(--brand) 40%, var(--line)); }
-.auth-field input:focus { border-color: var(--auth-green); background: var(--panel); box-shadow: 0 0 0 3px var(--brand-soft); }
-.auth-field input[aria-invalid="true"] { border-color: var(--red); }
-.auth-field input[aria-invalid="true"]:focus { box-shadow: 0 0 0 3px var(--red-soft); }
-.auth-field input:disabled { cursor: wait; background: var(--bg-secondary); opacity: .75; }
-.auth-password { position: relative; }
-.auth-password input { padding-right: 50px; }
+.auth-field input::placeholder {
+  color: var(--auth-muted);
+}
+.auth-field input:hover {
+  border-color: color-mix(in srgb, var(--brand) 40%, var(--line));
+}
+.auth-field input:focus {
+  border-color: var(--auth-green);
+  background: var(--panel);
+  box-shadow: 0 0 0 3px var(--brand-soft);
+}
+.auth-field input[aria-invalid='true'] {
+  border-color: var(--red);
+}
+.auth-field input[aria-invalid='true']:focus {
+  box-shadow: 0 0 0 3px var(--red-soft);
+}
+.auth-field input:disabled {
+  cursor: wait;
+  background: var(--bg-secondary);
+  opacity: 0.75;
+}
+.auth-password {
+  position: relative;
+}
+.auth-password input {
+  padding-right: 50px;
+}
 .auth-password__toggle {
   position: absolute;
   top: 3px;
@@ -391,15 +489,45 @@ watch(isRegister, (registering) => {
   background: transparent;
   color: var(--auth-muted);
   cursor: pointer;
-  transition: color .18s ease, background-color .18s ease;
+  transition:
+    color 0.18s ease,
+    background-color 0.18s ease;
 }
-.auth-password__toggle svg { width: 19px; height: 19px; }
-.auth-password__toggle:hover { color: var(--auth-green); background: var(--brand-light); }
-.auth-field-error { margin: 7px 0 0; color: var(--red); font-size: 12px; line-height: 1.65; }
-.auth-field-hint { margin: 8px 0 0; color: var(--auth-muted); font-size: 12px; line-height: 1.65; }
-.auth-notice { margin: 0 0 22px; padding: 12px 14px; border-radius: 8px; font-size: 13px; line-height: 1.75; }
-.auth-notice--error { color: var(--red); background: var(--red-soft); }
-.auth-notice--success { color: var(--green); background: var(--brand-light); }
+.auth-password__toggle svg {
+  width: 19px;
+  height: 19px;
+}
+.auth-password__toggle:hover {
+  color: var(--auth-green);
+  background: var(--brand-light);
+}
+.auth-field-error {
+  margin: 7px 0 0;
+  color: var(--red);
+  font-size: 12px;
+  line-height: 1.65;
+}
+.auth-field-hint {
+  margin: 8px 0 0;
+  color: var(--auth-muted);
+  font-size: 12px;
+  line-height: 1.65;
+}
+.auth-notice {
+  margin: 0 0 22px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.75;
+}
+.auth-notice--error {
+  color: var(--red);
+  background: var(--red-soft);
+}
+.auth-notice--success {
+  color: var(--green);
+  background: var(--brand-light);
+}
 .auth-submit {
   position: relative;
   display: flex;
@@ -418,18 +546,74 @@ watch(isRegister, (registering) => {
   font-weight: 500;
   cursor: pointer;
   box-shadow: var(--shadow-sm);
-  transition: background-color .18s ease, border-color .18s ease, box-shadow .18s ease;
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
 }
-.auth-submit > .app-icon { position: absolute; right: 18px; transition: transform .18s ease; }
-.auth-submit:hover:not(:disabled) { background: var(--brand-hover); border-color: var(--brand-hover); box-shadow: var(--shadow); }
-.auth-submit:hover:not(:disabled) > .app-icon { transform: translateX(3px); }
-.auth-submit:disabled { cursor: wait; opacity: .72; }
-.auth-submit__spinner { width: 16px; height: 16px; border: 2px solid rgb(255 255 255 / 35%); border-top-color: currentColor; border-radius: 50%; animation: auth-spin .7s linear infinite; }
-.auth-switch { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 1px; margin-top: 24px; color: var(--auth-muted); font-size: 12px; }
-.auth-switch button { display: inline-flex; align-items: center; gap: 4px; min-height: 44px; padding: 0 7px; border: 0; border-radius: 6px; background: transparent; color: var(--auth-green); font: inherit; font-weight: 600; cursor: pointer; }
-.auth-switch button:hover { background: var(--brand-light); }
-.auth-switch button:disabled, .auth-password__toggle:disabled { cursor: wait; opacity: .6; }
-.auth-switch button:focus-visible, .auth-password__toggle:focus-visible, .auth-submit:focus-visible { outline: 3px solid var(--brand); outline-offset: 3px; }
+.auth-submit > .app-icon {
+  position: absolute;
+  right: 18px;
+  transition: transform 0.18s ease;
+}
+.auth-submit:hover:not(:disabled) {
+  background: var(--brand-hover);
+  border-color: var(--brand-hover);
+  box-shadow: var(--shadow);
+}
+.auth-submit:hover:not(:disabled) > .app-icon {
+  transform: translateX(3px);
+}
+.auth-submit:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+.auth-submit__spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgb(255 255 255 / 35%);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: auth-spin 0.7s linear infinite;
+}
+.auth-switch {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 1px;
+  margin-top: 24px;
+  color: var(--auth-muted);
+  font-size: 12px;
+}
+.auth-switch button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--auth-green);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.auth-switch button:hover {
+  background: var(--brand-light);
+}
+.auth-switch button:disabled,
+.auth-password__toggle:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+.auth-switch button:focus-visible,
+.auth-password__toggle:focus-visible,
+.auth-submit:focus-visible {
+  outline: 3px solid var(--brand);
+  outline-offset: 3px;
+}
 
 .login-visual {
   position: relative;
@@ -439,65 +623,194 @@ watch(isRegister, (registering) => {
   border-radius: 18px;
   background: var(--bg-secondary);
 }
-.login-visual__image { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 52% center; mix-blend-mode: multiply; filter: saturate(.82); }
-.login-visual::after { position: absolute; z-index: -1; inset: 0; background: linear-gradient(180deg, rgb(239 241 230 / 30%), transparent 42%, transparent 78%, rgb(236 239 226 / 24%)); content: ""; }
-.login-visual__image { z-index: -2; }
-.login-visual__copy { position: relative; margin: 0; padding: 47px 42px; }
-.login-visual__quote { margin: 0; }
-.login-visual__quote p { margin: 0; color: var(--brand-hover); font-family: "Noto Serif SC", "Songti SC", "STSong", "SimSun", serif; font-size: clamp(27px, 2.6vw, 36px); font-weight: 400; line-height: 1.7; letter-spacing: .7px; text-wrap: balance; overflow-wrap: anywhere; }
-.login-visual__attribution { display: flex; flex-wrap: wrap; gap: 4px 8px; margin-top: 20px; color: var(--text-secondary); font-size: 12px; line-height: 1.8; }
-.login-visual__attribution cite { font-style: normal; }
-.login-shell--register .login-form-content { padding-block: 30px; }
-.login-shell--register .login-form-heading { margin-bottom: 25px; }
-.login-shell--register .auth-form { gap: 18px; }
-.login-shell--register .auth-switch { margin-top: 17px; }
+.login-visual__image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 52% center;
+  mix-blend-mode: multiply;
+  filter: saturate(0.82);
+}
+.login-visual::after {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background: linear-gradient(180deg, rgb(239 241 230 / 30%), transparent 42%, transparent 78%, rgb(236 239 226 / 24%));
+  content: '';
+}
+.login-visual__image {
+  z-index: -2;
+}
+.login-visual__copy {
+  position: relative;
+  margin: 0;
+  padding: 47px 42px;
+}
+.login-visual__quote {
+  margin: 0;
+}
+.login-visual__quote p {
+  margin: 0;
+  color: var(--brand-hover);
+  font-family: 'Noto Serif SC', 'Songti SC', 'STSong', 'SimSun', serif;
+  font-size: clamp(27px, 2.6vw, 36px);
+  font-weight: 400;
+  line-height: 1.7;
+  letter-spacing: 0.7px;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+.login-visual__attribution {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin-top: 20px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.8;
+}
+.login-visual__attribution cite {
+  font-style: normal;
+}
+.login-shell--register .login-form-content {
+  padding-block: 30px;
+}
+.login-shell--register .login-form-heading {
+  margin-bottom: 25px;
+}
+.login-shell--register .auth-form {
+  gap: 18px;
+}
+.login-shell--register .auth-switch {
+  margin-top: 17px;
+}
 
-@keyframes auth-reveal { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes auth-spin { to { transform: rotate(360deg); } }
+@keyframes auth-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes auth-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 
 @media (max-width: 1040px) {
-  .login-page { padding: 28px; }
-  .login-form-panel { padding: 32px 30px 25px; }
-  .login-visual__copy { padding: 45px 32px; }
-  .login-visual__quote p { font-size: 30px; }
+  .login-page {
+    padding: 28px;
+  }
+  .login-form-panel {
+    padding: 32px 30px 25px;
+  }
+  .login-visual__copy {
+    padding: 45px 32px;
+  }
+  .login-visual__quote p {
+    font-size: 30px;
+  }
 }
 
 @media (max-width: 760px) {
-  .login-page { padding: 24px; }
-  .login-shell { grid-template-columns: minmax(0, 1fr); width: min(480px, 100%); min-height: min(720px, calc(100svh - 48px)); padding: 0; border-radius: 22px; }
-  .login-form-panel { padding: 36px 38px 28px; }
-  .login-visual { display: none; }
-  .login-form-content { padding-block: 48px; }
-  .auth-field input { font-size: 16px; }
-  .auth-name-row--register input { font-size: 14px; }
+  .login-page {
+    padding: 24px;
+  }
+  .login-shell {
+    grid-template-columns: minmax(0, 1fr);
+    width: min(480px, 100%);
+    min-height: min(720px, calc(100svh - 48px));
+    padding: 0;
+    border-radius: 22px;
+  }
+  .login-form-panel {
+    padding: 36px 38px 28px;
+  }
+  .login-visual {
+    display: none;
+  }
+  .login-form-content {
+    padding-block: 48px;
+  }
+  .auth-field input {
+    font-size: 16px;
+  }
+  .auth-name-row--register input {
+    font-size: 14px;
+  }
 }
 
 @media (max-width: 480px) {
-  .login-page { padding: 16px; }
-  .login-shell { min-height: min(720px, calc(100svh - 32px)); border-radius: 20px; }
-  .login-form-panel { padding: 30px 25px 25px; }
-  .login-brand__logo { width: 168px; }
-  .login-form-heading h1 { font-size: 30px; }
-  .auth-name-row { gap: 13px; }
+  .login-page {
+    padding: 16px;
+  }
+  .login-shell {
+    min-height: min(720px, calc(100svh - 32px));
+    border-radius: 20px;
+  }
+  .login-form-panel {
+    padding: 30px 25px 25px;
+  }
+  .login-brand__logo {
+    width: 168px;
+  }
+  .login-form-heading h1 {
+    font-size: 30px;
+  }
+  .auth-name-row {
+    gap: 13px;
+  }
 }
 
 @media (max-width: 360px) {
-  .login-page { padding: 10px; }
-  .login-shell { min-height: calc(100svh - 20px); }
-  .login-form-panel { padding: 26px 20px 22px; }
-  .login-form-heading h1 { font-size: 27px; }
-  .auth-name-row--register { grid-template-columns: minmax(0, 1fr); }
-  .auth-name-row--register input { font-size: 16px; }
+  .login-page {
+    padding: 10px;
+  }
+  .login-shell {
+    min-height: calc(100svh - 20px);
+  }
+  .login-form-panel {
+    padding: 26px 20px 22px;
+  }
+  .login-form-heading h1 {
+    font-size: 27px;
+  }
+  .auth-name-row--register {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .auth-name-row--register input {
+    font-size: 16px;
+  }
 }
 
 @media (max-height: 760px) and (min-width: 761px) {
-  .login-page { padding-block: 24px; }
-  .login-shell { min-height: 650px; }
-  .login-form-content { padding-block: 30px; }
+  .login-page {
+    padding-block: 24px;
+  }
+  .login-shell {
+    min-height: 650px;
+  }
+  .login-form-content {
+    padding-block: 30px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .login-shell, .auth-submit__spinner { animation: none; }
-  .auth-field input, .auth-submit, .auth-submit > .app-icon, .auth-password__toggle { transition: none; }
+  .login-shell,
+  .auth-submit__spinner {
+    animation: none;
+  }
+  .auth-field input,
+  .auth-submit,
+  .auth-submit > .app-icon,
+  .auth-password__toggle {
+    transition: none;
+  }
 }
 </style>

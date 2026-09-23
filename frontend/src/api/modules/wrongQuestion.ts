@@ -40,8 +40,6 @@ export interface WrongQuestionPagePayload {
 export const getWrongQuestionPageApi = (params: Record<string, unknown>) =>
   http.get('/wrong-questions/page', { params })
 
-export const getWrongQuestionDetailApi = (answerId: number) =>
-  http.get(`/wrong-questions/${answerId}`)
+export const getWrongQuestionDetailApi = (answerId: number) => http.get(`/wrong-questions/${answerId}`)
 
-export const removeWrongQuestionApi = (answerId: number) =>
-  http.delete(`/wrong-questions/${answerId}`)
+export const removeWrongQuestionApi = (answerId: number) => http.delete(`/wrong-questions/${answerId}`)

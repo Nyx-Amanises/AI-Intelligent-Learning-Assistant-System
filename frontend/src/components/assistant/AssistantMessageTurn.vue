@@ -39,7 +39,9 @@
       <template v-else>{{ message.contentText || '' }}</template>
     </div>
     <p v-if="message.localStatus === 'stopped'" class="assistant-turn__note">已停止生成</p>
-    <p v-else-if="message.localStatus === 'timeout'" class="assistant-turn__note assistant-turn__note--warn">助手长时间没有响应，已停止等待。可以重新发送试试。</p>
+    <p v-else-if="message.localStatus === 'timeout'" class="assistant-turn__note assistant-turn__note--warn">
+      助手长时间没有响应，已停止等待。可以重新发送试试。
+    </p>
 
     <details v-if="hasTrace" class="assistant-turn__trace">
       <summary>查看引用与轨迹</summary>
@@ -61,11 +63,7 @@
       <div v-if="memories.length" class="assistant-trace-block">
         <div class="assistant-trace-block__label">参考记忆</div>
         <div class="assistant-trace-chip-row">
-          <span
-            v-for="memory in memories"
-            :key="memory.id"
-            class="assistant-trace-chip assistant-trace-chip--memory"
-          >
+          <span v-for="memory in memories" :key="memory.id" class="assistant-trace-chip assistant-trace-chip--memory">
             {{ memory.topicName || memory.memoryType || '会话记忆' }}
           </span>
         </div>
@@ -106,10 +104,7 @@ const hasTrace = computed(
   () =>
     !isUser.value &&
     Boolean(
-      props.toolCalls.length ||
-        props.memories.length ||
-        props.message.toolPlanJson ||
-        props.message.reasoningJson
+      props.toolCalls.length || props.memories.length || props.message.toolPlanJson || props.message.reasoningJson
     )
 )
 </script>
@@ -189,7 +184,7 @@ const hasTrace = computed(
 
 /* 流式生成时把闪烁光标贴在最后一个块的末尾，而不是另起一行。 */
 .assistant-turn__content--streaming :deep(.learning-note > :last-child)::after {
-  content: "▍";
+  content: '▍';
   display: inline-block;
   margin-left: 2px;
   color: var(--brand);

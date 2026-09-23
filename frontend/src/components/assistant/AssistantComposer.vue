@@ -11,7 +11,11 @@
       :class="{ 'assistant-textarea--compact': variant === 'dock' }"
       maxlength="4000"
       :aria-label="variant === 'hero' ? `向${ASSISTANT_NAME}提问` : `继续向${ASSISTANT_NAME}提问`"
-      :placeholder="variant === 'hero' ? '输入你的问题。回车发送，Shift + 回车换行。' : '继续追问、要求重写、要提纲、要习题或要复盘建议都可以。'"
+      :placeholder="
+        variant === 'hero'
+          ? '输入你的问题。回车发送，Shift + 回车换行。'
+          : '继续追问、要求重写、要提纲、要习题或要复盘建议都可以。'
+      "
       @keydown="handleKeydown"
     />
 
@@ -46,18 +50,21 @@
 import { computed, ref } from 'vue'
 import { ASSISTANT_NAME } from '@/config/brand'
 
-const props = withDefaults(defineProps<{
-  modelValue: string
-  /** hero：首页大输入框；dock：会话底部输入条。 */
-  variant?: 'hero' | 'dock'
-  sending?: boolean
-  /** 显示在字数前面的说明（首页用来展示对话范围）。 */
-  metaLabel?: string
-}>(), {
-  variant: 'dock',
-  sending: false,
-  metaLabel: ''
-})
+const props = withDefaults(
+  defineProps<{
+    modelValue: string
+    /** hero：首页大输入框；dock：会话底部输入条。 */
+    variant?: 'hero' | 'dock'
+    sending?: boolean
+    /** 显示在字数前面的说明（首页用来展示对话范围）。 */
+    metaLabel?: string
+  }>(),
+  {
+    variant: 'dock',
+    sending: false,
+    metaLabel: ''
+  }
+)
 
 const emit = defineEmits<{
   (event: 'update:modelValue', value: string): void
@@ -101,7 +108,9 @@ defineExpose({
   border-radius: 14px;
   background: var(--panel);
   box-shadow: var(--shadow-sm);
-  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
 }
 
 .assistant-composer:focus-within {

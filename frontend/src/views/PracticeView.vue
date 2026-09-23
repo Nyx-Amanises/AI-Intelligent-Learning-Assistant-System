@@ -2,7 +2,9 @@
   <section class="learning-page practice-view">
     <nav class="practice-navigation" aria-label="练习导航">
       <RouterLink to="/quiz" class="practice-back-link" @click="savePracticeDraft">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m10 5-7 7 7 7M3 12h18" stroke-linecap="round" stroke-linejoin="round" /></svg>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
+          <path d="m10 5-7 7 7 7M3 12h18" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
         <span>返回题集列表</span>
       </RouterLink>
     </nav>
@@ -20,17 +22,44 @@
     <div class="workspace-panel">
       <div class="workspace-toolbar">
         <div class="workspace-tabs" aria-label="练习视图">
-          <button type="button" class="workspace-tab" :class="{ 'workspace-tab--active': activeTab === 'current' }" :aria-pressed="activeTab === 'current'" @click="activeTab = 'current'">当前练习</button>
-          <button type="button" class="workspace-tab" :class="{ 'workspace-tab--active': activeTab === 'history' }" :aria-pressed="activeTab === 'history'" @click="activeTab = 'history'">历史记录 <span class="practice-tab-count">{{ total }}</span></button>
+          <button
+            type="button"
+            class="workspace-tab"
+            :class="{ 'workspace-tab--active': activeTab === 'current' }"
+            :aria-pressed="activeTab === 'current'"
+            @click="activeTab = 'current'"
+          >
+            当前练习
+          </button>
+          <button
+            type="button"
+            class="workspace-tab"
+            :class="{ 'workspace-tab--active': activeTab === 'history' }"
+            :aria-pressed="activeTab === 'history'"
+            @click="activeTab = 'history'"
+          >
+            历史记录 <span class="practice-tab-count">{{ total }}</span>
+          </button>
         </div>
-        <StatusPill v-if="practiceDetail && activeTab === 'current'" :tone="statusTone(practiceDetail.sessionStatus)" :label="formatPracticeStatus(practiceDetail.sessionStatus)" />
+        <StatusPill
+          v-if="practiceDetail && activeTab === 'current'"
+          :tone="statusTone(practiceDetail.sessionStatus)"
+          :label="formatPracticeStatus(practiceDetail.sessionStatus)"
+        />
       </div>
 
       <div v-if="activeTab === 'history'" class="workspace-body">
         <PracticeHistoryList
-          v-model:current="page.current" v-model:size="page.size"
-          :records="historyRecords" :total="total" :loading="historyLoading" :error="historyError" :action-loading-id="actionLoadingId"
-          @open="openPracticeFromHistory" @reload="loadHistory" @page-change="loadHistory"
+          v-model:current="page.current"
+          v-model:size="page.size"
+          :records="historyRecords"
+          :total="total"
+          :loading="historyLoading"
+          :error="historyError"
+          :action-loading-id="actionLoadingId"
+          @open="openPracticeFromHistory"
+          @reload="loadHistory"
+          @page-change="loadHistory"
           @rename="openRenameDialog({ id: $event.id, sessionName: $event.sessionName })"
           @restart="restartPractice($event.questionSetId)"
           @delete="removePractice($event.id)"
@@ -38,29 +67,57 @@
       </div>
 
       <div v-else class="workspace-body">
-        <div v-if="detailLoading" class="practice-loading" aria-live="polite"><el-skeleton :rows="6" animated /><span>正在准备练习…</span></div>
+        <div v-if="detailLoading" class="practice-loading" aria-live="polite">
+          <el-skeleton :rows="6" animated /><span>正在准备练习…</span>
+        </div>
         <div v-else-if="practiceDetail" class="practice-paper-layout">
           <PracticePaper
             v-model:answer-form="answerForm"
-            :practice-detail="practiceDetail" :sections="groupedSections" :submitted="isSubmitted"
-            :has-pending-ai-review="hasPendingAiReview" :pending-review-text="pendingReviewText"
-            :answered-count="answeredCount" :unanswered-count="unansweredCount" :completion-percentage="completionPercentage"
-            :submitting="submitting" :restarting="restarting"
-            @submit="submitPractice" @back="returnToQuiz"
+            :practice-detail="practiceDetail"
+            :sections="groupedSections"
+            :submitted="isSubmitted"
+            :has-pending-ai-review="hasPendingAiReview"
+            :pending-review-text="pendingReviewText"
+            :answered-count="answeredCount"
+            :unanswered-count="unansweredCount"
+            :completion-percentage="completionPercentage"
+            :submitting="submitting"
+            :restarting="restarting"
+            @submit="submitPractice"
+            @back="returnToQuiz"
             @restart="restartPractice(practiceDetail.questionSetId)"
             @rename="openRenameDialog({ id: practiceDetail.sessionId, sessionName: practiceDetail.sessionName })"
           />
           <PracticeAnswerSheet
-            :sections="groupedSections" :answer-form="answerForm" :submitted="isSubmitted" :active-question-id="activeQuestionId"
-            :answered-count="answeredCount" :total-questions="practiceDetail.totalQuestions || 0"
+            :sections="groupedSections"
+            :answer-form="answerForm"
+            :submitted="isSubmitted"
+            :active-question-id="activeQuestionId"
+            :answered-count="answeredCount"
+            :total-questions="practiceDetail.totalQuestions || 0"
             @select="scrollToQuestion"
           />
         </div>
-        <EmptyState v-else-if="detailError && detailSessionId" variant="error" icon="refresh" title="练习暂时没能打开" :description="detailError">
+        <EmptyState
+          v-else-if="detailError && detailSessionId"
+          variant="error"
+          icon="refresh"
+          title="练习暂时没能打开"
+          :description="detailError"
+        >
           <el-button @click="activeTab = 'history'">查看历史记录</el-button>
           <el-button type="primary" @click="loadPracticeDetail(detailSessionId)">重新加载</el-button>
         </EmptyState>
-        <EmptyState v-else icon="practice" title="给自己留一段专注学习的时间" :description="total ? '在历史记录中继续未完成的练习，或选择一套新题集。' : '从一套小练习开始，检验理解，再有针对性地复习。'">
+        <EmptyState
+          v-else
+          icon="practice"
+          title="给自己留一段专注学习的时间"
+          :description="
+            total
+              ? '在历史记录中继续未完成的练习，或选择一套新题集。'
+              : '从一套小练习开始，检验理解，再有针对性地复习。'
+          "
+        >
           <el-button v-if="total" @click="activeTab = 'history'">查看历史记录</el-button>
           <el-button type="primary" @click="router.push('/quiz')">选择题集</el-button>
         </EmptyState>
@@ -68,8 +125,13 @@
     </div>
 
     <RenameDialog
-      v-model="renameDialogVisible" title="修改练习名称" label="练习名称" placeholder="输入便于日后查找的名称"
-      :initial-value="renameTarget?.sessionName || ''" :loading="renaming" @save="renamePracticeSession"
+      v-model="renameDialogVisible"
+      title="修改练习名称"
+      label="练习名称"
+      placeholder="输入便于日后查找的名称"
+      :initial-value="renameTarget?.sessionName || ''"
+      :loading="renaming"
+      @save="renamePracticeSession"
     />
   </section>
 </template>
@@ -79,14 +141,30 @@ import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { submitPracticeReviewTaskApi, type AiTaskDetail } from '@/api/modules/ai'
-import { deletePracticeApi, getPracticeDetailApi, getPracticePageApi, renamePracticeApi, startPracticeApi, submitPracticeApi } from '@/api/modules/practice'
+import {
+  deletePracticeApi,
+  getPracticeDetailApi,
+  getPracticePageApi,
+  renamePracticeApi,
+  startPracticeApi,
+  submitPracticeApi
+} from '@/api/modules/practice'
 import EmptyState from '@/components/EmptyState.vue'
 import RenameDialog from '@/components/RenameDialog.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import PracticeAnswerSheet from '@/components/practice/PracticeAnswerSheet.vue'
 import PracticeHistoryList from '@/components/practice/PracticeHistoryList.vue'
 import PracticePaper from '@/components/practice/PracticePaper.vue'
-import { countAnswered, groupAnswers, hasAnswerValue, isPendingReview, isSubmittedStatus, type AnswerForm, type PracticeDetail, type PracticeHistoryItem } from '@/components/practice/practiceHelpers'
+import {
+  countAnswered,
+  groupAnswers,
+  hasAnswerValue,
+  isPendingReview,
+  isSubmittedStatus,
+  type AnswerForm,
+  type PracticeDetail,
+  type PracticeHistoryItem
+} from '@/components/practice/practiceHelpers'
 import { useLatestRequest } from '@/composables/useLatestRequest'
 import { isAiTaskSuccess, isAiTaskTerminal, waitForAiTaskUntilTerminal } from '@/utils/aiTask'
 import { confirmDanger } from '@/utils/confirm'
@@ -259,7 +337,10 @@ const ensurePracticeReviewTask = async (sessionId: number) => {
 const scrollToQuestion = (questionId: number) => {
   activeQuestionId.value = questionId
   const target = document.getElementById(`question-${questionId}`)
-  target?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' })
+  target?.scrollIntoView({
+    behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+    block: 'start'
+  })
 }
 
 const loadHistory = async () => {
@@ -456,20 +537,64 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.practice-navigation { display: flex; margin-bottom: 18px; }
-.practice-back-link { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; color: var(--muted); font-size: 14px; line-height: 1.5; text-decoration: none; }
-.practice-back-link svg { width: 18px; height: 18px; flex: none; }
-.practice-back-link:hover { color: var(--brand); }
-.practice-back-link:focus-visible { outline: 2px solid var(--brand); outline-offset: 4px; border-radius: 4px; }
-.practice-tab-count { margin-left: 6px; opacity: .7; font-size: 12px; font-variant-numeric: tabular-nums; }
-.practice-loading { display: grid; gap: 24px; padding: 24px; color: var(--muted); font-size: 13px; }
-.practice-paper-layout { grid-template-columns: minmax(0, 1fr) 240px; gap: 22px; }
+.practice-navigation {
+  display: flex;
+  margin-bottom: 18px;
+}
+.practice-back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+  text-decoration: none;
+}
+.practice-back-link svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+.practice-back-link:hover {
+  color: var(--brand);
+}
+.practice-back-link:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+.practice-tab-count {
+  margin-left: 6px;
+  opacity: 0.7;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.practice-loading {
+  display: grid;
+  gap: 24px;
+  padding: 24px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.practice-paper-layout {
+  grid-template-columns: minmax(0, 1fr) 240px;
+  gap: 22px;
+}
 @media (max-width: 1150px) {
-  .practice-paper-layout { grid-template-columns: minmax(0, 1fr); }
-  .practice-paper-layout > .practice-paper-sidebar { grid-row: 1; }
+  .practice-paper-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .practice-paper-layout > .practice-paper-sidebar {
+    grid-row: 1;
+  }
 }
 @media (max-width: 600px) {
-  .practice-navigation { margin-bottom: 12px; }
-  .practice-back-link { min-height: 44px; }
+  .practice-navigation {
+    margin-bottom: 12px;
+  }
+  .practice-back-link {
+    min-height: 44px;
+  }
 }
 </style>

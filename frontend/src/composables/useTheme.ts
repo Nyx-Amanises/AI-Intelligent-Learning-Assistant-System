@@ -69,9 +69,7 @@ export const useTheme = () => {
     applyThemeToDom(theme)
   }
 
-  const currentThemeOption = computed(() =>
-    THEME_OPTIONS.find((t) => t.key === currentTheme.value) || THEME_OPTIONS[0]
-  )
+  const currentThemeOption = computed(() => THEME_OPTIONS.find((t) => t.key === currentTheme.value) || THEME_OPTIONS[0])
 
   const isDark = computed(() => false)
 
@@ -89,4 +87,3 @@ export const useTheme = () => {
 if (typeof window !== 'undefined') {
   initTheme()
 }
-

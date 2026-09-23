@@ -111,7 +111,7 @@ export const useAssistantSessions = (options: AssistantSessionsOptions) => {
       activeSessionId.value = sessionId
       sessionDetail.value = detail
       options.onDetailLoaded(detail)
-    } catch (error: any) {
+    } catch (error) {
       if (!sessionDetailRequest.isLatest(requestId)) return
       ElMessage.error(getErrorMessage(error, '加载助手会话详情失败'))
     }
@@ -163,7 +163,7 @@ export const useAssistantSessions = (options: AssistantSessionsOptions) => {
       if (selectFallback) {
         await selectSession(sessionPage.records[0].id)
       }
-    } catch (error: any) {
+    } catch (error) {
       ElMessage.error(getErrorMessage(error, '加载助手会话失败'))
     } finally {
       sessionPageLoading.value = false
@@ -194,7 +194,7 @@ export const useAssistantSessions = (options: AssistantSessionsOptions) => {
         ElMessage.success(boundPayload ? '已按当前页面创建会话' : '新会话已创建')
       }
       return detail
-    } catch (error: any) {
+    } catch (error) {
       ElMessage.error(getErrorMessage(error, '创建助手会话失败'))
       return null
     } finally {
@@ -242,7 +242,7 @@ export const useAssistantSessions = (options: AssistantSessionsOptions) => {
       syncSessionDetail(res.data.data as AssistantSessionDetail)
       await loadSessionPage(false)
       ElMessage.success('会话名称已更新')
-    } catch (error: any) {
+    } catch (error) {
       ElMessage.error(getErrorMessage(error, '修改会话名称失败'))
     } finally {
       renamingSessionId.value = null
@@ -256,7 +256,7 @@ export const useAssistantSessions = (options: AssistantSessionsOptions) => {
       syncSessionDetail(res.data.data as AssistantSessionDetail)
       await loadSessionPage(false)
       ElMessage.success(pinned ? '已置顶聊天' : '已取消置顶')
-    } catch (error: any) {
+    } catch (error) {
       ElMessage.error(getErrorMessage(error, '修改置顶状态失败'))
     } finally {
       pinningSessionId.value = null
@@ -288,7 +288,7 @@ export const useAssistantSessions = (options: AssistantSessionsOptions) => {
       }
       await loadSessionPage(true)
       ElMessage.success('会话已删除')
-    } catch (error: any) {
+    } catch (error) {
       ElMessage.error(getErrorMessage(error, '删除会话失败'))
     } finally {
       deletingSessionId.value = null

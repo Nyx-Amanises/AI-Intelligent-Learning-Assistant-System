@@ -71,9 +71,7 @@ const contextLabel = computed(() =>
   formatContextLabel(props.session.currentContextType, props.session.currentContextId, props.session)
 )
 
-const lastActiveAt = computed(
-  () => props.session.lastMessageAt || props.session.updatedAt || props.session.createdAt
-)
+const lastActiveAt = computed(() => props.session.lastMessageAt || props.session.updatedAt || props.session.createdAt)
 
 defineExpose({
   scrollToBottom: (force?: boolean) => threadRef.value?.scrollToBottom(force)

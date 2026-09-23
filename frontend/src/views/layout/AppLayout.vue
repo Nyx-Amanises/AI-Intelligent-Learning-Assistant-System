@@ -22,17 +22,28 @@
             class="workspace-primary-nav__item"
             :class="{ 'is-active': item.activePaths.includes(route.path) }"
             :aria-current="item.activePaths.includes(route.path) ? 'page' : undefined"
-          >{{ item.label }}</RouterLink>
+            >{{ item.label }}</RouterLink
+          >
         </nav>
 
         <div class="workspace-topbar__actions">
-          <button class="workspace-search-trigger" type="button" aria-label="搜索学习资料（Ctrl K）" @click="openSearch">
+          <button
+            class="workspace-search-trigger"
+            type="button"
+            aria-label="搜索学习资料（Ctrl K）"
+            @click="openSearch"
+          >
             <AppIcon name="search" :size="21" />
             <span>搜索</span>
             <kbd>Ctrl K</kbd>
           </button>
 
-          <button type="button" class="workspace-assistant-trigger" :aria-label="'打开' + ASSISTANT_NAME" @click="openAssistant">
+          <button
+            type="button"
+            class="workspace-assistant-trigger"
+            :aria-label="'打开' + ASSISTANT_NAME"
+            @click="openAssistant"
+          >
             <AppIcon name="spark" :size="21" />
             <span>{{ ASSISTANT_NAME }}</span>
           </button>
@@ -66,7 +77,13 @@
 
           <div class="workspace-account">
             <RouterLink to="/profile" class="workspace-user" :aria-label="displayName + '，个人信息'" title="个人信息">
-              <img v-if="avatarSrc && !avatarLoadFailed" :src="avatarSrc" alt="" class="workspace-user__avatar" @error="avatarLoadFailed = true">
+              <img
+                v-if="avatarSrc && !avatarLoadFailed"
+                :src="avatarSrc"
+                alt=""
+                class="workspace-user__avatar"
+                @error="avatarLoadFailed = true"
+              />
               <span v-else class="workspace-user__avatar">{{ avatarText }}</span>
             </RouterLink>
             <el-dropdown class="workspace-account__dropdown" trigger="click" @command="handleUserCommand">
@@ -76,7 +93,9 @@
               <template #dropdown>
                 <el-dropdown-menu>
                   <el-dropdown-item command="profile">个人信息</el-dropdown-item>
-                  <el-dropdown-item command="avatar" :disabled="avatarUploading">{{ avatarUploading ? '正在上传…' : '更换头像' }}</el-dropdown-item>
+                  <el-dropdown-item command="avatar" :disabled="avatarUploading">{{
+                    avatarUploading ? '正在上传…' : '更换头像'
+                  }}</el-dropdown-item>
                   <el-dropdown-item command="settings">模型与设置</el-dropdown-item>
                   <el-dropdown-item command="logout" divided>退出登录</el-dropdown-item>
                 </el-dropdown-menu>
@@ -112,7 +131,15 @@
             </template>
           </el-dropdown>
 
-          <input ref="avatarInputRef" type="file" accept="image/jpeg,image/png,image/webp,image/gif" class="visually-hidden" tabindex="-1" aria-hidden="true" @change="handleAvatarChange">
+          <input
+            ref="avatarInputRef"
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/gif"
+            class="visually-hidden"
+            tabindex="-1"
+            aria-hidden="true"
+            @change="handleAvatarChange"
+          />
         </div>
       </div>
     </header>
@@ -126,15 +153,18 @@
       @touchend.passive="handleTouchEnd"
     >
       <div class="workspace-view-container">
-        <RouterView v-slot="{ Component, route }">
+        <RouterView v-slot="{ Component, route: currentRoute }">
           <Transition :name="transitionName">
-            <div :key="route.path" class="workspace-view-page">
+            <div :key="currentRoute.path" class="workspace-view-page">
               <component :is="Component" @open-assistant="openAssistant" />
             </div>
           </Transition>
         </RouterView>
       </div>
-      <footer class="workspace-footer"><span>{{ APP_NAME }}</span><span>让每一次学习，都有所收获。</span></footer>
+      <footer class="workspace-footer">
+        <span>{{ APP_NAME }}</span
+        ><span>让每一次学习，都有所收获。</span>
+      </footer>
     </main>
 
     <nav class="workspace-bottom-nav" aria-label="移动端主要导航">
@@ -151,13 +181,28 @@
       </RouterLink>
     </nav>
 
-
-    <el-dialog v-model="searchVisible" title="搜索学习资料" width="520px" class="workspace-search-dialog" @opened="searchInputRef?.focus()">
+    <el-dialog
+      v-model="searchVisible"
+      title="搜索学习资料"
+      width="520px"
+      class="workspace-search-dialog"
+      @opened="searchInputRef?.focus()"
+    >
       <form @submit.prevent="searchMaterials">
         <label for="workspace-search-input" class="workspace-search-label">输入资料名称或关键词</label>
-        <el-input id="workspace-search-input" ref="searchInputRef" v-model="searchKeyword" placeholder="例如：计算机网络、数据结构…" clearable size="large" />
+        <el-input
+          id="workspace-search-input"
+          ref="searchInputRef"
+          v-model="searchKeyword"
+          placeholder="例如：计算机网络、数据结构…"
+          clearable
+          size="large"
+        />
         <p class="workspace-search-help">在你的资料中查找，继续上一次的学习。</p>
-        <div class="workspace-search-actions"><el-button @click="searchVisible = false">取消</el-button><el-button type="primary" native-type="submit">搜索资料</el-button></div>
+        <div class="workspace-search-actions">
+          <el-button @click="searchVisible = false">取消</el-button
+          ><el-button type="primary" native-type="submit">搜索资料</el-button>
+        </div>
       </form>
     </el-dialog>
 
@@ -174,7 +219,12 @@ import AssistantDrawer from '@/components/AssistantDrawer.vue'
 import AppIcon from '@/components/AppIcon.vue'
 import BrandLogo from '@/components/BrandLogo.vue'
 import { APP_NAME, ASSISTANT_NAME } from '@/config/brand'
-import { mobileNavigationItems, moreNavigationItems, navigationItems, primaryNavigationItems } from '@/config/navigation'
+import {
+  mobileNavigationItems,
+  moreNavigationItems,
+  navigationItems,
+  primaryNavigationItems
+} from '@/config/navigation'
 import { useUserStore } from '@/stores/user'
 import { resolveAvatarUrl } from '@/utils/avatar'
 import { usePageProgress } from '@/composables/usePageProgress'
@@ -197,18 +247,13 @@ const displayName = computed(() => userStore.profile?.nickname || userStore.prof
 const avatarText = computed(() => Array.from(displayName.value)[0]?.toUpperCase() || '学')
 const currentPage = computed(() => navigationItems.find((item) => item.path === route.path) || navigationItems[0])
 const avatarSrc = computed(() => resolveAvatarUrl(userStore.profile?.avatarUrl))
-const isHome = computed(() =>
-  route.name === 'dashboard' ||
-  route.path === '/dashboard' ||
-  route.path === '/' ||
-  route.path === ''
+const isHome = computed(
+  () => route.name === 'dashboard' || route.path === '/dashboard' || route.path === '/' || route.path === ''
 )
 const visibleMoreNavigationItems = computed(() =>
   moreNavigationItems.filter((item) => !item.adminOnly || userStore.isAdmin)
 )
-const moreNavigationActive = computed(() =>
-  visibleMoreNavigationItems.value.some((item) => item.path === route.path)
-)
+const moreNavigationActive = computed(() => visibleMoreNavigationItems.value.some((item) => item.path === route.path))
 
 const ROUTE_ORDER: Record<string, number> = {
   '/dashboard': 10,
@@ -290,7 +335,10 @@ function handleUserCommand(command: string) {
   if (command === 'profile') void router.push('/profile')
   if (command === 'avatar') avatarInputRef.value?.click()
   if (command === 'settings') void router.push('/ai-config')
-  if (command === 'logout') { userStore.logout(); void router.push('/login') }
+  if (command === 'logout') {
+    userStore.logout()
+    void router.push('/login')
+  }
 }
 function handleMoreCommand(path: string) {
   void router.push(path)
@@ -301,9 +349,13 @@ async function handleAvatarChange(event: Event) {
   input.value = ''
   if (!file || avatarUploading.value) return
   if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) {
-    ElMessage.warning('请选择 JPG、PNG、WebP 或 GIF 图片'); return
+    ElMessage.warning('请选择 JPG、PNG、WebP 或 GIF 图片')
+    return
   }
-  if (file.size > 5 * 1024 * 1024) { ElMessage.warning('头像图片不能超过 5MB'); return }
+  if (file.size > 5 * 1024 * 1024) {
+    ElMessage.warning('头像图片不能超过 5MB')
+    return
+  }
   avatarUploading.value = true
   const requestToken = userStore.token
   try {
@@ -315,7 +367,9 @@ async function handleAvatarChange(event: Event) {
     if (requestToken && userStore.token === requestToken) {
       ElMessage.error(getErrorMessage(error, '头像上传失败'))
     }
-  } finally { avatarUploading.value = false }
+  } finally {
+    avatarUploading.value = false
+  }
 }
 function handleShortcut(event: KeyboardEvent) {
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k' && !assistantVisible.value) {
@@ -323,21 +377,30 @@ function handleShortcut(event: KeyboardEvent) {
     searchVisible.value = !searchVisible.value
   }
 }
-watch(() => route.path, () => {
-  document.title = currentPage.value.label + ' · ' + APP_NAME
+watch(
+  () => route.path,
+  () => {
+    document.title = currentPage.value.label + ' · ' + APP_NAME
+  }
+)
+watch(avatarSrc, () => {
+  avatarLoadFailed.value = false
 })
-watch(avatarSrc, () => { avatarLoadFailed.value = false })
 onMounted(() => {
   window.addEventListener('keydown', handleShortcut)
   document.title = currentPage.value.label + ' · ' + APP_NAME
   if (userStore.token && route.path !== '/profile') {
     const requestToken = userStore.token
     const previousProfile = userStore.profile
-    void getProfileApi().then((response) => {
-      if (response.data.data && userStore.token === requestToken && userStore.profile === previousProfile) {
-        userStore.setProfile(response.data.data)
-      }
-    }).catch(() => { /* Authentication errors are handled by the shared interceptor. */ })
+    void getProfileApi()
+      .then((response) => {
+        if (response.data.data && userStore.token === requestToken && userStore.profile === previousProfile) {
+          userStore.setProfile(response.data.data)
+        }
+      })
+      .catch(() => {
+        /* Authentication errors are handled by the shared interceptor. */
+      })
   }
 })
 onUnmounted(() => {
@@ -360,7 +423,10 @@ onUnmounted(() => {
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border-bottom: 1px solid var(--line);
-  transition: background-color .2s ease, border-color .2s ease, box-shadow .2s ease;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 .workspace-topbar__inner {
   display: flex;
@@ -372,9 +438,22 @@ onUnmounted(() => {
   margin-inline: auto;
   padding-inline: 48px;
 }
-.workspace-topbar__brand { display: flex; align-items: center; flex: 0 0 138px; min-height: 48px; border-radius: 4px; }
-.workspace-topbar__brand :deep(.brand-logo) { width: 138px; }
-.workspace-primary-nav { display: flex; align-items: center; gap: 8px; margin-right: auto; }
+.workspace-topbar__brand {
+  display: flex;
+  align-items: center;
+  flex: 0 0 138px;
+  min-height: 48px;
+  border-radius: 4px;
+}
+.workspace-topbar__brand :deep(.brand-logo) {
+  width: 138px;
+}
+.workspace-primary-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: auto;
+}
 .workspace-primary-nav__item {
   position: relative;
   display: flex;
@@ -386,9 +465,9 @@ onUnmounted(() => {
   text-decoration: none;
   font-size: 15px;
   font-weight: 500;
-  letter-spacing: .02em;
+  letter-spacing: 0.02em;
   white-space: nowrap;
-  transition: all .2s ease;
+  transition: all 0.2s ease;
 }
 .workspace-primary-nav__item:hover {
   color: var(--text);
@@ -399,9 +478,18 @@ onUnmounted(() => {
   font-weight: 600;
   background: var(--brand-light);
 }
-.workspace-topbar__actions, .workspace-account { display: flex; align-items: center; min-width: 0; }
-.workspace-topbar__actions { gap: 11px; }
-.workspace-account { gap: 0; }
+.workspace-topbar__actions,
+.workspace-account {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.workspace-topbar__actions {
+  gap: 11px;
+}
+.workspace-account {
+  gap: 0;
+}
 .workspace-search-trigger {
   display: flex;
   align-items: center;
@@ -416,7 +504,7 @@ onUnmounted(() => {
   font-size: 13px;
   white-space: nowrap;
   cursor: pointer;
-  transition: all .2s ease;
+  transition: all 0.2s ease;
 }
 .workspace-search-trigger:hover {
   color: var(--text);
@@ -443,7 +531,7 @@ onUnmounted(() => {
   background: var(--panel);
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all .2s ease;
+  transition: all 0.2s ease;
 }
 .workspace-theme-trigger:hover {
   color: var(--brand);
@@ -484,16 +572,24 @@ onUnmounted(() => {
   padding: 0 15px;
   border: 1px solid color-mix(in srgb, var(--brand) 25%, transparent);
   border-radius: 999px;
-  background: linear-gradient(135deg, color-mix(in srgb, var(--brand) 9%, transparent) 0%, color-mix(in srgb, var(--accent) 10%, transparent) 100%);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--brand) 9%, transparent) 0%,
+    color-mix(in srgb, var(--accent) 10%, transparent) 100%
+  );
   color: var(--brand);
   font-size: 13px;
   font-weight: 550;
   white-space: nowrap;
   cursor: pointer;
-  transition: all .2s ease;
+  transition: all 0.2s ease;
 }
 .workspace-assistant-trigger:hover {
-  background: linear-gradient(135deg, color-mix(in srgb, var(--brand) 15%, transparent) 0%, color-mix(in srgb, var(--accent) 17%, transparent) 100%);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--brand) 15%, transparent) 0%,
+    color-mix(in srgb, var(--accent) 17%, transparent) 100%
+  );
   border-color: color-mix(in srgb, var(--brand) 40%, transparent);
   color: var(--brand-hover);
   box-shadow: var(--shadow-sm);
@@ -520,14 +616,15 @@ onUnmounted(() => {
   color: var(--brand);
   font-size: 14px;
   font-weight: 600;
-  transition: all .2s ease;
+  transition: all 0.2s ease;
 }
 .workspace-user:hover .workspace-user__avatar {
   border-color: var(--brand);
   transform: scale(1.06);
   box-shadow: var(--shadow-sm);
 }
-.workspace-account__menu, .workspace-more-trigger {
+.workspace-account__menu,
+.workspace-more-trigger {
   display: grid;
   place-items: center;
   width: 44px;
@@ -539,11 +636,23 @@ onUnmounted(() => {
   background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: color .18s ease, background-color .18s ease;
+  transition:
+    color 0.18s ease,
+    background-color 0.18s ease;
 }
-.workspace-account__menu { width: 44px; min-height: 44px; }
-.workspace-account__menu:hover, .workspace-more-trigger:hover { color: var(--text); background: var(--bg-secondary); }
-.workspace-more-trigger.is-active { color: var(--brand); background: var(--brand-soft); }
+.workspace-account__menu {
+  width: 44px;
+  min-height: 44px;
+}
+.workspace-account__menu:hover,
+.workspace-more-trigger:hover {
+  color: var(--text);
+  background: var(--bg-secondary);
+}
+.workspace-more-trigger.is-active {
+  color: var(--brand);
+  background: var(--brand-soft);
+}
 .workspace-content {
   width: 100%;
   max-width: 1296px;
@@ -568,7 +677,7 @@ onUnmounted(() => {
   border-top: 1px solid var(--line);
   color: var(--muted);
   font-size: 12px;
-  letter-spacing: .06em;
+  letter-spacing: 0.06em;
 }
 .workspace-content--home .workspace-footer,
 .workspace-content:has(.daily-home) .workspace-footer {
@@ -576,14 +685,45 @@ onUnmounted(() => {
   margin: 64px auto 0;
   padding-inline: 48px;
 }
-.workspace-bottom-nav { display: none; }
-.skip-to-content { position: fixed; z-index: 4000; top: -80px; left: 20px; padding: 12px 18px; border-radius: 8px; color: #fff; background: var(--brand); }
-.skip-to-content:focus { top: 10px; }
-.workspace-search-label { display: block; margin-bottom: 10px; font-size: 14px; color: var(--text-secondary); }
-.workspace-search-help { color: var(--muted); font-size: 13px; line-height: 1.8; }
-.workspace-search-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px; }
-.workspace-topbar a:focus-visible, .workspace-topbar button:focus-visible,
-.workspace-bottom-nav a:focus-visible { outline: 2px solid var(--brand); outline-offset: 3px; }
+.workspace-bottom-nav {
+  display: none;
+}
+.skip-to-content {
+  position: fixed;
+  z-index: 4000;
+  top: -80px;
+  left: 20px;
+  padding: 12px 18px;
+  border-radius: 8px;
+  color: #fff;
+  background: var(--brand);
+}
+.skip-to-content:focus {
+  top: 10px;
+}
+.workspace-search-label {
+  display: block;
+  margin-bottom: 10px;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+.workspace-search-help {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.8;
+}
+.workspace-search-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 24px;
+}
+.workspace-topbar a:focus-visible,
+.workspace-topbar button:focus-visible,
+.workspace-bottom-nav a:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 3px;
+}
 .workspace-more-item {
   display: flex;
   align-items: center;
@@ -593,7 +733,7 @@ onUnmounted(() => {
 .workspace-more-item :deep(.app-icon) {
   color: var(--muted);
   flex-shrink: 0;
-  transition: color .18s ease;
+  transition: color 0.18s ease;
 }
 :deep(.el-dropdown-menu__item:hover) .workspace-more-item :deep(.app-icon),
 :deep(.el-dropdown-menu__item.is-current) .workspace-more-item :deep(.app-icon) {
@@ -605,35 +745,99 @@ onUnmounted(() => {
 }
 
 @media (max-width: 1180px) {
-  .workspace-topbar__inner { gap: 30px; padding-inline: 32px; }
-  .workspace-primary-nav { gap: 23px; }
-  .workspace-topbar__actions { gap: 9px; }
-  .workspace-search-trigger span, .workspace-search-trigger kbd { display: none; }
-  .workspace-content { padding-inline: 32px; }
-  .workspace-content--home { padding-inline: 0; }
-  .workspace-content--home .workspace-footer { padding-inline: 32px; margin-inline: auto; }
+  .workspace-topbar__inner {
+    gap: 30px;
+    padding-inline: 32px;
+  }
+  .workspace-primary-nav {
+    gap: 23px;
+  }
+  .workspace-topbar__actions {
+    gap: 9px;
+  }
+  .workspace-search-trigger span,
+  .workspace-search-trigger kbd {
+    display: none;
+  }
+  .workspace-content {
+    padding-inline: 32px;
+  }
+  .workspace-content--home {
+    padding-inline: 0;
+  }
+  .workspace-content--home .workspace-footer {
+    padding-inline: 32px;
+    margin-inline: auto;
+  }
 }
 @media (max-width: 960px) {
-  .workspace-topbar__inner { gap: 24px; }
-  .workspace-topbar__brand { flex-basis: 124px; }
-  .workspace-topbar__brand :deep(.brand-logo) { width: 124px; }
-  .workspace-primary-nav { gap: 15px; }
-  .workspace-assistant-trigger { margin-inline: 0; }
-  .workspace-assistant-trigger span { display: none; }
+  .workspace-topbar__inner {
+    gap: 24px;
+  }
+  .workspace-topbar__brand {
+    flex-basis: 124px;
+  }
+  .workspace-topbar__brand :deep(.brand-logo) {
+    width: 124px;
+  }
+  .workspace-primary-nav {
+    gap: 15px;
+  }
+  .workspace-assistant-trigger {
+    margin-inline: 0;
+  }
+  .workspace-assistant-trigger span {
+    display: none;
+  }
 }
 @media (max-width: 760px) {
-  .learning-shell { --shell-header-height: calc(72px + env(safe-area-inset-top)); padding-bottom: calc(74px + env(safe-area-inset-bottom)); }
-  .workspace-topbar { padding-top: env(safe-area-inset-top); }
-  .workspace-topbar__inner { justify-content: space-between; gap: 12px; padding-inline: 22px; }
-  .workspace-topbar__brand { flex-basis: 110px; }
-  .workspace-topbar__brand :deep(.brand-logo) { width: 110px; }
-  .workspace-primary-nav, .workspace-assistant-trigger, .workspace-account__dropdown { display: none; }
-  .workspace-topbar__actions { gap: 5px; }
-  .workspace-user__avatar { width: 34px; height: 34px; }
-  .workspace-content { min-height: calc(100dvh - var(--shell-header-height) - 74px - env(safe-area-inset-bottom)); padding: 28px 22px 28px; }
-  .workspace-content--home { padding: 0 0 24px; }
-  .workspace-footer { gap: 12px; margin-top: 46px; padding-top: 22px; font-size: 12px; }
-  .workspace-content--home .workspace-footer { padding-inline: 22px; margin-inline: auto; }
+  .learning-shell {
+    --shell-header-height: calc(72px + env(safe-area-inset-top));
+    padding-bottom: calc(74px + env(safe-area-inset-bottom));
+  }
+  .workspace-topbar {
+    padding-top: env(safe-area-inset-top);
+  }
+  .workspace-topbar__inner {
+    justify-content: space-between;
+    gap: 12px;
+    padding-inline: 22px;
+  }
+  .workspace-topbar__brand {
+    flex-basis: 110px;
+  }
+  .workspace-topbar__brand :deep(.brand-logo) {
+    width: 110px;
+  }
+  .workspace-primary-nav,
+  .workspace-assistant-trigger,
+  .workspace-account__dropdown {
+    display: none;
+  }
+  .workspace-topbar__actions {
+    gap: 5px;
+  }
+  .workspace-user__avatar {
+    width: 34px;
+    height: 34px;
+  }
+  .workspace-content {
+    min-height: calc(100dvh - var(--shell-header-height) - 74px - env(safe-area-inset-bottom));
+    padding: 28px 22px 28px;
+  }
+  .workspace-content--home {
+    padding: 0 0 24px;
+  }
+  .workspace-footer {
+    gap: 12px;
+    margin-top: 46px;
+    padding-top: 22px;
+    font-size: 12px;
+  }
+  .workspace-content--home .workspace-footer {
+    padding-inline: 22px;
+    margin-inline: auto;
+  }
   .workspace-bottom-nav {
     position: fixed;
     z-index: 40;
@@ -662,16 +866,30 @@ onUnmounted(() => {
     line-height: 1.35;
     font-weight: 400;
     text-decoration: none;
-    transition: color .18s ease;
+    transition: color 0.18s ease;
   }
-  .workspace-bottom-nav__item.is-active { color: var(--brand); font-weight: 650; }
-  .workspace-bottom-nav__item.is-active :deep(path) { stroke-width: 2.2; }
-  .workspace-bottom-nav__item:active { background: var(--bg-secondary); }
+  .workspace-bottom-nav__item.is-active {
+    color: var(--brand);
+    font-weight: 650;
+  }
+  .workspace-bottom-nav__item.is-active :deep(path) {
+    stroke-width: 2.2;
+  }
+  .workspace-bottom-nav__item:active {
+    background: var(--bg-secondary);
+  }
 }
 @media (max-width: 360px) {
-  .workspace-topbar__inner { padding-inline: 16px; gap: 8px; }
-  .workspace-topbar__actions { gap: 1px; }
-  .workspace-footer { flex-wrap: wrap; }
+  .workspace-topbar__inner {
+    padding-inline: 16px;
+    gap: 8px;
+  }
+  .workspace-topbar__actions {
+    gap: 1px;
+  }
+  .workspace-footer {
+    flex-wrap: wrap;
+  }
 }
 /* 顶栏微光流光进度条 */
 .workspace-progress-bar {
@@ -683,7 +901,9 @@ onUnmounted(() => {
   box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 45%, transparent);
   z-index: 10000;
   pointer-events: none;
-  transition: width 0.22s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.28s ease;
+  transition:
+    width 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.28s ease;
 }
 
 /* 页面视口容器：水平裁剪超出的滑动元素，防止横向滚动条闪烁 */
@@ -703,8 +923,9 @@ onUnmounted(() => {
 .slide-left-leave-active,
 .slide-right-enter-active,
 .slide-right-leave-active {
-  transition: transform 0.36s cubic-bezier(0.25, 1, 0.5, 1),
-              opacity 0.36s cubic-bezier(0.25, 1, 0.5, 1);
+  transition:
+    transform 0.36s cubic-bezier(0.25, 1, 0.5, 1),
+    opacity 0.36s cubic-bezier(0.25, 1, 0.5, 1);
   will-change: transform, opacity;
 }
 
@@ -747,13 +968,30 @@ onUnmounted(() => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .workspace-primary-nav__item, .workspace-primary-nav__item::after,
-  .workspace-search-trigger, .workspace-assistant-trigger, .workspace-account__menu,
-  .workspace-more-trigger, .workspace-bottom-nav__item { transition: none; }
-  .slide-left-enter-active, .slide-left-leave-active,
-  .slide-right-enter-active, .slide-right-leave-active { transition: opacity 0.1s ease; }
-  .slide-left-enter-from, .slide-left-leave-to,
-  .slide-right-enter-from, .slide-right-leave-to { opacity: 0; transform: none; }
-  .workspace-progress-bar { transition: none; }
+  .workspace-primary-nav__item,
+  .workspace-primary-nav__item::after,
+  .workspace-search-trigger,
+  .workspace-assistant-trigger,
+  .workspace-account__menu,
+  .workspace-more-trigger,
+  .workspace-bottom-nav__item {
+    transition: none;
+  }
+  .slide-left-enter-active,
+  .slide-left-leave-active,
+  .slide-right-enter-active,
+  .slide-right-leave-active {
+    transition: opacity 0.1s ease;
+  }
+  .slide-left-enter-from,
+  .slide-left-leave-to,
+  .slide-right-enter-from,
+  .slide-right-leave-to {
+    opacity: 0;
+    transform: none;
+  }
+  .workspace-progress-bar {
+    transition: none;
+  }
 }
 </style>

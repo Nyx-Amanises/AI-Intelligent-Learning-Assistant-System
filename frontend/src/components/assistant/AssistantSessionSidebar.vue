@@ -15,7 +15,9 @@
           <div class="assistant-sidebar__kicker">让知识，成为自己的</div>
           <h2>{{ ASSISTANT_NAME }}</h2>
         </div>
-        <button type="button" class="assistant-sidebar__close" aria-label="收起会话列表" @click="emit('close-mobile')">收起</button>
+        <button type="button" class="assistant-sidebar__close" aria-label="收起会话列表" @click="emit('close-mobile')">
+          收起
+        </button>
       </div>
       <p>{{ bindingHelperText }}</p>
     </div>
@@ -52,12 +54,8 @@
       </div>
     </div>
 
-    <div v-if="loading && !sessions.length" class="assistant-sidebar__empty">
-      正在加载会话...
-    </div>
-    <div v-else-if="!sessions.length" class="assistant-sidebar__empty">
-      还没有对话，先新建一个会话吧。
-    </div>
+    <div v-if="loading && !sessions.length" class="assistant-sidebar__empty">正在加载会话...</div>
+    <div v-else-if="!sessions.length" class="assistant-sidebar__empty">还没有对话，先新建一个会话吧。</div>
     <div v-else class="assistant-session-list">
       <article
         v-for="item in sessions"
@@ -78,7 +76,9 @@
             :aria-current="activeSessionId === item.id ? 'true' : undefined"
             :title="item.title || '新对话'"
             @click="emit('select', item.id)"
-          >{{ item.title || '新对话' }}</button>
+          >
+            {{ item.title || '新对话' }}
+          </button>
           <el-dropdown
             trigger="click"
             popper-class="assistant-session-menu"
@@ -418,7 +418,9 @@ defineExpose({ rootRef })
     box-shadow: 14px 0 36px rgb(27 42 32 / 12%);
     transform: translateX(-105%);
     visibility: hidden;
-    transition: transform 0.2s ease, visibility 0.2s ease;
+    transition:
+      transform 0.2s ease,
+      visibility 0.2s ease;
   }
 
   .assistant-sidebar--mobile-open {

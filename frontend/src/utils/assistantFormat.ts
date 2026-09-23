@@ -4,9 +4,8 @@ import type { AssistantSessionDetail, AssistantSessionPageItem } from '@/api/mod
 
 export const isUserMessage = (role?: string) => String(role || '').toUpperCase() === 'USER'
 
-export const isSessionPinned = (
-  session?: Pick<AssistantSessionPageItem | AssistantSessionDetail, 'pinned'> | null
-) => Number(session?.pinned || 0) === 1
+export const isSessionPinned = (session?: Pick<AssistantSessionPageItem | AssistantSessionDetail, 'pinned'> | null) =>
+  Number(session?.pinned || 0) === 1
 
 export const formatDateTime = (value?: string) => {
   if (!value) {

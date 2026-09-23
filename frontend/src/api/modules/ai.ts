@@ -114,8 +114,7 @@ export interface RetrievalPreviewPayload {
   segments: RetrievalPreviewSegment[]
 }
 
-export const generateSummaryApi = (id: number, data: SummaryPayload) =>
-  http.post(`/ai/material/${id}/summary`, data)
+export const generateSummaryApi = (id: number, data: SummaryPayload) => http.post(`/ai/material/${id}/summary`, data)
 
 export const getLatestSummaryApi = (id: number) => http.get(`/ai/material/${id}/latest-summary`)
 
@@ -132,8 +131,7 @@ export const submitSummaryTaskApi = (id: number, data: SummaryPayload) =>
 export const submitQuestionGenerateTaskApi = (id: number, data: QuestionGeneratePayload) =>
   http.post(`/ai/tasks/material/${id}/question-set`, data)
 
-export const submitPracticeReviewTaskApi = (sessionId: number) =>
-  http.post(`/ai/tasks/practice/${sessionId}/review`)
+export const submitPracticeReviewTaskApi = (sessionId: number) => http.post(`/ai/tasks/practice/${sessionId}/review`)
 
 export const submitEmbeddingTaskApi = (materialId: number, data: EmbeddingTaskPayload = {}) =>
   http.post(`/ai/tasks/material/${materialId}/embedding`, data)
@@ -141,8 +139,7 @@ export const submitEmbeddingTaskApi = (materialId: number, data: EmbeddingTaskPa
 export const previewMaterialRetrievalApi = (materialId: number, params: Record<string, unknown>) =>
   http.get(`/rag/material/${materialId}/retrieve-preview`, { params })
 
-export const getAiTaskPageApi = (params: Record<string, unknown>) =>
-  http.get('/ai/tasks/page', { params })
+export const getAiTaskPageApi = (params: Record<string, unknown>) => http.get('/ai/tasks/page', { params })
 
 export const getAiTaskDetailApi = (taskId: number) => http.get(`/ai/tasks/${taskId}`)
 

@@ -89,8 +89,12 @@
               </div>
               <div class="workspace-action-row workspace-action-row--fit" data-label="操作">
                 <el-button link type="primary" @click="selectDataset(item)">配置样本</el-button>
-                <el-button link type="success" :disabled="!item.sampleCount" @click="runDataset(item)">运行评测</el-button>
-                <el-button link type="info" :disabled="!item.lastRunId" @click="loadRun(item.lastRunId!)">查看结果</el-button>
+                <el-button link type="success" :disabled="!item.sampleCount" @click="runDataset(item)"
+                  >运行评测</el-button
+                >
+                <el-button link type="info" :disabled="!item.lastRunId" @click="loadRun(item.lastRunId!)"
+                  >查看结果</el-button
+                >
                 <el-button link type="danger" @click="removeDataset(item)">删除</el-button>
               </div>
             </div>
@@ -117,7 +121,8 @@
             <div>
               <h3>样本标注</h3>
               <p v-if="selectedDataset">
-                当前评测集：{{ selectedDataset.name }}，基于 {{ selectedDataset.materialTitle || `资料 #${selectedDataset.materialId}` }}。
+                当前评测集：{{ selectedDataset.name }}，基于
+                {{ selectedDataset.materialTitle || `资料 #${selectedDataset.materialId}` }}。
               </p>
               <p v-else>选择左侧评测集后，在这里维护人工标注样本。</p>
             </div>
@@ -128,9 +133,7 @@
             </div>
           </div>
 
-          <div v-if="!selectedDataset" class="state-block empty">
-            先从左侧选择一个评测集。
-          </div>
+          <div v-if="!selectedDataset" class="state-block empty">先从左侧选择一个评测集。</div>
           <div v-else-if="sampleLoading && !samples.length" class="state-block">正在加载评测样本...</div>
           <div v-else-if="!samples.length" class="state-block empty">
             还没有样本。建议先打开“资料分段参考”，选 20-50 个问题做第一版评测集。
@@ -177,7 +180,12 @@
       <div class="workspace-toolbar">
         <div>
           <h3 class="rag-run-title">最近评测结果 #{{ lastRun.id }}</h3>
-          <p class="page-desc">状态 {{ formatRunStatus(lastRun.status) }} · 样本 {{ lastRun.evaluatedSamples }}/{{ lastRun.totalSamples }} · 失败 {{ lastRun.failedSamples }}</p>
+          <p class="page-desc">
+            状态 {{ formatRunStatus(lastRun.status) }} · 样本 {{ lastRun.evaluatedSamples }}/{{
+              lastRun.totalSamples
+            }}
+            · 失败 {{ lastRun.failedSamples }}
+          </p>
         </div>
         <div class="workspace-toolbar__meta">
           <span class="workspace-chip">Limit {{ lastRun.retrievalLimit }}</span>
@@ -189,11 +197,17 @@
         <div class="rag-metric-grid">
           <div class="summary-overview-card">
             <span>Hit@1 / 3 / 5</span>
-            <strong>{{ formatMetric(lastRun.hitAt1) }} / {{ formatMetric(lastRun.hitAt3) }} / {{ formatMetric(lastRun.hitAt5) }}</strong>
+            <strong
+              >{{ formatMetric(lastRun.hitAt1) }} / {{ formatMetric(lastRun.hitAt3) }} /
+              {{ formatMetric(lastRun.hitAt5) }}</strong
+            >
           </div>
           <div class="summary-overview-card">
             <span>Recall@1 / 3 / 5</span>
-            <strong>{{ formatMetric(lastRun.recallAt1) }} / {{ formatMetric(lastRun.recallAt3) }} / {{ formatMetric(lastRun.recallAt5) }}</strong>
+            <strong
+              >{{ formatMetric(lastRun.recallAt1) }} / {{ formatMetric(lastRun.recallAt3) }} /
+              {{ formatMetric(lastRun.recallAt5) }}</strong
+            >
           </div>
           <div class="summary-overview-card">
             <span>平均耗时</span>
@@ -262,7 +276,12 @@
           </el-select>
         </el-form-item>
         <el-form-item label="评测集名称">
-          <el-input v-model="datasetForm.name" maxlength="120" show-word-limit placeholder="例如：生物必修1 RAG 检索评测集" />
+          <el-input
+            v-model="datasetForm.name"
+            maxlength="120"
+            show-word-limit
+            placeholder="例如：生物必修1 RAG 检索评测集"
+          />
         </el-form-item>
         <el-form-item label="说明">
           <el-input
@@ -323,9 +342,7 @@
           <el-input v-model="cmrcForm.datasetName" maxlength="120" placeholder="留空则自动生成" />
         </el-form-item>
         <el-form-item>
-          <el-checkbox v-model="cmrcForm.submitEmbeddingTask">
-            导入后自动提交 Embedding 任务
-          </el-checkbox>
+          <el-checkbox v-model="cmrcForm.submitEmbeddingTask"> 导入后自动提交 Embedding 任务 </el-checkbox>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -336,7 +353,12 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="sampleDialogVisible" :title="editingSampleId ? '编辑评测样本' : '新增评测样本'" width="760px" destroy-on-close>
+    <el-dialog
+      v-model="sampleDialogVisible"
+      :title="editingSampleId ? '编辑评测样本' : '新增评测样本'"
+      width="760px"
+      destroy-on-close
+    >
       <el-form label-position="top">
         <el-form-item label="检索问题">
           <el-input
@@ -365,7 +387,11 @@
           </el-form-item>
         </div>
         <el-form-item label="期望关键词">
-          <el-input v-model="sampleForm.expectedKeywords" maxlength="500" placeholder="例如：磷脂双分子层、蛋白质、糖类" />
+          <el-input
+            v-model="sampleForm.expectedKeywords"
+            maxlength="500"
+            placeholder="例如：磷脂双分子层、蛋白质、糖类"
+          />
         </el-form-item>
         <el-form-item label="备注">
           <el-input
@@ -397,12 +423,7 @@
         show-icon
         style="margin-bottom: 14px"
       />
-      <el-input
-        v-model="batchJsonText"
-        type="textarea"
-        :rows="14"
-        :placeholder="batchPlaceholder"
-      />
+      <el-input v-model="batchJsonText" type="textarea" :rows="14" :placeholder="batchPlaceholder" />
       <template #footer>
         <div class="toolbar" style="margin-bottom: 0; justify-content: flex-end">
           <el-button @click="batchDialogVisible = false">取消</el-button>
@@ -445,11 +466,7 @@
           </div>
         </div>
         <div class="rag-segment-list">
-          <article
-            v-for="segment in materialDetail.segments || []"
-            :key="segment.id"
-            class="rag-segment-card"
-          >
+          <article v-for="segment in materialDetail.segments || []" :key="segment.id" class="rag-segment-card">
             <div class="rag-segment-card__head">
               <strong>#{{ segment.id }} · {{ segment.sectionTitle || '未命名片段' }}</strong>
               <span>{{ formatSegmentLocation(segment) }}</span>
@@ -466,11 +483,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadFile } from 'element-plus'
-import {
-  getMaterialDetailApi,
-  getMaterialPageApi,
-  type MaterialPageItem
-} from '@/api/modules/material'
+import { getMaterialDetailApi, getMaterialPageApi, type MaterialPageItem } from '@/api/modules/material'
 import {
   addRagEvalSamplesApi,
   createRagEvalDatasetApi,
@@ -551,13 +564,10 @@ const datasetPage = reactive({
   size: 10
 })
 
-const autoQuery = useAutoListQuery(
-  [() => filters.keyword, () => filters.materialId],
-  () => {
-    datasetPage.current = 1
-    return loadDatasets()
-  }
-)
+const autoQuery = useAutoListQuery([() => filters.keyword, () => filters.materialId], () => {
+  datasetPage.current = 1
+  return loadDatasets()
+})
 
 const datasetForm = reactive({
   materialId: undefined as number | undefined,
@@ -598,22 +608,19 @@ const batchPlaceholder = `[
   }
 ]`
 
-const selectedMaterial = computed(() =>
-  materials.value.find((item) => item.id === datasetForm.materialId)
-)
+const selectedMaterial = computed(() => materials.value.find((item) => item.id === datasetForm.materialId))
 
 const visibleRunItems = computed(() => (lastRun.value?.items || []).slice(0, runVisibleCount.value))
-watch(() => lastRun.value?.id, () => {
-  runVisibleCount.value = RUN_VISIBLE_STEP
-})
-
-const visibleSamples = computed(() =>
-  samples.value.slice(0, sampleVisibleCount.value)
+watch(
+  () => lastRun.value?.id,
+  () => {
+    runVisibleCount.value = RUN_VISIBLE_STEP
+  }
 )
 
-const hasMoreSamples = computed(() =>
-  sampleVisibleCount.value < samples.value.length
-)
+const visibleSamples = computed(() => samples.value.slice(0, sampleVisibleCount.value))
+
+const hasMoreSamples = computed(() => sampleVisibleCount.value < samples.value.length)
 
 const nextSampleExpandCount = computed(() =>
   Math.min(SAMPLE_VISIBLE_STEP, Math.max(0, samples.value.length - sampleVisibleCount.value))
@@ -624,10 +631,7 @@ const resetSampleVisibleCount = () => {
 }
 
 const expandSamples = () => {
-  sampleVisibleCount.value = Math.min(
-    samples.value.length,
-    sampleVisibleCount.value + SAMPLE_VISIBLE_STEP
-  )
+  sampleVisibleCount.value = Math.min(samples.value.length, sampleVisibleCount.value + SAMPLE_VISIBLE_STEP)
 }
 
 const collapseSamples = () => {
@@ -725,7 +729,7 @@ const loadMaterials = async () => {
       parseStatus: 'SUCCESS'
     })
     materials.value = res.data.data.records || []
-  } catch (error: any) {
+  } catch (error) {
     ElMessage.error(getErrorMessage(error, '加载资料列表失败'))
   } finally {
     materialsLoading.value = false
@@ -755,7 +759,7 @@ const loadDatasets = async () => {
         selectedDataset.value = freshSelected
       }
     }
-  } catch (error: any) {
+  } catch (error) {
     if (!datasetRequest.isLatest(requestId)) return
     ElMessage.error(getErrorMessage(error, '加载评测集失败'))
   } finally {
@@ -832,7 +836,7 @@ const importCmrcDataset = async () => {
     }
     lastRun.value = null
     await loadSamples()
-  } catch (error: any) {
+  } catch (error) {
     ElMessage.error(getErrorMessage(error, '导入 CMRC2018 失败'))
   } finally {
     importingCmrc.value = false
@@ -865,7 +869,7 @@ const createDataset = async () => {
     }
     await loadDatasets()
     await loadSamples()
-  } catch (error: any) {
+  } catch (error) {
     ElMessage.error(getErrorMessage(error, '创建评测集失败'))
   } finally {
     creatingDataset.value = false
@@ -898,7 +902,7 @@ const removeDataset = async (dataset: RagEvalDataset) => {
       lastRun.value = null
     }
     await loadDatasets()
-  } catch (error: any) {
+  } catch (error) {
     ElMessage.error(getErrorMessage(error, '删除评测集失败'))
   }
 }
@@ -915,7 +919,7 @@ const loadSamples = async () => {
     if (!sampleRequest.isLatest(requestId) || selectedDataset.value?.id !== datasetId) return
     samples.value = res.data.data || []
     resetSampleVisibleCount()
-  } catch (error: any) {
+  } catch (error) {
     if (!sampleRequest.isLatest(requestId)) return
     ElMessage.error(getErrorMessage(error, '加载评测样本失败'))
   } finally {
@@ -973,7 +977,7 @@ const saveSample = async () => {
     sampleDialogVisible.value = false
     await loadSamples()
     await loadDatasets()
-  } catch (error: any) {
+  } catch (error) {
     ElMessage.error(getErrorMessage(error, '保存评测样本失败'))
   } finally {
     savingSample.value = false
@@ -999,7 +1003,7 @@ const removeSample = async (sample: RagEvalSample) => {
     ElMessage.success('评测样本已删除')
     await loadSamples()
     await loadDatasets()
-  } catch (error: any) {
+  } catch (error) {
     ElMessage.error(getErrorMessage(error, '删除评测样本失败'))
   }
 }
@@ -1037,7 +1041,7 @@ const importBatchSamples = async () => {
     batchDialogVisible.value = false
     await loadSamples()
     await loadDatasets()
-  } catch (error: any) {
+  } catch (error) {
     ElMessage.error(getErrorMessage(error, '批量导入失败'))
   } finally {
     savingSample.value = false
@@ -1065,7 +1069,7 @@ const confirmRunDataset = async () => {
     ElMessage.success('评测运行完成')
     await loadDatasets()
     await loadSamples()
-  } catch (error: any) {
+  } catch (error) {
     ElMessage.error(getErrorMessage(error, '运行评测失败'))
   } finally {
     runningEval.value = false
@@ -1077,7 +1081,7 @@ const loadRun = async (runId: number) => {
     const res = await getRagEvalRunApi(runId)
     lastRun.value = res.data.data as RagEvalRun
     ElMessage.success('评测结果已加载')
-  } catch (error: any) {
+  } catch (error) {
     ElMessage.error(getErrorMessage(error, '加载评测结果失败'))
   }
 }
@@ -1091,7 +1095,7 @@ const openSegmentDrawer = async () => {
   try {
     const res = await getMaterialDetailApi(selectedDataset.value.materialId)
     materialDetail.value = res.data.data as MaterialDetail
-  } catch (error: any) {
+  } catch (error) {
     materialDetail.value = null
     ElMessage.error(getErrorMessage(error, '加载资料分段失败'))
   } finally {

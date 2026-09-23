@@ -49,7 +49,7 @@
           <main class="assistant-main" :inert="isCompactLayout && mobileSidebarOpen">
             <AssistantTopbar
               ref="topbarRef"
-              :title="sessionDetail ? (sessionDetail.title || '新对话') : '今天继续哪一块？'"
+              :title="sessionDetail ? sessionDetail.title || '新对话' : '今天继续哪一块？'"
               :loading="sessionPageLoading"
               :mobile-sidebar-open="mobileSidebarOpen"
               @open-menu="openMobileSidebar"
@@ -111,12 +111,15 @@ import { useAssistantSessions } from '@/composables/useAssistantSessions'
 import { useAssistantStream } from '@/composables/useAssistantStream'
 import { useModalShell } from '@/composables/useModalShell'
 
-const props = withDefaults(defineProps<{
-  modelValue: boolean
-  showLauncher?: boolean
-}>(), {
-  showLauncher: true
-})
+const props = withDefaults(
+  defineProps<{
+    modelValue: boolean
+    showLauncher?: boolean
+  }>(),
+  {
+    showLauncher: true
+  }
+)
 
 const emit = defineEmits<{
   (event: 'update:modelValue', value: boolean): void
@@ -140,9 +143,7 @@ const mobileMenuRef = computed(() => topbarRef.value?.menuButtonRef ?? null)
 const aiMockMode = ref(false)
 const aiConfigChecking = ref(false)
 
-const greetingName = computed(
-  () => userStore.profile?.nickname || userStore.profile?.username || '同学'
-)
+const greetingName = computed(() => userStore.profile?.nickname || userStore.profile?.username || '同学')
 
 const { currentBinding } = useAssistantPageBinding()
 
@@ -217,42 +218,24 @@ const {
   requestScroll: (force) => conversationRef.value?.scrollToBottom(force)
 })
 
-const busySessionIds = computed(() =>
-  sessionPage.records.map((item) => item.id).filter((id) => sessionActionBusy(id))
-)
+const busySessionIds = computed(() => sessionPage.records.map((item) => item.id).filter((id) => sessionActionBusy(id)))
 
 const quickPrompts = computed(() => {
   const contextType = String(sessionDetail.value?.currentContextType || '').toUpperCase()
 
   if (contextType === 'MATERIAL') {
-    return [
-      '帮我梳理这份资料的核心知识点',
-      '根据这份资料生成一份复习提纲',
-      '这份资料里最值得优先掌握的内容是什么'
-    ]
+    return ['帮我梳理这份资料的核心知识点', '根据这份资料生成一份复习提纲', '这份资料里最值得优先掌握的内容是什么']
   }
 
   if (contextType === 'PRACTICE_SESSION') {
-    return [
-      '帮我分析这次练习的薄弱点',
-      '简答题为什么容易丢分',
-      '根据这次练习给我一个复习顺序'
-    ]
+    return ['帮我分析这次练习的薄弱点', '简答题为什么容易丢分', '根据这次练习给我一个复习顺序']
   }
 
   if (contextType === 'QUESTION_SET') {
-    return [
-      '这套题主要覆盖了哪些知识点',
-      '这套题的难度分布怎么样',
-      '刷完这套题后下一步怎么复习'
-    ]
+    return ['这套题主要覆盖了哪些知识点', '这套题的难度分布怎么样', '刷完这套题后下一步怎么复习']
   }
 
-  return [
-    '帮我找到最近上传的学习资料',
-    '如何把知识点整理成复习提纲',
-    '怎样安排一轮错题复习'
-  ]
+  return ['帮我找到最近上传的学习资料', '如何把知识点整理成复习提纲', '怎样安排一轮错题复习']
 })
 
 const loadAiConfigNotice = async () => {

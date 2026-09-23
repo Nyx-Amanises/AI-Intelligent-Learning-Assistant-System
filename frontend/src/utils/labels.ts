@@ -72,7 +72,11 @@ export const formatParseStatus = (value?: string | null, fallback = '待解析')
 
 // ---------- 总结 ----------
 
-export const SUMMARY_TYPE_LABELS: Record<string, string> = { STANDARD: '标准总结', EXAM: '考试重点', OUTLINE: '结构提纲' }
+export const SUMMARY_TYPE_LABELS: Record<string, string> = {
+  STANDARD: '标准总结',
+  EXAM: '考试重点',
+  OUTLINE: '结构提纲'
+}
 
 export const formatSummaryType = (value?: string | null) => SUMMARY_TYPE_LABELS[upper(value)] || '标准总结'
 
@@ -150,7 +154,8 @@ export const statusTone = (value?: string | null): StatusTone => {
   const status = upper(value)
   if (['SUCCESS', 'PUBLISHED', 'SUBMITTED', 'COMPLETED'].includes(status)) return 'success'
   if (['FAILED', 'PARTIAL_FAILED', 'PARSE_FAILED'].includes(status)) return 'failed'
-  if (['PENDING', 'PROCESSING', 'RUNNING', 'PARSING', 'PARTIAL', 'GENERATING', 'AI_PENDING'].includes(status)) return 'processing'
+  if (['PENDING', 'PROCESSING', 'RUNNING', 'PARSING', 'PARTIAL', 'GENERATING', 'AI_PENDING'].includes(status))
+    return 'processing'
   if (['CANCELLED', 'DISABLED', 'DRAFT', 'CREATED'].includes(status)) return 'muted'
   return 'brand'
 }

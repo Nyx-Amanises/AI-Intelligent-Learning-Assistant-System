@@ -12,7 +12,7 @@ body,
 
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', 'PingFang SC', sans-serif;
   color: var(--text);
   background: var(--bg);
   -webkit-font-smoothing: antialiased;
@@ -91,8 +91,7 @@ a {
 .auth-hero {
   padding: 44px;
   background:
-    linear-gradient(155deg, rgba(37, 95, 74, 0.96), rgba(75, 120, 88, 0.88)),
-    linear-gradient(0deg, #000, #000);
+    linear-gradient(155deg, rgba(37, 95, 74, 0.96), rgba(75, 120, 88, 0.88)), linear-gradient(0deg, #000, #000);
   color: #f4f7f2;
 }
 
@@ -908,7 +907,7 @@ a {
 }
 
 .donut-chart::after {
-  content: "";
+  content: '';
   position: absolute;
   inset: 28px;
   border-radius: inherit;
@@ -1175,7 +1174,7 @@ a {
   word-break: break-word;
   line-height: 1.75;
   color: #334155;
-  font-family: Consolas, "Courier New", monospace;
+  font-family: Consolas, 'Courier New', monospace;
   font-size: 12px;
 }
 
@@ -1219,16 +1218,6 @@ a {
 }
 
 @media (max-width: 1120px) {
-  
-
-  
-
-  
-
-  
-
-  
-
   .stats-grid,
   .action-grid,
   .content-grid--2,
@@ -1275,23 +1264,9 @@ a {
   .summary-dialog__meta {
     grid-template-columns: 1fr;
   }
-
-  
 }
 
 @media (max-width: 960px) {
-  
-
-  
-
-  
-
-  
-
-  
-
-  
-
   .auth-card {
     grid-template-columns: 1fr;
   }
@@ -1305,46 +1280,12 @@ a {
     overflow-x: hidden;
   }
 
-  
-
-  
-
-  
-
-  
-
-  
-
-  
-
-  
-
-  
-
   .shell-main,
   .shell-side,
   .auth-form,
   .auth-hero {
     padding: 20px;
   }
-
-  
-
-  
-
-  
-
-  
-
-  
-
-  
-
-  
-
-  
-
-  
 
   .page-header {
     gap: 10px;
@@ -1364,8 +1305,6 @@ a {
     padding: 16px;
     border-radius: 14px;
   }
-
-  
 
   .workspace-panel {
     border-radius: 14px;
@@ -1417,8 +1356,6 @@ a {
   .workspace-form-grid {
     gap: 14px;
   }
-
-  
 
   .workspace-table {
     gap: 10px;
@@ -1495,52 +1432,6 @@ a {
     min-height: 0;
     border-radius: 20px;
   }
-
-  
-
-  
-
-  
-
-  
-
-  
-
-  
-
-  
-
-  
-
-  
-
-  
-
-  
-
-  
-
-  
-
-  
-
-  
-
-  
-
-  
-
-  
-
-  
-
-  
-
-  
-
-  
-
-  
 
   .rag-sample-list,
   .rag-segment-list {

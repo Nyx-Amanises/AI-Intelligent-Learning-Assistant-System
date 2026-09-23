@@ -100,37 +100,26 @@ export interface CmrcImportResult {
   embeddingTaskId?: number
 }
 
-export const getRagEvalDatasetPageApi = (params: Record<string, unknown>) =>
-  http.get('/rag/eval/datasets', { params })
+export const getRagEvalDatasetPageApi = (params: Record<string, unknown>) => http.get('/rag/eval/datasets', { params })
 
-export const createRagEvalDatasetApi = (data: {
-  materialId: number
-  name: string
-  description?: string
-}) => http.post('/rag/eval/datasets', data)
+export const createRagEvalDatasetApi = (data: { materialId: number; name: string; description?: string }) =>
+  http.post('/rag/eval/datasets', data)
 
-export const deleteRagEvalDatasetApi = (datasetId: number) =>
-  http.delete(`/rag/eval/datasets/${datasetId}`)
+export const deleteRagEvalDatasetApi = (datasetId: number) => http.delete(`/rag/eval/datasets/${datasetId}`)
 
-export const getRagEvalSamplesApi = (datasetId: number) =>
-  http.get(`/rag/eval/datasets/${datasetId}/samples`)
+export const getRagEvalSamplesApi = (datasetId: number) => http.get(`/rag/eval/datasets/${datasetId}/samples`)
 
 export const addRagEvalSamplesApi = (datasetId: number, samples: RagEvalSampleForm[]) =>
   http.post(`/rag/eval/datasets/${datasetId}/samples`, { samples })
 
-export const updateRagEvalSampleApi = (
-  datasetId: number,
-  sampleId: number,
-  data: RagEvalSampleForm
-) => http.put(`/rag/eval/datasets/${datasetId}/samples/${sampleId}`, data)
+export const updateRagEvalSampleApi = (datasetId: number, sampleId: number, data: RagEvalSampleForm) =>
+  http.put(`/rag/eval/datasets/${datasetId}/samples/${sampleId}`, data)
 
 export const deleteRagEvalSampleApi = (datasetId: number, sampleId: number) =>
   http.delete(`/rag/eval/datasets/${datasetId}/samples/${sampleId}`)
 
-export const runRagEvalDatasetApi = (
-  datasetId: number,
-  data: { limit?: number; sampleIds?: number[] } = {}
-) => http.post(`/rag/eval/datasets/${datasetId}/runs`, data)
+export const runRagEvalDatasetApi = (datasetId: number, data: { limit?: number; sampleIds?: number[] } = {}) =>
+  http.post(`/rag/eval/datasets/${datasetId}/runs`, data)
 
 export const getRagEvalRunApi = (runId: number) => http.get(`/rag/eval/runs/${runId}`)
 

@@ -83,7 +83,8 @@ export const useAssistantStream = (options: AssistantStreamOptions) => {
 
   const getRelatedToolCalls = (messageId: number) => relatedToolCallMap.value.get(messageId) || EMPTY_TOOL_CALLS
 
-  const getMemories = (messageId?: number) => (messageId ? memoryMap.value[messageId] || EMPTY_MEMORIES : EMPTY_MEMORIES)
+  const getMemories = (messageId?: number) =>
+    messageId ? memoryMap.value[messageId] || EMPTY_MEMORIES : EMPTY_MEMORIES
 
   const ingestToolCalls = (toolCalls: AssistantToolCall[]) => {
     if (!toolCalls.length) {
@@ -195,11 +196,7 @@ export const useAssistantStream = (options: AssistantStreamOptions) => {
     memoryMap.value = nextMemoryMap
   }
 
-  const buildOptimisticMessage = (
-    id: number,
-    role: 'USER' | 'ASSISTANT',
-    contentText: string
-  ): AssistantMessage => ({
+  const buildOptimisticMessage = (id: number, role: 'USER' | 'ASSISTANT', contentText: string): AssistantMessage => ({
     id,
     role,
     messageType: 'TEXT',
@@ -451,10 +448,11 @@ export const useAssistantStream = (options: AssistantStreamOptions) => {
         // 之前被停止的回复只存在于本地，这里用服务端记录把它们换成正式消息。
         await options.loadSessionDetail(sessionDetail.value.id)
       }
-    } catch (error: any) {
-      if (error?.name === 'AbortError' || error?.name === 'TimeoutError') {
-        finishInterruptedTurn(error?.name === 'TimeoutError' ? 'timeout' : 'stopped')
-        if (error?.name === 'TimeoutError') {
+    } catch (error) {
+      const errorName = error instanceof Error ? error.name : ''
+      if (errorName === 'AbortError' || errorName === 'TimeoutError') {
+        finishInterruptedTurn(errorName === 'TimeoutError' ? 'timeout' : 'stopped')
+        if (errorName === 'TimeoutError') {
           ElMessage.warning('助手长时间没有响应，已停止等待')
         }
         return

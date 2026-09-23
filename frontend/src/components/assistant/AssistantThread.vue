@@ -235,7 +235,9 @@ defineExpose({ scrollToBottom, jumpToLatest })
   line-height: 1.6;
   text-align: left;
   cursor: pointer;
-  transition: border-color 0.18s ease, color 0.18s ease;
+  transition:
+    border-color 0.18s ease,
+    color 0.18s ease;
 }
 
 .assistant-suggestion-chip:hover {
@@ -262,7 +264,10 @@ defineExpose({ scrollToBottom, jumpToLatest })
   box-shadow: var(--shadow-md);
   transform: translateX(-50%);
   cursor: pointer;
-  transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease,
+    background-color 0.15s ease;
 }
 
 .assistant-thread__jump:hover {

@@ -16,7 +16,10 @@ export const useAssistantContext = () => {
   const sync = async (context: { materialId?: number; questionSetId?: number }) => {
     const nextMaterialId = context.materialId || undefined
     const nextQuestionSetId = context.questionSetId || undefined
-    if (readId(ASSISTANT_MATERIAL_QUERY_KEY) === nextMaterialId && readId(ASSISTANT_QUESTION_SET_QUERY_KEY) === nextQuestionSetId) {
+    if (
+      readId(ASSISTANT_MATERIAL_QUERY_KEY) === nextMaterialId &&
+      readId(ASSISTANT_QUESTION_SET_QUERY_KEY) === nextQuestionSetId
+    ) {
       return
     }
     const nextQuery = { ...route.query }

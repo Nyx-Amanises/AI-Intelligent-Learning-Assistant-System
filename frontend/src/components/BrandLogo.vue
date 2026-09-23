@@ -7,7 +7,7 @@
     height="64"
     decoding="async"
     draggable="false"
-  >
+  />
 </template>
 
 <script setup lang="ts">
@@ -16,7 +16,7 @@ import brandMark from '@/assets/brand/zhixu-mark.svg'
 import { APP_NAME } from '@/config/brand'
 
 withDefaults(defineProps<{ variant?: 'horizontal' | 'mark' }>(), {
-  variant: 'horizontal',
+  variant: 'horizontal'
 })
 </script>
 

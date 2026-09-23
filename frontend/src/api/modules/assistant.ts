@@ -151,8 +151,7 @@ export class AssistantStreamTimeoutError extends Error {
   }
 }
 
-export const createAssistantSessionApi = (data: AssistantSessionCreatePayload) =>
-  http.post('/assistant/sessions', data)
+export const createAssistantSessionApi = (data: AssistantSessionCreatePayload) => http.post('/assistant/sessions', data)
 
 export const getAssistantSessionPageApi = (params: Record<string, unknown>) =>
   http.get('/assistant/sessions/page', { params })
@@ -171,8 +170,7 @@ export const updateAssistantSessionPinnedApi = (sessionId: number, pinned: boole
 export const sendAssistantMessageApi = (sessionId: number, data: AssistantMessageSendPayload) =>
   http.post(`/assistant/sessions/${sessionId}/messages`, data)
 
-export const deleteAssistantSessionApi = (sessionId: number) =>
-  http.delete(`/assistant/sessions/${sessionId}`)
+export const deleteAssistantSessionApi = (sessionId: number) => http.delete(`/assistant/sessions/${sessionId}`)
 
 export const streamAssistantMessageApi = async (options: AssistantStreamOptions) => {
   const userStore = useUserStore()

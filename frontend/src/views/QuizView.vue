@@ -16,11 +16,22 @@
       <ListSectionHeading title="全部题集" :count="total" :loading="questionSetLoading" @refresh="loadQuestionSets()" />
       <div class="workspace-toolbar">
         <div class="workspace-filter-bar quiz-filter-bar">
-          <el-input v-model="filters.keyword" clearable placeholder="搜索题集名称" aria-label="搜索题集" class="workspace-filter-bar__search">
+          <el-input
+            v-model="filters.keyword"
+            clearable
+            placeholder="搜索题集名称"
+            aria-label="搜索题集"
+            class="workspace-filter-bar__search"
+          >
             <template #prefix><AppIcon name="search" :size="18" /></template>
           </el-input>
           <el-select v-model="filters.status" clearable placeholder="全部状态" aria-label="筛选题集状态">
-            <el-option v-for="status in FILTERABLE_STATUSES" :key="status" :label="formatQuestionSetStatus(status)" :value="status" />
+            <el-option
+              v-for="status in FILTERABLE_STATUSES"
+              :key="status"
+              :label="formatQuestionSetStatus(status)"
+              :value="status"
+            />
           </el-select>
           <el-select v-model="filters.difficultyLevel" clearable placeholder="全部难度" aria-label="筛选难度">
             <el-option v-for="level in 5" :key="level" :label="formatDifficulty(level)" :value="level" />
@@ -30,8 +41,17 @@
       </div>
 
       <div class="workspace-body">
-        <el-alert v-if="taskStatusText" :title="taskStatusText" type="info" :closable="false" show-icon class="quiz-notice" />
-        <div v-if="questionSetLoading" class="quiz-loading" aria-live="polite"><el-skeleton :rows="5" animated /><span>正在加载题集…</span></div>
+        <el-alert
+          v-if="taskStatusText"
+          :title="taskStatusText"
+          type="info"
+          :closable="false"
+          show-icon
+          class="quiz-notice"
+        />
+        <div v-if="questionSetLoading" class="quiz-loading" aria-live="polite">
+          <el-skeleton :rows="5" animated /><span>正在加载题集…</span>
+        </div>
         <EmptyState v-else-if="loadError" variant="error" icon="quiz" title="题集暂时没能加载" :description="loadError">
           <el-button type="primary" @click="loadQuestionSets()">重新加载</el-button>
         </EmptyState>
@@ -39,40 +59,91 @@
           v-else-if="!questionSets.length"
           icon="quiz"
           :title="hasFilters ? '没有找到匹配的题集' : '用一套练习，巩固刚学过的知识'"
-          :description="hasFilters ? '换个关键词或难度，看看其他题集。' : '选择资料，自由组合单选、判断和简答题，找到适合自己的练习节奏。'"
+          :description="
+            hasFilters
+              ? '换个关键词或难度，看看其他题集。'
+              : '选择资料，自由组合单选、判断和简答题，找到适合自己的练习节奏。'
+          "
         >
           <el-button v-if="hasFilters" @click="resetFilters">清除筛选</el-button>
-          <el-button v-else-if="materials.length" type="primary" @click="generateDialogVisible = true">生成第一套题</el-button>
+          <el-button v-else-if="materials.length" type="primary" @click="generateDialogVisible = true"
+            >生成第一套题</el-button
+          >
           <el-button v-else type="primary" @click="router.push('/materials')">先添加学习资料</el-button>
         </EmptyState>
         <div v-else class="quiz-card-grid">
           <article v-for="(item, index) in questionSets" :key="item.id" class="quiz-set-card">
-            <span class="quiz-set-card__number" aria-hidden="true">{{ formatIndex((page.current - 1) * page.size + index + 1) }}</span>
+            <span class="quiz-set-card__number" aria-hidden="true">{{
+              formatIndex((page.current - 1) * page.size + index + 1)
+            }}</span>
             <div class="quiz-set-card__content">
               <div class="quiz-set-card__top">
                 <span class="quiz-set-card__category">学习自测</span>
                 <StatusPill :tone="statusTone(item.status)" :label="formatQuestionSetStatus(item.status)" />
               </div>
-              <button type="button" class="quiz-set-card__title" :disabled="!canPreviewQuestionSet(item.status)" @click="viewQuestionSet(item)">{{ item.title }}</button>
+              <button
+                type="button"
+                class="quiz-set-card__title"
+                :disabled="!canPreviewQuestionSet(item.status)"
+                @click="viewQuestionSet(item)"
+              >
+                {{ item.title }}
+              </button>
               <div class="quiz-set-card__meta">
                 <span>{{ canPreviewQuestionSet(item.status) ? '' : '计划 ' }}{{ item.questionCount }} 道题目</span>
                 <span v-if="canPreviewQuestionSet(item.status)">满分 {{ item.totalScore }} 分</span>
                 <span>{{ formatDifficulty(item.difficultyLevel) }}</span>
                 <span class="quiz-set-card__date">{{ formatDate(item.createdAt) }}</span>
               </div>
-              <p v-if="CARD_HINTS[item.status || '']" class="quiz-set-card__hint">{{ CARD_HINTS[item.status || ''] }}</p>
+              <p v-if="CARD_HINTS[item.status || '']" class="quiz-set-card__hint">
+                {{ CARD_HINTS[item.status || ''] }}
+              </p>
             </div>
             <div class="quiz-set-card__actions">
               <div class="quiz-set-card__secondary">
-                <el-button v-if="['FAILED', 'CANCELLED'].includes(item.status || '')" link @click="router.push('/ai-tasks')">查看任务</el-button>
-                <el-button v-else link :disabled="!canPreviewQuestionSet(item.status)" @click="viewQuestionSet(item)">预览题目</el-button>
-                <el-dropdown trigger="click" :disabled="item.status === 'GENERATING'" @command="removeQuestionSet(item.id)">
-                  <IconMenuButton label="题集更多操作" :loading="actionLoadingId === item.id" :disabled="item.status === 'GENERATING'" />
-                  <template #dropdown><el-dropdown-menu><el-dropdown-item command="delete">删除题集</el-dropdown-item></el-dropdown-menu></template>
+                <el-button
+                  v-if="['FAILED', 'CANCELLED'].includes(item.status || '')"
+                  link
+                  @click="router.push('/ai-tasks')"
+                  >查看任务</el-button
+                >
+                <el-button v-else link :disabled="!canPreviewQuestionSet(item.status)" @click="viewQuestionSet(item)"
+                  >预览题目</el-button
+                >
+                <el-dropdown
+                  trigger="click"
+                  :disabled="item.status === 'GENERATING'"
+                  @command="removeQuestionSet(item.id)"
+                >
+                  <IconMenuButton
+                    label="题集更多操作"
+                    :loading="actionLoadingId === item.id"
+                    :disabled="item.status === 'GENERATING'"
+                  />
+                  <template #dropdown
+                    ><el-dropdown-menu
+                      ><el-dropdown-item command="delete">删除题集</el-dropdown-item></el-dropdown-menu
+                    ></template
+                  >
                 </el-dropdown>
               </div>
-              <el-button type="primary" plain :loading="item.status === 'GENERATING' || startingQuestionSetId === item.id" :disabled="!canPracticeQuestionSet(item.status) || (startingQuestionSetId !== null && startingQuestionSetId !== item.id)" @click="startPractice(item.id)">
-                {{ item.status === 'GENERATING' ? '生成中' : canPracticeQuestionSet(item.status) ? '开始练习' : '暂不可练习' }}
+              <el-button
+                type="primary"
+                plain
+                :loading="item.status === 'GENERATING' || startingQuestionSetId === item.id"
+                :disabled="
+                  !canPracticeQuestionSet(item.status) ||
+                  (startingQuestionSetId !== null && startingQuestionSetId !== item.id)
+                "
+                @click="startPractice(item.id)"
+              >
+                {{
+                  item.status === 'GENERATING'
+                    ? '生成中'
+                    : canPracticeQuestionSet(item.status)
+                      ? '开始练习'
+                      : '暂不可练习'
+                }}
                 <AppIcon v-if="canPracticeQuestionSet(item.status)" name="arrow-right" :size="16" />
               </el-button>
             </div>
@@ -81,17 +152,37 @@
 
         <div v-if="total" class="workspace-pagination">
           <div class="workspace-pagination__meta">共 {{ total }} 套题集</div>
-          <el-pagination v-model:current-page="page.current" v-model:page-size="page.size" :page-sizes="[10, 20, 50]" layout="sizes, prev, pager, next" :total="total" @current-change="loadQuestionSets()" @size-change="loadQuestionSets()" />
+          <el-pagination
+            v-model:current-page="page.current"
+            v-model:page-size="page.size"
+            :page-sizes="[10, 20, 50]"
+            layout="sizes, prev, pager, next"
+            :total="total"
+            @current-change="loadQuestionSets()"
+            @size-change="loadQuestionSets()"
+          />
         </div>
       </div>
     </div>
 
-    <el-dialog v-model="generateDialogVisible" title="生成一套专属练习" width="min(680px, calc(100vw - 32px))" destroy-on-close class="quiz-generate-dialog">
+    <el-dialog
+      v-model="generateDialogVisible"
+      title="生成一套专属练习"
+      width="min(680px, calc(100vw - 32px))"
+      destroy-on-close
+      class="quiz-generate-dialog"
+    >
       <template #header="{ titleId, titleClass }">
         <h2 :id="titleId" :class="[titleClass, 'dialog-title']">生成一套专属练习</h2>
         <div class="dialog-subtitle">根据学习资料，定制题型、题量与难度。</div>
       </template>
-      <EmptyState v-if="!materialsLoading && !materialsError && !materials.length" variant="compact" icon="folder" title="先准备一份学习资料" description="上传并解析资料后，就能围绕它生成练习。">
+      <EmptyState
+        v-if="!materialsLoading && !materialsError && !materials.length"
+        variant="compact"
+        icon="folder"
+        title="先准备一份学习资料"
+        description="上传并解析资料后，就能围绕它生成练习。"
+      >
         <el-button type="primary" @click="router.push('/materials')">前往资料库</el-button>
       </EmptyState>
       <el-form v-else label-position="top">
@@ -100,56 +191,134 @@
           <el-button link type="primary" :loading="materialsLoading" @click="loadMaterials">重试</el-button>
         </p>
         <el-form-item label="学习资料">
-          <el-select v-model="form.materialId" filterable style="width: 100%" placeholder="选择练习的资料" :loading="materialsLoading">
+          <el-select
+            v-model="form.materialId"
+            filterable
+            style="width: 100%"
+            placeholder="选择练习的资料"
+            :loading="materialsLoading"
+          >
             <el-option v-for="item in materials" :key="item.id" :label="item.title" :value="item.id" />
           </el-select>
         </el-form-item>
-        <el-form-item label="题集名称"><el-input v-model="form.questionSetTitle" maxlength="200" show-word-limit placeholder="给这次练习起个名字" /></el-form-item>
-        <div class="quiz-form-heading"><strong>题型组合</strong><span>共 {{ totalQuestionCount }} 道 · 最多 {{ MAX_QUESTION_COUNT }} 道</span></div>
-        <div class="quiz-count-grid">
-          <el-form-item label="单选题"><el-input-number v-model="form.singleCount" :min="0" :max="MAX_QUESTION_COUNT" aria-label="单选题数量" /></el-form-item>
-          <el-form-item label="判断题"><el-input-number v-model="form.judgeCount" :min="0" :max="MAX_QUESTION_COUNT" aria-label="判断题数量" /></el-form-item>
-          <el-form-item label="简答题"><el-input-number v-model="form.shortAnswerCount" :min="0" :max="MAX_QUESTION_COUNT" aria-label="简答题数量" /></el-form-item>
+        <el-form-item label="题集名称"
+          ><el-input v-model="form.questionSetTitle" maxlength="200" show-word-limit placeholder="给这次练习起个名字"
+        /></el-form-item>
+        <div class="quiz-form-heading">
+          <strong>题型组合</strong><span>共 {{ totalQuestionCount }} 道 · 最多 {{ MAX_QUESTION_COUNT }} 道</span>
         </div>
-        <el-alert v-if="!isQuestionCountValid" :title="`请选择 1 至 ${MAX_QUESTION_COUNT} 道题，再开始生成。`" type="warning" :closable="false" show-icon class="quiz-notice" />
+        <div class="quiz-count-grid">
+          <el-form-item label="单选题"
+            ><el-input-number v-model="form.singleCount" :min="0" :max="MAX_QUESTION_COUNT" aria-label="单选题数量"
+          /></el-form-item>
+          <el-form-item label="判断题"
+            ><el-input-number v-model="form.judgeCount" :min="0" :max="MAX_QUESTION_COUNT" aria-label="判断题数量"
+          /></el-form-item>
+          <el-form-item label="简答题"
+            ><el-input-number
+              v-model="form.shortAnswerCount"
+              :min="0"
+              :max="MAX_QUESTION_COUNT"
+              aria-label="简答题数量"
+          /></el-form-item>
+        </div>
+        <el-alert
+          v-if="!isQuestionCountValid"
+          :title="`请选择 1 至 ${MAX_QUESTION_COUNT} 道题，再开始生成。`"
+          type="warning"
+          :closable="false"
+          show-icon
+          class="quiz-notice"
+        />
         <el-form-item label="练习难度" class="quiz-difficulty-field">
-          <el-slider v-model="form.difficultyLevel" :min="1" :max="5" :marks="DIFFICULTY_LABELS" :format-tooltip="formatDifficulty" show-stops />
+          <el-slider
+            v-model="form.difficultyLevel"
+            :min="1"
+            :max="5"
+            :marks="DIFFICULTY_LABELS"
+            :format-tooltip="formatDifficulty"
+            show-stops
+          />
         </el-form-item>
         <details class="quiz-advanced">
           <summary>更多设置</summary>
-          <el-form-item label="生成模型（选填）"><el-input v-model="form.modelName" :placeholder="aiConfig.defaultModel ? '默认使用 ' + aiConfig.defaultModel : '使用已配置的默认模型'" /></el-form-item>
+          <el-form-item label="生成模型（选填）"
+            ><el-input
+              v-model="form.modelName"
+              :placeholder="aiConfig.defaultModel ? '默认使用 ' + aiConfig.defaultModel : '使用已配置的默认模型'"
+          /></el-form-item>
           <el-button link type="primary" @click="router.push('/ai-config')">管理 AI 设置</el-button>
         </details>
         <p v-if="aiConfigError" class="quiz-inline-note quiz-inline-note--error">
           AI 设置暂时无法读取：{{ aiConfigError }}
           <el-button link type="primary" :loading="aiConfigLoading" @click="loadAiConfig">重试</el-button>
         </p>
-        <p v-else-if="aiConfig.mockMode" class="quiz-inline-note">当前为演示模式，生成的题目仅用于体验。<el-button link type="primary" @click="router.push('/ai-config')">配置 AI</el-button></p>
-        <el-alert v-else-if="!aiConfig.enabled" title="AI 功能当前已关闭，请在 AI 设置中启用后生成。" type="warning" :closable="false" show-icon />
+        <p v-else-if="aiConfig.mockMode" class="quiz-inline-note">
+          当前为演示模式，生成的题目仅用于体验。<el-button link type="primary" @click="router.push('/ai-config')"
+            >配置 AI</el-button
+          >
+        </p>
+        <el-alert
+          v-else-if="!aiConfig.enabled"
+          title="AI 功能当前已关闭，请在 AI 设置中启用后生成。"
+          type="warning"
+          :closable="false"
+          show-icon
+        />
       </el-form>
       <template #footer>
         <el-button @click="generateDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="generating" :disabled="!form.materialId || !materials.length || !isQuestionCountValid" @click="generateQuestionSet">生成 {{ totalQuestionCount }} 道题</el-button>
+        <el-button
+          type="primary"
+          :loading="generating"
+          :disabled="!form.materialId || !materials.length || !isQuestionCountValid"
+          @click="generateQuestionSet"
+          >生成 {{ totalQuestionCount }} 道题</el-button
+        >
       </template>
     </el-dialog>
 
-    <el-drawer v-model="drawerVisible" title="题集预览" size="min(720px, 100vw)" :close-on-click-modal="false" class="quiz-preview-drawer">
+    <el-drawer
+      v-model="drawerVisible"
+      title="题集预览"
+      size="min(720px, 100vw)"
+      :close-on-click-modal="false"
+      class="quiz-preview-drawer"
+    >
       <div v-if="detailLoading" class="state-block">正在加载题集…</div>
       <template v-else-if="questionSetDetail">
         <div class="quiz-preview-heading">
           <h2>{{ questionSetDetail.title }}</h2>
-          <p><span>{{ questionSetDetail.questionCount }} 道题</span><span>满分 {{ questionSetDetail.totalScore }} 分</span><span>{{ formatQuestionSetStatus(questionSetDetail.status) }}</span></p>
+          <p>
+            <span>{{ questionSetDetail.questionCount }} 道题</span
+            ><span>满分 {{ questionSetDetail.totalScore }} 分</span
+            ><span>{{ formatQuestionSetStatus(questionSetDetail.status) }}</span>
+          </p>
         </div>
         <div class="quiz-preview-questions">
-          <article v-for="(question, index) in questionSetDetail.questions" :key="question.id" class="quiz-preview-question">
-            <div class="quiz-preview-question__meta"><span>{{ formatQuestionType(question.questionType, '练习题') }}</span><span>{{ question.score }} 分</span></div>
+          <article
+            v-for="(question, index) in questionSetDetail.questions"
+            :key="question.id"
+            class="quiz-preview-question"
+          >
+            <div class="quiz-preview-question__meta">
+              <span>{{ formatQuestionType(question.questionType, '练习题') }}</span
+              ><span>{{ question.score }} 分</span>
+            </div>
             <h3>{{ question.sortNo || index + 1 }}. {{ question.stemText }}</h3>
             <div v-if="question.optionA" class="option-list">
-              <div>A. {{ question.optionA }}</div><div v-if="question.optionB">B. {{ question.optionB }}</div><div v-if="question.optionC">C. {{ question.optionC }}</div><div v-if="question.optionD">D. {{ question.optionD }}</div>
+              <div>A. {{ question.optionA }}</div>
+              <div v-if="question.optionB">B. {{ question.optionB }}</div>
+              <div v-if="question.optionC">C. {{ question.optionC }}</div>
+              <div v-if="question.optionD">D. {{ question.optionD }}</div>
             </div>
             <details class="quiz-answer">
               <summary>查看参考答案与解析</summary>
-              <div class="analysis-box"><p><strong>参考答案</strong>{{ question.correctAnswer || '暂无参考答案' }}</p><p><strong>解析</strong>{{ question.answerAnalysis || '暂无解析' }}</p><p v-if="question.knowledgePoint"><strong>知识点</strong>{{ question.knowledgePoint }}</p></div>
+              <div class="analysis-box">
+                <p><strong>参考答案</strong>{{ question.correctAnswer || '暂无参考答案' }}</p>
+                <p><strong>解析</strong>{{ question.answerAnalysis || '暂无解析' }}</p>
+                <p v-if="question.knowledgePoint"><strong>知识点</strong>{{ question.knowledgePoint }}</p>
+              </div>
             </details>
           </article>
         </div>
@@ -160,7 +329,14 @@
       </template>
       <template #footer>
         <el-button @click="drawerVisible = false">关闭预览</el-button>
-        <el-button v-if="questionSetDetail" type="primary" :loading="startingQuestionSetId === questionSetDetail.id" :disabled="!canPracticeQuestionSet(questionSetDetail.status)" @click="startPractice(questionSetDetail.id)">开始练习</el-button>
+        <el-button
+          v-if="questionSetDetail"
+          type="primary"
+          :loading="startingQuestionSetId === questionSetDetail.id"
+          :disabled="!canPracticeQuestionSet(questionSetDetail.status)"
+          @click="startPractice(questionSetDetail.id)"
+          >开始练习</el-button
+        >
       </template>
     </el-drawer>
   </section>
@@ -170,14 +346,25 @@
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
-import { getAiConfigApi, submitQuestionGenerateTaskApi, type AiConfigResponse, type AiTaskDetail } from '@/api/modules/ai'
+import {
+  getAiConfigApi,
+  submitQuestionGenerateTaskApi,
+  type AiConfigResponse,
+  type AiTaskDetail
+} from '@/api/modules/ai'
 import { startPracticeApi } from '@/api/modules/practice'
 import { deleteQuestionSetApi, getQuestionSetDetailApi, getQuestionSetPageApi } from '@/api/modules/question'
 import { isAiTaskSuccess, isAiTaskTerminal, parseAiTaskResult, waitForAiTaskUntilTerminal } from '@/utils/aiTask'
 import { confirmDanger } from '@/utils/confirm'
 import { getErrorMessage } from '@/utils/errorMessage'
 import { formatDate, formatIndex, type SourceSegmentLike } from '@/utils/format'
-import { DIFFICULTY_LABELS, formatDifficulty, formatQuestionSetStatus, formatQuestionType, statusTone } from '@/utils/labels'
+import {
+  DIFFICULTY_LABELS,
+  formatDifficulty,
+  formatQuestionSetStatus,
+  formatQuestionType,
+  statusTone
+} from '@/utils/labels'
 import { useAssistantContext } from '@/composables/useAssistantContext'
 import { useAutoListQuery } from '@/composables/useAutoListQuery'
 import { useLatestRequest } from '@/composables/useLatestRequest'
@@ -289,18 +476,17 @@ const page = reactive({
   size: 10
 })
 
-const autoQuery = useAutoListQuery(
-  [() => filters.keyword, () => filters.status, () => filters.difficultyLevel],
-  () => {
-    page.current = 1
-    return loadQuestionSets()
-  }
-)
+const autoQuery = useAutoListQuery([() => filters.keyword, () => filters.status, () => filters.difficultyLevel], () => {
+  page.current = 1
+  return loadQuestionSets()
+})
 
 const totalQuestionCount = computed(
   () => Number(form.singleCount || 0) + Number(form.judgeCount || 0) + Number(form.shortAnswerCount || 0)
 )
-const isQuestionCountValid = computed(() => totalQuestionCount.value >= 1 && totalQuestionCount.value <= MAX_QUESTION_COUNT)
+const isQuestionCountValid = computed(
+  () => totalQuestionCount.value >= 1 && totalQuestionCount.value <= MAX_QUESTION_COUNT
+)
 
 /** 学习助手应关注的题集/资料：优先预览抽屉，其次列表首项、进行中的任务、生成对话框。 */
 const preferredAssistantQuestionContext = computed<AssistantQuestionContext>(() => {
@@ -574,17 +760,60 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.quiz-view .workspace-panel { background: transparent; border: 0; border-radius: 0; overflow: visible; }
-.quiz-view .quiz-filter-bar { display: grid; grid-template-columns: minmax(200px, 1.6fr) minmax(130px, .65fr) minmax(130px, .65fr) auto; gap: 12px; width: 100%; margin-bottom: 0; }
-.quiz-view .workspace-toolbar { margin: 0; padding: 0 0 26px; border-bottom: 1px solid var(--line); background: transparent; }
-.quiz-view .workspace-filter-bar :deep(.el-input__wrapper), .quiz-view .workspace-filter-bar :deep(.el-select__wrapper) { min-height: 46px; padding-inline: 16px; border-radius: 999px; background: transparent; box-shadow: none; }
-.quiz-view .workspace-filter-bar :deep(.el-input__wrapper) { background: var(--bg-secondary); }
-.quiz-view .workspace-filter-bar :deep(.el-select__wrapper:hover) { background: var(--bg-secondary); }
-.quiz-view .workspace-filter-bar :deep(.el-input__wrapper.is-focus), .quiz-view .workspace-filter-bar :deep(.el-select__wrapper.is-focused) { box-shadow: 0 0 0 2px var(--brand); }
-.quiz-view .workspace-body { padding: 0; }
-.quiz-notice { margin-block: 20px; }
-.quiz-loading { display: grid; gap: 24px; padding: 40px 0; color: var(--muted); font-size: 14px; }
-.quiz-card-grid { display: grid; grid-template-columns: minmax(0, 1fr); }
+.quiz-view .workspace-panel {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  overflow: visible;
+}
+.quiz-view .quiz-filter-bar {
+  display: grid;
+  grid-template-columns: minmax(200px, 1.6fr) minmax(130px, 0.65fr) minmax(130px, 0.65fr) auto;
+  gap: 12px;
+  width: 100%;
+  margin-bottom: 0;
+}
+.quiz-view .workspace-toolbar {
+  margin: 0;
+  padding: 0 0 26px;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+}
+.quiz-view .workspace-filter-bar :deep(.el-input__wrapper),
+.quiz-view .workspace-filter-bar :deep(.el-select__wrapper) {
+  min-height: 46px;
+  padding-inline: 16px;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: none;
+}
+.quiz-view .workspace-filter-bar :deep(.el-input__wrapper) {
+  background: var(--bg-secondary);
+}
+.quiz-view .workspace-filter-bar :deep(.el-select__wrapper:hover) {
+  background: var(--bg-secondary);
+}
+.quiz-view .workspace-filter-bar :deep(.el-input__wrapper.is-focus),
+.quiz-view .workspace-filter-bar :deep(.el-select__wrapper.is-focused) {
+  box-shadow: 0 0 0 2px var(--brand);
+}
+.quiz-view .workspace-body {
+  padding: 0;
+}
+.quiz-notice {
+  margin-block: 20px;
+}
+.quiz-loading {
+  display: grid;
+  gap: 24px;
+  padding: 40px 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+.quiz-card-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
 .quiz-set-card {
   display: grid;
   grid-template-columns: 46px minmax(0, 1fr) 272px;
@@ -595,7 +824,7 @@ onUnmounted(() => {
   border-radius: var(--radius);
   border: 1px solid transparent;
   border-bottom: 1px solid var(--line);
-  transition: all .25s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .quiz-set-card:hover {
   background: var(--panel-hover);
@@ -603,73 +832,314 @@ onUnmounted(() => {
   box-shadow: var(--shadow);
   transform: translateY(-2px);
 }
-.quiz-set-card__number { align-self: start; padding-top: 4px; color: var(--muted); font-size: 25px; font-weight: 400; font-variant-numeric: tabular-nums; letter-spacing: -.04em; }
-.quiz-set-card__content { min-width: 0; }
-.quiz-set-card__top { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; }
-.quiz-set-card__category { font-size: 12px; color: var(--muted); letter-spacing: .04em; }
-.quiz-set-card__title { width: fit-content; max-width: 100%; min-height: 44px; margin: 9px 0 0; padding: 4px 0; border: 0; background: none; color: var(--text); font: inherit; font-size: 20px; font-weight: 600; line-height: 1.6; text-align: left; overflow-wrap: anywhere; cursor: pointer; transition: color .18s ease; }
-.quiz-set-card__title:hover:not(:disabled) { color: var(--brand); }
-.quiz-set-card__title:disabled { cursor: default; }
-.quiz-set-card__title:focus-visible { outline: 2px solid var(--brand); outline-offset: 5px; border-radius: 3px; }
-.quiz-set-card__meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; margin-top: 9px; color: var(--muted); font-size: 13px; line-height: 1.7; }
-.quiz-set-card__meta > span + span::before { content: '·'; margin-right: 14px; color: var(--muted); }
-.quiz-set-card__hint { margin: 10px 0 0; color: var(--muted); font-size: 12px; line-height: 1.8; }
-.quiz-set-card__actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
-.quiz-set-card__secondary { display: flex; align-items: center; gap: 4px; }
-.quiz-set-card__secondary :deep(.el-button + .el-button) { margin-left: 0; }
-.dialog-title { margin: 0; }
-.quiz-inline-note { margin: 12px 0 0; padding: 12px 14px; border-radius: 8px; background: var(--bg); color: var(--muted); font-size: 12px; line-height: 1.8; }
-.quiz-inline-note :deep(.el-button) { font-size: 12px; margin-left: 6px; }
-.quiz-inline-note--error { margin: 0 0 12px; color: var(--red); background: var(--red-soft); }
-.quiz-form-heading { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin: 4px 0 14px; font-size: 14px; }
-.quiz-form-heading span { color: var(--muted); font-size: 12px; }
-.quiz-count-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
-.quiz-count-grid :deep(.el-input-number) { width: 100%; height: 46px; --el-component-size: 46px; }
-.quiz-count-grid :deep(.el-input-number__increase), .quiz-count-grid :deep(.el-input-number__decrease) { width: 44px; }
-.quiz-count-grid :deep(.el-input__wrapper) { padding-inline: 48px; }
-.quiz-difficulty-field { padding: 0 12px 18px; }
-.quiz-advanced { border-top: 1px solid var(--line); padding-top: 16px; margin-bottom: 16px; }
-.quiz-advanced summary { padding-bottom: 16px; color: var(--muted); font-size: 13px; cursor: pointer; }
-.quiz-preview-heading { padding-bottom: 20px; border-bottom: 1px solid var(--line); }
-.quiz-preview-heading h2 { margin: 0; font-size: 21px; line-height: 1.6; overflow-wrap: anywhere; color: var(--text); }
-.quiz-preview-heading p { display: flex; flex-wrap: wrap; gap: 16px; margin: 12px 0 0; font-size: 13px; color: var(--muted); }
-.quiz-preview-questions { display: grid; gap: 0; margin-top: 10px; }
-.quiz-preview-question { padding: 28px 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; }
-.quiz-preview-question__meta { display: flex; justify-content: space-between; color: var(--brand); font-size: 12px; }
-.quiz-preview-question h3 { margin: 14px 0; color: var(--text); font-size: 16px; font-weight: 600; line-height: 1.85; overflow-wrap: anywhere; }
-.quiz-preview-question .option-list { color: var(--text); font-size: 15px; line-height: 1.8; }
-.quiz-preview-question .option-list > div { padding: 9px 0; background: transparent; border-radius: 0; }
-.quiz-answer { margin-top: 20px; font-size: 13px; }
-.quiz-answer summary { color: var(--brand); cursor: pointer; line-height: 1.8; }
-.quiz-answer .analysis-box { border-radius: 8px; }
-.quiz-answer p { margin: 8px 0; color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere; }
-.quiz-answer p strong { display: block; margin-bottom: 3px; }
-.quiz-references { border-top: 1px solid var(--line); padding-top: 20px; }
-.quiz-references :deep(.source-segment-list) { margin-top: 16px; }
+.quiz-set-card__number {
+  align-self: start;
+  padding-top: 4px;
+  color: var(--muted);
+  font-size: 25px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em;
+}
+.quiz-set-card__content {
+  min-width: 0;
+}
+.quiz-set-card__top {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+.quiz-set-card__category {
+  font-size: 12px;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+}
+.quiz-set-card__title {
+  width: fit-content;
+  max-width: 100%;
+  min-height: 44px;
+  margin: 9px 0 0;
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.6;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+  transition: color 0.18s ease;
+}
+.quiz-set-card__title:hover:not(:disabled) {
+  color: var(--brand);
+}
+.quiz-set-card__title:disabled {
+  cursor: default;
+}
+.quiz-set-card__title:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 5px;
+  border-radius: 3px;
+}
+.quiz-set-card__meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-top: 9px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.quiz-set-card__meta > span + span::before {
+  content: '·';
+  margin-right: 14px;
+  color: var(--muted);
+}
+.quiz-set-card__hint {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.8;
+}
+.quiz-set-card__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.quiz-set-card__secondary {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.quiz-set-card__secondary :deep(.el-button + .el-button) {
+  margin-left: 0;
+}
+.dialog-title {
+  margin: 0;
+}
+.quiz-inline-note {
+  margin: 12px 0 0;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.8;
+}
+.quiz-inline-note :deep(.el-button) {
+  font-size: 12px;
+  margin-left: 6px;
+}
+.quiz-inline-note--error {
+  margin: 0 0 12px;
+  color: var(--red);
+  background: var(--red-soft);
+}
+.quiz-form-heading {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 4px 0 14px;
+  font-size: 14px;
+}
+.quiz-form-heading span {
+  color: var(--muted);
+  font-size: 12px;
+}
+.quiz-count-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+.quiz-count-grid :deep(.el-input-number) {
+  width: 100%;
+  height: 46px;
+  --el-component-size: 46px;
+}
+.quiz-count-grid :deep(.el-input-number__increase),
+.quiz-count-grid :deep(.el-input-number__decrease) {
+  width: 44px;
+}
+.quiz-count-grid :deep(.el-input__wrapper) {
+  padding-inline: 48px;
+}
+.quiz-difficulty-field {
+  padding: 0 12px 18px;
+}
+.quiz-advanced {
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+  margin-bottom: 16px;
+}
+.quiz-advanced summary {
+  padding-bottom: 16px;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+}
+.quiz-preview-heading {
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--line);
+}
+.quiz-preview-heading h2 {
+  margin: 0;
+  font-size: 21px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  color: var(--text);
+}
+.quiz-preview-heading p {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.quiz-preview-questions {
+  display: grid;
+  gap: 0;
+  margin-top: 10px;
+}
+.quiz-preview-question {
+  padding: 28px 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+}
+.quiz-preview-question__meta {
+  display: flex;
+  justify-content: space-between;
+  color: var(--brand);
+  font-size: 12px;
+}
+.quiz-preview-question h3 {
+  margin: 14px 0;
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.85;
+  overflow-wrap: anywhere;
+}
+.quiz-preview-question .option-list {
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.8;
+}
+.quiz-preview-question .option-list > div {
+  padding: 9px 0;
+  background: transparent;
+  border-radius: 0;
+}
+.quiz-answer {
+  margin-top: 20px;
+  font-size: 13px;
+}
+.quiz-answer summary {
+  color: var(--brand);
+  cursor: pointer;
+  line-height: 1.8;
+}
+.quiz-answer .analysis-box {
+  border-radius: 8px;
+}
+.quiz-answer p {
+  margin: 8px 0;
+  color: var(--text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.quiz-answer p strong {
+  display: block;
+  margin-bottom: 3px;
+}
+.quiz-references {
+  border-top: 1px solid var(--line);
+  padding-top: 20px;
+}
+.quiz-references :deep(.source-segment-list) {
+  margin-top: 16px;
+}
 @media (max-width: 1000px) {
-  .quiz-set-card { grid-template-columns: 40px minmax(0, 1fr); gap: 16px 22px; }
-  .quiz-set-card__actions { grid-column: 2; justify-content: space-between; }
-  .quiz-view .quiz-filter-bar { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
-  .quiz-view .workspace-filter-bar__search { grid-column: 1 / -1; }
+  .quiz-set-card {
+    grid-template-columns: 40px minmax(0, 1fr);
+    gap: 16px 22px;
+  }
+  .quiz-set-card__actions {
+    grid-column: 2;
+    justify-content: space-between;
+  }
+  .quiz-view .quiz-filter-bar {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  }
+  .quiz-view .workspace-filter-bar__search {
+    grid-column: 1 / -1;
+  }
 }
 @media (max-width: 600px) {
-  .quiz-view .page-header { flex-direction: column; align-items: stretch; gap: 24px; }
-  .quiz-view .page-header > .el-button { align-self: flex-start; }
-  .quiz-view .quiz-filter-bar { gap: 10px 4px; }
-  .quiz-view .workspace-filter-bar :deep(.el-select__wrapper) { padding-inline: 10px; }
-  .quiz-view .workspace-toolbar { padding-bottom: 20px; }
-  .quiz-set-card { grid-template-columns: 28px minmax(0, 1fr); padding-block: 24px; gap: 14px; }
-  .quiz-set-card__number { font-size: 20px; }
-  .quiz-set-card__title { font-size: 18px; }
-  .quiz-set-card__meta { font-size: 12px; gap: 6px 10px; }
-  .quiz-set-card__meta > span + span::before { margin-right: 10px; }
-  .quiz-set-card__date { flex-basis: 100%; }
-  .quiz-set-card__meta > .quiz-set-card__date::before { display: none; }
-  .quiz-set-card__actions > :deep(.el-button) { padding-inline: 16px; }
-  .quiz-count-grid { grid-template-columns: 1fr; gap: 0; }
+  .quiz-view .page-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 24px;
+  }
+  .quiz-view .page-header > .el-button {
+    align-self: flex-start;
+  }
+  .quiz-view .quiz-filter-bar {
+    gap: 10px 4px;
+  }
+  .quiz-view .workspace-filter-bar :deep(.el-select__wrapper) {
+    padding-inline: 10px;
+  }
+  .quiz-view .workspace-toolbar {
+    padding-bottom: 20px;
+  }
+  .quiz-set-card {
+    grid-template-columns: 28px minmax(0, 1fr);
+    padding-block: 24px;
+    gap: 14px;
+  }
+  .quiz-set-card__number {
+    font-size: 20px;
+  }
+  .quiz-set-card__title {
+    font-size: 18px;
+  }
+  .quiz-set-card__meta {
+    font-size: 12px;
+    gap: 6px 10px;
+  }
+  .quiz-set-card__meta > span + span::before {
+    margin-right: 10px;
+  }
+  .quiz-set-card__date {
+    flex-basis: 100%;
+  }
+  .quiz-set-card__meta > .quiz-set-card__date::before {
+    display: none;
+  }
+  .quiz-set-card__actions > :deep(.el-button) {
+    padding-inline: 16px;
+  }
+  .quiz-count-grid {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
-  .quiz-set-card, .quiz-set-card__title { transition: none; }
-  .quiz-set-card:hover { transform: none; }
+  .quiz-set-card,
+  .quiz-set-card__title {
+    transition: none;
+  }
+  .quiz-set-card:hover {
+    transform: none;
+  }
 }
 </style>

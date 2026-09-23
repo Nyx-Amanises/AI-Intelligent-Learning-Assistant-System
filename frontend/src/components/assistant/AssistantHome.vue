@@ -114,7 +114,9 @@ const emit = defineEmits<{
   line-height: 1.6;
   text-align: left;
   cursor: pointer;
-  transition: border-color 0.18s ease, color 0.18s ease;
+  transition:
+    border-color 0.18s ease,
+    color 0.18s ease;
 }
 
 .assistant-suggestion-chip:hover {

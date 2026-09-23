@@ -26,8 +26,7 @@ export interface MaterialForm {
 
 export const createTextMaterialApi = (data: MaterialForm) => http.post('/material/text', data)
 
-export const renameMaterialApi = (id: number, title: string) =>
-  http.put(`/material/${id}/title`, { title })
+export const renameMaterialApi = (id: number, title: string) => http.put(`/material/${id}/title`, { title })
 
 export const getMaterialPageApi = (params: Record<string, unknown>) => http.get('/material/page', { params })
 
