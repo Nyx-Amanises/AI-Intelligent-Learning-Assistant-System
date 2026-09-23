@@ -31,6 +31,8 @@ export interface AssistantMessage {
   tokenInput?: number
   tokenOutput?: number
   createdAt?: string
+  /** 仅前端使用：被用户停止或等待超时的本地回复状态。 */
+  localStatus?: 'stopped' | 'timeout'
 }
 
 export interface AssistantToolCall {
@@ -135,7 +137,18 @@ export interface AssistantStreamOptions {
   sessionId: number
   data: AssistantMessageSendPayload
   signal?: AbortSignal
+  /** 连续多久没有收到任何数据就判定为超时（毫秒），0 表示不限制。 */
+  idleTimeoutMs?: number
   onEvent: (event: AssistantStreamEvent) => void
+}
+
+export const ASSISTANT_STREAM_IDLE_TIMEOUT_MS = 90000
+
+export class AssistantStreamTimeoutError extends Error {
+  constructor(message = '助手长时间没有响应，已停止等待') {
+    super(message)
+    this.name = 'TimeoutError'
+  }
 }
 
 export const createAssistantSessionApi = (data: AssistantSessionCreatePayload) =>
@@ -163,93 +176,137 @@ export const deleteAssistantSessionApi = (sessionId: number) =>
 
 export const streamAssistantMessageApi = async (options: AssistantStreamOptions) => {
   const userStore = useUserStore()
-  const response = await fetch(resolveApiUrl(`/assistant/sessions/${options.sessionId}/messages/stream`), {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'text/event-stream',
-      ...(userStore.token ? { Authorization: `Bearer ${userStore.token}` } : {})
-    },
-    body: JSON.stringify(options.data),
-    signal: options.signal
-  })
+  const idleTimeoutMs = options.idleTimeoutMs ?? ASSISTANT_STREAM_IDLE_TIMEOUT_MS
+  const controller = new AbortController()
+  let timedOut = false
+  let idleTimer: number | undefined
 
-  if (!response.ok && response.status === 401) {
-    const rawText = await response.text()
-    let message = '\u6d41\u5f0f\u8bf7\u6c42\u5931\u8d25'
-
-    try {
-      const parsed = JSON.parse(rawText)
-      message = parsed.message || message
-    } catch {
-      message = rawText || message
-    }
-
-    throw handleAuthExpired(message)
-  }
-
-  if (!response.ok) {
-    const rawText = await response.text()
-    try {
-      const parsed = JSON.parse(rawText)
-      throw new Error(parsed.message || '流式请求失败')
-    } catch {
-      throw new Error(rawText || '流式请求失败')
+  const armIdleTimer = () => {
+    window.clearTimeout(idleTimer)
+    if (idleTimeoutMs > 0) {
+      idleTimer = window.setTimeout(() => {
+        timedOut = true
+        controller.abort()
+      }, idleTimeoutMs)
     }
   }
-
-  if (!response.body) {
-    throw new Error('浏览器未返回流式响应体')
+  const forwardAbort = () => controller.abort()
+  if (options.signal?.aborted) {
+    forwardAbort()
+  } else {
+    options.signal?.addEventListener('abort', forwardAbort, { once: true })
   }
 
-  const reader = response.body.getReader()
-  const decoder = new TextDecoder('utf-8')
-  let buffer = ''
+  try {
+    armIdleTimer()
+    const response = await fetch(resolveApiUrl(`/assistant/sessions/${options.sessionId}/messages/stream`), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'text/event-stream',
+        ...(userStore.token ? { Authorization: `Bearer ${userStore.token}` } : {})
+      },
+      body: JSON.stringify(options.data),
+      signal: controller.signal
+    })
 
-  const processEventBlock = (block: string) => {
-    const dataLines = block
-      .split('\n')
-      .map((line) => line.trimEnd())
-      .filter((line) => line.startsWith('data:'))
-      .map((line) => line.slice(5).trim())
+    if (!response.ok && response.status === 401) {
+      const rawText = await response.text()
+      let message = '流式请求失败'
 
-    if (!dataLines.length) {
-      return
-    }
-
-    const payloadText = dataLines.join('\n')
-    if (!payloadText) {
-      return
-    }
-
-    const payload = JSON.parse(payloadText) as AssistantStreamEvent
-    options.onEvent(payload)
-  }
-
-  const flushBuffer = () => {
-    buffer = buffer.replace(/\r\n/g, '\n')
-    let separatorIndex = buffer.indexOf('\n\n')
-    while (separatorIndex >= 0) {
-      const block = buffer.slice(0, separatorIndex).trim()
-      buffer = buffer.slice(separatorIndex + 2)
-      if (block) {
-        processEventBlock(block)
+      try {
+        const parsed = JSON.parse(rawText)
+        message = parsed.message || message
+      } catch {
+        message = rawText || message
       }
-      separatorIndex = buffer.indexOf('\n\n')
-    }
-  }
 
-  while (true) {
-    const { value, done } = await reader.read()
-    if (done) {
-      break
+      throw handleAuthExpired(message)
     }
-    buffer += decoder.decode(value, { stream: true })
-    flushBuffer()
-  }
 
-  buffer += decoder.decode()
-  if (buffer.trim()) {
-    processEventBlock(buffer.trim())
+    if (!response.ok) {
+      const rawText = await response.text()
+      try {
+        const parsed = JSON.parse(rawText)
+        throw new Error(parsed.message || '流式请求失败')
+      } catch {
+        throw new Error(rawText || '流式请求失败')
+      }
+    }
+
+    if (!response.body) {
+      throw new Error('浏览器未返回流式响应体')
+    }
+
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder('utf-8')
+    let buffer = ''
+
+    const processEventBlock = (block: string) => {
+      const dataLines = block
+        .split('\n')
+        .map((line) => line.trimEnd())
+        .filter((line) => line.startsWith('data:'))
+        .map((line) => line.slice(5).trim())
+
+      if (!dataLines.length) {
+        return
+      }
+
+      const payloadText = dataLines.join('\n')
+      if (!payloadText) {
+        return
+      }
+
+      let payload: AssistantStreamEvent
+      try {
+        payload = JSON.parse(payloadText) as AssistantStreamEvent
+      } catch {
+        // 跳过无法解析的事件块，避免一条坏数据中断整个回复。
+        return
+      }
+      options.onEvent(payload)
+    }
+
+    const flushBuffer = () => {
+      buffer = buffer.replace(/\r\n/g, '\n')
+      let separatorIndex = buffer.indexOf('\n\n')
+      while (separatorIndex >= 0) {
+        const block = buffer.slice(0, separatorIndex).trim()
+        buffer = buffer.slice(separatorIndex + 2)
+        if (block) {
+          processEventBlock(block)
+        }
+        separatorIndex = buffer.indexOf('\n\n')
+      }
+    }
+
+    try {
+      while (true) {
+        armIdleTimer()
+        const { value, done } = await reader.read()
+        if (done) {
+          break
+        }
+        buffer += decoder.decode(value, { stream: true })
+        flushBuffer()
+      }
+
+      buffer += decoder.decode()
+      if (buffer.trim()) {
+        processEventBlock(buffer.trim())
+      }
+    } finally {
+      window.clearTimeout(idleTimer)
+      void reader.cancel().catch(() => undefined)
+    }
+  } catch (error) {
+    if (timedOut) {
+      throw new AssistantStreamTimeoutError()
+    }
+    throw error
+  } finally {
+    window.clearTimeout(idleTimer)
+    options.signal?.removeEventListener('abort', forwardAbort)
   }
 }

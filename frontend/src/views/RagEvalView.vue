@@ -486,6 +486,7 @@ import {
   type RagEvalSampleForm
 } from '@/api/modules/ragEval'
 import { useAutoListQuery } from '@/composables/useAutoListQuery'
+import { getErrorMessage } from '@/utils/errorMessage'
 
 interface MaterialSegment {
   id: number
@@ -728,7 +729,7 @@ const loadMaterials = async () => {
     })
     materials.value = res.data.data.records || []
   } catch (error: any) {
-    ElMessage.error(error.message || '加载资料列表失败')
+    ElMessage.error(getErrorMessage(error, '加载资料列表失败'))
   } finally {
     materialsLoading.value = false
   }
@@ -753,7 +754,7 @@ const loadDatasets = async () => {
       }
     }
   } catch (error: any) {
-    ElMessage.error(error.message || '加载评测集失败')
+    ElMessage.error(getErrorMessage(error, '加载评测集失败'))
   } finally {
     datasetLoading.value = false
   }
@@ -829,7 +830,7 @@ const importCmrcDataset = async () => {
     lastRun.value = null
     await loadSamples()
   } catch (error: any) {
-    ElMessage.error(error.message || '导入 CMRC2018 失败')
+    ElMessage.error(getErrorMessage(error, '导入 CMRC2018 失败'))
   } finally {
     importingCmrc.value = false
   }
@@ -862,7 +863,7 @@ const createDataset = async () => {
     await loadDatasets()
     await loadSamples()
   } catch (error: any) {
-    ElMessage.error(error.message || '创建评测集失败')
+    ElMessage.error(getErrorMessage(error, '创建评测集失败'))
   } finally {
     creatingDataset.value = false
   }
@@ -895,7 +896,7 @@ const removeDataset = async (dataset: RagEvalDataset) => {
     }
     await loadDatasets()
   } catch (error: any) {
-    ElMessage.error(error.message || '删除评测集失败')
+    ElMessage.error(getErrorMessage(error, '删除评测集失败'))
   }
 }
 
@@ -909,7 +910,7 @@ const loadSamples = async () => {
     samples.value = res.data.data || []
     resetSampleVisibleCount()
   } catch (error: any) {
-    ElMessage.error(error.message || '加载评测样本失败')
+    ElMessage.error(getErrorMessage(error, '加载评测样本失败'))
   } finally {
     sampleLoading.value = false
   }
@@ -966,7 +967,7 @@ const saveSample = async () => {
     await loadSamples()
     await loadDatasets()
   } catch (error: any) {
-    ElMessage.error(error.message || '保存评测样本失败')
+    ElMessage.error(getErrorMessage(error, '保存评测样本失败'))
   } finally {
     savingSample.value = false
   }
@@ -992,7 +993,7 @@ const removeSample = async (sample: RagEvalSample) => {
     await loadSamples()
     await loadDatasets()
   } catch (error: any) {
-    ElMessage.error(error.message || '删除评测样本失败')
+    ElMessage.error(getErrorMessage(error, '删除评测样本失败'))
   }
 }
 
@@ -1030,7 +1031,7 @@ const importBatchSamples = async () => {
     await loadSamples()
     await loadDatasets()
   } catch (error: any) {
-    ElMessage.error(error.message || '批量导入失败')
+    ElMessage.error(getErrorMessage(error, '批量导入失败'))
   } finally {
     savingSample.value = false
   }
@@ -1058,7 +1059,7 @@ const confirmRunDataset = async () => {
     await loadDatasets()
     await loadSamples()
   } catch (error: any) {
-    ElMessage.error(error.message || '运行评测失败')
+    ElMessage.error(getErrorMessage(error, '运行评测失败'))
   } finally {
     runningEval.value = false
   }
@@ -1070,7 +1071,7 @@ const loadRun = async (runId: number) => {
     lastRun.value = res.data.data as RagEvalRun
     ElMessage.success('评测结果已加载')
   } catch (error: any) {
-    ElMessage.error(error.message || '加载评测结果失败')
+    ElMessage.error(getErrorMessage(error, '加载评测结果失败'))
   }
 }
 
@@ -1085,7 +1086,7 @@ const openSegmentDrawer = async () => {
     materialDetail.value = res.data.data as MaterialDetail
   } catch (error: any) {
     materialDetail.value = null
-    ElMessage.error(error.message || '加载资料分段失败')
+    ElMessage.error(getErrorMessage(error, '加载资料分段失败'))
   } finally {
     segmentLoading.value = false
   }

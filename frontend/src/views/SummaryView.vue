@@ -40,6 +40,12 @@
           <el-skeleton :rows="5" animated />
           <span>正在整理你的总结…</span>
         </div>
+        <div v-else-if="loadError" class="learning-empty learning-empty--error" role="alert">
+          <div class="learning-empty__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M12 9v4M12 16.5h.01M10.3 4.1 2.8 17a2 2 0 0 0 1.7 3h15a2 2 0 0 0 1.7-3L13.7 4.1a2 2 0 0 0-3.4 0Z" stroke-linecap="round" stroke-linejoin="round" /></svg></div>
+          <h3>总结暂时没能加载</h3>
+          <p>{{ loadError }}</p>
+          <el-button type="primary" @click="loadSummaryHistory()">重新加载</el-button>
+        </div>
         <div v-else-if="!pagedSummaryHistory.length" class="learning-empty">
           <div class="learning-empty__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M8 3h8l4 4v14H4V3h4ZM14 3v5h6M8 12h8M8 16h5" stroke-linejoin="round" stroke-linecap="round" /></svg></div>
           <h3>{{ summaryHistory.length ? '没有找到匹配的总结' : '让第一份资料，变成一份清晰的总结' }}</h3>
@@ -173,6 +179,7 @@ import { getAllSummaryHistoryApi, submitSummaryTaskApi, type AiTaskDetail } from
 import { getMaterialDetailApi, getMaterialPageApi } from '@/api/modules/material'
 import { isAiTaskSuccess, isAiTaskTerminal, parseAiTaskResult, waitForAiTask } from '@/utils/aiTask'
 import LearningNoteContent from '@/components/LearningNoteContent.vue'
+import { getErrorMessage } from '@/utils/errorMessage'
 
 const route = useRoute()
 const router = useRouter()
@@ -198,6 +205,7 @@ const materialsLoading = ref(false)
 const detailLoading = ref(false)
 const generating = ref(false)
 const historyLoading = ref(false)
+const loadError = ref('')
 const currentTask = ref<AiTaskDetail | null>(null)
 let viewDisposed = false
 let historyRequestId = 0
@@ -336,7 +344,7 @@ const loadMaterials = async () => {
       ...remainingPages.flatMap((response) => response.data.data.records || [])
     ].filter((item: any) => item.parseStatus === 'SUCCESS')
   } catch (error: any) {
-    ElMessage.error(error.message || '加载资料失败')
+    ElMessage.error(getErrorMessage(error, '加载资料失败'))
   } finally {
     materialsLoading.value = false
   }
@@ -357,14 +365,18 @@ const loadSummaryHistory = async (background = false) => {
   if (viewDisposed) return
   stopHistoryRefresh()
   const requestId = ++historyRequestId
-  if (!background) historyLoading.value = true
+  if (!background) {
+    historyLoading.value = true
+    loadError.value = ''
+  }
   try {
     const res = await getAllSummaryHistoryApi()
     if (viewDisposed || requestId !== historyRequestId) return
     summaryHistory.value = res.data.data || []
+    loadError.value = ''
   } catch (error: any) {
     if (!viewDisposed && requestId === historyRequestId && !background) {
-      ElMessage.error(error.message || '加载总结列表失败')
+      loadError.value = getErrorMessage(error, '总结列表暂时无法加载，请稍后重试。')
     }
   } finally {
     if (!viewDisposed && requestId === historyRequestId) {
@@ -381,7 +393,7 @@ const loadMaterialDetail = async (id: number) => {
     selectedMaterialDetail.value = res.data.data
   } catch (error: any) {
     selectedMaterialDetail.value = null
-    ElMessage.error(error.message || '加载资料详情失败')
+    ElMessage.error(getErrorMessage(error, '加载资料详情失败'))
   } finally {
     detailLoading.value = false
   }
@@ -490,7 +502,7 @@ const generateSummary = async () => {
     ElMessage.success('AI 总结生成完成')
   } catch (error: any) {
     if (!viewDisposed) {
-      ElMessage.error(error.message || 'AI 总结任务失败')
+      ElMessage.error(getErrorMessage(error, 'AI 总结任务失败'))
       if (currentTask.value && !isAiTaskTerminal(currentTask.value.status)) await loadSummaryHistory(true)
     }
   } finally {
@@ -564,6 +576,7 @@ onUnmounted(() => {
 .learning-empty h3 { margin: 0 0 12px; color: var(--text); font-size: 21px; font-weight: 500; line-height: 1.5; }
 .learning-empty p { max-width: 440px; margin: 0 0 26px; color: var(--muted); font-size: 15px; line-height: 1.9; }
 .learning-empty--compact { min-height: 200px; }
+.learning-empty--error .learning-empty__icon { color: var(--red); background: var(--red-soft); border-color: transparent; }
 .summary-mode-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; width: 100%; }
 .summary-mode-options :deep(.el-radio.is-bordered) { height: auto; min-height: 100px; margin: 0; padding: 16px 12px; border-radius: 9px; white-space: normal; align-items: flex-start; }
 .summary-mode-options :deep(.el-radio__input) { margin-top: 3px; }

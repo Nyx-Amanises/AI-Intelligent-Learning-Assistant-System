@@ -179,6 +179,7 @@ import { useUserStore } from '@/stores/user'
 import { resolveAvatarUrl } from '@/utils/avatar'
 import { usePageProgress } from '@/composables/usePageProgress'
 import { useTheme, type ThemeMode } from '@/composables/useTheme'
+import { getErrorMessage } from '@/utils/errorMessage'
 
 const userStore = useUserStore()
 const pageProgress = usePageProgress()
@@ -309,7 +310,7 @@ async function handleAvatarChange(event: Event) {
     ElMessage.success('头像已更新')
   } catch (error) {
     if (requestToken && userStore.token === requestToken) {
-      ElMessage.error(error instanceof Error ? error.message : '头像上传失败')
+      ElMessage.error(getErrorMessage(error, '头像上传失败'))
     }
   } finally { avatarUploading.value = false }
 }

@@ -66,7 +66,15 @@ http.interceptors.response.use(
   (error) => {
     const status = error?.response?.status
     const url = error?.config?.url
-    const message = error?.response?.data?.message || error?.message || DEFAULT_NETWORK_ERROR
+    const serverMessage = error?.response?.data?.message
+    let message: string = serverMessage || DEFAULT_NETWORK_ERROR
+    if (!serverMessage) {
+      if (error?.code === 'ECONNABORTED' || /timeout/i.test(String(error?.message || ''))) {
+        message = '请求超时，请稍后重试'
+      } else if (status) {
+        message = `服务暂时不可用（HTTP ${status}），请稍后重试`
+      }
+    }
 
     if (status === 401 && !isAuthEndpoint(url)) {
       return Promise.reject(handleAuthExpired(message || AUTH_EXPIRED_MESSAGE))

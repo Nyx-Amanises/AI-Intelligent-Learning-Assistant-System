@@ -39,6 +39,12 @@
       <div class="workspace-body">
         <el-alert v-if="taskStatusText" :title="taskStatusText" type="info" :closable="false" show-icon class="quiz-notice" />
         <div v-if="questionSetLoading" class="quiz-loading" aria-live="polite"><el-skeleton :rows="5" animated /><span>正在加载题集…</span></div>
+        <div v-else-if="loadError" class="learning-empty learning-empty--error" role="alert">
+          <div class="learning-empty__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M12 9v4M12 16.5h.01M10.3 4.1 2.8 17a2 2 0 0 0 1.7 3h15a2 2 0 0 0 1.7-3L13.7 4.1a2 2 0 0 0-3.4 0Z" stroke-linecap="round" stroke-linejoin="round" /></svg></div>
+          <h3>题集暂时没能加载</h3>
+          <p>{{ loadError }}</p>
+          <el-button type="primary" @click="loadQuestionSets()">重新加载</el-button>
+        </div>
         <div v-else-if="!questionSets.length" class="learning-empty">
           <div class="learning-empty__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2" /><path d="m8 9 1.5 1.5L12 8M14 9h3M8 15h9" stroke-linecap="round" stroke-linejoin="round" /></svg></div>
           <h3>{{ hasFilters ? '没有找到匹配的题集' : '用一套练习，巩固刚学过的知识' }}</h3>
@@ -176,6 +182,7 @@ import { startPracticeApi } from '@/api/modules/practice'
 import { deleteQuestionSetApi, getQuestionSetDetailApi, getQuestionSetPageApi } from '@/api/modules/question'
 import { isAiTaskSuccess, isAiTaskTerminal, parseAiTaskResult, waitForAiTask } from '@/utils/aiTask'
 import { useAutoListQuery } from '@/composables/useAutoListQuery'
+import { getErrorMessage } from '@/utils/errorMessage'
 
 const route = useRoute()
 const router = useRouter()
@@ -192,6 +199,7 @@ const total = ref(0)
 const questionSetDetail = ref<any>(null)
 const materialsLoading = ref(false)
 const questionSetLoading = ref(false)
+const loadError = ref('')
 const generating = ref(false)
 const detailLoading = ref(false)
 const drawerVisible = ref(false)
@@ -401,7 +409,7 @@ const loadAiConfig = async () => {
     const res = await getAiConfigApi()
     aiConfig.value = res.data.data
   } catch (error: any) {
-    ElMessage.error(error.message || '加载 AI 配置失败')
+    ElMessage.error(getErrorMessage(error, '加载 AI 配置失败'))
   } finally {
     configLoading.value = false
   }
@@ -424,7 +432,7 @@ const loadMaterials = async () => {
       ...remainingPages.flatMap((response) => response.data.data.records || [])
     ].filter((item: any) => item.parseStatus === 'SUCCESS')
   } catch (error: any) {
-    ElMessage.error(error.message || '加载资料失败')
+    ElMessage.error(getErrorMessage(error, '加载资料失败'))
   } finally {
     materialsLoading.value = false
   }
@@ -444,7 +452,10 @@ const scheduleQuestionSetRefresh = () => {
 const loadQuestionSets = async (background = false) => {
   stopQuestionSetRefresh()
   const requestId = ++questionSetRequestId
-  if (!background) questionSetLoading.value = true
+  if (!background) {
+    questionSetLoading.value = true
+    loadError.value = ''
+  }
   try {
     const res = await getQuestionSetPageApi({
       current: page.current,
@@ -456,9 +467,10 @@ const loadQuestionSets = async (background = false) => {
     if (viewDisposed || requestId !== questionSetRequestId) return
     questionSets.value = res.data.data.records || []
     total.value = res.data.data.total || 0
+    loadError.value = ''
   } catch (error: any) {
     if (!viewDisposed && requestId === questionSetRequestId && !background) {
-      ElMessage.error(error.message || '加载题集失败')
+      loadError.value = getErrorMessage(error, '题集暂时无法加载，请稍后重试。')
     }
   } finally {
     if (!viewDisposed && requestId === questionSetRequestId) {
@@ -527,7 +539,7 @@ const generateQuestionSet = async () => {
     ElMessage.success(aiConfig.value.mockMode ? '演示题集已生成' : '题集已生成')
   } catch (error: any) {
     if (!viewDisposed) {
-      ElMessage.error(error.message || '题集任务失败')
+      ElMessage.error(getErrorMessage(error, '题集任务失败'))
       if (currentTask.value && !isAiTaskTerminal(currentTask.value.status)) await loadQuestionSets(true)
     }
   } finally {
@@ -551,7 +563,7 @@ const viewQuestionSet = async (item: any) => {
   } catch (error: any) {
     questionSetDetail.value = null
     pendingQuestionContext.value = null
-    ElMessage.error(error.message || '加载题集详情失败')
+    ElMessage.error(getErrorMessage(error, '加载题集详情失败'))
   } finally {
     detailLoading.value = false
   }
@@ -565,7 +577,7 @@ const startPractice = async (questionSetId: number) => {
     ElMessage.success('练习已开始')
     router.push({ path: '/practice', query: { sessionId: String(res.data.data.sessionId) } })
   } catch (error: any) {
-    ElMessage.error(error.message || '开始练习失败')
+    ElMessage.error(getErrorMessage(error, '开始练习失败'))
   } finally {
     startingQuestionSetId.value = null
   }
@@ -593,7 +605,7 @@ const removeQuestionSet = async (id: number) => {
     }
     await loadQuestionSets()
   } catch (error: any) {
-    ElMessage.error(error.message || '删除题集失败')
+    ElMessage.error(getErrorMessage(error, '删除题集失败'))
   } finally {
     actionLoadingId.value = null
   }
@@ -678,9 +690,13 @@ onUnmounted(() => {
 .quiz-set-card__meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; margin-top: 9px; color: var(--muted); font-size: 13px; line-height: 1.7; }
 .quiz-set-card__meta > span + span::before { content: '·'; margin-right: 14px; color: #a7afa2; }
 .quiz-set-card__hint { margin: 10px 0 0; color: var(--muted); font-size: 12px; line-height: 1.8; }
+.learning-empty { display: grid; justify-items: center; align-content: center; min-height: 370px; padding: 52px 20px; text-align: center; }
+.learning-empty__icon { display: grid; place-items: center; width: 72px; height: 72px; margin-bottom: 24px; border-radius: 50%; color: var(--brand); background: var(--brand-soft); }
+.learning-empty__icon svg { width: 30px; height: 30px; }
 .learning-empty h3 { margin: 0 0 12px; color: var(--text); font-size: 21px; font-weight: 500; line-height: 1.5; }
 .learning-empty p { max-width: 440px; margin: 0 0 26px; color: var(--muted); font-size: 15px; line-height: 1.9; }
 .learning-empty--compact { min-height: 200px; }
+.learning-empty--error .learning-empty__icon { color: var(--red); background: var(--red-soft); border-color: transparent; }
 .quiz-form-heading { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin: 4px 0 14px; font-size: 14px; }
 .quiz-form-heading span { color: var(--muted); font-size: 12px; }
 .quiz-count-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }

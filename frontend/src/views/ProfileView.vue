@@ -84,6 +84,7 @@ import { getProfileApi, updateProfileApi, uploadAvatarApi } from '@/api/modules/
 import AppIcon from '@/components/AppIcon.vue'
 import { useUserStore, type UserProfile } from '@/stores/user'
 import { resolveAvatarUrl } from '@/utils/avatar'
+import { getErrorMessage } from '@/utils/errorMessage'
 
 type FieldName = 'nickname' | 'email'
 type Feedback = { type: 'success' | 'error'; message: string }
@@ -156,7 +157,7 @@ async function loadProfile() {
     loaded.value = true
   } catch (error) {
     if (active && userStore.token === requestToken) {
-      loadError.value = error instanceof Error ? error.message : '请检查网络后重试。'
+      loadError.value = getErrorMessage(error, '请检查网络后重试。')
     }
   } finally {
     loading.value = false
@@ -185,7 +186,7 @@ async function saveProfile() {
     saveFeedback.value = { type: 'success', message: '个人信息已保存' }
   } catch (error) {
     if (active && userStore.token === requestToken) {
-      saveFeedback.value = { type: 'error', message: error instanceof Error ? error.message : '保存失败。' }
+      saveFeedback.value = { type: 'error', message: getErrorMessage(error, '保存失败。') }
     }
   } finally {
     submitting.value = false
@@ -221,7 +222,7 @@ async function handleAvatarChange(event: Event) {
     avatarFeedback.value = { type: 'success', message: '头像已更新' }
   } catch (error) {
     if (active && userStore.token === requestToken) {
-      avatarFeedback.value = { type: 'error', message: (error instanceof Error ? error.message : '头像上传失败。') + ' 请重新选择图片后重试。' }
+      avatarFeedback.value = { type: 'error', message: getErrorMessage(error, '头像上传失败。') + ' 请重新选择图片后重试。' }
     }
   } finally {
     avatarUploading.value = false

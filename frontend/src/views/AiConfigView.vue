@@ -246,6 +246,7 @@ import {
   type AiConfigResponse
 } from '@/api/modules/ai'
 import { useTheme, type ThemeMode } from '@/composables/useTheme'
+import { getErrorMessage } from '@/utils/errorMessage'
 
 const { currentTheme, themeOptions, currentThemeOption, setTheme } = useTheme()
 
@@ -405,7 +406,7 @@ async function loadConfig() {
   } catch (error) {
     if (sequence === loadSequence) {
       loaded.value = false
-      loadError.value = error instanceof Error ? error.message : '请检查网络后重试。'
+      loadError.value = getErrorMessage(error, '请检查网络后重试。')
     }
   } finally {
     if (sequence === loadSequence) {
@@ -484,7 +485,7 @@ async function saveConfig() {
     savedFeedback.value = saveScope.value === 'GLOBAL' ? '共享配置已保存' : '配置已保存'
     ElMessage.success(savedFeedback.value)
   } catch (error) {
-    saveError.value = error instanceof Error ? error.message : '保存失败，请重试。'
+    saveError.value = getErrorMessage(error, '保存失败，请重试。')
   } finally {
     saving.value = false
   }
@@ -506,7 +507,7 @@ async function clearPersonalConfig() {
     savedFeedback.value = '已恢复默认配置'
     ElMessage.success(savedFeedback.value)
   } catch (error) {
-    saveError.value = error instanceof Error ? error.message : '恢复默认配置失败，请重试。'
+    saveError.value = getErrorMessage(error, '恢复默认配置失败，请重试。')
   } finally {
     saving.value = false
   }

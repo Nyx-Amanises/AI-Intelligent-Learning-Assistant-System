@@ -1,5 +1,6 @@
 package com.aiassistant.learning.service.impl;
 
+import com.aiassistant.learning.common.exception.AiStreamAbortedException;
 import com.aiassistant.learning.common.exception.BusinessException;
 import com.aiassistant.learning.service.AiChatService;
 import com.aiassistant.learning.service.AiConfigService;
@@ -124,6 +125,8 @@ public class AiChatServiceImpl implements AiChatService {
                 }
                 consumeEventPayload(dataLines, onDelta);
             }
+        } catch (AiStreamAbortedException exception) {
+            throw exception;
         } catch (BusinessException exception) {
             throw exception;
         } catch (java.net.http.HttpTimeoutException exception) {
@@ -313,6 +316,9 @@ public class AiChatServiceImpl implements AiChatService {
             if (StringUtils.hasText(deltaText)) {
                 onDelta.accept(deltaText);
             }
+        } catch (AiStreamAbortedException exception) {
+            // 前端已断开连接，停止继续消费模型输出。
+            throw exception;
         } catch (Exception ignored) {
             // 某些中转站会插入非标准事件，这里忽略无法解析的分片，避免中断整条流。
         }

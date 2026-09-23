@@ -1,5 +1,6 @@
 package com.aiassistant.learning.service.impl;
 
+import com.aiassistant.learning.common.exception.AiStreamAbortedException;
 import com.aiassistant.learning.common.exception.BusinessException;
 import com.aiassistant.learning.context.UserContext;
 import com.aiassistant.learning.dto.assistant.AssistantMessageSendRequest;
@@ -52,6 +53,9 @@ public class AssistantServiceImpl implements AssistantService {
 
     /** 新建会话的默认标题。 */
     private static final String DEFAULT_SESSION_TITLE = "新对话";
+
+    /** 用户中途停止时，追加在已生成内容末尾的提示。 */
+    private static final String INTERRUPTED_REPLY_SUFFIX = "\n\n（回答已停止）";
 
     /** 助手会话 Mapper。 */
     private final AssistantSessionMapper assistantSessionMapper;
@@ -315,11 +319,12 @@ public class AssistantServiceImpl implements AssistantService {
             AssistantAgentOrchestrator.AssistantPreparedResult preparedResult
     ) {
         UserContext.setCurrentUserId(userId);
+        StringBuilder assistantReplyBuilder = new StringBuilder();
+        boolean replyPersisted = false;
         try {
             sendStreamEvent(emitter, buildSessionEventPayload(session, userMessage));
             sendStreamEvent(emitter, buildTraceEventPayload(preparedResult));
 
-            StringBuilder assistantReplyBuilder = new StringBuilder();
             if (preparedResult.useModel()) {
                 aiChatService.streamChat(
                         preparedResult.systemPrompt(),
@@ -348,8 +353,15 @@ public class AssistantServiceImpl implements AssistantService {
                     preparedResult,
                     assistantReply
             );
+            replyPersisted = true;
             sendStreamEvent(emitter, Map.of("type", "done", "reply", replyVO));
             emitter.complete();
+        } catch (AiStreamAbortedException exception) {
+            // 前端主动停止或连接断开：不再推送事件，只把已经生成的部分保存下来。
+            if (!replyPersisted) {
+                persistInterruptedReply(userId, session, userMessage, request, preparedResult, assistantReplyBuilder.toString());
+            }
+            completeQuietly(emitter);
         } catch (Exception exception) {
             sendStreamFailureReply(
                     emitter,
@@ -392,6 +404,39 @@ public class AssistantServiceImpl implements AssistantService {
             emitter.complete();
         } catch (Exception persistException) {
             sendStreamError(emitter, assistantReply);
+        }
+    }
+
+    /**
+     * 用户中途停止时保存已生成的部分回复，方便之后回看。一个字都没生成时不落库。
+     */
+    private void persistInterruptedReply(
+            Long userId,
+            AssistantSession session,
+            AssistantMessage userMessage,
+            AssistantMessageSendRequest request,
+            AssistantAgentOrchestrator.AssistantPreparedResult preparedResult,
+            String partialReply
+    ) {
+        String trimmed = partialReply == null ? "" : partialReply.trim();
+        if (!StringUtils.hasText(trimmed)) {
+            return;
+        }
+        try {
+            persistStreamReply(userId, session, userMessage, request, preparedResult, trimmed + INTERRUPTED_REPLY_SUFFIX);
+        } catch (Exception ignored) {
+            // 连接已经断开，保存失败也无法再告知前端，这里静默处理。
+        }
+    }
+
+    /**
+     * 关闭一个可能已经被客户端断开的 emitter。
+     */
+    private void completeQuietly(SseEmitter emitter) {
+        try {
+            emitter.complete();
+        } catch (Exception ignored) {
+            // emitter 已经结束时会抛出异常，忽略即可。
         }
     }
 
@@ -489,7 +534,8 @@ public class AssistantServiceImpl implements AssistantService {
         try {
             emitter.send(SseEmitter.event().data(payload, MediaType.APPLICATION_JSON));
         } catch (Exception exception) {
-            throw new BusinessException(500, "SSE 推送失败: " + resolveStreamErrorMessage(exception));
+            // 推送失败几乎都意味着前端已经断开（停止生成、关闭页面等），按中止处理。
+            throw new AiStreamAbortedException("SSE 推送失败: " + resolveStreamErrorMessage(exception), exception);
         }
     }
 

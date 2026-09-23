@@ -97,8 +97,7 @@
               class="assistant-session-card"
               :class="{
                 'assistant-session-card--active': activeSessionId === item.id,
-                'assistant-session-card--pinned': isSessionPinned(item),
-                'assistant-session-card--disabled': sendingMessage
+                'assistant-session-card--pinned': isSessionPinned(item)
               }"
             >
               <div class="assistant-session-card__top">
@@ -112,7 +111,6 @@
                 <button
                   type="button"
                   class="assistant-session-card__select"
-                  :disabled="sendingMessage"
                   :aria-current="activeSessionId === item.id ? 'true' : undefined"
                   :title="item.title || '新对话'"
                   @click="selectSession(item.id)"
@@ -120,13 +118,13 @@
                 <el-dropdown
                   trigger="click"
                   popper-class="assistant-session-menu"
-                  :disabled="sendingMessage || sessionActionBusy(item.id)"
+                  :disabled="sessionActionBusy(item.id)"
                   @command="handleSessionCommandFromMenu(item, $event)"
                 >
                   <button
                     type="button"
                     class="assistant-session-card__menu-button"
-                    :disabled="sendingMessage || sessionActionBusy(item.id)"
+                    :disabled="sessionActionBusy(item.id)"
                     aria-label="更多对话操作"
                     @click.stop
                   >
@@ -171,7 +169,7 @@
               <button
                 type="button"
                 class="assistant-top-button assistant-top-button--ghost"
-                :disabled="sessionPageLoading || sendingMessage"
+                :disabled="sessionPageLoading"
                 @click="loadSessionPage(true)"
               >
                 {{ sessionPageLoading ? '刷新中...' : '刷新' }}
@@ -241,7 +239,9 @@
               <p v-if="sessionDetail.lastMessageAt || sessionDetail.updatedAt || sessionDetail.createdAt">最近活跃 {{ formatDateTime(sessionDetail.lastMessageAt || sessionDetail.updatedAt || sessionDetail.createdAt) }}</p>
             </div>
 
-            <div ref="messageStreamRef" class="assistant-thread" role="log" aria-label="对话消息" aria-live="polite" :aria-busy="sendingMessage">
+            <div class="visually-hidden" aria-live="polite">{{ liveAnnouncement }}</div>
+            <div class="assistant-thread-wrap">
+            <div ref="messageStreamRef" class="assistant-thread" role="log" aria-label="对话消息" :aria-busy="sendingMessage" @scroll.passive="handleThreadScroll">
               <div v-if="!sessionDetail.messages.length" class="assistant-thread__empty">
                 <strong>这段对话已经准备好了</strong>
                 <p>直接开始提问，或者点一条建议让我先帮你起个头。</p>
@@ -299,8 +299,11 @@
                     'assistant-turn__content--streaming': isStreamingAssistantMessage(message.id)
                   }"
                 >
-                  {{ message.contentText || '' }}<span v-if="isStreamingAssistantMessage(message.id)" class="assistant-typing-cursor">|</span>
+                  <LearningNoteContent v-if="!isUserMessage(message.role)" :text="message.contentText" />
+                  <template v-else>{{ message.contentText || '' }}</template>
                 </div>
+                <p v-if="message.localStatus === 'stopped'" class="assistant-turn__note">已停止生成</p>
+                <p v-else-if="message.localStatus === 'timeout'" class="assistant-turn__note assistant-turn__note--warn">助手长时间没有响应，已停止等待。可以重新发送试试。</p>
 
                 <details v-if="hasTraceContent(index)" class="assistant-turn__trace">
                   <summary>查看引用与轨迹</summary>
@@ -345,6 +348,17 @@
               </div>
 
             </div>
+            <button
+              v-if="!stickToBottom"
+              type="button"
+              class="assistant-thread__jump"
+              :class="{ 'assistant-thread__jump--unread': hasUnreadBelow }"
+              @click="jumpToLatest"
+            >
+              <AppIcon name="chevron-down" :size="16" />
+              <span>{{ hasUnreadBelow ? '有新内容' : '回到最新' }}</span>
+            </button>
+            </div>
 
             <div class="assistant-composer assistant-composer--dock">
               <div class="assistant-composer__topline">
@@ -370,12 +384,22 @@
                   <span>{{ draftCount }}/4000</span>
                 </div>
                 <button
+                  v-if="sendingMessage"
+                  type="button"
+                  class="assistant-send-button assistant-send-button--stop"
+                  @click="stopStreaming"
+                >
+                  <span class="assistant-send-button__stop-icon" aria-hidden="true" />
+                  停止生成
+                </button>
+                <button
+                  v-else
                   type="button"
                   class="assistant-send-button"
-                  :disabled="sendingMessage || !draftMessage.trim()"
+                  :disabled="!draftMessage.trim()"
                   @click="sendMessage"
                 >
-                  {{ sendingMessage ? '发送中...' : '发送' }}
+                  发送
                 </button>
               </div>
             </div>
@@ -412,7 +436,9 @@ import {
 import { getAiConfigApi } from '@/api/modules/ai'
 import { useUserStore } from '@/stores/user'
 import AppIcon from '@/components/AppIcon.vue'
+import LearningNoteContent from '@/components/LearningNoteContent.vue'
 import { ASSISTANT_NAME } from '@/config/brand'
+import { getErrorMessage } from '@/utils/errorMessage'
 
 interface CurrentPageBinding {
   bindable: boolean
@@ -494,6 +520,13 @@ const greetingName = computed(
 )
 const mobileSidebarOpen = ref(false)
 let streamAbortController: AbortController | null = null
+/** 用户是否停留在消息列表底部；只有在底部时新内容才会自动滚动。 */
+const stickToBottom = ref(true)
+/** 用户上翻期间是否有新内容到达。 */
+const hasUnreadBelow = ref(false)
+/** 供读屏软件播报的整轮结果（避免逐字播报流式内容）。 */
+const liveAnnouncement = ref('')
+const THREAD_BOTTOM_THRESHOLD = 48
 
 const resolveRouteLabel = (path: string) => {
   switch (path) {
@@ -665,6 +698,16 @@ watch(
     }
     await nextTick()
     scrollToBottom()
+  }
+)
+
+watch(
+  () => sessionDetail.value?.id,
+  async () => {
+    stickToBottom.value = true
+    hasUnreadBelow.value = false
+    await nextTick()
+    scrollToBottom(true)
   }
 )
 
@@ -902,12 +945,67 @@ const formatJson = (value?: string) => {
   }
 }
 
-const scrollToBottom = () => {
+const isThreadNearBottom = (element: HTMLElement) =>
+  element.scrollHeight - element.scrollTop - element.clientHeight <= THREAD_BOTTOM_THRESHOLD
+
+const handleThreadScroll = () => {
   const element = messageStreamRef.value
   if (!element) {
     return
   }
-  element.scrollTop = element.scrollHeight
+  const nearBottom = isThreadNearBottom(element)
+  stickToBottom.value = nearBottom
+  if (nearBottom) {
+    hasUnreadBelow.value = false
+  }
+}
+
+let scrollFrame: number | undefined
+
+/**
+ * 滚动到底部。默认只在用户本来就停留在底部时才滚动，避免用户上翻阅读时被强行拉回；
+ * `force` 用于用户主动发送消息、切换会话等场景。
+ */
+const scrollToBottom = (force = false) => {
+  const element = messageStreamRef.value
+  if (!element) {
+    return
+  }
+  if (!force && !stickToBottom.value) {
+    hasUnreadBelow.value = true
+    return
+  }
+  if (scrollFrame !== undefined) {
+    return
+  }
+  scrollFrame = window.requestAnimationFrame(() => {
+    scrollFrame = undefined
+    const target = messageStreamRef.value
+    if (!target) {
+      return
+    }
+    target.scrollTop = target.scrollHeight
+    stickToBottom.value = true
+    hasUnreadBelow.value = false
+  })
+}
+
+const jumpToLatest = () => {
+  stickToBottom.value = true
+  scrollToBottom(true)
+}
+
+const stopStreaming = () => {
+  streamAbortController?.abort()
+}
+
+/**
+ * 在切换会话、新建会话等操作前中止正在进行的回复，避免旧回复写入新界面。
+ */
+const abortStreamingIfNeeded = () => {
+  if (sendingMessage.value) {
+    stopStreaming()
+  }
 }
 
 const fillPrompt = (prompt: string) => {
@@ -1097,10 +1195,6 @@ const renderAssistantError = (message: string) => {
 }
 
 const changeSessionPage = (page: number) => {
-  if (sendingMessage.value) {
-    ElMessage.warning('当前回复还在生成中，先等这一轮完成吧')
-    return
-  }
   if (page === sessionPage.current || page < 1 || page > totalSessionPages.value) {
     return
   }
@@ -1145,7 +1239,7 @@ const loadSessionPage = async (selectFallback: boolean) => {
       await selectSession(sessionPage.records[0].id)
     }
   } catch (error: any) {
-    ElMessage.error(error.message || '加载助手会话失败')
+    ElMessage.error(getErrorMessage(error, '加载助手会话失败'))
   } finally {
     sessionPageLoading.value = false
   }
@@ -1160,30 +1254,26 @@ const loadSessionDetail = async (sessionId: number) => {
     sessionDetail.value = detail
     ingestToolCalls(detail.recentToolCalls)
   } catch (error: any) {
-    ElMessage.error(error.message || '加载助手会话详情失败')
+    ElMessage.error(getErrorMessage(error, '加载助手会话详情失败'))
   } finally {
     sessionDetailLoading.value = false
   }
 }
 
 const selectSession = async (sessionId: number) => {
-  if (sendingMessage.value) {
-    ElMessage.warning('当前回复还在生成中，先等这一轮完成吧')
-    return
-  }
   if (sessionDetail.value?.id === sessionId) {
     activeSessionId.value = sessionId
     closeMobileSidebar()
     return
   }
+  abortStreamingIfNeeded()
   await loadSessionDetail(sessionId)
   closeMobileSidebar()
 }
 
 const createSession = async (bindCurrentPage: boolean, silent = false, allowWhileSending = false) => {
-  if (sendingMessage.value && !allowWhileSending) {
-    ElMessage.warning('当前回复还在生成中，暂时不能新建会话')
-    return null
+  if (!allowWhileSending) {
+    abortStreamingIfNeeded()
   }
   const targetLoading = bindCurrentPage ? creatingContext : creatingBlank
   targetLoading.value = true
@@ -1202,7 +1292,7 @@ const createSession = async (bindCurrentPage: boolean, silent = false, allowWhil
     }
     return detail
   } catch (error: any) {
-    ElMessage.error(error.message || '创建助手会话失败')
+    ElMessage.error(getErrorMessage(error, '创建助手会话失败'))
     return null
   } finally {
     targetLoading.value = false
@@ -1238,6 +1328,29 @@ const applyReply = (reply: AssistantChatReply) => {
   void nextTick(scrollToBottom)
 }
 
+/**
+ * 停止或超时后收尾：保留已经生成的部分并标注状态；一个字都没生成时直接移除空气泡。
+ */
+const finishInterruptedTurn = (status: 'stopped' | 'timeout') => {
+  const currentPendingTurn = pendingTurn.value
+  pendingTurn.value = null
+  liveAnnouncement.value = status === 'timeout' ? '助手长时间没有响应，已停止等待' : '已停止生成'
+  if (!currentPendingTurn) {
+    return
+  }
+  const assistantMessage = sessionDetail.value?.messages.find(
+    (message) => message.id === currentPendingTurn.assistantMessageId
+  )
+  if (!assistantMessage?.contentText) {
+    removeMessagesById([currentPendingTurn.assistantMessageId])
+    return
+  }
+  updateMessage(currentPendingTurn.assistantMessageId, (message) => ({
+    ...message,
+    localStatus: status
+  }))
+}
+
 const sendMessage = async () => {
   const contentText = draftMessage.value.trim()
   if (!contentText) {
@@ -1251,6 +1364,7 @@ const sendMessage = async () => {
   const previousDraft = draftMessage.value
   let shouldRestoreDraft = true
   let detail = sessionDetail.value
+  let controller: AbortController | null = null
 
   try {
     if (!detail?.id) {
@@ -1282,9 +1396,12 @@ const sendMessage = async () => {
     }
 
     draftMessage.value = ''
-    void nextTick(scrollToBottom)
+    liveAnnouncement.value = ''
+    stickToBottom.value = true
+    void nextTick(() => scrollToBottom(true))
     streamAbortController?.abort()
-    streamAbortController = new AbortController()
+    controller = new AbortController()
+    streamAbortController = controller
 
     let streamErrorMessage = ''
     let finalReply: AssistantChatReply | null = null
@@ -1292,7 +1409,7 @@ const sendMessage = async () => {
     await streamAssistantMessageApi({
       sessionId: detail.id,
       data: { contentText },
-      signal: streamAbortController.signal,
+      signal: controller.signal,
       onEvent: (event) => {
         switch (event.type) {
           case 'session':
@@ -1333,10 +1450,19 @@ const sendMessage = async () => {
     )
     pendingTurn.value = null
     applyReply(finalReply)
+    liveAnnouncement.value = '学习助手已回复完成'
     sessionPage.current = 1
     await loadSessionPage(false)
+    if (sessionDetail.value?.messages.some((message) => message.id < 0)) {
+      // 之前被停止的回复只存在于本地，这里用服务端记录把它们换成正式消息。
+      await loadSessionDetail(sessionDetail.value.id)
+    }
   } catch (error: any) {
-    if (error?.name === 'AbortError') {
+    if (error?.name === 'AbortError' || error?.name === 'TimeoutError') {
+      finishInterruptedTurn(error?.name === 'TimeoutError' ? 'timeout' : 'stopped')
+      if (error?.name === 'TimeoutError') {
+        ElMessage.warning('助手长时间没有响应，已停止等待')
+      }
       return
     }
 
@@ -1361,20 +1487,17 @@ const sendMessage = async () => {
       }
     }
 
-    ElMessage.error(error.message || '发送消息失败')
+    ElMessage.error(getErrorMessage(error, '发送消息失败'))
   } finally {
     pendingTurn.value = null
-    streamAbortController = null
+    if (streamAbortController === controller) {
+      streamAbortController = null
+    }
     sendingMessage.value = false
   }
 }
 
 const renameSession = async (item: AssistantSessionPageItem) => {
-  if (sendingMessage.value) {
-    ElMessage.warning('当前回复还在生成中，暂时不能修改会话名称')
-    return
-  }
-
   let nextTitle = ''
   try {
     const result = await ElMessageBox.prompt('请输入新的对话名称', '重命名对话', {
@@ -1413,18 +1536,13 @@ const renameSession = async (item: AssistantSessionPageItem) => {
     await loadSessionPage(false)
     ElMessage.success('会话名称已更新')
   } catch (error: any) {
-    ElMessage.error(error.message || '修改会话名称失败')
+    ElMessage.error(getErrorMessage(error, '修改会话名称失败'))
   } finally {
     renamingSessionId.value = null
   }
 }
 
 const updateSessionPinned = async (item: AssistantSessionPageItem, pinned: boolean) => {
-  if (sendingMessage.value) {
-    ElMessage.warning('当前回复还在生成中，暂时不能修改置顶状态')
-    return
-  }
-
   pinningSessionId.value = item.id
   try {
     const res = await updateAssistantSessionPinnedApi(item.id, pinned)
@@ -1432,7 +1550,7 @@ const updateSessionPinned = async (item: AssistantSessionPageItem, pinned: boole
     await loadSessionPage(false)
     ElMessage.success(pinned ? '已置顶聊天' : '已取消置顶')
   } catch (error: any) {
-    ElMessage.error(error.message || '修改置顶状态失败')
+    ElMessage.error(getErrorMessage(error, '修改置顶状态失败'))
   } finally {
     pinningSessionId.value = null
   }
@@ -1458,10 +1576,6 @@ const handleSessionCommandFromMenu = (item: AssistantSessionPageItem, command: u
 }
 
 const removeSession = async (sessionId: number) => {
-  if (sendingMessage.value) {
-    ElMessage.warning('当前回复还在生成中，暂时不能删除会话')
-    return
-  }
   try {
     await ElMessageBox.confirm('删除后该会话中的聊天记录、工具调用和上下文都将一起移除，确定继续吗？', '删除确认', {
       type: 'warning',
@@ -1472,6 +1586,9 @@ const removeSession = async (sessionId: number) => {
     return
   }
 
+  if (pendingTurn.value?.sessionId === sessionId) {
+    abortStreamingIfNeeded()
+  }
   deletingSessionId.value = sessionId
   try {
     await deleteAssistantSessionApi(sessionId)
@@ -1485,7 +1602,7 @@ const removeSession = async (sessionId: number) => {
     await loadSessionPage(true)
     ElMessage.success('会话已删除')
   } catch (error: any) {
-    ElMessage.error(error.message || '删除会话失败')
+    ElMessage.error(getErrorMessage(error, '删除会话失败'))
   } finally {
     deletingSessionId.value = null
   }
@@ -1501,6 +1618,9 @@ onMounted(() => {
 onBeforeUnmount(() => {
   restoreBodyScroll()
   compactLayoutQuery?.removeEventListener('change', syncCompactLayout)
+  if (scrollFrame !== undefined) {
+    window.cancelAnimationFrame(scrollFrame)
+  }
   streamAbortController?.abort()
   pendingTurn.value = null
 })
@@ -2181,6 +2301,93 @@ onBeforeUnmount(() => {
 
 .assistant-turn__content--assistant {
   color: var(--text);
+  white-space: normal;
+}
+
+.assistant-turn__content--assistant :deep(.learning-note) {
+  font-size: inherit;
+  line-height: inherit;
+}
+
+/* 流式生成时把闪烁光标贴在最后一个块的末尾，而不是另起一行。 */
+.assistant-turn__content--streaming :deep(.learning-note > :last-child)::after {
+  content: "▍";
+  display: inline-block;
+  margin-left: 2px;
+  color: var(--brand);
+  animation: assistant-cursor 0.9s steps(1) infinite;
+}
+
+.assistant-turn__content--assistant :deep(.learning-note__paragraph) {
+  margin-bottom: 12px;
+}
+
+.assistant-turn__content--assistant :deep(.learning-note__heading) {
+  margin-top: 18px;
+}
+
+.assistant-turn__note {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.assistant-turn__note--warn {
+  color: var(--accent);
+}
+
+.assistant-thread-wrap {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.assistant-thread__jump {
+  position: absolute;
+  left: 50%;
+  bottom: 22px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 6px 14px 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12px;
+  box-shadow: var(--shadow-md);
+  transform: translateX(-50%);
+  cursor: pointer;
+  transition: color .15s ease, border-color .15s ease, background-color .15s ease;
+}
+
+.assistant-thread__jump:hover {
+  color: var(--brand);
+  border-color: var(--brand);
+}
+
+.assistant-thread__jump--unread {
+  color: var(--brand);
+  border-color: var(--brand);
+  background: var(--brand-light);
+}
+
+.assistant-send-button--stop {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.assistant-send-button__stop-icon {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: currentColor;
 }
 
 .assistant-turn__content--streaming {
@@ -2717,6 +2924,8 @@ onBeforeUnmount(() => {
 .assistant-composer--dock { width: min(820px, 100%); border-radius: 14px; }
 .assistant-send-button { min-height: 44px; border-radius: 9px; background: var(--brand); color: #fff; }
 .assistant-send-button:not(:disabled):hover { background: var(--brand-hover); }
+.assistant-send-button--stop { border: 1px solid var(--line); background: var(--panel); color: var(--text); }
+.assistant-send-button--stop:not(:disabled):hover { border-color: var(--red); background: var(--red-soft); color: var(--red); }
 .assistant-suggestion-row { gap: 10px; }
 .assistant-suggestion-chip { display: inline-flex; align-items: center; min-height: 44px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--text-secondary); font-size: 13px; font-weight: 400; line-height: 1.6; text-align: left; box-shadow: none; transition: border-color .18s ease, color .18s ease; }
 .assistant-suggestion-chip:hover { border-color: var(--brand); color: var(--brand); }

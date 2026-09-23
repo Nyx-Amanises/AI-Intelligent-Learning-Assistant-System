@@ -59,6 +59,12 @@
             <el-pagination v-model:current-page="page.current" v-model:page-size="page.size" :page-sizes="[10, 20, 50]" layout="sizes, prev, pager, next" :total="total" @current-change="loadHistory" @size-change="loadHistory" />
           </div>
         </template>
+        <div v-else-if="historyError" class="learning-empty learning-empty--error" role="alert">
+          <div class="learning-empty__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M12 9v4M12 16.5h.01M10.3 4.1 2.8 17a2 2 0 0 0 1.7 3h15a2 2 0 0 0 1.7-3L13.7 4.1a2 2 0 0 0-3.4 0Z" stroke-linecap="round" stroke-linejoin="round" /></svg></div>
+          <h3>练习记录暂时没能加载</h3>
+          <p>{{ historyError }}</p>
+          <el-button type="primary" @click="loadHistory">重新加载</el-button>
+        </div>
         <div v-else class="learning-empty">
           <div class="learning-empty__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2" /><path d="M8 8h8M8 12h8M8 16h4" stroke-linecap="round" /></svg></div>
           <h3>你的练习记录，从这里开始</h3><p>选择一套题集完成练习，成绩与答案都会保存在这里。</p>
@@ -161,6 +167,12 @@
             </aside>
           </div>
         </template>
+        <div v-else-if="detailError && detailSessionId" class="learning-empty learning-empty--error" role="alert">
+          <div class="learning-empty__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M12 9v4M12 16.5h.01M10.3 4.1 2.8 17a2 2 0 0 0 1.7 3h15a2 2 0 0 0 1.7-3L13.7 4.1a2 2 0 0 0-3.4 0Z" stroke-linecap="round" stroke-linejoin="round" /></svg></div>
+          <h3>练习暂时没能打开</h3>
+          <p>{{ detailError }}</p>
+          <div class="practice-empty-actions"><el-button @click="activeTab = 'history'">查看历史记录</el-button><el-button type="primary" @click="loadPracticeDetail(detailSessionId)">重新加载</el-button></div>
+        </div>
         <div v-else class="learning-empty">
           <div class="learning-empty__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M5 4h14v17H5zM9 2v4M15 2v4M9 11h6M9 15h4" stroke-linecap="round" stroke-linejoin="round" /></svg></div>
           <h3>给自己留一段专注学习的时间</h3><p>{{ total ? '在历史记录中继续未完成的练习，或选择一套新题集。' : '从一套小练习开始，检验理解，再有针对性地复习。' }}</p>
@@ -190,6 +202,7 @@ import {
   submitPracticeApi
 } from '@/api/modules/practice'
 import { isAiTaskSuccess, isAiTaskTerminal, waitForAiTask } from '@/utils/aiTask'
+import { getErrorMessage } from '@/utils/errorMessage'
 
 const route = useRoute()
 const router = useRouter()
@@ -198,7 +211,10 @@ const total = ref(0)
 const practiceDetail = ref<any>(null)
 const answerForm = ref<Record<number, string>>({})
 const historyLoading = ref(false)
+const historyError = ref('')
 const detailLoading = ref(false)
+const detailError = ref('')
+const detailSessionId = ref<number | null>(null)
 const submitting = ref(false)
 const restarting = ref(false)
 const renaming = ref(false)
@@ -539,7 +555,7 @@ const ensurePracticeReviewTask = async (sessionId: number) => {
     }
   } catch (error: any) {
     if (!reviewTaskWaitAborted) {
-      ElMessage.error(error.message || '简答题评分任务失败')
+      ElMessage.error(getErrorMessage(error, '简答题评分任务失败'))
     }
   } finally {
     reviewTaskWaiting.value = false
@@ -554,12 +570,13 @@ const scrollToQuestion = (questionId: number) => {
 
 const loadHistory = async () => {
   historyLoading.value = true
+  historyError.value = ''
   try {
     const res = await getPracticePageApi({ current: page.current, size: page.size })
     historyRecords.value = res.data.data.records || []
     total.value = res.data.data.total || 0
   } catch (error: any) {
-    ElMessage.error(error.message || '加载练习记录失败')
+    historyError.value = getErrorMessage(error, '练习记录暂时无法加载，请稍后重试。')
   } finally {
     historyLoading.value = false
   }
@@ -568,6 +585,8 @@ const loadHistory = async () => {
 const loadPracticeDetail = async (sessionId: number, silent = false) => {
   if (!isViewActive) return
   detailLoading.value = true
+  detailError.value = ''
+  detailSessionId.value = sessionId
   try {
     const res = await getPracticeDetailApi(sessionId)
     if (!isViewActive) return
@@ -593,7 +612,7 @@ const loadPracticeDetail = async (sessionId: number, silent = false) => {
   } catch (error: any) {
     if (!isViewActive) return
     practiceDetail.value = null
-    ElMessage.error(error.message || '加载练习详情失败')
+    detailError.value = getErrorMessage(error, '这次练习暂时无法打开，请稍后重试。')
   } finally {
     detailLoading.value = false
   }
@@ -633,7 +652,7 @@ const renamePracticeSession = async () => {
     }
     await loadHistory()
   } catch (error: any) {
-    ElMessage.error(error.message || '修改练习名称失败')
+    ElMessage.error(getErrorMessage(error, '修改练习名称失败'))
   } finally {
     renaming.value = false
   }
@@ -655,7 +674,7 @@ const restartPractice = async (questionSetId?: number) => {
     await loadPracticeDetail(res.data.data.sessionId)
     activeTab.value = 'current'
   } catch (error: any) {
-    ElMessage.error(error.message || '重新开始练习失败')
+    ElMessage.error(getErrorMessage(error, '重新开始练习失败'))
   } finally {
     restarting.value = false
   }
@@ -686,7 +705,7 @@ const removePractice = async (sessionId: number, clearCurrent = false) => {
     }
     await loadHistory()
   } catch (error: any) {
-    ElMessage.error(error.message || '删除练习失败')
+    ElMessage.error(getErrorMessage(error, '删除练习失败'))
   } finally {
     actionLoadingId.value = null
   }
@@ -731,7 +750,7 @@ const submitPractice = async () => {
     ElMessage.success('练习提交成功')
     await loadHistory()
   } catch (error: any) {
-    ElMessage.error(error.message || '提交练习失败')
+    ElMessage.error(getErrorMessage(error, '提交练习失败'))
   } finally {
     submitting.value = false
   }
@@ -857,6 +876,7 @@ onUnmounted(() => {
 .learning-empty__icon svg { width: 29px; height: 29px; }
 .learning-empty h3 { margin: 0 0 10px; color: var(--text); font-size: 18px; font-weight: 600; }
 .learning-empty p { max-width: 430px; margin: 0 0 24px; color: var(--muted); font-size: 14px; line-height: 1.8; }
+.learning-empty--error .learning-empty__icon { color: var(--red); background: var(--red-soft); border-color: transparent; }
 .practice-empty-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
 .practice-empty-actions :deep(.el-button + .el-button) { margin: 0; }
 @media (max-width: 1150px) {

@@ -347,6 +347,7 @@ import type { UploadRequestOptions } from 'element-plus'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import AppIcon from '@/components/AppIcon.vue'
 import { useAutoListQuery } from '@/composables/useAutoListQuery'
+import { getErrorMessage } from '@/utils/errorMessage'
 import {
   previewMaterialRetrievalApi,
   submitEmbeddingTaskApi,
@@ -514,12 +515,6 @@ const getProcessingText = (row: MaterialPageItem) => {
     return '向量索引中…'
   }
   return '处理中…'
-}
-
-const getErrorMessage = (error: unknown, fallback: string) => {
-  const message = error instanceof Error ? error.message : ''
-  if (/network|timeout|failed to fetch/i.test(message)) return '网络连接暂时不可用，请检查连接后重试。'
-  return /[\u3400-\u9fff]/.test(message) ? message : fallback
 }
 
 const formatRetrievalScore = (value?: number) => {

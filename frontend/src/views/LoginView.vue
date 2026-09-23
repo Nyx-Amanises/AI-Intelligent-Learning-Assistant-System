@@ -178,6 +178,7 @@ import { APP_NAME } from '@/config/brand'
 import AppIcon from '@/components/AppIcon.vue'
 import BrandLogo from '@/components/BrandLogo.vue'
 import botanicalPhoto from '@/assets/auth/botanical-study.webp'
+import { getErrorMessage } from '@/utils/errorMessage'
 
 type AuthField = 'username' | 'nickname' | 'password' | 'confirmPassword'
 
@@ -268,7 +269,7 @@ const submit = async () => {
       : '/dashboard'
     await router.replace(redirect)
   } catch (error) {
-    submitError.value = error instanceof Error ? error.message : '操作失败，请稍后重试。'
+    submitError.value = getErrorMessage(error, '操作失败，请稍后重试。')
   } finally {
     submitting.value = false
     if (registrationNotice.value) {

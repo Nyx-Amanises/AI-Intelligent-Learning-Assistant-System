@@ -32,6 +32,12 @@
 
       <div class="workspace-body">
         <div v-if="loading" class="wrong-loading" aria-live="polite"><el-skeleton :rows="5" animated /><span>正在加载错题…</span></div>
+        <div v-else-if="loadError" class="learning-empty learning-empty--error" role="alert">
+          <div class="learning-empty__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M12 9v4M12 16.5h.01M10.3 4.1 2.8 17a2 2 0 0 0 1.7 3h15a2 2 0 0 0 1.7-3L13.7 4.1a2 2 0 0 0-3.4 0Z" stroke-linecap="round" stroke-linejoin="round" /></svg></div>
+          <h3>错题本暂时没能加载</h3>
+          <p>{{ loadError }}</p>
+          <el-button type="primary" @click="loadWrongQuestions">重新加载</el-button>
+        </div>
         <div v-else-if="!wrongQuestions.length" class="learning-empty">
           <div class="learning-empty__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a3 3 0 0 0-3-3H4V4ZM20 4h-4a3 3 0 0 0-3 3v14a3 3 0 0 1 3-3h4V4Z" stroke-linejoin="round" /></svg></div>
           <h3>{{ hasFilters ? '没有找到匹配的错题' : '这里暂时没有需要复习的错题' }}</h3>
@@ -102,6 +108,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { getMaterialPageApi, type MaterialPageItem } from '@/api/modules/material'
 import { useAutoListQuery } from '@/composables/useAutoListQuery'
+import { getErrorMessage } from '@/utils/errorMessage'
 import {
   getWrongQuestionDetailApi,
   getWrongQuestionPageApi,
@@ -113,6 +120,7 @@ import {
 const router = useRouter()
 const route = useRoute()
 const loading = ref(false)
+const loadError = ref('')
 const detailLoading = ref(false)
 const drawerVisible = ref(false)
 const materialsLoading = ref(false)
@@ -212,7 +220,7 @@ const loadMaterials = async () => {
     })
     materials.value = res.data.data.records || []
   } catch (error: any) {
-    ElMessage.error(error.message || '加载资料列表失败')
+    ElMessage.error(getErrorMessage(error, '加载资料列表失败'))
   } finally {
     materialsLoading.value = false
   }
@@ -220,6 +228,7 @@ const loadMaterials = async () => {
 
 const loadWrongQuestions = async () => {
   loading.value = true
+  loadError.value = ''
   try {
     const res = await getWrongQuestionPageApi({
       current: page.current,
@@ -232,7 +241,7 @@ const loadWrongQuestions = async () => {
     wrongQuestions.value = data.records || []
     total.value = data.total || 0
   } catch (error: any) {
-    ElMessage.error(error.message || '加载错题本失败')
+    loadError.value = getErrorMessage(error, '错题本暂时无法加载，请稍后重试。')
   } finally {
     loading.value = false
   }
@@ -255,7 +264,7 @@ const openDetail = async (item: WrongQuestionItem) => {
     detail.value = res.data.data as WrongQuestionItem
   } catch (error: any) {
     detail.value = null
-    ElMessage.error(error.message || '加载错题详情失败')
+    ElMessage.error(getErrorMessage(error, '加载错题详情失败'))
   } finally {
     detailLoading.value = false
   }
@@ -285,7 +294,7 @@ const removeWrongQuestion = async (item: WrongQuestionItem, closeDrawer = false)
     }
     await loadWrongQuestions()
   } catch (error: any) {
-    ElMessage.error(error.message || '移出错题本失败')
+    ElMessage.error(getErrorMessage(error, '移出错题本失败'))
   } finally {
     removingAnswerId.value = null
   }
@@ -334,6 +343,7 @@ void loadWrongQuestions()
 .learning-empty__icon svg { width: 29px; height: 29px; }
 .learning-empty h3 { margin: 0 0 10px; color: var(--text); font-size: 18px; font-weight: 600; }
 .learning-empty p { max-width: 440px; margin: 0 0 24px; color: var(--muted); font-size: 14px; line-height: 1.8; }
+.learning-empty--error .learning-empty__icon { color: var(--red); background: var(--red-soft); border-color: transparent; }
 .wrong-detail-context { display: grid; gap: 7px; margin-bottom: 22px; color: var(--muted); font-size: 12px; line-height: 1.8; }
 .wrong-detail-question__meta { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .wrong-detail-question h2 { margin: 18px 0; font-size: 18px; font-weight: 600; color: var(--text); line-height: 1.85; white-space: pre-wrap; overflow-wrap: anywhere; }

@@ -245,6 +245,7 @@ import {
   type AiTaskPagePayload
 } from '@/api/modules/ai'
 import { useAutoListQuery } from '@/composables/useAutoListQuery'
+import { getErrorMessage } from '@/utils/errorMessage'
 
 const router = useRouter()
 const loading = ref(false)
@@ -446,7 +447,7 @@ const loadTasks = async (silent = false) => {
     tasks.value = data.records || []
     total.value = data.total || 0
   } catch (error: any) {
-    ElMessage.error(error.message || '加载任务列表失败')
+    ElMessage.error(getErrorMessage(error, '加载任务列表失败'))
   } finally {
     if (!silent) {
       loading.value = false
@@ -472,7 +473,7 @@ const openTaskDetail = async (taskId: number, silent = false) => {
     taskDetail.value = res.data.data as AiTaskDetail
   } catch (error: any) {
     taskDetail.value = null
-    ElMessage.error(error.message || '加载任务详情失败')
+    ElMessage.error(getErrorMessage(error, '加载任务详情失败'))
   } finally {
     if (!silent) {
       detailLoading.value = false
@@ -492,7 +493,7 @@ const retryTask = async (taskId: number, reloadDetail = false) => {
       drawerVisible.value = true
     }
   } catch (error: any) {
-    ElMessage.error(error.message || '任务重试失败')
+    ElMessage.error(getErrorMessage(error, '任务重试失败'))
   } finally {
     retryingTaskId.value = null
   }
@@ -510,7 +511,7 @@ const dispatchTask = async (taskId: number, reloadDetail = false) => {
       drawerVisible.value = true
     }
   } catch (error: any) {
-    ElMessage.error(error.message || '任务重新派发失败')
+    ElMessage.error(getErrorMessage(error, '任务重新派发失败'))
   } finally {
     dispatchingTaskId.value = null
   }
@@ -549,7 +550,7 @@ const removeTask = async (taskId: number, closeDetail = false, status?: string, 
     }
     await loadTasks()
   } catch (error: any) {
-    ElMessage.error(error.message || '删除任务记录失败')
+    ElMessage.error(getErrorMessage(error, '删除任务记录失败'))
   } finally {
     deletingTaskId.value = null
   }
