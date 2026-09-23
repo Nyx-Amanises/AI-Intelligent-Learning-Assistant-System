@@ -1,6 +1,8 @@
 package com.aiassistant.learning.controller;
 
 import com.aiassistant.learning.common.result.ApiResponse;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import com.aiassistant.learning.context.UserContext;
 import com.aiassistant.learning.dto.assistant.AssistantMessageSendRequest;
 import com.aiassistant.learning.dto.assistant.AssistantSessionCreateRequest;
@@ -35,6 +37,9 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @RequestMapping("/api/assistant/sessions")
 public class AssistantController {
 
+    /** 单页最大条数，避免通过 size 参数一次拉取全表。 */
+    private static final long MAX_PAGE_SIZE = 100;
+
     /** 智能助手业务服务。 */
     private final AssistantService assistantService;
 
@@ -56,8 +61,9 @@ public class AssistantController {
      */
     @GetMapping("/page")
     public ApiResponse<PageVO<AssistantSessionPageVO>> pageSessions(
-            @RequestParam(defaultValue = "1") Long current,
-            @RequestParam(defaultValue = "10") Long size
+            @RequestParam(defaultValue = "1") @Min(value = 1, message = "页码最小为1") Long current,
+            @RequestParam(defaultValue = "10") @Min(value = 1, message = "每页条数最小为1")
+            @Max(value = MAX_PAGE_SIZE, message = "每页条数最大为" + MAX_PAGE_SIZE) Long size
     ) {
         Long userId = UserContext.getCurrentUserId();
         return ApiResponse.success(assistantService.pageSessions(userId, current, size));

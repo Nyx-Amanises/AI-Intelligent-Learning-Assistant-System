@@ -1,6 +1,8 @@
 package com.aiassistant.learning.controller;
 
 import com.aiassistant.learning.common.result.ApiResponse;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import com.aiassistant.learning.context.UserContext;
 import com.aiassistant.learning.dto.practice.PracticeSessionRenameRequest;
 import com.aiassistant.learning.dto.practice.PracticeStartRequest;
@@ -11,6 +13,7 @@ import com.aiassistant.learning.vo.practice.PracticeDetailVO;
 import com.aiassistant.learning.vo.practice.PracticeReviewStatusVO;
 import com.aiassistant.learning.vo.practice.PracticeSessionPageVO;
 import jakarta.validation.Valid;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -27,9 +30,13 @@ import org.springframework.web.bind.annotation.RestController;
  * <p>这个 Controller 覆盖一次练习的完整流程：
  * 开始练习、提交答案、查看练习记录、重命名、等待 AI 判分和删除练习。</p>
  */
+@Validated
 @RestController
 @RequestMapping("/api/practice")
 public class PracticeController {
+
+    /** 单页最大条数，避免通过 size 参数一次拉取全表。 */
+    private static final long MAX_PAGE_SIZE = 100;
 
     private final PracticeService practiceService;
 
@@ -75,8 +82,9 @@ public class PracticeController {
      */
     @GetMapping("/page")
     public ApiResponse<PageVO<PracticeSessionPageVO>> page(
-            @RequestParam(defaultValue = "1") Long current,
-            @RequestParam(defaultValue = "10") Long size
+            @RequestParam(defaultValue = "1") @Min(value = 1, message = "页码最小为1") Long current,
+            @RequestParam(defaultValue = "10") @Min(value = 1, message = "每页条数最小为1")
+            @Max(value = MAX_PAGE_SIZE, message = "每页条数最大为" + MAX_PAGE_SIZE) Long size
     ) {
         Long userId = UserContext.getCurrentUserId();
         return ApiResponse.success(practiceService.pagePracticeSessions(userId, current, size));

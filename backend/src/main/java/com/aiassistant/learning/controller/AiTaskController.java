@@ -1,6 +1,8 @@
 package com.aiassistant.learning.controller;
 
 import com.aiassistant.learning.common.result.ApiResponse;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import com.aiassistant.learning.context.UserContext;
 import com.aiassistant.learning.dto.ai.AiTaskCreateRequest;
 import com.aiassistant.learning.dto.ai.EmbeddingTaskRequest;
@@ -11,6 +13,7 @@ import com.aiassistant.learning.vo.ai.AiTaskDetailVO;
 import com.aiassistant.learning.vo.ai.AiTaskPageVO;
 import com.aiassistant.learning.vo.page.PageVO;
 import jakarta.validation.Valid;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -26,9 +29,13 @@ import org.springframework.web.bind.annotation.RestController;
  * <p>适合耗时较长的 AI 操作，例如生成摘要、生成题集、简答题判分和资料向量化。
  * 这些操作先创建任务记录，再由任务处理器执行，前端可以查询任务进度。</p>
  */
+@Validated
 @RestController
 @RequestMapping("/api/ai/tasks")
 public class AiTaskController {
+
+    /** 单页最大条数，避免通过 size 参数一次拉取全表。 */
+    private static final long MAX_PAGE_SIZE = 100;
 
     private final AiTaskService aiTaskService;
 
@@ -124,8 +131,9 @@ public class AiTaskController {
      */
     @GetMapping("/page")
     public ApiResponse<PageVO<AiTaskPageVO>> page(
-            @RequestParam(defaultValue = "1") Long current,
-            @RequestParam(defaultValue = "10") Long size,
+            @RequestParam(defaultValue = "1") @Min(value = 1, message = "页码最小为1") Long current,
+            @RequestParam(defaultValue = "10") @Min(value = 1, message = "每页条数最小为1")
+            @Max(value = MAX_PAGE_SIZE, message = "每页条数最大为" + MAX_PAGE_SIZE) Long size,
             @RequestParam(required = false) String taskType,
             @RequestParam(required = false) String status
     ) {

@@ -1,11 +1,14 @@
 package com.aiassistant.learning.controller;
 
 import com.aiassistant.learning.common.result.ApiResponse;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import com.aiassistant.learning.context.UserContext;
 import com.aiassistant.learning.service.QuestionSetService;
 import com.aiassistant.learning.vo.page.PageVO;
 import com.aiassistant.learning.vo.question.QuestionSetDetailVO;
 import com.aiassistant.learning.vo.question.QuestionSetPageVO;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -19,9 +22,13 @@ import org.springframework.web.bind.annotation.RestController;
  * <p>题集通常由 AI 根据学习资料生成，里面包含多道题目。
  * 这里负责题集列表、详情和删除操作。</p>
  */
+@Validated
 @RestController
 @RequestMapping("/api/question-set")
 public class QuestionSetController {
+
+    /** 单页最大条数，避免通过 size 参数一次拉取全表。 */
+    private static final long MAX_PAGE_SIZE = 100;
 
     private final QuestionSetService questionSetService;
 
@@ -46,8 +53,9 @@ public class QuestionSetController {
      */
     @GetMapping("/page")
     public ApiResponse<PageVO<QuestionSetPageVO>> page(
-            @RequestParam(defaultValue = "1") Long current,
-            @RequestParam(defaultValue = "10") Long size,
+            @RequestParam(defaultValue = "1") @Min(value = 1, message = "页码最小为1") Long current,
+            @RequestParam(defaultValue = "10") @Min(value = 1, message = "每页条数最小为1")
+            @Max(value = MAX_PAGE_SIZE, message = "每页条数最大为" + MAX_PAGE_SIZE) Long size,
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) Integer difficultyLevel
