@@ -201,7 +201,7 @@ import {
   startPracticeApi,
   submitPracticeApi
 } from '@/api/modules/practice'
-import { isAiTaskSuccess, isAiTaskTerminal, waitForAiTask } from '@/utils/aiTask'
+import { isAiTaskSuccess, isAiTaskTerminal, waitForAiTaskUntilTerminal } from '@/utils/aiTask'
 import { getErrorMessage } from '@/utils/errorMessage'
 import { useLatestRequest } from '@/composables/useLatestRequest'
 
@@ -537,15 +537,17 @@ const ensurePracticeReviewTask = async (sessionId: number) => {
     currentReviewTask.value = submittedTask
     const taskId = submittedTask.id
 
-    const finishedTask = await waitForAiTask(taskId)
-    if (reviewTaskWaitAborted) {
+    // 评分慢时持续等待，直到任务结束或用户离开本页；偶发网络错误会自动重试。
+    const finishedTask = await waitForAiTaskUntilTerminal(taskId, {
+      shouldStop: () => reviewTaskWaitAborted,
+      onProgress: (task) => {
+        currentReviewTask.value = task
+      }
+    })
+    if (reviewTaskWaitAborted || !finishedTask || !isAiTaskTerminal(finishedTask.status)) {
       return
     }
     currentReviewTask.value = finishedTask
-    if (!isAiTaskTerminal(finishedTask.status)) {
-      ElMessage.info('简答题评分仍在处理中，可稍后回到本页查看结果')
-      return
-    }
     if (!isAiTaskSuccess(finishedTask.status)) {
       throw new Error(finishedTask.errorMessage || '简答题评分任务执行失败')
     }
