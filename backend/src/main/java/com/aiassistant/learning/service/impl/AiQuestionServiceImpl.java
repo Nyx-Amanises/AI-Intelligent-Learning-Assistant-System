@@ -33,6 +33,7 @@ import java.util.Locale;
 import java.util.Map;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
 /**
@@ -93,6 +94,8 @@ public class AiQuestionServiceImpl implements AiQuestionService {
     private final RetrievalService retrievalService;
     /** 解析 AI 返回 JSON 的工具。 */
     private final ObjectMapper objectMapper;
+    /** 编程式事务模板：模型调用完成后，只用一个短事务保存题集。 */
+    private final TransactionTemplate transactionTemplate;
 
     public AiQuestionServiceImpl(
             StudyMaterialService studyMaterialService,
@@ -103,8 +106,10 @@ public class AiQuestionServiceImpl implements AiQuestionService {
             AiConfigService aiConfigService,
             AiChatService aiChatService,
             RetrievalService retrievalService,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            TransactionTemplate transactionTemplate
     ) {
+        this.transactionTemplate = transactionTemplate;
         this.studyMaterialService = studyMaterialService;
         this.materialSegmentMapper = materialSegmentMapper;
         this.questionSetMapper = questionSetMapper;
@@ -153,31 +158,33 @@ public class AiQuestionServiceImpl implements AiQuestionService {
      * 保留同步 API 和未关联题集的历史任务入口。
      */
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public QuestionSetDetailVO generateQuestionSet(Long userId, Long materialId, QuestionGenerateRequest request) {
         return generateQuestionSet(userId, materialId, request, null);
     }
 
     /**
      * 根据资料内容生成题目，并原子保存到题集。
+     *
+     * <p>先在无事务状态下读取资料并调用模型（期间不占用数据库连接），
+     * 再通过 {@link TransactionTemplate} 用一个短事务原子保存题集、题目和生成记录。
+     * 这个方法本身不能加 {@code @Transactional}。</p>
      */
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public QuestionSetDetailVO generateQuestionSet(
             Long userId, Long materialId, QuestionGenerateRequest request, Long questionSetId
     ) {
         StudyMaterial material = getOwnedMaterial(userId, materialId);
-        QuestionSet questionSet = null;
+        QuestionSet existingQuestionSet = null;
         if (questionSetId != null) {
-            questionSet = questionSetMapper.selectOne(new LambdaQueryWrapper<QuestionSet>()
+            existingQuestionSet = questionSetMapper.selectOne(new LambdaQueryWrapper<QuestionSet>()
                     .eq(QuestionSet::getId, questionSetId)
                     .eq(QuestionSet::getUserId, userId)
                     .eq(QuestionSet::getMaterialId, materialId)
                     .last("limit 1"));
-            if (questionSet == null) {
+            if (existingQuestionSet == null) {
                 throw new BusinessException(404, "题集不存在");
             }
-            if (!"GENERATING".equals(questionSet.getStatus())) {
+            if (!"GENERATING".equals(existingQuestionSet.getStatus())) {
                 throw new BusinessException("当前题集不处于生成状态");
             }
         }
@@ -203,7 +210,7 @@ public class AiQuestionServiceImpl implements AiQuestionService {
         );
         String inputText = buildQuestionUserPrompt(material, contextSegments, questionPlan, difficultyLevel);
 
-        // AI 返回的题目会先转换为内部 GeneratedQuestion，再批量落库。
+        // 阶段二：调用模型。此时没有任何事务打开。
         LocalDateTime start = LocalDateTime.now();
         List<GeneratedQuestion> generatedQuestions = callAiOrMock(
                 material,
@@ -212,7 +219,34 @@ public class AiQuestionServiceImpl implements AiQuestionService {
                 difficultyLevel,
                 modelName
         );
+        int responseTimeMs = (int) Duration.between(start, LocalDateTime.now()).toMillis();
 
+        // 阶段三：短事务落库。
+        QuestionSet questionSetToSave = existingQuestionSet;
+        return transactionTemplate.execute(status -> persistQuestionSet(
+                userId, material, request, questionSetId, questionSetToSave, generatedQuestions,
+                difficultyLevel, modelName, promptText, inputText, contextSegments, responseTimeMs));
+    }
+
+    /**
+     * 在短事务中保存题集、题目和生成记录。
+     */
+    private QuestionSetDetailVO persistQuestionSet(
+            Long userId,
+            StudyMaterial material,
+            QuestionGenerateRequest request,
+            Long questionSetId,
+            QuestionSet existingQuestionSet,
+            List<GeneratedQuestion> generatedQuestions,
+            int difficultyLevel,
+            String modelName,
+            String promptText,
+            String inputText,
+            List<MaterialSegment> contextSegments,
+            int responseTimeMs
+    ) {
+        Long materialId = material.getId();
+        QuestionSet questionSet = existingQuestionSet;
         if (questionSet == null) {
             questionSet = new QuestionSet();
             questionSet.setUserId(userId);
@@ -288,7 +322,7 @@ public class AiQuestionServiceImpl implements AiQuestionService {
         record.setOutputText("generated_question_set_id=" + questionSet.getId());
         record.setStatus("SUCCESS");
         record.setTokenUsed(Math.max(1, inputText.length() / 4));
-        record.setResponseTimeMs((int) Duration.between(start, LocalDateTime.now()).toMillis());
+        record.setResponseTimeMs(responseTimeMs);
         aiGenerationRecordMapper.insert(record);
 
         return QuestionSetDetailVO.builder()

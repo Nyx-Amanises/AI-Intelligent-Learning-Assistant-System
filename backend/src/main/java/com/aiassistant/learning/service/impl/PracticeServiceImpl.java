@@ -43,6 +43,7 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
 /**
@@ -125,6 +126,8 @@ public class PracticeServiceImpl implements PracticeService {
     private final RetrievalService retrievalService;
     private final ObjectMapper objectMapper;
     private final PracticeService selfPracticeService;
+    /** 编程式事务模板：AI 判分完成后，只用一个短事务写回分数。 */
+    private final TransactionTemplate transactionTemplate;
 
     /**
      * 构造方法注入依赖。
@@ -138,6 +141,7 @@ public class PracticeServiceImpl implements PracticeService {
      * @param retrievalService 资料片段检索服务
      * @param objectMapper JSON 解析器
      * @param selfPracticeService 当前服务代理对象，用于让 @Async 方法通过 Spring 代理生效
+     * @param transactionTemplate 编程式事务模板
      */
     public PracticeServiceImpl(
             PracticeSessionMapper practiceSessionMapper,
@@ -148,8 +152,10 @@ public class PracticeServiceImpl implements PracticeService {
             AiChatService aiChatService,
             RetrievalService retrievalService,
             ObjectMapper objectMapper,
-            @Lazy PracticeService selfPracticeService
+            @Lazy PracticeService selfPracticeService,
+            TransactionTemplate transactionTemplate
     ) {
+        this.transactionTemplate = transactionTemplate;
         this.practiceSessionMapper = practiceSessionMapper;
         this.practiceAnswerMapper = practiceAnswerMapper;
         this.questionSetMapper = questionSetMapper;
@@ -415,13 +421,13 @@ public class PracticeServiceImpl implements PracticeService {
     /**
      * 立即处理所有待 AI 判分的简答题。
      *
-     * <p>查出当前会话中 reviewMode 为 AI_PENDING 的答案，逐题调用 AI 或规则兜底评分，
-     * 最后刷新整场练习的总分和正确率。</p>
+     * <p>查出当前会话中 reviewMode 为 AI_PENDING 的答案，逐题调用 AI 或规则兜底评分。
+     * 模型调用在无事务状态下进行（可能耗时数分钟，期间不占用数据库连接），
+     * 全部评完后再用一个短事务写回每题分数并刷新整场练习的总分和正确率。</p>
      *
      * @param sessionId 练习会话 ID
      */
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public void reviewPendingShortAnswersNow(Long sessionId) {
         PracticeSession session = practiceSessionMapper.selectById(sessionId);
         if (session == null) {
@@ -436,7 +442,8 @@ public class PracticeServiceImpl implements PracticeService {
                 .eq(PracticeAnswer::getSessionId, sessionId)
                 .orderByAsc(PracticeAnswer::getId));
 
-        boolean updated = false;
+        // 阶段一：逐题调用模型，只在内存里累积评分结果。
+        List<PracticeAnswer> reviewedAnswers = new ArrayList<>();
         for (PracticeAnswer answer : answers) {
             if (!REVIEW_MODE_AI_PENDING.equalsIgnoreCase(answer.getReviewMode())) {
                 continue;
@@ -456,13 +463,19 @@ public class PracticeServiceImpl implements PracticeService {
             answer.setReviewMode(review.mode());
             answer.setReviewComment(review.comment());
             answer.setMarkedWrong(review.correct() ? 0 : 1);
-            practiceAnswerMapper.updateById(answer);
-            updated = true;
+            reviewedAnswers.add(answer);
+        }
+        if (reviewedAnswers.isEmpty()) {
+            return;
         }
 
-        if (updated) {
+        // 阶段二：短事务写回分数并刷新会话汇总。
+        transactionTemplate.executeWithoutResult(status -> {
+            for (PracticeAnswer answer : reviewedAnswers) {
+                practiceAnswerMapper.updateById(answer);
+            }
             refreshSessionScore(sessionId);
-        }
+        });
     }
 
     /**

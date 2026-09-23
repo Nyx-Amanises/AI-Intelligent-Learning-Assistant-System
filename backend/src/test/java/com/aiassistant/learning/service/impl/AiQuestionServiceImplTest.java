@@ -38,6 +38,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 class AiQuestionServiceImplTest {
 
@@ -50,7 +52,8 @@ class AiQuestionServiceImplTest {
     private final AiChatService chat = mock(AiChatService.class);
     private final RetrievalService retrieval = mock(RetrievalService.class);
     private final AiQuestionServiceImpl service = new AiQuestionServiceImpl(
-            materials, segments, questionSets, questionItems, records, config, chat, retrieval, new ObjectMapper());
+            materials, segments, questionSets, questionItems, records, config, chat, retrieval, new ObjectMapper(),
+            new TransactionTemplate(mock(PlatformTransactionManager.class)));
 
     @BeforeAll
     static void initializeTableMetadata() {

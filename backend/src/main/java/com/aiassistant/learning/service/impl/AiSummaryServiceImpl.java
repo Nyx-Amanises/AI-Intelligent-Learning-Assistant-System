@@ -31,6 +31,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
 /**
@@ -60,6 +61,8 @@ public class AiSummaryServiceImpl implements AiSummaryService {
     private final AiChatService aiChatService;
     /** 语义检索服务，用于找出最适合总结的资料片段。 */
     private final RetrievalService retrievalService;
+    /** 编程式事务模板：模型调用完成后，只用一个短事务保存结果。 */
+    private final TransactionTemplate transactionTemplate;
 
     public AiSummaryServiceImpl(
             StudyMaterialService studyMaterialService,
@@ -68,8 +71,10 @@ public class AiSummaryServiceImpl implements AiSummaryService {
             StudyNoteMapper studyNoteMapper,
             AiConfigService aiConfigService,
             AiChatService aiChatService,
-            RetrievalService retrievalService
+            RetrievalService retrievalService,
+            TransactionTemplate transactionTemplate
     ) {
+        this.transactionTemplate = transactionTemplate;
         this.studyMaterialService = studyMaterialService;
         this.materialSegmentMapper = materialSegmentMapper;
         this.aiGenerationRecordMapper = aiGenerationRecordMapper;
@@ -124,36 +129,38 @@ public class AiSummaryServiceImpl implements AiSummaryService {
      * 保留同步 API 和未关联记录的历史任务入口。
      */
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public SummaryResultVO generateMaterialSummary(Long userId, Long materialId, SummaryGenerateRequest request) {
         return generateMaterialSummary(userId, materialId, request, null);
     }
 
     /**
-     * 生成总结，并在同一事务中保存结果和可选笔记。
+     * 生成总结。
+     *
+     * <p>流程分为三段：先在无事务状态下读取资料和片段，再调用模型（可能耗时数分钟，期间不占用数据库连接和事务），
+     * 最后通过 {@link TransactionTemplate} 用一个短事务保存结果和可选笔记。
+     * 这个方法本身不能加 {@code @Transactional}，否则模型调用会被包进事务里。</p>
      */
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public SummaryResultVO generateMaterialSummary(
             Long userId, Long materialId, SummaryGenerateRequest request, Long recordId
     ) {
         StudyMaterial material = getOwnedMaterial(userId, materialId);
-        AiGenerationRecord record = null;
+        AiGenerationRecord existingRecord = null;
         if (recordId != null) {
-            record = aiGenerationRecordMapper.selectOne(new LambdaQueryWrapper<AiGenerationRecord>()
+            existingRecord = aiGenerationRecordMapper.selectOne(new LambdaQueryWrapper<AiGenerationRecord>()
                     .eq(AiGenerationRecord::getId, recordId)
                     .eq(AiGenerationRecord::getUserId, userId)
                     .eq(AiGenerationRecord::getMaterialId, materialId)
                     .eq(AiGenerationRecord::getTaskType, "SUMMARY")
                     .last("limit 1"));
-            if (record == null) {
+            if (existingRecord == null) {
                 throw new BusinessException(404, "总结记录不存在");
             }
-            if ("SUCCESS".equals(record.getStatus()) && StringUtils.hasText(record.getOutputText())) {
+            if ("SUCCESS".equals(existingRecord.getStatus()) && StringUtils.hasText(existingRecord.getOutputText())) {
                 // 总结已提交、任务结果写入失败时，只恢复结果，避免重复保存笔记。
-                return toSummaryResult(userId, material, record);
+                return toSummaryResult(userId, material, existingRecord);
             }
-            if (!"GENERATING".equals(record.getStatus())) {
+            if (!"GENERATING".equals(existingRecord.getStatus())) {
                 throw new BusinessException("当前总结不处于生成状态");
             }
         }
@@ -172,9 +179,9 @@ public class AiSummaryServiceImpl implements AiSummaryService {
         String inputText = buildInputText(material, contextSegments);
         String promptText = buildPrompt(summaryType);
 
+        // 阶段二：调用模型。此时没有任何事务打开。
         LocalDateTime start = LocalDateTime.now();
         String summaryText;
-
         try {
             summaryText = callAiOrMock(promptText, inputText, modelName, request.getTemperature());
         } catch (Exception exception) {
@@ -183,7 +190,34 @@ public class AiSummaryServiceImpl implements AiSummaryService {
         if (!StringUtils.hasText(summaryText)) {
             throw new BusinessException(500, "AI 总结生成失败: 模型未返回总结内容");
         }
+        int responseTimeMs = (int) Duration.between(start, LocalDateTime.now()).toMillis();
 
+        // 阶段三：短事务落库。
+        AiGenerationRecord recordToSave = existingRecord;
+        return transactionTemplate.execute(status -> persistSummaryResult(
+                userId, material, request, recordId, recordToSave,
+                summaryType, modelName, promptText, inputText, summaryText, contextSegments, responseTimeMs));
+    }
+
+    /**
+     * 在短事务中保存总结记录、可选笔记和资料的总结状态。
+     */
+    private SummaryResultVO persistSummaryResult(
+            Long userId,
+            StudyMaterial material,
+            SummaryGenerateRequest request,
+            Long recordId,
+            AiGenerationRecord existingRecord,
+            String summaryType,
+            String modelName,
+            String promptText,
+            String inputText,
+            String summaryText,
+            List<MaterialSegment> contextSegments,
+            int responseTimeMs
+    ) {
+        Long materialId = material.getId();
+        AiGenerationRecord record = existingRecord;
         if (record == null) {
             record = new AiGenerationRecord();
             record.setUserId(userId);
@@ -198,7 +232,7 @@ public class AiSummaryServiceImpl implements AiSummaryService {
         record.setStatus("SUCCESS");
         record.setErrorMessage(null);
         record.setTokenUsed(estimateTokens(inputText, summaryText));
-        record.setResponseTimeMs((int) Duration.between(start, LocalDateTime.now()).toMillis());
+        record.setResponseTimeMs(responseTimeMs);
         if (recordId == null) {
             aiGenerationRecordMapper.insert(record);
         } else {

@@ -25,6 +25,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 class QuestionSetAvailabilityTest {
 
@@ -36,7 +38,8 @@ class QuestionSetAvailabilityTest {
         QuestionItemMapper questions = mock(QuestionItemMapper.class);
         PracticeServiceImpl service = new PracticeServiceImpl(
                 sessions, mock(PracticeAnswerMapper.class), questionSets, questions, mock(AiConfigService.class),
-                mock(AiChatService.class), mock(RetrievalService.class), new ObjectMapper(), mock(PracticeService.class));
+                mock(AiChatService.class), mock(RetrievalService.class), new ObjectMapper(), mock(PracticeService.class),
+                new TransactionTemplate(mock(PlatformTransactionManager.class)));
         QuestionSet questionSet = new QuestionSet();
         questionSet.setId(91L);
         questionSet.setStatus(status);
