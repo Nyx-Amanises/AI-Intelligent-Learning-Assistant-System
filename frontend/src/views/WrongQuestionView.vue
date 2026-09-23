@@ -1,19 +1,20 @@
 <template>
-  <section class="wrong-view">
+  <section class="learning-page wrong-view">
     <div class="page-header">
       <div>
         <div class="learning-eyebrow">温故知新</div>
         <h1 class="page-title">错题本</h1>
         <p class="page-desc">回看答错的原因，补上知识的缺口，让下一次更有把握。</p>
       </div>
-      <div class="toolbar" style="margin-bottom: 0">
-        <el-button :loading="loading" @click="loadWrongQuestions">刷新</el-button>
+      <div class="toolbar toolbar--flush">
         <el-button type="primary" @click="router.push('/quiz')">开始新练习</el-button>
       </div>
     </div>
 
     <div class="workspace-panel">
-      <div class="wrong-library-heading"><h2>待巩固的题目 <span>{{ total }}</span></h2><p>练习中的错题与低分简答题，会自动收集在这里。</p></div>
+      <div class="wrong-view__heading">
+        <ListSectionHeading title="待巩固的题目" :count="total" description="练习中的错题与低分简答题，会自动收集在这里。" :loading="loading" @refresh="loadWrongQuestions" />
+      </div>
       <div class="workspace-toolbar">
         <div class="workspace-filter-bar workspace-filter-bar--wrong">
           <el-input v-model="filters.keyword" clearable placeholder="搜索题目、知识点或资料" aria-label="搜索错题" class="workspace-filter-bar__search" />
@@ -24,7 +25,7 @@
             <el-option label="单选题" value="SINGLE" />
             <el-option label="判断题" value="JUDGE" />
             <el-option label="简答题" value="SHORT_ANSWER" />
-            <el-option label="简答题（早期题集）" value="SHORT" />
+            <el-option v-if="userStore.isAdmin" label="简答题（旧版）" value="SHORT" />
           </el-select>
           <el-button @click="resetFilters">重置</el-button>
         </div>
@@ -32,30 +33,32 @@
 
       <div class="workspace-body">
         <div v-if="loading" class="wrong-loading" aria-live="polite"><el-skeleton :rows="5" animated /><span>正在加载错题…</span></div>
-        <div v-else-if="loadError" class="learning-empty learning-empty--error" role="alert">
-          <div class="learning-empty__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M12 9v4M12 16.5h.01M10.3 4.1 2.8 17a2 2 0 0 0 1.7 3h15a2 2 0 0 0 1.7-3L13.7 4.1a2 2 0 0 0-3.4 0Z" stroke-linecap="round" stroke-linejoin="round" /></svg></div>
-          <h3>错题本暂时没能加载</h3>
-          <p>{{ loadError }}</p>
+        <EmptyState v-else-if="loadError" variant="error" icon="refresh" title="错题本暂时没能加载" :description="loadError">
           <el-button type="primary" @click="loadWrongQuestions">重新加载</el-button>
-        </div>
-        <div v-else-if="!wrongQuestions.length" class="learning-empty">
-          <div class="learning-empty__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a3 3 0 0 0-3-3H4V4ZM20 4h-4a3 3 0 0 0-3 3v14a3 3 0 0 1 3-3h4V4Z" stroke-linejoin="round" /></svg></div>
-          <h3>{{ hasFilters ? '没有找到匹配的错题' : '这里暂时没有需要复习的错题' }}</h3>
-          <p>{{ hasFilters ? '试试其他关键词、资料或题型。' : '完成练习后，需要巩固的题目会保存在这里，方便随时回顾。' }}</p>
+        </EmptyState>
+        <EmptyState
+          v-else-if="!wrongQuestions.length"
+          icon="wrong"
+          :title="hasFilters ? '没有找到匹配的错题' : '这里暂时没有需要复习的错题'"
+          :description="hasFilters ? '试试其他关键词、资料或题型。' : '完成练习后，需要巩固的题目会保存在这里，方便随时回顾。'"
+        >
           <el-button v-if="hasFilters" @click="resetFilters">清除筛选</el-button>
           <el-button v-else type="primary" @click="router.push('/quiz')">去做一次练习</el-button>
-        </div>
+        </EmptyState>
         <div v-else class="wrong-question-list">
           <article v-for="item in wrongQuestions" :key="item.answerId" class="wrong-question-card">
-            <div class="wrong-question-card__top"><div><span class="wrong-type">{{ formatQuestionType(item.questionType) }}</span><span class="wrong-difficulty">{{ formatDifficulty(item.difficultyLevel) }}</span></div><span class="wrong-score">{{ item.obtainedScore ?? 0 }} <small>/ {{ item.fullScore || 0 }} 分</small></span></div>
+            <div class="wrong-question-card__top">
+              <div><StatusPill tone="brand" hide-dot :label="formatQuestionType(item.questionType)" /><span class="wrong-difficulty">{{ formatDifficulty(item.difficultyLevel) }}</span></div>
+              <span class="wrong-score">{{ item.obtainedScore ?? 0 }} <small>/ {{ item.fullScore || 0 }} 分</small></span>
+            </div>
             <button type="button" class="wrong-question-card__stem" @click="openDetail(item)">{{ item.stemText }}</button>
             <p v-if="item.knowledgePoint" class="wrong-question-card__knowledge">知识点 · {{ item.knowledgePoint }}</p>
             <div class="wrong-question-card__footer">
-              <div class="wrong-question-card__source"><span :title="item.materialTitle">{{ item.materialTitle || '未关联资料' }}</span><small>{{ formatDateTime(item.answerTime || item.createdAt).slice(0, 10) }}</small></div>
+              <div class="wrong-question-card__source"><span :title="item.materialTitle">{{ item.materialTitle || '未关联资料' }}</span><small>{{ formatDate(item.answerTime || item.createdAt) }}</small></div>
               <div class="wrong-question-card__actions">
                 <el-button type="primary" plain @click="openDetail(item)">查看解析</el-button>
                 <el-dropdown trigger="click" @command="handleQuestionAction($event, item)">
-                  <el-button text :loading="removingAnswerId === item.answerId" aria-label="错题更多操作" class="wrong-more-button">···</el-button>
+                  <IconMenuButton label="错题更多操作" :loading="removingAnswerId === item.answerId" />
                   <template #dropdown><el-dropdown-menu><el-dropdown-item command="practice">查看原练习</el-dropdown-item><el-dropdown-item command="remove" divided>移出错题本</el-dropdown-item></el-dropdown-menu></template>
                 </el-dropdown>
               </div>
@@ -70,12 +73,12 @@
       </div>
     </div>
 
-    <el-drawer v-model="drawerVisible" title="错题解析" size="min(700px, 100vw)" class="wrong-detail-drawer">
+    <el-drawer v-model="drawerVisible" title="错题解析" size="min(720px, 100vw)" class="wrong-detail-drawer">
       <div v-if="detailLoading" class="state-block">正在加载解析…</div>
       <template v-else-if="detail">
         <div class="wrong-detail-context"><span>{{ detail.materialTitle || '未关联资料' }}</span><span>{{ detail.sessionName || '练习回顾' }}</span></div>
         <div class="wrong-detail-question">
-          <div class="wrong-detail-question__meta"><span class="wrong-type">{{ formatQuestionType(detail.questionType) }}</span><span class="wrong-score">{{ detail.obtainedScore ?? 0 }} <small>/ {{ detail.fullScore || 0 }} 分</small></span></div>
+          <div class="wrong-detail-question__meta"><StatusPill tone="brand" hide-dot :label="formatQuestionType(detail.questionType)" /><span class="wrong-score">{{ detail.obtainedScore ?? 0 }} <small>/ {{ detail.fullScore || 0 }} 分</small></span></div>
           <h2>{{ detail.stemText }}</h2>
           <div v-if="hasOptions(detail)" class="wrong-detail-options">
             <div v-for="option in buildOptions(detail)" :key="option.value" :class="{ 'wrong-option--correct': detail.correctAnswer === option.value, 'wrong-option--selected': detail.userAnswer === option.value && detail.correctAnswer !== option.value }">
@@ -92,6 +95,7 @@
         <div v-if="detail.answerAnalysis" class="wrong-analysis"><h3>为什么这样回答？</h3><p>{{ detail.answerAnalysis }}</p></div>
         <div v-if="detail.reviewComment" class="wrong-analysis"><h3>评分反馈 <span>{{ formatReviewMode(detail.reviewMode) }}</span></h3><p>{{ detail.reviewComment }}</p></div>
         <div v-if="detail.knowledgePoint" class="wrong-knowledge"><span>建议复习的知识点</span><p>{{ detail.knowledgePoint }}</p></div>
+        <p class="wrong-detail-time">作答于 {{ formatDateTime(detail.answerTime || detail.createdAt) }}</p>
       </template>
       <div v-else class="state-block empty">暂时无法读取这道题，请关闭后重试。</div>
       <template #footer>
@@ -104,12 +108,20 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
-import { getMaterialPageApi, type MaterialPageItem } from '@/api/modules/material'
+import EmptyState from '@/components/EmptyState.vue'
+import IconMenuButton from '@/components/IconMenuButton.vue'
+import ListSectionHeading from '@/components/ListSectionHeading.vue'
+import StatusPill from '@/components/StatusPill.vue'
 import { useAutoListQuery } from '@/composables/useAutoListQuery'
-import { getErrorMessage } from '@/utils/errorMessage'
 import { useLatestRequest } from '@/composables/useLatestRequest'
+import { useParsedMaterials } from '@/composables/useParsedMaterials'
+import { useUserStore } from '@/stores/user'
+import { confirmDanger } from '@/utils/confirm'
+import { getErrorMessage } from '@/utils/errorMessage'
+import { formatDate, formatDateTime } from '@/utils/format'
+import { formatDifficulty, formatQuestionType, formatReviewMode } from '@/utils/labels'
 import {
   getWrongQuestionDetailApi,
   getWrongQuestionPageApi,
@@ -120,16 +132,16 @@ import {
 
 const router = useRouter()
 const route = useRoute()
+const userStore = useUserStore()
 const loading = ref(false)
 const loadError = ref('')
 const detailLoading = ref(false)
 const drawerVisible = ref(false)
-const materialsLoading = ref(false)
 const removingAnswerId = ref<number | null>(null)
 const wrongQuestions = ref<WrongQuestionItem[]>([])
-const materials = ref<MaterialPageItem[]>([])
 const detail = ref<WrongQuestionItem | null>(null)
 const total = ref(0)
+const { materials, loading: materialsLoading, error: materialsError, load: loadMaterials } = useParsedMaterials()
 
 const filters = reactive({
   keyword: typeof route.query.keyword === 'string' ? route.query.keyword : '',
@@ -140,10 +152,7 @@ const filters = reactive({
 })
 
 const hasFilters = computed(() => Boolean(filters.keyword || filters.materialId || filters.questionType))
-const formatDifficulty = (value?: number) => {
-  const labels: Record<number, string> = { 1: '入门', 2: '基础', 3: '适中', 4: '进阶', 5: '挑战' }
-  return labels[value || 3] || '适中'
-}
+
 const buildOptions = (item: WrongQuestionItem) =>
   [
     { value: 'A', label: item.optionA },
@@ -156,6 +165,8 @@ const formatAnswerText = (item: WrongQuestionItem, value?: string) => {
   const option = buildOptions(item).find((entry) => entry.value === value)
   return option ? `${option.value}. ${option.label}` : value
 }
+const hasOptions = (item: WrongQuestionItem) =>
+  Boolean(item.optionA || item.optionB || item.optionC || item.optionD)
 const handleQuestionAction = (command: string, item: WrongQuestionItem) => {
   if (command === 'practice') goPractice(item.sessionId)
   if (command === 'remove') void removeWrongQuestion(item)
@@ -174,59 +185,6 @@ const autoQuery = useAutoListQuery(
   }
 )
 
-const formatDateTime = (value?: string) => {
-  if (!value) {
-    return '--'
-  }
-  return value.replace('T', ' ').slice(0, 19)
-}
-
-const formatQuestionType = (value?: string) => {
-  switch ((value || '').toUpperCase()) {
-    case 'SINGLE':
-      return '单选题'
-    case 'JUDGE':
-      return '判断题'
-    case 'SHORT':
-    case 'SHORT_ANSWER':
-      return '简答题'
-    default:
-      return '其他题型'
-  }
-}
-
-const formatReviewMode = (value?: string) => {
-  switch ((value || '').toUpperCase()) {
-    case 'AI':
-      return 'AI 评分'
-    case 'AI_PENDING':
-      return 'AI 评分中'
-    case 'RULE':
-      return '自动判分'
-    default:
-      return '自动评分'
-  }
-}
-
-const hasOptions = (item: WrongQuestionItem) =>
-  Boolean(item.optionA || item.optionB || item.optionC || item.optionD)
-
-const loadMaterials = async () => {
-  materialsLoading.value = true
-  try {
-    const res = await getMaterialPageApi({
-      current: 1,
-      size: 50,
-      parseStatus: 'SUCCESS'
-    })
-    materials.value = res.data.data.records || []
-  } catch (error: any) {
-    ElMessage.error(getErrorMessage(error, '加载资料列表失败'))
-  } finally {
-    materialsLoading.value = false
-  }
-}
-
 const loadWrongQuestions = async () => {
   loading.value = true
   loadError.value = ''
@@ -241,7 +199,7 @@ const loadWrongQuestions = async () => {
     const data = res.data.data as WrongQuestionPagePayload
     wrongQuestions.value = data.records || []
     total.value = data.total || 0
-  } catch (error: any) {
+  } catch (error) {
     loadError.value = getErrorMessage(error, '错题本暂时无法加载，请稍后重试。')
   } finally {
     loading.value = false
@@ -268,7 +226,7 @@ const openDetail = async (item: WrongQuestionItem) => {
     const res = await getWrongQuestionDetailApi(item.answerId)
     if (!detailRequest.isLatest(requestId)) return
     detail.value = res.data.data as WrongQuestionItem
-  } catch (error: any) {
+  } catch (error) {
     if (!detailRequest.isLatest(requestId)) return
     detail.value = null
     ElMessage.error(getErrorMessage(error, '加载错题详情失败'))
@@ -278,15 +236,11 @@ const openDetail = async (item: WrongQuestionItem) => {
 }
 
 const removeWrongQuestion = async (item: WrongQuestionItem, closeDrawer = false) => {
-  try {
-    await ElMessageBox.confirm('移出后这道题不会再显示在错题本中，原练习记录仍会保留，确定继续吗？', '移出确认', {
-      type: 'warning',
-      confirmButtonText: '确认移出',
-      cancelButtonText: '取消'
-    })
-  } catch {
-    return
-  }
+  const confirmed = await confirmDanger('移出后这道题不会再显示在错题本中，原练习记录仍会保留，确定继续吗？', {
+    title: '移出确认',
+    confirmText: '确认移出'
+  })
+  if (!confirmed) return
 
   removingAnswerId.value = item.answerId
   try {
@@ -300,7 +254,7 @@ const removeWrongQuestion = async (item: WrongQuestionItem, closeDrawer = false)
       page.current -= 1
     }
     await loadWrongQuestions()
-  } catch (error: any) {
+  } catch (error) {
     ElMessage.error(getErrorMessage(error, '移出错题本失败'))
   } finally {
     removingAnswerId.value = null
@@ -314,16 +268,15 @@ const goPractice = (sessionId?: number) => {
   router.push({ path: '/practice', query: { sessionId: String(sessionId) } })
 }
 
-void loadMaterials()
+void loadMaterials().then(() => {
+  if (materialsError.value) ElMessage.error(materialsError.value)
+})
 void loadWrongQuestions()
 </script>
 
 <style scoped>
-.learning-eyebrow { margin-bottom: 8px; color: var(--brand); font-size: 12px; font-weight: 650; letter-spacing: .12em; }
-.wrong-library-heading { padding: 24px 24px 0; }
-.wrong-library-heading h2 { display: flex; align-items: center; gap: 9px; margin: 0; font-size: 17px; }
-.wrong-library-heading h2 span { min-width: 24px; padding: 2px 7px; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; font-size: 12px; font-weight: 500; text-align: center; }
-.wrong-library-heading p { margin: 7px 0 0; color: var(--muted); font-size: 13px; line-height: 1.7; }
+.toolbar--flush { margin-bottom: 0; }
+.wrong-view__heading { padding: 24px 24px 0; }
 .wrong-view .workspace-filter-bar--wrong { display: grid; grid-template-columns: minmax(200px, 1.6fr) minmax(150px, 1fr) minmax(130px, .75fr) auto; width: 100%; margin-bottom: 0; }
 .wrong-view .workspace-toolbar { margin-top: 6px; }
 .wrong-loading { display: grid; gap: 24px; padding: 24px; color: var(--muted); font-size: 13px; }
@@ -331,7 +284,6 @@ void loadWrongQuestions()
 .wrong-question-card { display: flex; flex-direction: column; min-width: 0; padding: 22px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
 .wrong-question-card__top { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
 .wrong-question-card__top > div { display: flex; align-items: center; gap: 12px; }
-.wrong-type { display: inline-flex; padding: 4px 8px; border-radius: 5px; color: var(--brand); background: var(--brand-light); font-size: 12px; font-weight: 500; }
 .wrong-difficulty { font-size: 12px; color: var(--muted); }
 .wrong-score { font-size: 18px; font-weight: 550; font-variant-numeric: tabular-nums; color: var(--text); white-space: nowrap; }
 .wrong-score small { color: var(--muted); font-size: 12px; font-weight: 400; }
@@ -344,13 +296,6 @@ void loadWrongQuestions()
 .wrong-question-card__source span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .wrong-question-card__source small { font-size: 11px; }
 .wrong-question-card__actions { display: flex; align-items: center; flex-shrink: 0; gap: 4px; }
-.wrong-more-button { font-size: 21px; letter-spacing: .06em; }
-.learning-empty { display: grid; justify-items: center; align-content: center; min-height: 340px; padding: 40px 20px; text-align: center; }
-.learning-empty__icon { display: grid; place-items: center; width: 64px; height: 64px; margin-bottom: 20px; border: 1px solid var(--line); border-radius: 16px; color: var(--brand); background: var(--bg); }
-.learning-empty__icon svg { width: 29px; height: 29px; }
-.learning-empty h3 { margin: 0 0 10px; color: var(--text); font-size: 18px; font-weight: 600; }
-.learning-empty p { max-width: 440px; margin: 0 0 24px; color: var(--muted); font-size: 14px; line-height: 1.8; }
-.learning-empty--error .learning-empty__icon { color: var(--red); background: var(--red-soft); border-color: transparent; }
 .wrong-detail-context { display: grid; gap: 7px; margin-bottom: 22px; color: var(--muted); font-size: 12px; line-height: 1.8; }
 .wrong-detail-question__meta { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .wrong-detail-question h2 { margin: 18px 0; font-size: 18px; font-weight: 600; color: var(--text); line-height: 1.85; white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -372,12 +317,13 @@ void loadWrongQuestions()
 .wrong-knowledge { margin-top: 26px; padding: 18px; border-radius: 8px; background: var(--bg); }
 .wrong-knowledge > span { color: var(--muted); font-size: 12px; }
 .wrong-knowledge p { margin: 8px 0 0; color: var(--brand); font-size: 14px; line-height: 1.85; }
+.wrong-detail-time { margin: 22px 0 0; color: var(--muted); font-size: 12px; }
 @media (max-width: 1050px) {
   .wrong-question-list { grid-template-columns: 1fr; }
   .wrong-view .workspace-filter-bar--wrong { grid-template-columns: 1fr 1fr; }
 }
 @media (max-width: 600px) {
-  .wrong-library-heading { padding: 18px 16px 0; }
+  .wrong-view__heading { padding: 18px 16px 0; }
   .wrong-view .workspace-filter-bar--wrong { grid-template-columns: minmax(0, 1fr); }
   .wrong-question-card { padding: 18px; }
   .wrong-question-card__footer { flex-wrap: wrap; }
