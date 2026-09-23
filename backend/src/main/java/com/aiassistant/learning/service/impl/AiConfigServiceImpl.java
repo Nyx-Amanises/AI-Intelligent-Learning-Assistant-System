@@ -1,6 +1,7 @@
 package com.aiassistant.learning.service.impl;
 
 import com.aiassistant.learning.common.exception.BusinessException;
+import com.aiassistant.learning.common.security.SecretCipher;
 import com.aiassistant.learning.config.AiProperties;
 import com.aiassistant.learning.context.UserContext;
 import com.aiassistant.learning.dto.ai.AiConfigUpdateRequest;
@@ -43,17 +44,21 @@ public class AiConfigServiceImpl implements AiConfigService {
     private final ObjectMapper objectMapper;
     private final AiConfigMapper aiConfigMapper;
     private final SysUserMapper sysUserMapper;
+    /** API Key 落库前加密、读出后解密。 */
+    private final SecretCipher secretCipher;
 
     public AiConfigServiceImpl(
             AiProperties aiProperties,
             ObjectMapper objectMapper,
             AiConfigMapper aiConfigMapper,
-            SysUserMapper sysUserMapper
+            SysUserMapper sysUserMapper,
+            SecretCipher secretCipher
     ) {
         this.aiProperties = aiProperties;
         this.objectMapper = objectMapper;
         this.aiConfigMapper = aiConfigMapper;
         this.sysUserMapper = sysUserMapper;
+        this.secretCipher = secretCipher;
     }
 
     @Override
@@ -238,12 +243,12 @@ public class AiConfigServiceImpl implements AiConfigService {
         entity.setChatProviderType(normalizeText(draft.chatProviderType, true));
         entity.setBaseUrl(normalizeText(draft.baseUrl, false));
         entity.setChatPath(normalizeText(draft.chatPath, false));
-        entity.setApiKey(normalizeSecret(draft.apiKey));
+        entity.setApiKey(secretCipher.encrypt(normalizeSecret(draft.apiKey)));
         entity.setDefaultModel(normalizeText(draft.defaultModel, false));
         entity.setEmbeddingProviderType(normalizeText(draft.embeddingProviderType, true));
         entity.setEmbeddingBaseUrl(normalizeText(draft.embeddingBaseUrl, false));
         entity.setEmbeddingPath(normalizeText(draft.embeddingPath, false));
-        entity.setEmbeddingApiKey(normalizeSecret(draft.embeddingApiKey));
+        entity.setEmbeddingApiKey(secretCipher.encrypt(normalizeSecret(draft.embeddingApiKey)));
         entity.setDefaultEmbeddingModel(normalizeText(draft.defaultEmbeddingModel, false));
 
         if (existing == null) {
@@ -491,12 +496,12 @@ public class AiConfigServiceImpl implements AiConfigService {
         draft.chatProviderType = entity.getChatProviderType();
         draft.baseUrl = entity.getBaseUrl();
         draft.chatPath = entity.getChatPath();
-        draft.apiKey = entity.getApiKey();
+        draft.apiKey = secretCipher.decrypt(entity.getApiKey());
         draft.defaultModel = entity.getDefaultModel();
         draft.embeddingProviderType = entity.getEmbeddingProviderType();
         draft.embeddingBaseUrl = entity.getEmbeddingBaseUrl();
         draft.embeddingPath = entity.getEmbeddingPath();
-        draft.embeddingApiKey = entity.getEmbeddingApiKey();
+        draft.embeddingApiKey = secretCipher.decrypt(entity.getEmbeddingApiKey());
         draft.defaultEmbeddingModel = entity.getDefaultEmbeddingModel();
         return draft;
     }

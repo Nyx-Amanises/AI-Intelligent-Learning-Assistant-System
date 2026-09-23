@@ -180,7 +180,7 @@ docker run -d --name qdrant -p 6333:6333 -p 6334:6334 -v qdrant_storage:/qdrant/
 
 数据库表结构由 Flyway 管理，脚本位于 `backend/src/main/resources/db/migration`，后端启动时自动建表或补齐变更；旧库会被自动标记为基线版本 1，无需手工导入 SQL。
 
-后端支持通过环境变量覆盖配置。其中 `SPRING_DATASOURCE_PASSWORD` 与 `APP_JWT_SECRET` **没有默认值**，缺失或 JWT 密钥短于 32 个字符时后端会在启动阶段直接报错退出；本地手动启动前请先在终端导出这两个变量（可参���根目录 `.env.example`）。
+后端支持通过环境变量覆盖配置。其中 `SPRING_DATASOURCE_PASSWORD`、`APP_JWT_SECRET`、`APP_SECRET_ENCRYPTION_KEY` **没有默认值**，缺失或长度不足时后端会在启动阶段直接报错退出；本地手动启动前请先在终端导出这两个变量（可参���根目录 `.env.example`）。
 
 | 变量 | 说明 |
 | --- | --- |
@@ -203,6 +203,7 @@ docker run -d --name qdrant -p 6333:6333 -p 6334:6334 -v qdrant_storage:/qdrant/
 | `APP_QDRANT_API_KEY` | Qdrant API Key |
 | `APP_QDRANT_COLLECTION_NAME` | Qdrant Collection 名称 |
 | `APP_JWT_SECRET` | JWT 密钥（必填，至少 32 个字符） |
+| `APP_SECRET_ENCRYPTION_KEY` | 数据库中 AI API Key 的加密口令（必填，至少 16 个字符；AES-256-GCM） |
 | `APP_FILE_UPLOAD_DIR` | 上传文件保存目录，默认 `./uploads` |
 | `VITE_API_BASE_URL` | 前端生产环境后端 API 地址 |
 

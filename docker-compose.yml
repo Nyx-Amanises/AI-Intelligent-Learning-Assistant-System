@@ -84,6 +84,7 @@ services:
       APP_QDRANT_BASE_URL: http://qdrant:6333
       APP_QDRANT_COLLECTION_NAME: ${APP_QDRANT_COLLECTION_NAME:-material_segment_vectors}
       APP_JWT_SECRET: ${APP_JWT_SECRET:?请在 .env 中设置至少 32 位的 APP_JWT_SECRET}
+      APP_SECRET_ENCRYPTION_KEY: ${APP_SECRET_ENCRYPTION_KEY:?请在 .env 中设置至少 16 位的 APP_SECRET_ENCRYPTION_KEY}
     ports:
       - "${BACKEND_HOST_PORT:-8083}:8083"
     volumes:

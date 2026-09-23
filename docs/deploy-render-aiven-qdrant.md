@@ -90,6 +90,7 @@ APP_AI_CONFIG_FILE=/tmp/ai-config.json
 APP_AI_ENABLED=true
 APP_AI_MOCK_MODE=true
 APP_JWT_SECRET=<random-long-secret>
+APP_SECRET_ENCRYPTION_KEY=<random-secret-used-to-encrypt-stored-api-keys>
 
 SPRING_DATASOURCE_URL=<see section 1>
 SPRING_DATASOURCE_USERNAME=<see section 1>

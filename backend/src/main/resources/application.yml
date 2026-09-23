@@ -70,3 +70,6 @@ app:
   jwt:
     secret: ${APP_JWT_SECRET}
     expire-hours: ${APP_JWT_EXPIRE_HOURS:24}
+  secret:
+    # 数据库中 AI 配置 API Key 的加密口令（AES-256-GCM），无默认值，至少 16 个字符
+    encryption-key: ${APP_SECRET_ENCRYPTION_KEY}

@@ -12,6 +12,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.aiassistant.learning.common.exception.BusinessException;
+import com.aiassistant.learning.common.security.SecretCipher;
 import com.aiassistant.learning.config.AiProperties;
 import com.aiassistant.learning.dto.ai.AiConfigUpdateRequest;
 import com.aiassistant.learning.entity.AiConfig;
@@ -45,7 +46,8 @@ class AiConfigServiceImplTest {
     private final AiConfigMapper configs = mock(AiConfigMapper.class);
     private final SysUserMapper users = mock(SysUserMapper.class);
     private final AiProperties properties = new AiProperties();
-    private final AiConfigServiceImpl service = new AiConfigServiceImpl(properties, new ObjectMapper(), configs, users);
+    private final SecretCipher cipher = SecretCipher.forPassphrase("unit-test-encryption-key-0123456789");
+    private final AiConfigServiceImpl service = new AiConfigServiceImpl(properties, new ObjectMapper(), configs, users, cipher);
 
     @TempDir
     Path temporaryDirectory;
@@ -167,7 +169,8 @@ class AiConfigServiceImplTest {
         assertEquals(SHARED_CHAT_KEY, resolved.apiKey());
         assertEquals("personal-embedding-test-key", resolved.embeddingApiKey());
         assertNull(personal.getApiKey());
-        assertEquals("personal-embedding-test-key", personal.getEmbeddingApiKey());
+        assertTrue(cipher.isEncrypted(personal.getEmbeddingApiKey()));
+        assertEquals("personal-embedding-test-key", cipher.decrypt(personal.getEmbeddingApiKey()));
     }
 
     @Test
@@ -230,8 +233,8 @@ class AiConfigServiceImplTest {
 
         service.updateGlobalConfig(USER_ID, request);
 
-        assertEquals(SHARED_CHAT_KEY, global.getApiKey());
-        assertEquals(SHARED_EMBEDDING_KEY, global.getEmbeddingApiKey());
+        assertEquals(SHARED_CHAT_KEY, cipher.decrypt(global.getApiKey()));
+        assertEquals(SHARED_EMBEDDING_KEY, cipher.decrypt(global.getEmbeddingApiKey()));
     }
 
     @ParameterizedTest

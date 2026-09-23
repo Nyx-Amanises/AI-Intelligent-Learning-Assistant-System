@@ -180,7 +180,7 @@ docker run -d --name qdrant -p 6333:6333 -p 6334:6334 -v qdrant_storage:/qdrant/
 
 Database schema is managed by Flyway (`backend/src/main/resources/db/migration`) and applied automatically on backend startup; existing databases are baselined at version 1, so no manual SQL import is needed.
 
-The backend supports overriding configuration through environment variables. `SPRING_DATASOURCE_PASSWORD` and `APP_JWT_SECRET` have **no default value**: the backend refuses to start when either is missing or the JWT secret is shorter than 32 characters. Export both before starting manually (see `.env.example`).
+The backend supports overriding configuration through environment variables. `SPRING_DATASOURCE_PASSWORD`, `APP_JWT_SECRET` and `APP_SECRET_ENCRYPTION_KEY` have **no default value**: the backend refuses to start when any of them is missing or too short. Export both before starting manually (see `.env.example`).
 
 | Variable |描述|
 | --- | --- |
@@ -203,6 +203,7 @@ The backend supports overriding configuration through environment variables. `SP
 | `APP_QDRANT_API_KEY` | Qdrant API key |
 | `APP_QDRANT_COLLECTION_NAME` | Qdrant collection name |
 | `APP_JWT_SECRET` | JWT secret (required, at least 32 characters) |
+| `APP_SECRET_ENCRYPTION_KEY` | Passphrase used to encrypt AI API keys stored in the database (required, at least 16 characters; AES-256-GCM) |
 | `APP_FILE_UPLOAD_DIR` | Upload directory, defaults to `./uploads` |
 | `VITE_API_BASE_URL` | Frontend production API base URL |
 
