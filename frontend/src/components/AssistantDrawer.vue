@@ -439,6 +439,7 @@ import AppIcon from '@/components/AppIcon.vue'
 import LearningNoteContent from '@/components/LearningNoteContent.vue'
 import { ASSISTANT_NAME } from '@/config/brand'
 import { getErrorMessage } from '@/utils/errorMessage'
+import { useLatestRequest } from '@/composables/useLatestRequest'
 
 interface CurrentPageBinding {
   bindable: boolean
@@ -1245,18 +1246,23 @@ const loadSessionPage = async (selectFallback: boolean) => {
   }
 }
 
+const sessionDetailRequest = useLatestRequest()
+
 const loadSessionDetail = async (sessionId: number) => {
+  const requestId = sessionDetailRequest.begin()
   sessionDetailLoading.value = true
   try {
     const res = await getAssistantSessionDetailApi(sessionId, 30)
+    if (!sessionDetailRequest.isLatest(requestId)) return
     const detail = normalizeSessionDetail(res.data.data as AssistantSessionDetail)
     activeSessionId.value = sessionId
     sessionDetail.value = detail
     ingestToolCalls(detail.recentToolCalls)
   } catch (error: any) {
+    if (!sessionDetailRequest.isLatest(requestId)) return
     ElMessage.error(getErrorMessage(error, '加载助手会话详情失败'))
   } finally {
-    sessionDetailLoading.value = false
+    if (sessionDetailRequest.isLatest(requestId)) sessionDetailLoading.value = false
   }
 }
 

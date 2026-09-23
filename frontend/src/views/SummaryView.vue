@@ -180,6 +180,7 @@ import { getMaterialDetailApi, getMaterialPageApi } from '@/api/modules/material
 import { isAiTaskSuccess, isAiTaskTerminal, parseAiTaskResult, waitForAiTask } from '@/utils/aiTask'
 import LearningNoteContent from '@/components/LearningNoteContent.vue'
 import { getErrorMessage } from '@/utils/errorMessage'
+import { useLatestRequest } from '@/composables/useLatestRequest'
 
 const route = useRoute()
 const router = useRouter()
@@ -386,16 +387,21 @@ const loadSummaryHistory = async (background = false) => {
   }
 }
 
+const materialDetailRequest = useLatestRequest()
+
 const loadMaterialDetail = async (id: number) => {
+  const requestId = materialDetailRequest.begin()
   detailLoading.value = true
   try {
     const res = await getMaterialDetailApi(id)
+    if (!materialDetailRequest.isLatest(requestId)) return
     selectedMaterialDetail.value = res.data.data
   } catch (error: any) {
+    if (!materialDetailRequest.isLatest(requestId)) return
     selectedMaterialDetail.value = null
     ElMessage.error(getErrorMessage(error, '加载资料详情失败'))
   } finally {
-    detailLoading.value = false
+    if (materialDetailRequest.isLatest(requestId)) detailLoading.value = false
   }
 }
 

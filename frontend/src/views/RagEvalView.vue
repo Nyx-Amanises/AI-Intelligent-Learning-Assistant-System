@@ -487,6 +487,7 @@ import {
 } from '@/api/modules/ragEval'
 import { useAutoListQuery } from '@/composables/useAutoListQuery'
 import { getErrorMessage } from '@/utils/errorMessage'
+import { useLatestRequest } from '@/composables/useLatestRequest'
 
 interface MaterialSegment {
   id: number
@@ -735,7 +736,11 @@ const loadMaterials = async () => {
   }
 }
 
+const datasetRequest = useLatestRequest()
+const sampleRequest = useLatestRequest()
+
 const loadDatasets = async () => {
+  const requestId = datasetRequest.begin()
   datasetLoading.value = true
   try {
     const res = await getRagEvalDatasetPageApi({
@@ -744,6 +749,7 @@ const loadDatasets = async () => {
       keyword: filters.keyword || undefined,
       materialId: filters.materialId || undefined
     })
+    if (!datasetRequest.isLatest(requestId)) return
     const data = res.data.data as RagEvalDatasetPagePayload
     datasets.value = data.records || []
     datasetTotal.value = data.total || 0
@@ -754,9 +760,10 @@ const loadDatasets = async () => {
       }
     }
   } catch (error: any) {
+    if (!datasetRequest.isLatest(requestId)) return
     ElMessage.error(getErrorMessage(error, '加载评测集失败'))
   } finally {
-    datasetLoading.value = false
+    if (datasetRequest.isLatest(requestId)) datasetLoading.value = false
   }
 }
 
@@ -904,15 +911,19 @@ const loadSamples = async () => {
   if (!selectedDataset.value) {
     return
   }
+  const datasetId = selectedDataset.value.id
+  const requestId = sampleRequest.begin()
   sampleLoading.value = true
   try {
-    const res = await getRagEvalSamplesApi(selectedDataset.value.id)
+    const res = await getRagEvalSamplesApi(datasetId)
+    if (!sampleRequest.isLatest(requestId) || selectedDataset.value?.id !== datasetId) return
     samples.value = res.data.data || []
     resetSampleVisibleCount()
   } catch (error: any) {
+    if (!sampleRequest.isLatest(requestId)) return
     ElMessage.error(getErrorMessage(error, '加载评测样本失败'))
   } finally {
-    sampleLoading.value = false
+    if (sampleRequest.isLatest(requestId)) sampleLoading.value = false
   }
 }
 

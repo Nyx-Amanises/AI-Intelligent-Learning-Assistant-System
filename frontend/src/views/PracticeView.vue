@@ -203,6 +203,7 @@ import {
 } from '@/api/modules/practice'
 import { isAiTaskSuccess, isAiTaskTerminal, waitForAiTask } from '@/utils/aiTask'
 import { getErrorMessage } from '@/utils/errorMessage'
+import { useLatestRequest } from '@/composables/useLatestRequest'
 
 const route = useRoute()
 const router = useRouter()
@@ -582,14 +583,17 @@ const loadHistory = async () => {
   }
 }
 
+const practiceDetailRequest = useLatestRequest()
+
 const loadPracticeDetail = async (sessionId: number, silent = false) => {
   if (!isViewActive) return
+  const requestId = practiceDetailRequest.begin()
   detailLoading.value = true
   detailError.value = ''
   detailSessionId.value = sessionId
   try {
     const res = await getPracticeDetailApi(sessionId)
-    if (!isViewActive) return
+    if (!isViewActive || !practiceDetailRequest.isLatest(requestId)) return
     practiceDetail.value = res.data.data
     syncAnswerForm()
     if (isSubmittedPractice()) {
@@ -610,11 +614,11 @@ const loadPracticeDetail = async (sessionId: number, silent = false) => {
       currentReviewTask.value = null
     }
   } catch (error: any) {
-    if (!isViewActive) return
+    if (!isViewActive || !practiceDetailRequest.isLatest(requestId)) return
     practiceDetail.value = null
     detailError.value = getErrorMessage(error, '这次练习暂时无法打开，请稍后重试。')
   } finally {
-    detailLoading.value = false
+    if (practiceDetailRequest.isLatest(requestId)) detailLoading.value = false
   }
 }
 

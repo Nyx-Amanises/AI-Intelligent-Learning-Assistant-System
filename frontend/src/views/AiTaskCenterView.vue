@@ -247,6 +247,7 @@ import {
 import { useAutoListQuery } from '@/composables/useAutoListQuery'
 import { useUserStore } from '@/stores/user'
 import { getErrorMessage } from '@/utils/errorMessage'
+import { useLatestRequest } from '@/composables/useLatestRequest'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -435,7 +436,11 @@ const formatJsonContent = (value?: string) => {
   }
 }
 
+const taskListRequest = useLatestRequest()
+const taskDetailRequest = useLatestRequest()
+
 const loadTasks = async (silent = false) => {
+  const requestId = taskListRequest.begin()
   if (!silent) {
     loading.value = true
   }
@@ -446,13 +451,15 @@ const loadTasks = async (silent = false) => {
       taskType: filters.taskType || undefined,
       status: filters.status || undefined
     })
+    if (!taskListRequest.isLatest(requestId)) return
     const data = res.data.data as AiTaskPagePayload
     tasks.value = data.records || []
     total.value = data.total || 0
   } catch (error: any) {
+    if (!taskListRequest.isLatest(requestId) || silent) return
     ElMessage.error(getErrorMessage(error, '加载任务列表失败'))
   } finally {
-    if (!silent) {
+    if (!silent && taskListRequest.isLatest(requestId)) {
       loading.value = false
     }
   }
@@ -467,18 +474,22 @@ const resetFilters = () => {
 }
 
 const openTaskDetail = async (taskId: number, silent = false) => {
+  const requestId = taskDetailRequest.begin()
   drawerVisible.value = true
   if (!silent) {
     detailLoading.value = true
+    taskDetail.value = null
   }
   try {
     const res = await getAiTaskDetailApi(taskId)
+    if (!taskDetailRequest.isLatest(requestId)) return
     taskDetail.value = res.data.data as AiTaskDetail
   } catch (error: any) {
+    if (!taskDetailRequest.isLatest(requestId) || silent) return
     taskDetail.value = null
     ElMessage.error(getErrorMessage(error, '加载任务详情失败'))
   } finally {
-    if (!silent) {
+    if (!silent && taskDetailRequest.isLatest(requestId)) {
       detailLoading.value = false
     }
   }

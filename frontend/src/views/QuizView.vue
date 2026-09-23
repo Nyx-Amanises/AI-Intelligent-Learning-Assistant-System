@@ -183,6 +183,7 @@ import { deleteQuestionSetApi, getQuestionSetDetailApi, getQuestionSetPageApi } 
 import { isAiTaskSuccess, isAiTaskTerminal, parseAiTaskResult, waitForAiTask } from '@/utils/aiTask'
 import { useAutoListQuery } from '@/composables/useAutoListQuery'
 import { getErrorMessage } from '@/utils/errorMessage'
+import { useLatestRequest } from '@/composables/useLatestRequest'
 
 const route = useRoute()
 const router = useRouter()
@@ -547,8 +548,11 @@ const generateQuestionSet = async () => {
   }
 }
 
+const questionSetDetailRequest = useLatestRequest()
+
 const viewQuestionSet = async (item: any) => {
   if (!canPreviewQuestionSet(item.status)) return
+  const requestId = questionSetDetailRequest.begin()
   drawerVisible.value = true
   detailLoading.value = true
   questionSetDetail.value = null
@@ -558,14 +562,15 @@ const viewQuestionSet = async (item: any) => {
   }
   try {
     const res = await getQuestionSetDetailApi(item.id)
-    if (viewDisposed) return
+    if (viewDisposed || !questionSetDetailRequest.isLatest(requestId)) return
     questionSetDetail.value = res.data.data
   } catch (error: any) {
+    if (viewDisposed || !questionSetDetailRequest.isLatest(requestId)) return
     questionSetDetail.value = null
     pendingQuestionContext.value = null
     ElMessage.error(getErrorMessage(error, '加载题集详情失败'))
   } finally {
-    detailLoading.value = false
+    if (questionSetDetailRequest.isLatest(requestId)) detailLoading.value = false
   }
 }
 

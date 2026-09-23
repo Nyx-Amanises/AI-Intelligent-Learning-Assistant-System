@@ -109,6 +109,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { getMaterialPageApi, type MaterialPageItem } from '@/api/modules/material'
 import { useAutoListQuery } from '@/composables/useAutoListQuery'
 import { getErrorMessage } from '@/utils/errorMessage'
+import { useLatestRequest } from '@/composables/useLatestRequest'
 import {
   getWrongQuestionDetailApi,
   getWrongQuestionPageApi,
@@ -256,17 +257,23 @@ const resetFilters = () => {
   })
 }
 
+const detailRequest = useLatestRequest()
+
 const openDetail = async (item: WrongQuestionItem) => {
+  const requestId = detailRequest.begin()
   drawerVisible.value = true
   detailLoading.value = true
+  detail.value = null
   try {
     const res = await getWrongQuestionDetailApi(item.answerId)
+    if (!detailRequest.isLatest(requestId)) return
     detail.value = res.data.data as WrongQuestionItem
   } catch (error: any) {
+    if (!detailRequest.isLatest(requestId)) return
     detail.value = null
     ElMessage.error(getErrorMessage(error, '加载错题详情失败'))
   } finally {
-    detailLoading.value = false
+    if (detailRequest.isLatest(requestId)) detailLoading.value = false
   }
 }
 
