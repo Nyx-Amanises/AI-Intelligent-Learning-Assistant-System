@@ -30,4 +30,10 @@ public class RetrievedSegmentVO {
 
     /** 检索得分，分数越高表示越相关。 */
     private Double score;
+
+    /** 向量相似度；文本检索时为空。 */
+    private Double semanticScore;
+
+    /** 词面覆盖分：问题中的词在分段里出现的比例。 */
+    private Double lexicalScore;
 }

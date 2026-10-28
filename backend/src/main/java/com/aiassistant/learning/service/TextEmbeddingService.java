@@ -19,7 +19,12 @@ public interface TextEmbeddingService {
             /** 实际使用的模型名称。 */
             String modelName,
             /** 每段文本对应一个向量，顺序和输入 texts 保持一致。 */
-            List<List<Double>> vectors
+            List<List<Double>> vectors,
+            /** 是否为 Mock 模式下由文本哈希生成的假向量。 */
+            boolean mock
     ) {
+        public EmbeddingBatchResult(String modelName, List<List<Double>> vectors) {
+            this(modelName, vectors, false);
+        }
     }
 }

@@ -33,6 +33,8 @@ import com.aiassistant.learning.mapper.RagEvalRunMapper;
 import com.aiassistant.learning.mapper.RagEvalSampleMapper;
 import com.aiassistant.learning.service.AiTaskService;
 import com.aiassistant.learning.service.RetrievalService;
+import com.aiassistant.learning.service.RetrievalService.RetrievalHit;
+import com.aiassistant.learning.service.RetrievalService.RetrievalResult;
 import com.aiassistant.learning.service.StudyMaterialService;
 import com.aiassistant.learning.service.VectorStoreService.RetrievedSegment;
 import com.aiassistant.learning.vo.rag.CmrcImportResultVO;
@@ -193,12 +195,12 @@ class RagEvalServiceImplTest {
         RagEvalSample pageHitAtFirst = storedSample(2L, "问题二", "[]", "[3]");
         RagEvalSample miss = storedSample(3L, "问题三", "[50]", null);
         when(samples.selectList(any())).thenReturn(List.of(hitAtSecond, pageHitAtFirst, miss));
-        when(retrievalService.retrieveMaterialSegments(eq(USER_ID), eq(MATERIAL_ID), eq("问题一"), anyInt()))
-                .thenReturn(List.of(segment(20L, 1), segment(11L, 2), segment(12L, 4)));
-        when(retrievalService.retrieveMaterialSegments(eq(USER_ID), eq(MATERIAL_ID), eq("问题二"), anyInt()))
-                .thenReturn(List.of(segment(21L, 3), segment(22L, 5)));
-        when(retrievalService.retrieveMaterialSegments(eq(USER_ID), eq(MATERIAL_ID), eq("问题三"), anyInt()))
-                .thenReturn(List.of(segment(30L, 1)));
+        when(retrievalService.retrieve(eq(USER_ID), eq(MATERIAL_ID), eq("问题一"), anyInt()))
+                .thenReturn(vectorResult(List.of(segment(20L, 1), segment(11L, 2), segment(12L, 4))));
+        when(retrievalService.retrieve(eq(USER_ID), eq(MATERIAL_ID), eq("问题二"), anyInt()))
+                .thenReturn(vectorResult(List.of(segment(21L, 3), segment(22L, 5))));
+        when(retrievalService.retrieve(eq(USER_ID), eq(MATERIAL_ID), eq("问题三"), anyInt()))
+                .thenReturn(vectorResult(List.of(segment(30L, 1))));
         RagEvalRunRequest request = new RagEvalRunRequest();
         request.setLimit(5);
 
@@ -232,9 +234,9 @@ class RagEvalServiceImplTest {
                 storedSample(1L, "正常", "[11]", null),
                 storedSample(2L, "异常", "[12]", null)
         ));
-        when(retrievalService.retrieveMaterialSegments(eq(USER_ID), eq(MATERIAL_ID), eq("正常"), anyInt()))
-                .thenReturn(List.of(segment(11L, 1)));
-        when(retrievalService.retrieveMaterialSegments(eq(USER_ID), eq(MATERIAL_ID), eq("异常"), anyInt()))
+        when(retrievalService.retrieve(eq(USER_ID), eq(MATERIAL_ID), eq("正常"), anyInt()))
+                .thenReturn(vectorResult(List.of(segment(11L, 1))));
+        when(retrievalService.retrieve(eq(USER_ID), eq(MATERIAL_ID), eq("异常"), anyInt()))
                 .thenThrow(new BusinessException(500, "向量库不可用"));
 
         RagEvalRunVO run = service.runDataset(USER_ID, DATASET_ID, new RagEvalRunRequest());
@@ -246,6 +248,28 @@ class RagEvalServiceImplTest {
         assertEquals("向量库不可用", run.getItems().get(1).getErrorMessage());
         assertEquals(0D, run.getItems().get(1).getReciprocalRank());
         verify(runItems, times(2)).insert(any(RagEvalRunItem.class));
+    }
+
+    @Test
+    void runSummaryWarnsWhenRetrievalDegradedOrUsedMockVectors() {
+        when(samples.selectList(any())).thenReturn(List.of(
+                storedSample(1L, "降级", "[11]", null),
+                storedSample(2L, "演示", "[12]", null)
+        ));
+        when(retrievalService.retrieve(eq(USER_ID), eq(MATERIAL_ID), eq("降级"), anyInt()))
+                .thenReturn(new RetrievalResult(MATERIAL_ID, "资料", RetrievalService.MODE_TEXT, true,
+                        "向量模型调用失败，已改用数据库文本检索", false,
+                        List.of(new RetrievalHit(segment(11L, 1), null, 0.5, 0.45))));
+        when(retrievalService.retrieve(eq(USER_ID), eq(MATERIAL_ID), eq("演示"), anyInt()))
+                .thenReturn(new RetrievalResult(MATERIAL_ID, "资料", RetrievalService.MODE_VECTOR, false, null, true,
+                        List.of(new RetrievalHit(segment(12L, 1), 0.3, 0.5, 0.67))));
+
+        RagEvalRunVO run = service.runDataset(USER_ID, DATASET_ID, new RagEvalRunRequest());
+
+        assertEquals("SUCCESS", run.getStatus());
+        assertTrue(run.getErrorMessage().contains("1 条样本的检索降级为数据库文本检索"));
+        assertTrue(run.getErrorMessage().contains("向量模型调用失败"));
+        assertTrue(run.getErrorMessage().contains("Mock 演示向量"));
     }
 
     @Test
@@ -322,6 +346,11 @@ class RagEvalServiceImplTest {
         sample.setExpectedSegmentIds(segmentIdsJson);
         sample.setExpectedPageNos(pageNosJson);
         return sample;
+    }
+
+    private RetrievalResult vectorResult(List<RetrievedSegment> retrieved) {
+        return new RetrievalResult(MATERIAL_ID, "资料", RetrievalService.MODE_VECTOR, false, null, false,
+                retrieved.stream().map(segment -> new RetrievalHit(segment, segment.score(), 0D, 0D)).toList());
     }
 
     private RetrievedSegment segment(Long segmentId, Integer pageNo) {

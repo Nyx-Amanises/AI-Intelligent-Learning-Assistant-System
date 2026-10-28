@@ -103,14 +103,27 @@ export interface RetrievalPreviewSegment {
   sectionTitle?: string
   contentText?: string
   keywords?: string
+  /** 综合得分（向量相似度与词面匹配加权）。 */
   score?: number
+  /** 向量相似度；文本检索时为空。 */
+  semanticScore?: number | null
+  /** 词面覆盖分。 */
+  lexicalScore?: number
 }
+
+/** VECTOR：向量召回 + 词面重排；TEXT：数据库文本检索（向量不可用时的降级方案）。 */
+export type RetrievalMode = 'VECTOR' | 'TEXT'
 
 export interface RetrievalPreviewPayload {
   materialId: number
+  materialTitle?: string
   queryText: string
   limit: number
   hitCount: number
+  retrievalMode?: RetrievalMode
+  degraded?: boolean
+  degradeReason?: string | null
+  mockEmbedding?: boolean
   segments: RetrievalPreviewSegment[]
 }
 

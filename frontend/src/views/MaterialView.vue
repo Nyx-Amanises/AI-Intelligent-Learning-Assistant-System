@@ -512,7 +512,25 @@
           {{ retrievalError }}<el-button @click="runRetrievalPreview">重新检索</el-button>
         </div>
         <div v-else-if="retrievalResult" class="list-stack material-library-retrieval__result">
-          <div class="soft-text">共命中 {{ retrievalResult.hitCount }} 条</div>
+          <el-alert
+            v-if="retrievalResult.degraded"
+            type="warning"
+            :closable="false"
+            show-icon
+            title="已降级为数据库文本检索"
+            :description="retrievalResult.degradeReason || '向量检索暂不可用。'"
+          />
+          <el-alert
+            v-else-if="retrievalResult.mockEmbedding"
+            type="info"
+            :closable="false"
+            show-icon
+            title="当前使用 Mock 演示向量"
+            description="向量由文本哈希生成，相似度没有语义意义，排序主要由词面匹配决定。"
+          />
+          <div class="soft-text">
+            {{ formatRetrievalMode(retrievalResult) }} · 共命中 {{ retrievalResult.hitCount }} 条
+          </div>
           <div v-for="segment in retrievalResult.segments" :key="segment.segmentId" class="section-card">
             <div class="summary-history-card__top">
               <div>
@@ -520,7 +538,7 @@
                   {{ segment.sectionTitle || `第 ${segment.segmentNo || '--'} 段` }}
                 </div>
                 <div class="section-card__meta">
-                  {{ formatSegmentMeta(segment) }} · 相似度 {{ formatRetrievalScore(segment.score) }}
+                  {{ formatSegmentMeta(segment) }} · {{ formatSegmentScores(segment) }}
                 </div>
               </div>
             </div>
@@ -551,7 +569,12 @@ import { confirmDanger } from '@/utils/confirm'
 import { getErrorMessage } from '@/utils/errorMessage'
 import { formatCharacters, formatDate, formatDateTime, formatSegmentMeta } from '@/utils/format'
 import { formatDifficulty, formatMaterialType, formatParseStatus, materialTypeIcon } from '@/utils/labels'
-import { previewMaterialRetrievalApi, submitEmbeddingTaskApi, type RetrievalPreviewPayload } from '@/api/modules/ai'
+import {
+  previewMaterialRetrievalApi,
+  submitEmbeddingTaskApi,
+  type RetrievalPreviewPayload,
+  type RetrievalPreviewSegment
+} from '@/api/modules/ai'
 import {
   createTextMaterialApi,
   deleteMaterialApi,
@@ -696,12 +719,16 @@ const getProcessingText = (row: MaterialPageItem) => {
   return '处理中…'
 }
 
-const formatRetrievalScore = (value?: number) => {
-  if (typeof value !== 'number') {
-    return '--'
-  }
-  return value.toFixed(4)
-}
+const formatScore = (value?: number | null) => (typeof value === 'number' ? value.toFixed(3) : '--')
+
+const formatRetrievalMode = (result: RetrievalPreviewPayload) =>
+  result.degraded || result.retrievalMode === 'TEXT' ? '数据库文本检索' : '向量检索 + 词面重排'
+
+/** 文本检索没有向量分，只展示词面匹配度；向量检索同时展示综合、向量和词面三项得分。 */
+const formatSegmentScores = (segment: RetrievalPreviewSegment) =>
+  segment.semanticScore === null || segment.semanticScore === undefined
+    ? `文本匹配度 ${formatScore(segment.lexicalScore)}`
+    : `综合 ${formatScore(segment.score)} · 向量 ${formatScore(segment.semanticScore)} · 词面 ${formatScore(segment.lexicalScore)}`
 
 const formatEmbeddingStatus = (value?: string) => {
   switch ((value || '').toUpperCase()) {

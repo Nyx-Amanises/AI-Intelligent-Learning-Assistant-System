@@ -194,6 +194,15 @@
       </div>
 
       <div class="workspace-body">
+        <el-alert
+          v-if="lastRun.errorMessage"
+          class="rag-run-notice"
+          type="warning"
+          :closable="false"
+          show-icon
+          title="本次运行需要注意"
+          :description="lastRun.errorMessage"
+        />
         <div class="rag-metric-grid">
           <div class="summary-overview-card">
             <span>Hit@1 / 3 / 5</span>

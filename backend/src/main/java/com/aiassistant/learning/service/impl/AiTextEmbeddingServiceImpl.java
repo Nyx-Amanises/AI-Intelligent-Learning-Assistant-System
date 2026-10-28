@@ -64,7 +64,7 @@ public class AiTextEmbeddingServiceImpl implements TextEmbeddingService {
             List<List<Double>> vectors = texts.stream()
                     .map(this::buildMockVector)
                     .toList();
-            return new EmbeddingBatchResult(resolvedModel, vectors);
+            return new EmbeddingBatchResult(resolvedModel, vectors, true);
         }
 
         String providerType = normalizeProviderType(config.embeddingProviderType());

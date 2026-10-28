@@ -22,6 +22,7 @@ import com.aiassistant.learning.mapper.RagEvalSampleMapper;
 import com.aiassistant.learning.service.AiTaskService;
 import com.aiassistant.learning.service.RagEvalService;
 import com.aiassistant.learning.service.RetrievalService;
+import com.aiassistant.learning.service.RetrievalService.RetrievalResult;
 import com.aiassistant.learning.service.StudyMaterialService;
 import com.aiassistant.learning.service.VectorStoreService.RetrievedSegment;
 import com.aiassistant.learning.vo.ai.AiTaskDetailVO;
@@ -266,11 +267,12 @@ public class RagEvalServiceImpl implements RagEvalService {
 
         int retrievalLimit = resolveLimit(request.getLimit());
         RagEvalRun run = createRunningRun(userId, dataset, samples.size(), retrievalLimit);
-        List<RagEvalRunItem> runItems = samples.stream()
+        List<EvaluatedSample> evaluatedSamples = samples.stream()
                 .map(sample -> evaluateSample(userId, run, sample, retrievalLimit))
                 .toList();
+        List<RagEvalRunItem> runItems = evaluatedSamples.stream().map(EvaluatedSample::item).toList();
 
-        finishRun(run, runItems);
+        finishRun(run, evaluatedSamples);
         dataset.setLastRunId(run.getId());
         dataset.setLastRunAt(run.getFinishedAt());
         datasetMapper.updateById(dataset);
@@ -486,9 +488,10 @@ public class RagEvalServiceImpl implements RagEvalService {
     /**
      * 评测单条样本。
      *
-     * <p>这里会执行真实检索，保存返回的段落和页码，并计算 hitRank、MRR 所需的 reciprocalRank 和 Recall@K。</p>
+     * <p>这里会执行真实检索，保存返回的段落和页码，并计算 hitRank、MRR 所需的 reciprocalRank 和 Recall@K。
+     * 同时记下本条样本是否降级为文本检索、是否使用了 Mock 向量，供运行摘要提示。</p>
      */
-    private RagEvalRunItem evaluateSample(Long userId, RagEvalRun run, RagEvalSample sample, int retrievalLimit) {
+    private EvaluatedSample evaluateSample(Long userId, RagEvalRun run, RagEvalSample sample, int retrievalLimit) {
         long startTime = System.currentTimeMillis();
         RagEvalRunItem item = new RagEvalRunItem();
         item.setRunId(run.getId());
@@ -499,15 +502,20 @@ public class RagEvalServiceImpl implements RagEvalService {
         item.setQueryText(sample.getQueryText());
         item.setExpectedSegmentIds(sample.getExpectedSegmentIds());
         item.setExpectedPageNos(sample.getExpectedPageNos());
+        String degradeReason = null;
+        boolean mockEmbedding = false;
 
         try {
             // 调用 RAG 检索服务，得到按相关性排序后的候选分段。
-            List<RetrievedSegment> retrieved = retrievalService.retrieveMaterialSegments(
+            RetrievalResult retrieval = retrievalService.retrieve(
                     userId,
                     sample.getMaterialId(),
                     sample.getQueryText(),
                     retrievalLimit
             );
+            degradeReason = retrieval.degraded() ? retrieval.degradeReason() : null;
+            mockEmbedding = retrieval.mockEmbedding();
+            List<RetrievedSegment> retrieved = retrieval.segments();
             List<Long> retrievedSegmentIds = retrieved.stream().map(RetrievedSegment::segmentId).toList();
             List<Integer> retrievedPageNos = retrieved.stream().map(RetrievedSegment::pageNo).filter(Objects::nonNull).toList();
             List<Long> expectedSegmentIds = parseLongList(sample.getExpectedSegmentIds());
@@ -531,13 +539,23 @@ public class RagEvalServiceImpl implements RagEvalService {
             item.setLatencyMs(System.currentTimeMillis() - startTime);
             runItemMapper.insert(item);
         }
-        return item;
+        return new EvaluatedSample(item, degradeReason, mockEmbedding);
+    }
+
+    /**
+     * 单条样本的评测结果，附带本次检索的降级与 Mock 情况。
+     */
+    private record EvaluatedSample(RagEvalRunItem item, String degradeReason, boolean mockEmbedding) {
     }
 
     /**
      * 汇总本次运行的整体指标，并把运行状态从 RUNNING 改成最终状态。
+     *
+     * <p>如果有样本降级成了数据库文本检索，或者用的是 Mock 向量，运行摘要里会写明：
+     * 这类结果不能当作向量检索的效果来引用。</p>
      */
-    private void finishRun(RagEvalRun run, List<RagEvalRunItem> runItems) {
+    private void finishRun(RagEvalRun run, List<EvaluatedSample> evaluatedSamples) {
+        List<RagEvalRunItem> runItems = evaluatedSamples.stream().map(EvaluatedSample::item).toList();
         int total = runItems.size();
         int failed = (int) runItems.stream().filter(item -> StringUtils.hasText(item.getErrorMessage())).count();
         int evaluated = total - failed;
@@ -557,10 +575,33 @@ public class RagEvalServiceImpl implements RagEvalService {
                 .toList()));
         run.setStatus(failed == 0 ? "SUCCESS" : evaluated > 0 ? "PARTIAL_FAILED" : "FAILED");
         run.setFinishedAt(LocalDateTime.now());
-        if (failed > 0) {
-            run.setErrorMessage("有 " + failed + " 条样本评测失败，请查看运行明细");
-        }
+        run.setErrorMessage(buildRunNotice(failed, evaluatedSamples));
         runMapper.updateById(run);
+    }
+
+    /**
+     * 组装运行摘要：失败样本数、降级为文本检索的样本数及原因、是否使用了 Mock 向量。
+     *
+     * @return 没有需要提示的情况时返回 null
+     */
+    private String buildRunNotice(int failed, List<EvaluatedSample> evaluatedSamples) {
+        List<String> notices = new ArrayList<>();
+        if (failed > 0) {
+            notices.add("有 " + failed + " 条样本评测失败，请查看运行明细");
+        }
+        List<String> degradeReasons = evaluatedSamples.stream()
+                .map(EvaluatedSample::degradeReason)
+                .filter(StringUtils::hasText)
+                .toList();
+        if (!degradeReasons.isEmpty()) {
+            notices.add("有 " + degradeReasons.size() + " 条样本的检索降级为数据库文本检索（"
+                    + String.join("；", new LinkedHashSet<>(degradeReasons))
+                    + "），本次指标不代表向量检索效果");
+        }
+        if (evaluatedSamples.stream().anyMatch(EvaluatedSample::mockEmbedding)) {
+            notices.add("本次使用 Mock 演示向量，指标只能验证流程，不能作为检索质量的实验依据");
+        }
+        return notices.isEmpty() ? null : String.join("。", notices);
     }
 
     /**

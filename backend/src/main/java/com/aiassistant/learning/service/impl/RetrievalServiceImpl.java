@@ -17,16 +17,21 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 /**
  * RAG 检索服务实现。
  *
- * <p>整体流程是：校验资料归属 -> 将查询文本转成向量 -> 从 Qdrant 召回候选分段 -> 用关键词匹配做一次轻量重排序。</p>
+ * <p>整体流程是：校验资料归属 -> 将查询文本转成向量 -> 从 Qdrant 召回候选分段 -> 用关键词匹配做一次轻量重排序。
+ * 向量链路任何一环不可用时，降级为数据库文本检索，并在结果中标明降级原因。</p>
  */
 @Service
 public class RetrievalServiceImpl implements RetrievalService {
+
+    private static final Logger log = LoggerFactory.getLogger(RetrievalServiceImpl.class);
 
     /** 召回候选数量相对最终返回数量的放大倍数，候选多一些，后面重排序才有空间。 */
     private static final int OVERSAMPLE_FACTOR = 3;
@@ -59,9 +64,12 @@ public class RetrievalServiceImpl implements RetrievalService {
 
     /**
      * 检索指定资料中与问题最相关的分段。
+     *
+     * <p>优先走向量检索；以下情况降级为数据库文本检索，并在结果里写明原因：
+     * 向量库未启用、向量模型调用失败、向量库查询失败、资料在向量库中没有向量（尚未建立索引）。</p>
      */
     @Override
-    public List<RetrievedSegment> retrieveMaterialSegments(Long userId, Long materialId, String queryText, Integer limit) {
+    public RetrievalResult retrieve(Long userId, Long materialId, String queryText, Integer limit) {
         if (!StringUtils.hasText(queryText)) {
             throw new BusinessException("检索语句不能为空");
         }
@@ -74,15 +82,22 @@ public class RetrievalServiceImpl implements RetrievalService {
             throw new BusinessException(404, "资料不存在");
         }
 
-        // RAG 的第一步是把问题转换成向量，后续才能和资料分段向量做相似度搜索。
         int resolvedLimit = resolveLimit(limit);
         if (!isQdrantReady()) {
-            return retrieveDatabaseFallbackSegments(materialId, queryText, resolvedLimit);
+            return degradeToText(material, queryText, resolvedLimit, "向量检索服务未启用", null);
         }
 
-        List<Double> queryVector = textEmbeddingService.embedTexts(List.of(queryText.trim()), null).vectors().stream()
-                .findFirst()
-                .orElseThrow(() -> new BusinessException("未生成检索向量"));
+        // RAG 的第一步是把问题转换成向量，后续才能和资料分段向量做相似度搜索。
+        TextEmbeddingService.EmbeddingBatchResult embedding;
+        List<Double> queryVector;
+        try {
+            embedding = textEmbeddingService.embedTexts(List.of(queryText.trim()), null);
+            queryVector = embedding.vectors().stream()
+                    .findFirst()
+                    .orElseThrow(() -> new BusinessException("未生成检索向量"));
+        } catch (RuntimeException exception) {
+            return degradeToText(material, queryText, resolvedLimit, "向量模型调用失败", exception);
+        }
 
         // 先多召回一些候选，再用本地规则重排，能提升关键词型问题的命中率。
         int candidateLimit = Math.max(resolvedLimit * OVERSAMPLE_FACTOR, MIN_OVERSAMPLE_LIMIT);
@@ -90,12 +105,20 @@ public class RetrievalServiceImpl implements RetrievalService {
         try {
             candidates = vectorStoreService.searchMaterialSegments(userId, materialId, queryVector, candidateLimit);
         } catch (RuntimeException exception) {
-            candidates = List.of();
+            return degradeToText(material, queryText, resolvedLimit, "向量数据库查询失败", exception);
         }
-        if (!candidates.isEmpty()) {
-            return rerankSegments(queryText, candidates, resolvedLimit);
+        if (candidates.isEmpty()) {
+            return degradeToText(material, queryText, resolvedLimit, "该资料尚未建立向量索引", null);
         }
-        return retrieveDatabaseFallbackSegments(materialId, queryText, resolvedLimit);
+        return new RetrievalResult(
+                material.getId(),
+                material.getTitle(),
+                MODE_VECTOR,
+                false,
+                null,
+                embedding.mock(),
+                rerankSegments(queryText, candidates, resolvedLimit, true)
+        );
     }
 
     /**
@@ -107,15 +130,27 @@ public class RetrievalServiceImpl implements RetrievalService {
     }
 
     /**
-     * 解析本次检索的返回数量。
+     * 降级为数据库文本检索：读取该资料的全部分段，按词面匹配程度排序。
+     *
+     * @param reason 给用户看的降级原因
+     * @param cause 触发降级的异常，没有时为 null；只写日志，不返回给前端
      */
-    private List<RetrievedSegment> retrieveDatabaseFallbackSegments(Long materialId, String queryText, int limit) {
-        List<MaterialSegment> segments = materialSegmentMapper.selectList(new LambdaQueryWrapper<MaterialSegment>()
-                .eq(MaterialSegment::getMaterialId, materialId)
-                .orderByAsc(MaterialSegment::getSegmentNo));
-        if (segments.isEmpty()) {
-            return List.of();
+    private RetrievalResult degradeToText(
+            StudyMaterial material,
+            String queryText,
+            int limit,
+            String reason,
+            Exception cause
+    ) {
+        if (cause == null) {
+            log.info("RAG 检索降级为数据库文本检索 materialId={} reason={}", material.getId(), reason);
+        } else {
+            log.warn("RAG 检索降级为数据库文本检索 materialId={} reason={} cause={}",
+                    material.getId(), reason, cause.getMessage());
         }
+        List<MaterialSegment> segments = materialSegmentMapper.selectList(new LambdaQueryWrapper<MaterialSegment>()
+                .eq(MaterialSegment::getMaterialId, material.getId())
+                .orderByAsc(MaterialSegment::getSegmentNo));
         List<RetrievedSegment> candidates = segments.stream()
                 .map(segment -> new RetrievedSegment(
                         segment.getId(),
@@ -127,9 +162,20 @@ public class RetrievalServiceImpl implements RetrievalService {
                         0D
                 ))
                 .toList();
-        return rerankSegments(queryText, candidates, limit);
+        return new RetrievalResult(
+                material.getId(),
+                material.getTitle(),
+                MODE_TEXT,
+                true,
+                reason + "，已改用数据库文本检索",
+                false,
+                rerankSegments(queryText, candidates, limit, false)
+        );
     }
 
+    /**
+     * 解析本次检索的返回数量。
+     */
     private int resolveLimit(Integer limit) {
         if (limit != null && limit > 0) {
             return limit;
@@ -139,40 +185,50 @@ public class RetrievalServiceImpl implements RetrievalService {
     }
 
     /**
-     * 对向量召回结果做轻量重排序。
+     * 对候选分段做轻量重排序。
      *
-     * <p>向量相似度擅长语义召回，关键词匹配擅长精确术语命中；这里把两种分数混合起来排序。</p>
+     * <p>向量相似度擅长语义召回，关键词匹配擅长精确术语命中；这里把两种分数混合起来排序。
+     * 文本检索时没有向量分，只按词面得分排序。</p>
+     *
+     * @param hasSemanticScore 候选分段的 score 是否为向量相似度
      */
-    private List<RetrievedSegment> rerankSegments(String queryText, List<RetrievedSegment> candidates, int limit) {
+    private List<RetrievalHit> rerankSegments(
+            String queryText,
+            List<RetrievedSegment> candidates,
+            int limit,
+            boolean hasSemanticScore
+    ) {
         if (candidates == null || candidates.isEmpty()) {
             return List.of();
         }
 
         String normalizedQuery = normalizeForComparison(queryText);
-        if (!StringUtils.hasText(normalizedQuery)) {
-            return candidates.stream().limit(limit).toList();
-        }
-
-        List<String> lexicalTerms = buildLexicalTerms(queryText, normalizedQuery);
+        List<String> lexicalTerms = StringUtils.hasText(normalizedQuery)
+                ? buildLexicalTerms(queryText, normalizedQuery)
+                : List.of();
         List<RankedSegment> rankedSegments = new ArrayList<>(candidates.size());
         for (int index = 0; index < candidates.size(); index++) {
             RetrievedSegment candidate = candidates.get(index);
             String normalizedContent = normalizeForComparison(candidate.contentText());
             String normalizedTitle = normalizeForComparison(candidate.sectionTitle());
-            double lexicalScore = computeLexicalScore(normalizedQuery, lexicalTerms, normalizedContent, normalizedTitle);
-            double semanticScore = candidate.score() == null ? 0D : candidate.score();
+            double lexicalScore = StringUtils.hasText(normalizedQuery)
+                    ? computeLexicalScore(normalizedQuery, lexicalTerms, normalizedContent, normalizedTitle)
+                    : 0D;
+            Double semanticScore = hasSemanticScore ? (candidate.score() == null ? 0D : candidate.score()) : null;
             // 标题或正文完整包含查询时，额外加一点分，帮助精确问题靠前。
-            double titleBoost = normalizedTitle.contains(normalizedQuery) ? 0.12D : 0D;
-            double exactBoost = normalizedContent.contains(normalizedQuery) ? 0.18D : 0D;
-            double finalScore = semanticScore * 0.72D + lexicalScore * 0.90D + titleBoost + exactBoost;
-            rankedSegments.add(new RankedSegment(candidate, finalScore, index));
+            double titleBoost = StringUtils.hasText(normalizedQuery) && normalizedTitle.contains(normalizedQuery) ? 0.12D : 0D;
+            double exactBoost = StringUtils.hasText(normalizedQuery) && normalizedContent.contains(normalizedQuery) ? 0.18D : 0D;
+            double finalScore = (semanticScore == null ? 0D : semanticScore) * 0.72D
+                    + lexicalScore * 0.90D + titleBoost + exactBoost;
+            rankedSegments.add(new RankedSegment(
+                    new RetrievalHit(candidate, semanticScore, lexicalScore, finalScore), index));
         }
 
         return rankedSegments.stream()
                 .sorted(Comparator
-                        .comparingDouble(RankedSegment::score).reversed()
+                        .comparingDouble((RankedSegment ranked) -> ranked.hit().relevanceScore()).reversed()
                         .thenComparingInt(RankedSegment::originalIndex))
-                .map(RankedSegment::segment)
+                .map(RankedSegment::hit)
                 .limit(limit)
                 .toList();
     }
@@ -267,8 +323,8 @@ public class RetrievalServiceImpl implements RetrievalService {
     }
 
     /**
-     * 重排序时的临时结构，保存原始分段、重排分数和原始顺序。
+     * 重排序时的临时结构，保存命中结果和原始顺序。
      */
-    private record RankedSegment(RetrievedSegment segment, double score, int originalIndex) {
+    private record RankedSegment(RetrievalHit hit, int originalIndex) {
     }
 }
