@@ -8,7 +8,7 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: ${SPRING_DATASOURCE_URL:jdbc:mysql://127.0.0.1:3307/ai_learning_assistant?allowPublicKeyRetrieval=true&useSSL=false&useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai}
     username: ${SPRING_DATASOURCE_USERNAME:root}
-    password: ${SPRING_DATASOURCE_PASSWORD}
+    password: ${SPRING_DATASOURCE_PASSWORD:123456789}
   flyway:
     # 启动时自动执行 classpath:db/migration 下的 V*.sql；
     # 旧库（由 mysqldump 建立、没有 flyway_schema_history）会被标记为版本 1，只补执行之后的脚本。
@@ -68,8 +68,9 @@ app:
   file:
     upload-dir: ${APP_FILE_UPLOAD_DIR:./uploads}
   jwt:
-    secret: ${APP_JWT_SECRET}
+    secret: ${APP_JWT_SECRET:}
     expire-hours: ${APP_JWT_EXPIRE_HOURS:24}
   secret:
-    # 数据库中 AI 配置 API Key 的加密口令（AES-256-GCM），无默认值，至少 16 个字符
-    encryption-key: ${APP_SECRET_ENCRYPTION_KEY}
+    # 数据库中 AI 配置 API Key 的加密口令（AES-256-GCM），至少 16 个字符
+    # 本地开发缺失时自动生成并落入 runtime/ 目录复用；生产环境必须显式配置
+    encryption-key: ${APP_SECRET_ENCRYPTION_KEY:}

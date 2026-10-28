@@ -180,13 +180,15 @@ docker run -d --name qdrant -p 6333:6333 -p 6334:6334 -v qdrant_storage:/qdrant/
 
 Database schema is managed by Flyway (`backend/src/main/resources/db/migration`) and applied automatically on backend startup; existing databases are baselined at version 1, so no manual SQL import is needed.
 
-The backend supports overriding configuration through environment variables. `SPRING_DATASOURCE_PASSWORD`, `APP_JWT_SECRET` and `APP_SECRET_ENCRYPTION_KEY` have **no default value**: the backend refuses to start when any of them is missing or too short. Export both before starting manually (see `.env.example`).
+The backend supports overriding configuration through environment variables, following the **"local runnable by default, production explicitly strict"** design:
+- **Local Development (Default)**: Works out-of-the-box without manual configuration. MySQL password defaults to `123456789` (aligned with Docker Compose), JWT secret is generated randomly in memory (tokens expire across restarts), and the secret encryption passphrase is auto-generated and persisted to `runtime/secret-encryption.key` for cross-restart reuse.
+- **Production Environment** (activated via `prod` profile or `app.security.require-explicit-secrets=true`): `SPRING_DATASOURCE_PASSWORD`, `APP_JWT_SECRET` and `APP_SECRET_ENCRYPTION_KEY` must be explicitly provided and meet length requirements; startup will abort immediately if any is missing or unresolved (see `.env.example`).
 
 | Variable |描述|
 | --- | --- |
 | `SPRING_DATASOURCE_URL` | MySQL connection URL |
 | `SPRING_DATASOURCE_USERNAME` | MySQL username |
-| `SPRING_DATASOURCE_PASSWORD` | MySQL password (required, no default) |
+| `SPRING_DATASOURCE_PASSWORD` | MySQL password (required in production; defaults to `123456789` locally) |
 | `SPRING_REDIS_HOST` | Redis host |
 | `SPRING_REDIS_SSL_ENABLED` | Whether Redis / Valkey TLS is enabled |
 | `APP_AI_ENABLED` | Whether AI capabilities are enabled |
@@ -202,8 +204,8 @@ The backend supports overriding configuration through environment variables. `SP
 | `APP_QDRANT_BASE_URL` | Qdrant base URL |
 | `APP_QDRANT_API_KEY` | Qdrant API key |
 | `APP_QDRANT_COLLECTION_NAME` | Qdrant collection name |
-| `APP_JWT_SECRET` | JWT secret (required, at least 32 characters) |
-| `APP_SECRET_ENCRYPTION_KEY` | Passphrase used to encrypt AI API keys stored in the database (required, at least 16 characters; AES-256-GCM) |
+| `APP_JWT_SECRET` | JWT secret (required in prod, >= 32 chars; auto-generated locally) |
+| `APP_SECRET_ENCRYPTION_KEY` | Encryption passphrase for stored AI API keys (required in prod, >= 16 chars; auto-generated to runtime/ locally) |
 | `APP_FILE_UPLOAD_DIR` | Upload directory, defaults to `./uploads` |
 | `VITE_API_BASE_URL` | Frontend production API base URL |
 

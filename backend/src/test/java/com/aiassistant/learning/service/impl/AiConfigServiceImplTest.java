@@ -1,7 +1,9 @@
 package com.aiassistant.learning.service.impl;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -310,6 +312,24 @@ class AiConfigServiceImplTest {
         ResolvedAiConfig result = service.getResolvedConfig(USER_ID);
 
         assertEquals(SHARED_CHAT_KEY, result.embeddingApiKey());
+    }
+
+    @Test
+    void unDecryptableKeyFromMismatchedPassphraseDoesNotCrashConfigPage() {
+        global = null;
+        SecretCipher otherCipher = SecretCipher.forPassphrase("completely-different-key-123456789");
+        AiConfig corrupted = new AiConfig();
+        corrupted.setScope("USER");
+        corrupted.setUserId(USER_ID);
+        corrupted.setEnabled(true);
+        corrupted.setMockMode(true);
+        corrupted.setApiKey(otherCipher.encrypt("sk-old-key"));
+        personal = corrupted;
+
+        AiConfigVO result = assertDoesNotThrow(() -> service.getConfig(USER_ID));
+        assertNotNull(result);
+        assertFalse(result.getApiKeyConfigured());
+        assertFalse(result.getEmbeddingApiKeyConfigured());
     }
 
     private AiConfig config(String scope, long userId) {

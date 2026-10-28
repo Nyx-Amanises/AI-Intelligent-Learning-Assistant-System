@@ -180,13 +180,15 @@ docker run -d --name qdrant -p 6333:6333 -p 6334:6334 -v qdrant_storage:/qdrant/
 
 数据库表结构由 Flyway 管理，脚本位于 `backend/src/main/resources/db/migration`，后端启动时自动建表或补齐变更；旧库会被自动标记为基线版本 1，无需手工导入 SQL。
 
-后端支持通过环境变量覆盖配置。其中 `SPRING_DATASOURCE_PASSWORD`、`APP_JWT_SECRET`、`APP_SECRET_ENCRYPTION_KEY` **没有默认值**，缺失或长度不足时后端会在启动阶段直接报错退出；本地手动启动前请先在终端导出这两个变量（可参���根目录 `.env.example`）。
+后端支持通过环境变量覆盖配置，遵循**“本地默认能跑、生产显式严格”**的设计：
+- **本地开发（默认）**：未配置时开箱即用。MySQL 密码默认 `123456789`（与 Docker Compose 一致），JWT 密钥在内存中随机生成（重启后旧 Token 失效），数据库加密口令自动生成并落入 `runtime/secret-encryption.key` 跨重启复用。
+- **生产环境**（激活 `prod` profile 或配置 `app.security.require-explicit-secrets=true`）：`SPRING_DATASOURCE_PASSWORD`、`APP_JWT_SECRET` 与 `APP_SECRET_ENCRYPTION_KEY` 必须显式提供且满足长度要求，缺失时拒绝启动并报错提示（参考根目录 `.env.example`）。
 
 | 变量 | 说明 |
 | --- | --- |
 | `SPRING_DATASOURCE_URL` | MySQL 连接地址 |
 | `SPRING_DATASOURCE_USERNAME` | MySQL 用户名 |
-| `SPRING_DATASOURCE_PASSWORD` | MySQL 密码（必填，无默认值） |
+| `SPRING_DATASOURCE_PASSWORD` | MySQL 密码（生产必填；本地默认 `123456789`） |
 | `SPRING_REDIS_HOST` | Redis 地址 |
 | `SPRING_REDIS_SSL_ENABLED` | Redis / Valkey 是否启用 TLS |
 | `APP_AI_ENABLED` | 是否启用 AI 能力 |
@@ -202,8 +204,8 @@ docker run -d --name qdrant -p 6333:6333 -p 6334:6334 -v qdrant_storage:/qdrant/
 | `APP_QDRANT_BASE_URL` | Qdrant 地址 |
 | `APP_QDRANT_API_KEY` | Qdrant API Key |
 | `APP_QDRANT_COLLECTION_NAME` | Qdrant Collection 名称 |
-| `APP_JWT_SECRET` | JWT 密钥（必填，至少 32 个字符） |
-| `APP_SECRET_ENCRYPTION_KEY` | 数据库中 AI API Key 的加密口令（必填，至少 16 个字符；AES-256-GCM） |
+| `APP_JWT_SECRET` | JWT 密钥（生产必填，至少 32 字符；本地缺失时随机生成） |
+| `APP_SECRET_ENCRYPTION_KEY` | 数据库中 AI API Key 的加密口令（生产必填，至少 16 字符；本地缺失时落盘复用） |
 | `APP_FILE_UPLOAD_DIR` | 上传文件保存目录，默认 `./uploads` |
 | `VITE_API_BASE_URL` | 前端生产环境后端 API 地址 |
 

@@ -18,6 +18,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -37,6 +39,7 @@ public class AiConfigServiceImpl implements AiConfigService {
     private static final String CHAT_PROVIDER_DEEPSEEK = "DEEPSEEK";
     private static final String CHAT_PROVIDER_DOUBAO_ARK = "DOUBAO_ARK";
     private static final String EMBEDDING_PROVIDER_OPENAI_COMPATIBLE = "OPENAI_COMPATIBLE";
+    private static final Logger log = LoggerFactory.getLogger(AiConfigServiceImpl.class);
 
     private final AiProperties aiProperties;
     private final ObjectMapper objectMapper;
@@ -494,14 +497,27 @@ public class AiConfigServiceImpl implements AiConfigService {
         draft.chatProviderType = entity.getChatProviderType();
         draft.baseUrl = entity.getBaseUrl();
         draft.chatPath = entity.getChatPath();
-        draft.apiKey = secretCipher.decrypt(entity.getApiKey());
+        draft.apiKey = decryptSafely(entity.getApiKey(), "apiKey", entity.getUserId());
         draft.defaultModel = entity.getDefaultModel();
         draft.embeddingProviderType = entity.getEmbeddingProviderType();
         draft.embeddingBaseUrl = entity.getEmbeddingBaseUrl();
         draft.embeddingPath = entity.getEmbeddingPath();
-        draft.embeddingApiKey = secretCipher.decrypt(entity.getEmbeddingApiKey());
+        draft.embeddingApiKey = decryptSafely(entity.getEmbeddingApiKey(), "embeddingApiKey", entity.getUserId());
         draft.defaultEmbeddingModel = entity.getDefaultEmbeddingModel();
         return draft;
+    }
+
+    private String decryptSafely(String storedValue, String fieldName, Long userId) {
+        if (!StringUtils.hasText(storedValue) || !secretCipher.isEncrypted(storedValue)) {
+            return storedValue;
+        }
+        try {
+            return secretCipher.decrypt(storedValue);
+        } catch (Exception exception) {
+            log.warn("用户 {} 的 {} 解密失败（密钥可能已变更或轮换），将重置为空让用户重新配置: {}",
+                    userId, fieldName, exception.getMessage());
+            return null;
+        }
     }
 
     private ConfigDraft fromProperties() {

@@ -1,0 +1,9 @@
+# 生产环境专用配置：要求必须通过环境变量显式提供敏感配置，严禁使用本地开发默认值。
+app:
+  security:
+    require-explicit-secrets: true
+
+spring:
+  datasource:
+    # 生产环境必须显式通过环境变量提供密码，不使用本地开发默认值
+    password: ${SPRING_DATASOURCE_PASSWORD}
