@@ -15,9 +15,13 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.List;
+import java.util.Locale;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -154,6 +158,7 @@ public class AiConfigServiceImpl implements AiConfigService {
         AiConfig globalConfig = findConfig(SCOPE_GLOBAL, GLOBAL_USER_ID);
         if (globalConfig != null) {
             ConfigDraft globalDraft = mergeDraft(fromEntity(globalConfig), fallback, true);
+            globalDraft.sharedScope = true;
             if (isUsableConfig(globalDraft)) {
                 return new EffectiveConfig(globalDraft, SCOPE_GLOBAL);
             }
@@ -162,16 +167,25 @@ public class AiConfigServiceImpl implements AiConfigService {
     }
 
     private ConfigDraft resolveLegacyFallback() {
-        return mergeDraft(loadLegacyConfig(), fromProperties(), true);
+        ConfigDraft fallback = mergeDraft(loadLegacyConfig(), fromProperties(), true);
+        fallback.sharedScope = true;
+        return fallback;
     }
 
+    /**
+     * 根据请求组装要保存的配置。
+     *
+     * @param sharedScope 是否为共享配置（管理员维护）。共享配置允许回落到环境变量中的 Key；
+     *                    但沿用旧 Key 时要求服务主机不变，否则管理员只改 Base URL 就能把共享 Key 发到自己的服务器上。
+     */
     private ConfigDraft buildTargetConfig(
             AiConfigUpdateRequest request,
             ConfigDraft existing,
             ConfigDraft fallback,
-            boolean allowFallbackSecrets
+            boolean sharedScope
     ) {
         ConfigDraft target = new ConfigDraft();
+        target.sharedScope = sharedScope;
         target.enabled = request.getEnabled() == null ? firstNonNull(bool(existing, "enabled"), fallback.enabled) : request.getEnabled();
         target.mockMode = request.getMockMode() == null ? firstNonNull(bool(existing, "mockMode"), fallback.mockMode) : request.getMockMode();
         target.autoSummary = request.getAutoSummary() == null ? firstNonNull(bool(existing, "autoSummary"), fallback.autoSummary, Boolean.TRUE) : request.getAutoSummary();
@@ -192,17 +206,79 @@ public class AiConfigServiceImpl implements AiConfigService {
                 text(existing, "defaultEmbeddingModel"),
                 fallback.defaultEmbeddingModel
         );
-        target.apiKey = pickSecret(
+        boolean realCalls = Boolean.TRUE.equals(target.enabled) && !Boolean.TRUE.equals(target.mockMode);
+        ResolvedAiConfig targetEndpoints = toResolvedConfig(target);
+        // 旧 Key 实际生效时对应的地址：已保存的字段优先，没填的字段落到同一份兜底配置上。
+        ResolvedAiConfig existingEndpoints = toResolvedConfig(mergeDraft(existing, fallback, sharedScope));
+        ResolvedAiConfig fallbackEndpoints = toResolvedConfig(fallback);
+        target.apiKey = resolveSecret(
                 request.getApiKey(),
-                text(existing, "apiKey"),
-                allowFallbackSecrets ? fallback.apiKey : null
+                List.of(
+                        new SecretSource(text(existing, "apiKey"), existingEndpoints.baseUrl()),
+                        new SecretSource(sharedScope ? fallback.apiKey : null, fallbackEndpoints.baseUrl())
+                ),
+                targetEndpoints.baseUrl(),
+                sharedScope,
+                "聊天",
+                realCalls
         );
-        target.embeddingApiKey = pickSecret(
+        target.embeddingApiKey = resolveSecret(
                 request.getEmbeddingApiKey(),
-                text(existing, "embeddingApiKey"),
-                allowFallbackSecrets ? fallback.embeddingApiKey : null
+                List.of(
+                        new SecretSource(text(existing, "embeddingApiKey"), existingEndpoints.embeddingBaseUrl()),
+                        new SecretSource(sharedScope ? fallback.embeddingApiKey : null, fallbackEndpoints.embeddingBaseUrl())
+                ),
+                targetEndpoints.embeddingBaseUrl(),
+                sharedScope,
+                "向量",
+                realCalls
         );
         return target;
+    }
+
+    /**
+     * 决定保存时使用哪个 Key：请求里填了新 Key 就用新的；留空时才沿用已有 Key。
+     *
+     * <p>共享配置沿用已有 Key 的前提是服务主机没有变化。主机变了就不再沿用，
+     * 需要真实调用时直接提示重新填写；Mock / 关闭状态下则把 Key 清空。</p>
+     *
+     * @param candidates 按优先级排列的可沿用 Key 及其原本对应的服务地址
+     * @param checkHost 是否要求服务主机不变（共享配置为 true）
+     */
+    private String resolveSecret(
+            String requestedSecret,
+            List<SecretSource> candidates,
+            String targetUrl,
+            boolean checkHost,
+            String label,
+            boolean realCalls
+    ) {
+        String provided = normalizeSecret(requestedSecret);
+        if (hasText(provided)) {
+            return provided;
+        }
+        boolean droppedForNewHost = false;
+        for (SecretSource candidate : candidates) {
+            String secret = normalizeSecret(candidate.secret());
+            if (!hasText(secret)) {
+                continue;
+            }
+            if (!checkHost || sameOrigin(candidate.url(), targetUrl)) {
+                return secret;
+            }
+            droppedForNewHost = true;
+        }
+        if (droppedForNewHost && realCalls) {
+            throw new BusinessException(label + "服务地址已改为 " + hostOf(targetUrl)
+                    + "，请重新填写对应的 API Key（为防止密钥被发送到新地址，原 Key 不会沿用）");
+        }
+        return null;
+    }
+
+    /**
+     * 可沿用的 Key 及其原本对应的服务地址。
+     */
+    private record SecretSource(String secret, String url) {
     }
 
     private void validateConfig(ConfigDraft draft) {
@@ -229,7 +305,7 @@ public class AiConfigServiceImpl implements AiConfigService {
             throw new BusinessException("请填写当前配置作用域自己的 AI API Key。普通用户不填写个人 Key 时，只有接口地址、路径和模型与共享配置一致，才会复用管理员共享 Key。");
         }
         if (!hasText(config.embeddingApiKey())) {
-            throw new BusinessException("向量配置与共享配置不一致，请填写自己的向量 API Key。");
+            throw new BusinessException("请填写向量 API Key：向量服务与聊天服务不在同一主机，或与共享配置不一致时，不会复用其他 Key。");
         }
     }
 
@@ -333,7 +409,11 @@ public class AiConfigServiceImpl implements AiConfigService {
 
         String apiKey = normalizeSecret(draft.apiKey);
         String embeddingApiKey = normalizeSecret(draft.embeddingApiKey);
-        if (!hasText(embeddingApiKey) && !draft.sharedChatKeyInherited) {
+        // 没有单独的向量 Key 时可借用聊天 Key；但共享 Key 只借给同一主机的向量服务，
+        // 否则把向量地址改成别的主机就能让共享聊天 Key 被发过去。
+        if (!hasText(embeddingApiKey)
+                && !draft.sharedChatKeyInherited
+                && (!draft.sharedScope || sameOrigin(embeddingBaseUrl, baseUrl))) {
             embeddingApiKey = apiKey;
         }
 
@@ -376,8 +456,18 @@ public class AiConfigServiceImpl implements AiConfigService {
         result.embeddingBaseUrl = pickText(safeOverride.embeddingBaseUrl, safeFallback.embeddingBaseUrl);
         result.embeddingPath = pickText(safeOverride.embeddingPath, safeFallback.embeddingPath);
         result.defaultEmbeddingModel = pickText(safeOverride.defaultEmbeddingModel, safeFallback.defaultEmbeddingModel);
-        result.apiKey = pickSecret(safeOverride.apiKey, allowFallbackSecrets ? safeFallback.apiKey : null);
-        result.embeddingApiKey = pickSecret(safeOverride.embeddingApiKey, allowFallbackSecrets ? safeFallback.embeddingApiKey : null);
+        // 兜底配置里的 Key 只补给同一服务主机：保存的地址指向别的主机时，不能把兜底 Key 一起带过去。
+        ResolvedAiConfig resultEndpoints = toResolvedConfig(result);
+        ResolvedAiConfig fallbackEndpoints = toResolvedConfig(safeFallback);
+        boolean fallbackChatKeyAllowed = allowFallbackSecrets
+                && sameOrigin(resultEndpoints.baseUrl(), fallbackEndpoints.baseUrl());
+        boolean fallbackEmbeddingKeyAllowed = allowFallbackSecrets
+                && sameOrigin(resultEndpoints.embeddingBaseUrl(), fallbackEndpoints.embeddingBaseUrl());
+        result.apiKey = pickSecret(safeOverride.apiKey, fallbackChatKeyAllowed ? safeFallback.apiKey : null);
+        result.embeddingApiKey = pickSecret(
+                safeOverride.embeddingApiKey,
+                fallbackEmbeddingKeyAllowed ? safeFallback.embeddingApiKey : null
+        );
         return result;
     }
 
@@ -432,6 +522,7 @@ public class AiConfigServiceImpl implements AiConfigService {
         target.chatPath = source.chatPath;
         target.apiKey = source.apiKey;
         target.sharedChatKeyInherited = source.sharedChatKeyInherited;
+        target.sharedScope = source.sharedScope;
         target.defaultModel = source.defaultModel;
         target.embeddingProviderType = source.embeddingProviderType;
         target.embeddingBaseUrl = source.embeddingBaseUrl;
@@ -452,6 +543,36 @@ public class AiConfigServiceImpl implements AiConfigService {
 
     private boolean sameUrl(String left, String right) {
         return sameConfigValue(trimTrailingSlash(left), trimTrailingSlash(right));
+    }
+
+    /**
+     * 判断两个地址是否指向同一服务主机（协议、主机名、端口都相同）。无法解析的地址一律视为不同。
+     */
+    private boolean sameOrigin(String left, String right) {
+        String leftOrigin = originOf(left);
+        return leftOrigin != null && leftOrigin.equals(originOf(right));
+    }
+
+    private String originOf(String url) {
+        if (!hasText(url)) {
+            return null;
+        }
+        try {
+            URI uri = new URI(url.trim());
+            if (uri.getScheme() == null || uri.getHost() == null) {
+                return null;
+            }
+            String scheme = uri.getScheme().toLowerCase(Locale.ROOT);
+            int port = uri.getPort() != -1 ? uri.getPort() : ("https".equals(scheme) ? 443 : 80);
+            return scheme + "://" + uri.getHost().toLowerCase(Locale.ROOT) + ":" + port;
+        } catch (URISyntaxException exception) {
+            return null;
+        }
+    }
+
+    private String hostOf(String url) {
+        String origin = originOf(url);
+        return origin == null ? "新地址" : origin.substring(origin.indexOf("://") + 3);
     }
 
     private boolean samePath(String left, String right) {
@@ -717,6 +838,9 @@ public class AiConfigServiceImpl implements AiConfigService {
         private String apiKey;
         @JsonIgnore
         private boolean sharedChatKeyInherited;
+        /** 是否为共享配置（管理员共享配置或环境变量），共享 Key 只能发往原来的服务主机。 */
+        @JsonIgnore
+        private boolean sharedScope;
         private String defaultModel;
         private String embeddingProviderType;
         private String embeddingBaseUrl;

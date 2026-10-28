@@ -150,8 +150,9 @@ class AiConfigServiceImplTest {
     }
 
     @Test
-    void matchingEmbeddingEndpointCanReuseTheSharedChatKeyWhenNoSeparateSharedEmbeddingKeyExists() {
+    void sharedChatKeyIsLentToAnEmbeddingServiceOnTheSameHost() {
         global.setEmbeddingApiKey(null);
+        global.setEmbeddingBaseUrl("https://shared-chat.example.test/");
 
         service.updateConfig(USER_ID, new AiConfigUpdateRequest());
 
@@ -258,6 +259,94 @@ class AiConfigServiceImplTest {
         assertFalse(service.getConfig(USER_ID).getCanManageGlobal());
     }
 
+    @Test
+    void sharedChatKeyIsNeverLentToAnEmbeddingServiceOnAnotherHost() {
+        global.setEmbeddingApiKey(null);
+        global.setEmbeddingBaseUrl("https://attacker.example.test");
+
+        ResolvedAiConfig resolved = service.getResolvedConfig(USER_ID);
+
+        assertEquals(SHARED_CHAT_KEY, resolved.apiKey());
+        assertNull(resolved.embeddingApiKey());
+    }
+
+    @Test
+    void adminMovingTheSharedChatServiceToAnotherHostMustReenterTheKey() {
+        actAsAdmin();
+        AiConfigUpdateRequest request = new AiConfigUpdateRequest();
+        request.setBaseUrl("https://attacker.example.test");
+        request.setApiKey("");
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.updateGlobalConfig(USER_ID, request));
+
+        assertTrue(exception.getMessage().contains("请重新填写对应的 API Key"));
+        assertTrue(exception.getMessage().contains("attacker.example.test"));
+        verify(configs, never()).updateById(any(AiConfig.class));
+        assertEquals(SHARED_CHAT_KEY, cipher.decrypt(global.getApiKey()));
+    }
+
+    @Test
+    void adminMovingTheSharedEmbeddingServiceToAnotherHostMustReenterTheEmbeddingKey() {
+        actAsAdmin();
+        AiConfigUpdateRequest request = new AiConfigUpdateRequest();
+        request.setEmbeddingBaseUrl("https://attacker.example.test");
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.updateGlobalConfig(USER_ID, request));
+
+        assertTrue(exception.getMessage().contains("向量服务地址已改为"));
+        verify(configs, never()).updateById(any(AiConfig.class));
+    }
+
+    @Test
+    void movingToAnotherHostInMockModeDropsTheOldKeyInsteadOfCarryingItOver() {
+        actAsAdmin();
+        AiConfigUpdateRequest request = new AiConfigUpdateRequest();
+        request.setMockMode(true);
+        request.setBaseUrl("https://attacker.example.test");
+
+        service.updateGlobalConfig(USER_ID, request);
+
+        assertNull(global.getApiKey());
+        assertEquals(SHARED_EMBEDDING_KEY, cipher.decrypt(global.getEmbeddingApiKey()));
+    }
+
+    @Test
+    void changesOnTheSameHostKeepTheSavedSharedKeys() {
+        actAsAdmin();
+        AiConfigUpdateRequest request = new AiConfigUpdateRequest();
+        request.setBaseUrl("https://SHARED-CHAT.example.test:443/");
+        request.setChatPath("/v2/chat/completions");
+        request.setDefaultModel("another-chat-model");
+
+        service.updateGlobalConfig(USER_ID, request);
+
+        assertEquals(SHARED_CHAT_KEY, cipher.decrypt(global.getApiKey()));
+        assertEquals("another-chat-model", global.getDefaultModel());
+    }
+
+    @Test
+    void environmentKeyIsNotPairedWithASavedSharedUrlOnAnotherHost() {
+        properties.setApiKey("environment-test-key");
+        global.setApiKey(null);
+        global.setBaseUrl("https://attacker.example.test");
+
+        // 共享配置没有可用 Key，整体退回环境变量配置：环境 Key 只会发往环境变量里的地址。
+        ResolvedAiConfig resolved = service.getResolvedConfig(USER_ID);
+        assertEquals("https://shared-chat.example.test", resolved.baseUrl());
+        assertEquals("environment-test-key", resolved.apiKey());
+
+        global.setBaseUrl(null);
+        assertEquals("environment-test-key", service.getResolvedConfig(USER_ID).apiKey());
+    }
+
+    private void actAsAdmin() {
+        SysUser admin = new SysUser();
+        admin.setRoleCode("ADMIN");
+        when(users.selectById(USER_ID)).thenReturn(admin);
+    }
+
     @ParameterizedTest
     @CsvSource({"true, true", "false, false", "false, true"})
     void mockOrDisabledConfigCanBeSavedWithoutForwardingSharedKeys(boolean enabled, boolean mockMode) {
@@ -308,6 +397,7 @@ class AiConfigServiceImplTest {
     @Test
     void aStoredEmbeddingPlaceholderFallsBackToTheValidChatKey() {
         global.setEmbeddingApiKey("replace-with-your-api-key");
+        global.setEmbeddingBaseUrl("https://shared-chat.example.test");
 
         ResolvedAiConfig result = service.getResolvedConfig(USER_ID);
 

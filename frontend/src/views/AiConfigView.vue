@@ -158,7 +158,9 @@
                   <p class="config-field-help" :class="{ 'config-field-help--ready': configInfo.apiKeyConfigured }">
                     <AppIcon v-if="configInfo.apiKeyConfigured" name="check" :size="14" />
                     {{
-                      configInfo.apiKeyConfigured ? '已配置密钥，留空即可沿用。' : '尚未配置密钥。演示体验无需填写。'
+                      configInfo.apiKeyConfigured
+                        ? '已配置密钥，留空即可沿用；服务地址换到其他主机时需要重新填写。'
+                        : '尚未配置密钥。演示体验无需填写。'
                     }}
                   </p>
                 </el-form-item>
