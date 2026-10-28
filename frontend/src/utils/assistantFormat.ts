@@ -1,4 +1,10 @@
-import type { AssistantSessionDetail, AssistantSessionPageItem } from '@/api/modules/assistant'
+import type {
+  AssistantCitation,
+  AssistantRagEvidence,
+  AssistantSessionDetail,
+  AssistantSessionPageItem,
+  AssistantToolCall
+} from '@/api/modules/assistant'
 
 /** 学习助手相关的纯格式化 / 判定函数，不依赖任何组件状态。 */
 
@@ -74,4 +80,64 @@ export const buildLocalDateTime = () => {
   const now = new Date()
   const pad = (value: number) => String(value).padStart(2, '0')
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`
+}
+
+type LegacyRetrievedSegment = {
+  segmentId?: number
+  segmentNo?: number
+  pageNo?: number
+  sectionTitle?: string
+  contentText?: string
+  score?: number
+}
+
+const legacyLocationText = (segment: LegacyRetrievedSegment) =>
+  segment.sectionTitle ||
+  [segment.pageNo ? `第 ${segment.pageNo} 页` : '', segment.segmentNo ? `第 ${segment.segmentNo} 段` : '']
+    .filter(Boolean)
+    .join(' · ') ||
+  '资料片段'
+
+/**
+ * 从本轮工具调用中取出资料问答的检索依据（rag.retrieve 的结果）。
+ *
+ * 新版结果是带编号引用的对象；早期会话保存的是分段数组，这里一并兼容，只是没有资料名和依据判定。
+ */
+export const parseRagEvidence = (toolCalls: AssistantToolCall[]): AssistantRagEvidence | null => {
+  const call = [...toolCalls]
+    .reverse()
+    .find(
+      (item) =>
+        item.toolName === 'rag.retrieve' && String(item.status || '').toUpperCase() === 'SUCCESS' && item.toolResultJson
+    )
+  if (!call?.toolResultJson) return null
+
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(call.toolResultJson)
+  } catch {
+    return null
+  }
+
+  if (Array.isArray(parsed)) {
+    const segments = parsed as LegacyRetrievedSegment[]
+    return {
+      evidenceLevel: segments.length ? undefined : 'NONE',
+      citations: segments.map<AssistantCitation>((segment, index) => ({
+        index: index + 1,
+        segmentId: segment.segmentId,
+        segmentNo: segment.segmentNo,
+        pageNo: segment.pageNo,
+        sectionTitle: segment.sectionTitle,
+        locationText: legacyLocationText(segment),
+        contentText: segment.contentText,
+        score: segment.score
+      }))
+    }
+  }
+
+  if (parsed && typeof parsed === 'object' && Array.isArray((parsed as AssistantRagEvidence).citations)) {
+    return parsed as AssistantRagEvidence
+  }
+  return null
 }

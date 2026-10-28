@@ -56,6 +56,36 @@ export interface AssistantRelevantMemory {
   summaryText?: string
 }
 
+/** rag.retrieve 工具返回的一条引用片段，index 与回答中的 [n] 对应。 */
+export interface AssistantCitation {
+  index: number
+  segmentId?: number
+  segmentNo?: number
+  pageNo?: number
+  sectionTitle?: string
+  locationText: string
+  contentText?: string
+  score?: number
+  semanticScore?: number | null
+  lexicalScore?: number
+}
+
+/** SUFFICIENT：依据充分；WEAK：片段与问题相关度较低；NONE：没有检索到片段。 */
+export type AssistantEvidenceLevel = 'SUFFICIENT' | 'WEAK' | 'NONE'
+
+/** rag.retrieve 工具结果：资料问答的检索依据。 */
+export interface AssistantRagEvidence {
+  materialId?: number
+  materialTitle?: string
+  queryText?: string
+  retrievalMode?: 'VECTOR' | 'TEXT'
+  degraded?: boolean
+  degradeReason?: string | null
+  mockEmbedding?: boolean
+  evidenceLevel?: AssistantEvidenceLevel
+  citations: AssistantCitation[]
+}
+
 export interface AssistantSessionPageItem {
   id: number
   title: string

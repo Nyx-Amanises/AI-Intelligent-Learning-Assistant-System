@@ -43,8 +43,10 @@
       助手长时间没有响应，已停止等待。可以重新发送试试。
     </p>
 
+    <AssistantCitations v-if="!isUser && evidence" :evidence="evidence" />
+
     <details v-if="hasTrace" class="assistant-turn__trace">
-      <summary>查看引用与轨迹</summary>
+      <summary>查看调用轨迹</summary>
 
       <div v-if="toolCalls.length" class="assistant-trace-block">
         <div class="assistant-trace-block__label">工具调用</div>
@@ -87,7 +89,8 @@ import { computed } from 'vue'
 import type { AssistantMessage, AssistantRelevantMemory, AssistantToolCall } from '@/api/modules/assistant'
 import AppIcon from '@/components/AppIcon.vue'
 import LearningNoteContent from '@/components/LearningNoteContent.vue'
-import { formatDateTime, formatJson, isUserMessage, toolStatusClass } from '@/utils/assistantFormat'
+import AssistantCitations from '@/components/assistant/AssistantCitations.vue'
+import { formatDateTime, formatJson, isUserMessage, parseRagEvidence, toolStatusClass } from '@/utils/assistantFormat'
 
 const props = defineProps<{
   message: AssistantMessage
@@ -99,6 +102,9 @@ const props = defineProps<{
 }>()
 
 const isUser = computed(() => isUserMessage(props.message.role))
+
+/** 本轮资料问答的检索依据；没有调用 rag.retrieve 时为 null。 */
+const evidence = computed(() => (isUser.value ? null : parseRagEvidence(props.toolCalls)))
 
 const hasTrace = computed(
   () =>
