@@ -49,6 +49,11 @@ public class MaterialPageVO {
     private String tags;
 
     /**
+     * 资料说明。
+     */
+    private String description;
+
+    /**
      * 资料总字符数。
      */
     private Integer totalCharacters;

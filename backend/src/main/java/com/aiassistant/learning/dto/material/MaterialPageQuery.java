@@ -26,7 +26,12 @@ public class MaterialPageQuery {
     private Long size = 10L;
 
     /**
-     * 标题关键词，非空时按标题模糊搜索。
+     * 搜索关键词，非空时同时模糊匹配标题、标签和资料说明。
+     */
+    private String keyword;
+
+    /**
+     * 标题关键词，非空时按标题模糊搜索；已被 keyword 取代，保留以兼容旧调用。
      */
     private String title;
 

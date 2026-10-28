@@ -1,6 +1,7 @@
 package com.aiassistant.learning.service.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -19,6 +20,8 @@ import com.aiassistant.learning.common.exception.BusinessException;
 import com.aiassistant.learning.config.FileStorageProperties;
 import com.aiassistant.learning.dto.ai.SummaryGenerateRequest;
 import com.aiassistant.learning.dto.material.MaterialCreateRequest;
+import com.aiassistant.learning.dto.material.MaterialPageQuery;
+import com.aiassistant.learning.dto.material.MaterialUpdateRequest;
 import com.aiassistant.learning.entity.MaterialSegment;
 import com.aiassistant.learning.entity.StudyMaterial;
 import com.aiassistant.learning.mapper.MaterialSegmentMapper;
@@ -28,19 +31,28 @@ import com.aiassistant.learning.service.VectorStoreService;
 import com.aiassistant.learning.vo.material.MaterialPageVO;
 import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentCaptor;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * StudyMaterialServiceImpl 单元测试：文本资料创建、TXT 解析切片、重命名 / 删除、助手搜索排序与向量状态汇总。
@@ -206,8 +218,145 @@ class StudyMaterialServiceImplTest {
 
         assertThrows(BusinessException.class, () -> service.renameMaterial(USER_ID, MATERIAL_ID, "标题"));
         assertThrows(BusinessException.class, () -> service.deleteMaterial(USER_ID, MATERIAL_ID));
+        assertThrows(BusinessException.class, () -> service.updateMaterialInfo(USER_ID, MATERIAL_ID, updateRequest("标题")));
         verify(segments, never()).delete(any());
         verify(service, never()).removeById(any(Long.class));
+        verify(service, never()).update(any(Wrapper.class));
+    }
+
+    @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void updateMaterialInfoWritesEditableColumnsAndNormalizesTags() {
+        doReturn(material(MATERIAL_ID, "旧标题", "SUCCESS")).when(service).getOne(any());
+        doReturn(true).when(service).update(any(Wrapper.class));
+        MaterialUpdateRequest request = updateRequest("  新标题 ");
+        request.setTags(" 期末复习，第三章、期末复习 ;重点 ");
+        request.setDifficultyLevel(4);
+        request.setDescription("  来源：人教版必修1 课件 ");
+
+        service.updateMaterialInfo(USER_ID, MATERIAL_ID, request);
+
+        ArgumentCaptor<Wrapper<StudyMaterial>> update = ArgumentCaptor.forClass(Wrapper.class);
+        verify(service).update(update.capture());
+        LambdaUpdateWrapper<StudyMaterial> statement = (LambdaUpdateWrapper<StudyMaterial>) update.getValue();
+        assertEquals(Set.of("title", "tags", "description", "difficulty_level"), assignedColumns(statement));
+        assertTrue(statement.getSqlSegment().contains("user_id ="));
+        assertTrue(statement.getParamNameValuePairs().containsValue("新标题"));
+        assertTrue(statement.getParamNameValuePairs().containsValue("期末复习,第三章,重点"));
+        assertTrue(statement.getParamNameValuePairs().containsValue("来源：人教版必修1 课件"));
+        assertTrue(statement.getParamNameValuePairs().containsValue(4));
+        verify(segments).update(isNull(), any());
+    }
+
+    @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void updateMaterialInfoClearsBlankTagsAndKeepsDifficultyWhenOmitted() {
+        doReturn(material(MATERIAL_ID, "标题", "SUCCESS")).when(service).getOne(any());
+        doReturn(true).when(service).update(any(Wrapper.class));
+        MaterialUpdateRequest request = updateRequest("标题");
+        request.setTags(" ， ");
+        request.setDescription("   ");
+
+        service.updateMaterialInfo(USER_ID, MATERIAL_ID, request);
+
+        ArgumentCaptor<Wrapper<StudyMaterial>> update = ArgumentCaptor.forClass(Wrapper.class);
+        verify(service).update(update.capture());
+        LambdaUpdateWrapper<StudyMaterial> statement = (LambdaUpdateWrapper<StudyMaterial>) update.getValue();
+        assertEquals(Set.of("title", "tags", "description"), assignedColumns(statement));
+        assertTrue(statement.getSqlSet().contains("tags=null") || statement.getParamNameValuePairs().containsValue(null));
+        verify(segments, never()).update(isNull(), any());
+    }
+
+    @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void pageKeywordSearchesTitleTagsAndDescription() {
+        doReturn(new Page<StudyMaterial>(1, 10)).when(service).page(any(), any(Wrapper.class));
+        MaterialPageQuery query = new MaterialPageQuery();
+        query.setKeyword(" 期末 ");
+
+        service.pageMaterials(USER_ID, query);
+
+        ArgumentCaptor<Wrapper<StudyMaterial>> wrapper = ArgumentCaptor.forClass(Wrapper.class);
+        verify(service).page(any(), wrapper.capture());
+        String sql = wrapper.getValue().getSqlSegment();
+        assertTrue(sql.contains("title LIKE"));
+        assertTrue(sql.contains("tags LIKE"));
+        assertTrue(sql.contains("description LIKE"));
+        assertTrue(((LambdaQueryWrapper<StudyMaterial>) wrapper.getValue()).getParamNameValuePairs().containsValue("%期末%"));
+    }
+
+    @Test
+    void deleteMaterialRemovesTheUploadedFileOnlyAfterCommit() throws Exception {
+        Path stored = Files.writeString(temporaryDirectory.resolve("stored.pdf"), "%PDF-1.4");
+        StudyMaterial material = material(MATERIAL_ID, "细胞", "SUCCESS");
+        material.setFileUrl(stored.toString());
+        doReturn(material).when(service).getOne(any());
+
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            service.deleteMaterial(USER_ID, MATERIAL_ID);
+            assertTrue(Files.exists(stored), "事务提交前不能删除文件");
+            TransactionSynchronizationManager.getSynchronizations().forEach(TransactionSynchronization::afterCommit);
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+
+        assertFalse(Files.exists(stored));
+    }
+
+    @Test
+    void deleteMaterialNeverTouchesFilesOutsideTheUploadDirectory(@TempDir Path elsewhere) throws Exception {
+        Path outside = Files.writeString(elsewhere.resolve("important.txt"), "keep me");
+        StudyMaterial material = material(MATERIAL_ID, "细胞", "SUCCESS");
+        material.setFileUrl(outside.toString());
+        doReturn(material).when(service).getOne(any());
+
+        service.deleteMaterial(USER_ID, MATERIAL_ID);
+
+        assertTrue(Files.exists(outside));
+    }
+
+    @Test
+    void uploadRejectsFilesWhoseContentDoesNotMatchTheExtension() throws Exception {
+        assertThrows(BusinessException.class, () -> service.uploadMaterial(USER_ID,
+                new MockMultipartFile("file", "notes.pdf", "application/pdf", "just text".getBytes(StandardCharsets.UTF_8))));
+        assertThrows(BusinessException.class, () -> service.uploadMaterial(USER_ID,
+                new MockMultipartFile("file", "old.docx", "application/msword",
+                        new byte[] {(byte) 0xD0, (byte) 0xCF, 0x11, (byte) 0xE0, 0, 0})));
+        assertThrows(BusinessException.class, () -> service.uploadMaterial(USER_ID,
+                new MockMultipartFile("file", "utf16.txt", "text/plain", "study notes".getBytes(StandardCharsets.UTF_16LE))));
+
+        verify(service, never()).save(any(StudyMaterial.class));
+        try (var files = Files.list(temporaryDirectory)) {
+            assertEquals(0, files.count(), "被拒绝的文件不应写入上传目录");
+        }
+    }
+
+    @Test
+    void uploadAcceptsAPlainUtf8TextFile() {
+        MockMultipartFile file = new MockMultipartFile("file", "细胞.txt", "text/plain",
+                "第一章 细胞\n细胞是生命活动的基本单位。".getBytes(StandardCharsets.UTF_8));
+
+        Long materialId = service.uploadMaterial(USER_ID, file);
+
+        assertEquals(MATERIAL_ID, materialId);
+        ArgumentCaptor<StudyMaterial> saved = ArgumentCaptor.forClass(StudyMaterial.class);
+        verify(service).save(saved.capture());
+        assertEquals("TXT", saved.getValue().getMaterialType());
+        assertEquals("细胞", saved.getValue().getTitle());
+        assertEquals("SUCCESS", saved.getValue().getParseStatus());
+    }
+
+    private MaterialUpdateRequest updateRequest(String title) {
+        MaterialUpdateRequest request = new MaterialUpdateRequest();
+        request.setTitle(title);
+        return request;
+    }
+
+    private Set<String> assignedColumns(LambdaUpdateWrapper<StudyMaterial> statement) {
+        return Arrays.stream(statement.getSqlSet().split(","))
+                .map(assignment -> assignment.substring(0, assignment.indexOf('=')).trim())
+                .collect(Collectors.toSet());
     }
 
     @Test

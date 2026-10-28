@@ -5,6 +5,7 @@ import com.aiassistant.learning.context.UserContext;
 import com.aiassistant.learning.dto.material.MaterialCreateRequest;
 import com.aiassistant.learning.dto.material.MaterialPageQuery;
 import com.aiassistant.learning.dto.material.MaterialRenameRequest;
+import com.aiassistant.learning.dto.material.MaterialUpdateRequest;
 import com.aiassistant.learning.service.StudyMaterialService;
 import com.aiassistant.learning.vo.material.MaterialDetailVO;
 import com.aiassistant.learning.vo.material.MaterialPageVO;
@@ -25,7 +26,7 @@ import org.springframework.web.multipart.MultipartFile;
 /**
  * 学习资料管理接口。
  *
- * <p>这个 Controller 负责资料的新增、上传、分页查询、详情、重命名、解析和删除。
+ * <p>这个 Controller 负责资料的新增、上传、分页查询、详情、信息编辑、解析和删除。
  * 每个接口都会先从 {@link UserContext} 获取当前登录用户 ID，确保用户只能操作自己的资料。</p>
  */
 @Validated
@@ -109,6 +110,20 @@ public class StudyMaterialController {
         Long userId = UserContext.getCurrentUserId();
         studyMaterialService.renameMaterial(userId, id, request.getTitle());
         return ApiResponse.success("资料名称已更新", null);
+    }
+
+    /**
+     * 编辑资料信息：标题、标签、难度和资料说明。
+     *
+     * @param id 资料 ID
+     * @param request 新的资料信息
+     * @return 修改成功提示
+     */
+    @PutMapping("/{id}")
+    public ApiResponse<Void> update(@PathVariable Long id, @Valid @RequestBody MaterialUpdateRequest request) {
+        Long userId = UserContext.getCurrentUserId();
+        studyMaterialService.updateMaterialInfo(userId, id, request);
+        return ApiResponse.success("资料信息已更新", null);
     }
 
     /**

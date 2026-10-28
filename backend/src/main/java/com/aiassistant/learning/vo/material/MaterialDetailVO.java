@@ -37,13 +37,10 @@ public class MaterialDetailVO {
 
     /**
      * 原始文件名。
+     *
+     * <p>服务器上的保存路径不返回给前端，避免暴露部署目录结构。</p>
      */
     private String fileName;
-
-    /**
-     * 服务器保存路径。
-     */
-    private String fileUrl;
 
     /**
      * 文件大小，单位通常为字节。
@@ -69,6 +66,11 @@ public class MaterialDetailVO {
      * 资料标签。
      */
     private String tags;
+
+    /**
+     * 资料说明，例如来源、版本或用途备注。
+     */
+    private String description;
 
     /**
      * 资料总页数。

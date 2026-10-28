@@ -4,6 +4,7 @@ import com.aiassistant.learning.common.exception.BusinessException;
 import com.aiassistant.learning.config.FileStorageProperties;
 import com.aiassistant.learning.dto.material.MaterialCreateRequest;
 import com.aiassistant.learning.dto.material.MaterialPageQuery;
+import com.aiassistant.learning.dto.material.MaterialUpdateRequest;
 import com.aiassistant.learning.entity.MaterialSegment;
 import com.aiassistant.learning.entity.StudyMaterial;
 import com.aiassistant.learning.mapper.MaterialSegmentMapper;
@@ -21,6 +22,7 @@ import com.aiassistant.learning.vo.material.MaterialSegmentVO;
 import com.aiassistant.learning.vo.page.PageVO;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -32,6 +34,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -44,6 +47,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -117,7 +122,8 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
         material.setParseStatus("SUCCESS");
         material.setSummaryStatus("PENDING");
         material.setDifficultyLevel(request.getDifficultyLevel() == null ? 3 : request.getDifficultyLevel());
-        material.setTags(request.getTags());
+        material.setTags(normalizeTags(request.getTags()));
+        material.setDescription(trimToNull(request.getDescription()));
         material.setTotalCharacters(request.getContentText().length());
         material.setDeleted(0);
         this.save(material);
@@ -137,8 +143,8 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
     /**
      * 上传文件资料。
      *
-     * <p>这个方法只负责校验文件类型、保存文件和创建资料记录；
-     * 文件正文解析由 {@link #parseMaterial(Long, Long)} 单独执行。</p>
+     * <p>这个方法负责校验文件类型与文件头、保存文件、创建资料记录并立即尝试解析；
+     * 如果事务最终回滚，已经写到磁盘上的文件也会被删掉，避免留下孤儿文件。</p>
      *
      * @param userId 当前登录用户 ID
      * @param file 上传文件
@@ -153,6 +159,7 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
 
         String originalFilename = file.getOriginalFilename();
         String materialType = resolveMaterialType(originalFilename);
+        verifyFileSignature(file, materialType);
         Path uploadDir = initUploadDir();
         String storedFilename = UUID.randomUUID() + getExtension(originalFilename);
         Path targetPath = uploadDir.resolve(storedFilename);
@@ -162,6 +169,7 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
         } catch (IOException exception) {
             throw new BusinessException(500, "文件保存失败");
         }
+        deleteStoredFileOnRollback(targetPath.toString());
 
         StudyMaterial material = new StudyMaterial();
         material.setUserId(userId);
@@ -205,11 +213,19 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
      */
     @Override
     public PageVO<MaterialPageVO> pageMaterials(Long userId, MaterialPageQuery query) {
+        String keyword = StringUtils.hasText(query.getKeyword())
+                ? query.getKeyword().trim()
+                : (StringUtils.hasText(query.getTitle()) ? query.getTitle().trim() : null);
         Page<StudyMaterial> page = this.page(
                 new Page<>(query.getCurrent(), query.getSize()),
                 new LambdaQueryWrapper<StudyMaterial>()
                         .eq(StudyMaterial::getUserId, userId)
-                        .like(StringUtils.hasText(query.getTitle()), StudyMaterial::getTitle, query.getTitle())
+                        .and(keyword != null, wrapper -> wrapper
+                                .like(StudyMaterial::getTitle, keyword)
+                                .or()
+                                .like(StudyMaterial::getTags, keyword)
+                                .or()
+                                .like(StudyMaterial::getDescription, keyword))
                         .eq(StringUtils.hasText(query.getMaterialType()), StudyMaterial::getMaterialType, query.getMaterialType())
                         .eq(StringUtils.hasText(query.getParseStatus()), StudyMaterial::getParseStatus, query.getParseStatus())
                         .orderByDesc(StudyMaterial::getCreatedAt)
@@ -349,12 +365,12 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
                 .materialType(material.getMaterialType())
                 .sourceType(material.getSourceType())
                 .fileName(material.getFileName())
-                .fileUrl(material.getFileUrl())
                 .fileSize(material.getFileSize())
                 .parseStatus(material.getParseStatus())
                 .summaryStatus(material.getSummaryStatus())
                 .difficultyLevel(material.getDifficultyLevel())
                 .tags(material.getTags())
+                .description(material.getDescription())
                 .totalPages(material.getTotalPages())
                 .totalCharacters(material.getTotalCharacters())
                 .embeddingStatus(resolveEmbeddingStatus(material.getParseStatus(), embeddingStats))
@@ -383,11 +399,50 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
         String normalizedTitle = normalizeTitle(title, "资料标题不能为空");
         material.setTitle(normalizedTitle);
         this.updateById(material);
+        syncFirstSegmentTitle(materialId, previousTitle, normalizedTitle);
+    }
+
+    /**
+     * 编辑资料信息。
+     *
+     * <p>用显式 set 写入可编辑列：标签、说明传空时会被清空（updateById 会跳过 null 字段，做不到这一点），
+     * 也不会覆盖解析状态、文件路径等其他字段。难度不传时保持原值。</p>
+     *
+     * @param userId 当前登录用户 ID
+     * @param materialId 资料 ID
+     * @param request 新的资料信息
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void updateMaterialInfo(Long userId, Long materialId, MaterialUpdateRequest request) {
+        StudyMaterial material = getUserOwnedMaterial(userId, materialId);
+        String normalizedTitle = normalizeTitle(request.getTitle(), "资料标题不能为空");
+        String normalizedTags = normalizeTags(request.getTags());
+        if (normalizedTags != null && normalizedTags.length() > 255) {
+            throw new BusinessException("标签长度不能超过255个字符");
+        }
+        this.update(new LambdaUpdateWrapper<StudyMaterial>()
+                .eq(StudyMaterial::getId, material.getId())
+                .eq(StudyMaterial::getUserId, userId)
+                .set(StudyMaterial::getTitle, normalizedTitle)
+                .set(StudyMaterial::getTags, normalizedTags)
+                .set(StudyMaterial::getDescription, trimToNull(request.getDescription()))
+                .set(request.getDifficultyLevel() != null, StudyMaterial::getDifficultyLevel, request.getDifficultyLevel()));
+        syncFirstSegmentTitle(materialId, material.getTitle(), normalizedTitle);
+    }
+
+    /**
+     * 文本资料的第一个分段标题默认等于资料名，资料改名时一并更新，避免详情页显示旧标题。
+     */
+    private void syncFirstSegmentTitle(Long materialId, String previousTitle, String newTitle) {
+        if (newTitle.equals(previousTitle)) {
+            return;
+        }
         materialSegmentMapper.update(null, Wrappers.<MaterialSegment>lambdaUpdate()
                 .eq(MaterialSegment::getMaterialId, materialId)
                 .eq(MaterialSegment::getSegmentNo, 1)
                 .eq(StringUtils.hasText(previousTitle), MaterialSegment::getSectionTitle, previousTitle)
-                .set(MaterialSegment::getSectionTitle, normalizedTitle));
+                .set(MaterialSegment::getSectionTitle, newTitle));
     }
 
     /**
@@ -430,7 +485,8 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
     /**
      * 删除资料。
      *
-     * <p>删除顺序是：校验资料归属、清理向量库、删除数据库分段、删除资料本身。</p>
+     * <p>删除顺序是：校验资料归属、清理向量库、删除数据库分段、删除资料本身；
+     * 上传的原始文件在事务提交后再删除，事务回滚时文件仍然保留。</p>
      *
      * @param userId 当前登录用户 ID
      * @param materialId 资料 ID
@@ -443,6 +499,7 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
         materialSegmentMapper.delete(Wrappers.<MaterialSegment>lambdaQuery()
                 .eq(MaterialSegment::getMaterialId, material.getId()));
         this.removeById(material.getId());
+        deleteStoredFileAfterCommit(material.getFileUrl());
     }
 
     /**
@@ -521,6 +578,7 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
                             .summaryStatus(item.getSummaryStatus())
                             .difficultyLevel(item.getDifficultyLevel())
                             .tags(item.getTags())
+                            .description(item.getDescription())
                             .totalCharacters(item.getTotalCharacters())
                             .embeddingStatus(resolveEmbeddingStatus(item.getParseStatus(), stats))
                             .embeddedSegmentCount(stats.embeddedSegments())
@@ -1111,6 +1169,110 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
     }
 
     /**
+     * 按文件头校验上传内容与扩展名是否一致，避免把改了扩展名的其他文件存进资料库。
+     *
+     * <ul>
+     *   <li>PDF：前 1024 字节内出现 "%PDF-"（规范允许文件头前有少量字节）；</li>
+     *   <li>DOCX：本质是 ZIP 包，以 "PK\003\004" 开头（旧版 .doc 不满足）；</li>
+     *   <li>TXT：开头不含 0 字节，排除二进制文件和 UTF-16 编码文本。</li>
+     * </ul>
+     */
+    private void verifyFileSignature(MultipartFile file, String materialType) {
+        byte[] head;
+        try (InputStream inputStream = file.getInputStream()) {
+            head = inputStream.readNBytes(1024);
+        } catch (IOException exception) {
+            throw new BusinessException("无法读取上传文件，请重新选择");
+        }
+        switch (materialType) {
+            case "PDF" -> {
+                if (indexOf(head, "%PDF-".getBytes(StandardCharsets.US_ASCII)) < 0) {
+                    throw new BusinessException("文件内容不是有效的 PDF，请确认文件没有损坏或被改过扩展名");
+                }
+            }
+            case "DOCX" -> {
+                if (head.length < 4 || head[0] != 'P' || head[1] != 'K' || head[2] != 3 || head[3] != 4) {
+                    throw new BusinessException("文件内容不是有效的 Word（.docx）文档；旧版 .doc 请先另存为 .docx");
+                }
+            }
+            case "TXT" -> {
+                for (byte value : head) {
+                    if (value == 0) {
+                        throw new BusinessException("TXT 资料需为 UTF-8 编码的纯文本文件");
+                    }
+                }
+            }
+            default -> throw new BusinessException("仅支持上传 pdf、docx、txt 文件");
+        }
+    }
+
+    private int indexOf(byte[] source, byte[] target) {
+        outer:
+        for (int start = 0; start <= source.length - target.length; start++) {
+            for (int offset = 0; offset < target.length; offset++) {
+                if (source[start + offset] != target[offset]) {
+                    continue outer;
+                }
+            }
+            return start;
+        }
+        return -1;
+    }
+
+    /**
+     * 上传事务回滚时删除已经写到磁盘的文件。
+     */
+    private void deleteStoredFileOnRollback(String fileUrl) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCompletion(int status) {
+                if (status == STATUS_ROLLED_BACK) {
+                    deleteStoredFile(fileUrl);
+                }
+            }
+        });
+    }
+
+    /**
+     * 删除资料时，在事务提交后删除原始文件；没有事务时立即删除。
+     */
+    private void deleteStoredFileAfterCommit(String fileUrl) {
+        if (!StringUtils.hasText(fileUrl)) {
+            return;
+        }
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            deleteStoredFile(fileUrl);
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                deleteStoredFile(fileUrl);
+            }
+        });
+    }
+
+    /**
+     * 删除上传目录中的资料文件。只删除上传目录之内的路径，防止异常数据指向其他文件。
+     */
+    private void deleteStoredFile(String fileUrl) {
+        try {
+            Path uploadDir = Path.of(fileStorageProperties.getUploadDir()).toAbsolutePath().normalize();
+            Path filePath = Path.of(fileUrl).toAbsolutePath().normalize();
+            if (!filePath.startsWith(uploadDir)) {
+                log.warn("资料文件不在上传目录内，跳过删除: {}", filePath.getFileName());
+                return;
+            }
+            Files.deleteIfExists(filePath);
+        } catch (Exception exception) {
+            log.warn("删除资料原始文件失败: {}", exception.getMessage());
+        }
+    }
+
+    /**
      * 根据文件扩展名判断资料类型。
      *
      * @param fileName 原始文件名
@@ -1166,6 +1328,29 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
             throw new BusinessException("标题长度不能超过200个字符");
         }
         return normalized;
+    }
+
+    /**
+     * 整理标签：按逗号、顿号、分号、竖线或换行拆开，去掉空白和重复项，再用英文逗号连接。
+     *
+     * @param tags 原始标签字符串
+     * @return 整理后的标签；没有有效标签时返回 null
+     */
+    private String normalizeTags(String tags) {
+        if (!StringUtils.hasText(tags)) {
+            return null;
+        }
+        LinkedHashSet<String> values = new LinkedHashSet<>();
+        for (String tag : tags.split("[,，、;；|\\n]+")) {
+            if (StringUtils.hasText(tag)) {
+                values.add(tag.trim());
+            }
+        }
+        return values.isEmpty() ? null : String.join(",", values);
+    }
+
+    private String trimToNull(String value) {
+        return StringUtils.hasText(value) ? value.trim() : null;
     }
 
     /**

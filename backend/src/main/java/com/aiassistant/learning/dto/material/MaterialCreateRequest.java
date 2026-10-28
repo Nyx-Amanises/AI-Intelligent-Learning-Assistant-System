@@ -35,6 +35,12 @@ public class MaterialCreateRequest {
     private String tags;
 
     /**
+     * 资料说明，例如来源、版本或用途备注，可为空。
+     */
+    @Size(max = 500, message = "资料说明不能超过500个字符")
+    private String description;
+
+    /**
      * 难度等级，范围为 1 到 5；为空时 Service 会使用默认值。
      */
     @Min(value = 1, message = "难度等级最小为1")

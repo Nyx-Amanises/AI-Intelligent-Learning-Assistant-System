@@ -90,6 +90,11 @@ public class StudyMaterial extends BaseLogicEntity {
     private String tags;
 
     /**
+     * 资料说明，例如来源、版本或用途备注。
+     */
+    private String description;
+
+    /**
      * 文件总页数，主要用于 PDF 解析结果。
      */
     private Integer totalPages;

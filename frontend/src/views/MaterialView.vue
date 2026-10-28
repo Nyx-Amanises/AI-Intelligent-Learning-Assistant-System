@@ -28,8 +28,8 @@
       <el-input
         v-model="searchKeyword"
         clearable
-        aria-label="按名称搜索资料"
-        placeholder="搜索资料名称…"
+        aria-label="按名称、标签或说明搜索资料"
+        placeholder="搜索资料名称、标签或说明…"
         class="material-library__search"
         @keyup.enter="autoQuery.runNow"
       >
@@ -106,6 +106,9 @@
           <h3 :title="row.title">
             <button type="button" @click="viewDetail(row.id)">{{ row.title }}</button>
           </h3>
+          <p v-if="row.description" class="material-library-card__desc" :title="row.description">
+            {{ row.description }}
+          </p>
           <p class="material-library-card__meta">
             <span>{{ formatDate(row.createdAt) }}</span>
             <span>{{ formatCharacters(row.totalCharacters) }}</span>
@@ -170,7 +173,7 @@
                     :disabled="row.parseStatus !== 'SUCCESS' || row.embeddingStatus === 'RUNNING'"
                     >{{ getEmbeddingActionLabel(row) }}</el-dropdown-item
                   >
-                  <el-dropdown-item command="rename" divided>重命名</el-dropdown-item>
+                  <el-dropdown-item command="edit" divided>编辑信息</el-dropdown-item>
                   <el-dropdown-item command="parse">{{
                     row.parseStatus === 'SUCCESS' ? '重新解析资料' : '解析资料'
                   }}</el-dropdown-item>
@@ -265,6 +268,16 @@
             aria-label="资料难度"
           />
         </el-form-item>
+        <el-form-item label="资料说明">
+          <el-input
+            v-model="form.description"
+            type="textarea"
+            :rows="2"
+            maxlength="500"
+            show-word-limit
+            placeholder="选填，可记录来源、版本或用途"
+          />
+        </el-form-item>
         <el-form-item label="资料内容" required>
           <el-input
             v-model="form.contentText"
@@ -284,15 +297,58 @@
       </template>
     </el-dialog>
 
-    <RenameDialog
-      v-model="renameDialogVisible"
-      title="重命名资料"
-      label="资料名称"
-      placeholder="请输入新的资料名称"
-      :initial-value="renameTarget?.title || ''"
-      :loading="renaming"
-      @save="renameMaterial"
-    />
+    <el-dialog
+      v-model="editDialogVisible"
+      class="material-library-modal"
+      title="编辑资料信息"
+      width="min(620px, calc(100vw - 32px))"
+      destroy-on-close
+    >
+      <el-form label-position="top" class="material-library-form" @submit.prevent="saveMaterialInfo">
+        <el-form-item label="资料标题" required :error="editTitleError">
+          <el-input
+            v-model="editForm.title"
+            maxlength="200"
+            show-word-limit
+            placeholder="请输入资料标题"
+            @input="editTitleError = ''"
+          />
+        </el-form-item>
+        <el-form-item label="标签">
+          <el-input
+            v-model="editForm.tags"
+            maxlength="255"
+            placeholder="多个标签用逗号或顿号分隔，例如：期末复习、第三章"
+          />
+        </el-form-item>
+        <el-form-item label="难度等级">
+          <el-slider
+            v-model="editForm.difficultyLevel"
+            :min="1"
+            :max="5"
+            show-stops
+            :format-tooltip="formatDifficulty"
+            aria-label="资料难度"
+          />
+        </el-form-item>
+        <el-form-item label="资料说明">
+          <el-input
+            v-model="editForm.description"
+            type="textarea"
+            :rows="3"
+            maxlength="500"
+            show-word-limit
+            placeholder="可记录来源、版本或用途，例如：人教版生物必修 1 第 3 章课件，仅用于个人复习"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <div class="material-library-dialog__footer">
+          <el-button @click="editDialogVisible = false">取消</el-button>
+          <el-button type="primary" :loading="savingInfo" @click="saveMaterialInfo">保存</el-button>
+        </div>
+      </template>
+    </el-dialog>
 
     <el-drawer
       v-model="drawerVisible"
@@ -348,6 +404,16 @@
               <dt>资料标签</dt>
               <dd>{{ getTags(detail.tags).join('、') || '暂无标签' }}</dd>
             </div>
+            <div>
+              <dt>难度等级</dt>
+              <dd>{{ formatDifficulty(detail.difficultyLevel) }}</dd>
+            </div>
+            <div class="material-library-detail__meta-wide">
+              <dt>资料说明</dt>
+              <dd :class="{ 'is-empty': !detail.description }">
+                {{ detail.description || '暂无说明，可在“编辑信息”中补充来源、版本或备注。' }}
+              </dd>
+            </div>
           </dl>
           <div class="material-library-detail__actions">
             <el-button
@@ -361,6 +427,7 @@
               ><AppIcon name="summary" :size="16" />生成或查看摘要</el-button
             >
             <el-button @click="goQuiz(detail.id)"><AppIcon name="quiz" :size="16" />生成练习</el-button>
+            <el-button @click="openEditDialog(detail)">编辑信息</el-button>
           </div>
           <section class="material-library-detail__retrieval" aria-labelledby="material-detail-retrieval-title">
             <div class="material-library-detail__retrieval-heading">
@@ -477,7 +544,6 @@ import AppIcon from '@/components/AppIcon.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import IconMenuButton from '@/components/IconMenuButton.vue'
 import ListSectionHeading from '@/components/ListSectionHeading.vue'
-import RenameDialog from '@/components/RenameDialog.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import { useAutoListQuery } from '@/composables/useAutoListQuery'
 import { usePolling } from '@/composables/usePolling'
@@ -492,7 +558,7 @@ import {
   getMaterialDetailApi,
   getMaterialPageApi,
   parseMaterialApi,
-  renameMaterialApi,
+  updateMaterialApi,
   uploadMaterialApi,
   type MaterialPageItem
 } from '@/api/modules/material'
@@ -506,12 +572,12 @@ const detailId = ref(0)
 const drawerVisible = ref(false)
 const uploadDialogVisible = ref(false)
 const textDialogVisible = ref(false)
-const renameDialogVisible = ref(false)
+const editDialogVisible = ref(false)
 const retrievalDialogVisible = ref(false)
 const tableLoading = ref(false)
 const detailLoading = ref(false)
 const creating = ref(false)
-const renaming = ref(false)
+const savingInfo = ref(false)
 const uploading = ref(false)
 const retrievalLoading = ref(false)
 const actionLoadingId = ref<number | null>(null)
@@ -519,7 +585,8 @@ const retrievalResult = ref<RetrievalPreviewPayload | null>(null)
 const loadError = ref('')
 const detailError = ref('')
 const retrievalError = ref('')
-const renameTarget = ref<{ id: number; title: string } | null>(null)
+const editTitleError = ref('')
+const editTargetId = ref<number | null>(null)
 let listRequestVersion = 0
 let detailRequestVersion = 0
 
@@ -539,7 +606,15 @@ const form = reactive({
   materialType: 'TEXT',
   difficultyLevel: 3,
   tags: '',
+  description: '',
   contentText: ''
+})
+
+const editForm = reactive({
+  title: '',
+  tags: '',
+  difficultyLevel: 3,
+  description: ''
 })
 
 const filters = reactive({
@@ -681,6 +756,7 @@ const resetForm = () => {
   form.materialType = 'TEXT'
   form.difficultyLevel = 3
   form.tags = ''
+  form.description = ''
   form.contentText = ''
 }
 
@@ -738,6 +814,7 @@ const createMaterial = async () => {
       ...form,
       title: form.title.trim(),
       tags: form.tags.trim(),
+      description: form.description.trim(),
       contentText: form.contentText.trim()
     })
     ElMessage.success('资料保存成功，系统正在自动生成摘要…')
@@ -835,27 +912,43 @@ const viewDetail = async (id: number) => {
   }
 }
 
-const openRenameDialog = (row: MaterialPageItem) => {
-  renameTarget.value = { id: row.id, title: row.title }
-  renameDialogVisible.value = true
+const openEditDialog = (row: MaterialPageItem) => {
+  editTargetId.value = row.id
+  editForm.title = row.title
+  editForm.tags = getTags(row.tags).join('、')
+  editForm.difficultyLevel = row.difficultyLevel || 3
+  editForm.description = row.description || ''
+  editTitleError.value = ''
+  editDialogVisible.value = true
 }
 
-const renameMaterial = async (title: string) => {
-  const target = renameTarget.value
-  if (!target) return
-  renaming.value = true
+const saveMaterialInfo = async () => {
+  const id = editTargetId.value
+  if (!id || savingInfo.value) return
+  const title = editForm.title.trim()
+  if (!title) {
+    editTitleError.value = '资料标题不能为空'
+    return
+  }
+  const payload = {
+    title,
+    tags: editForm.tags.trim(),
+    difficultyLevel: editForm.difficultyLevel,
+    description: editForm.description.trim()
+  }
+  savingInfo.value = true
   try {
-    await renameMaterialApi(target.id, title)
-    ElMessage.success('资料名称已更新')
-    renameDialogVisible.value = false
-    if (detail.value?.id === target.id) {
-      detail.value = { ...detail.value, title }
+    await updateMaterialApi(id, payload)
+    ElMessage.success('资料信息已更新')
+    editDialogVisible.value = false
+    if (detail.value?.id === id) {
+      detail.value = { ...detail.value, ...payload, tags: getTags(payload.tags).join(',') }
     }
     await loadMaterials()
   } catch (error) {
-    ElMessage.error(getErrorMessage(error, '修改资料名称失败，请稍后重试。'))
+    ElMessage.error(getErrorMessage(error, '保存资料信息失败，请稍后重试。'))
   } finally {
-    renaming.value = false
+    savingInfo.value = false
   }
 }
 
@@ -925,8 +1018,8 @@ const beforeUpload = (file: File) => {
 
 const handleMaterialCommand = (command: string, row: MaterialPageItem) => {
   switch (command) {
-    case 'rename':
-      openRenameDialog(row)
+    case 'edit':
+      openEditDialog(row)
       break
     case 'parse':
       void parseMaterial(row.id)
@@ -1221,6 +1314,15 @@ void loadMaterials()
   content: '·';
   margin-right: 12px;
 }
+.material-library-card__desc {
+  margin: 0 0 4px;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.65;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .material-library-card__tags {
   display: flex;
   flex-wrap: wrap;
@@ -1501,6 +1603,12 @@ void loadMaterials()
   font-size: 13px;
   line-height: 1.7;
   overflow-wrap: anywhere;
+}
+.material-library-detail__meta .material-library-detail__meta-wide {
+  grid-column: 1 / -1;
+}
+.material-library-detail__meta dd.is-empty {
+  color: var(--muted);
 }
 .material-library-detail__actions {
   display: flex;

@@ -2,6 +2,7 @@ package com.aiassistant.learning.service;
 
 import com.aiassistant.learning.dto.material.MaterialCreateRequest;
 import com.aiassistant.learning.dto.material.MaterialPageQuery;
+import com.aiassistant.learning.dto.material.MaterialUpdateRequest;
 import com.aiassistant.learning.entity.StudyMaterial;
 import com.aiassistant.learning.vo.material.MaterialPageVO;
 import com.aiassistant.learning.vo.material.MaterialDetailVO;
@@ -95,6 +96,15 @@ public interface StudyMaterialService extends IService<StudyMaterial> {
     void renameMaterial(Long userId, Long materialId, String title);
 
     /**
+     * 编辑资料信息：标题、标签、难度和资料说明。
+     *
+     * @param userId 当前登录用户 ID
+     * @param materialId 资料 ID
+     * @param request 新的资料信息
+     */
+    void updateMaterialInfo(Long userId, Long materialId, MaterialUpdateRequest request);
+
+    /**
      * 解析资料文件并生成文本分段。
      *
      * @param userId 当前登录用户 ID
@@ -103,7 +113,7 @@ public interface StudyMaterialService extends IService<StudyMaterial> {
     void parseMaterial(Long userId, Long materialId);
 
     /**
-     * 删除资料及其分段、向量数据。
+     * 删除资料及其分段、向量数据；事务提交后再删除上传的原始文件。
      *
      * @param userId 当前登录用户 ID
      * @param materialId 资料 ID
