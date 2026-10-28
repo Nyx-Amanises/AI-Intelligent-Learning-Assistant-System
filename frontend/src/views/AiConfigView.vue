@@ -59,38 +59,6 @@
             </div>
           </section>
 
-          <section class="page-card config-section" aria-labelledby="theme-title">
-            <div class="config-section__heading">
-              <span class="config-section__icon"><AppIcon :name="currentThemeOption.icon" :size="22" /></span>
-              <div>
-                <h2 id="theme-title">外观与主题风格</h2>
-                <p>支持白天与护眼模式，随时切换适宜的阅读光线。</p>
-              </div>
-            </div>
-
-            <div class="config-theme-grid">
-              <button
-                v-for="opt in themeOptions"
-                :key="opt.key"
-                type="button"
-                class="config-theme-card"
-                :class="{ 'is-active': currentTheme === opt.key }"
-                @click="selectTheme(opt.key)"
-              >
-                <div class="config-theme-card__preview" :style="{ backgroundColor: opt.color }">
-                  <AppIcon :name="opt.icon" :size="24" />
-                </div>
-                <div class="config-theme-card__content">
-                  <div class="config-theme-card__header">
-                    <strong>{{ opt.label }}</strong>
-                    <span v-if="currentTheme === opt.key" class="config-theme-card__badge">当前使用</span>
-                  </div>
-                  <p>{{ opt.hint }}</p>
-                </div>
-              </button>
-            </div>
-          </section>
-
           <section class="page-card config-section" aria-labelledby="automation-title">
             <div class="config-section__heading">
               <span class="config-section__icon"><AppIcon name="refresh" :size="22" /></span>
@@ -400,16 +368,8 @@ import {
   type AiConfigPayload,
   type AiConfigResponse
 } from '@/api/modules/ai'
-import { useTheme, type ThemeMode } from '@/composables/useTheme'
 import { useUserStore } from '@/stores/user'
 import { getErrorMessage } from '@/utils/errorMessage'
-
-const { currentTheme, themeOptions, currentThemeOption, setTheme } = useTheme()
-
-function selectTheme(theme: ThemeMode) {
-  setTheme(theme)
-  ElMessage.success(`已切换为${currentThemeOption.value.label}`)
-}
 
 type SaveScope = 'USER' | 'GLOBAL'
 type UsageMode = 'live' | 'demo' | 'off'
@@ -1138,75 +1098,6 @@ onBeforeUnmount(() => {
 }
 .config-automation-item__desc {
   margin: 0;
-  font-size: 12px;
-  color: var(--muted);
-  line-height: 1.6;
-}
-
-.config-theme-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 16px;
-}
-.config-theme-card {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 16px;
-  border: 1.5px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--bg-secondary);
-  text-align: left;
-  font: inherit;
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-}
-.config-theme-card:hover {
-  border-color: var(--brand);
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-sm);
-}
-.config-theme-card.is-active {
-  border-color: var(--brand);
-  background: var(--panel);
-  box-shadow: 0 0 0 2px var(--brand);
-}
-.config-theme-card__preview {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 64px;
-  border-radius: 10px;
-  border: 1px solid var(--line);
-  color: var(--brand);
-  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.05);
-}
-.config-theme-card__content {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-}
-.config-theme-card__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-.config-theme-card__header strong {
-  font-size: 15px;
-  color: var(--text);
-  font-weight: 600;
-}
-.config-theme-card__badge {
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: var(--brand-light);
-  color: var(--brand);
-  font-weight: 600;
-}
-.config-theme-card p {
-  margin: 6px 0 0;
   font-size: 12px;
   color: var(--muted);
   line-height: 1.6;
