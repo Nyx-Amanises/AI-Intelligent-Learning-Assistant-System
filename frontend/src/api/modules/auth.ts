@@ -18,9 +18,18 @@ export interface UpdateProfilePayload {
   email?: string | null
 }
 
+export interface ChangePasswordPayload {
+  oldPassword: string
+  newPassword: string
+  confirmPassword: string
+}
+
 export const loginApi = (data: LoginPayload) => http.post('/auth/login', data)
 
 export const registerApi = (data: RegisterPayload) => http.post('/auth/register', data)
+
+/** 修改密码成功后旧 token 全部失效，响应 data.token 是当前设备需要换上的新 token。 */
+export const changePasswordApi = (data: ChangePasswordPayload) => http.put('/auth/password', data)
 
 export const getProfileApi = () => http.get('/user/profile')
 

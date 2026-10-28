@@ -33,6 +33,11 @@ export const useUserStore = defineStore('user', {
       writeStorage('token', token)
       writeStorage('profile', JSON.stringify(profile))
     },
+    /** 修改密码后后端会重新签发 token，只替换 token、保留当前资料。 */
+    setToken(token: string) {
+      this.token = token
+      writeStorage('token', token)
+    },
     setProfile(profile: UserProfile | null) {
       this.profile = profile
       if (profile) {

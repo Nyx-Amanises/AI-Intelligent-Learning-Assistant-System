@@ -20,6 +20,11 @@ import org.springframework.stereotype.Component;
 @Component
 public class JwtTokenUtil {
 
+    /**
+     * token 中保存令牌版本号的 claim 名称，对应 sys_user.token_version。
+     */
+    static final String CLAIM_TOKEN_VERSION = "tv";
+
     private final JwtProperties jwtProperties;
 
     /**
@@ -36,18 +41,33 @@ public class JwtTokenUtil {
      *
      * @param userId 用户主键 ID，会放到 token 的 subject 中
      * @param username 用户名，会作为自定义 claim 保存
+     * @param tokenVersion 用户当前的令牌版本号，修改密码后会递增，使旧 token 失效
      * @return 可返回给前端保存的 JWT 字符串
      */
-    public String createToken(Long userId, String username) {
+    public String createToken(Long userId, String username, int tokenVersion) {
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime expireTime = now.plusHours(jwtProperties.getExpireHours());
         return Jwts.builder()
                 .subject(String.valueOf(userId))
                 .claim("username", username)
+                .claim(CLAIM_TOKEN_VERSION, tokenVersion)
                 .issuedAt(toDate(now))
                 .expiration(toDate(expireTime))
                 .signWith(buildKey())
                 .compact();
+    }
+
+    /**
+     * 读取 token 中记录的令牌版本号。
+     *
+     * <p>引入令牌版本之前签发的 token 没有这个 claim，按 0 处理，与数据库默认值一致。</p>
+     *
+     * @param claims 已校验签名的 token 声明
+     * @return 令牌版本号
+     */
+    public static int readTokenVersion(Claims claims) {
+        Object value = claims.get(CLAIM_TOKEN_VERSION);
+        return value instanceof Number number ? number.intValue() : 0;
     }
 
     /**

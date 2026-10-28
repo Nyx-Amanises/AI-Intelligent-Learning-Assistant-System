@@ -2,6 +2,8 @@ package com.aiassistant.learning.interceptor;
 
 import com.aiassistant.learning.common.exception.BusinessException;
 import com.aiassistant.learning.context.UserContext;
+import com.aiassistant.learning.entity.SysUser;
+import com.aiassistant.learning.mapper.SysUserMapper;
 import com.aiassistant.learning.util.JwtTokenUtil;
 import io.jsonwebtoken.Claims;
 import jakarta.servlet.http.HttpServletRequest;
@@ -30,18 +32,24 @@ public class AuthInterceptor implements HandlerInterceptor {
     private static final String BEARER_PREFIX = "Bearer ";
 
     private final JwtTokenUtil jwtTokenUtil;
+    private final SysUserMapper sysUserMapper;
 
     /**
-     * 通过构造方法注入 JWT 工具类。
+     * 通过构造方法注入依赖。
      *
      * @param jwtTokenUtil 用于生成和解析 token 的工具类
+     * @param sysUserMapper 用于核对 token 对应的账号仍然有效
      */
-    public AuthInterceptor(JwtTokenUtil jwtTokenUtil) {
+    public AuthInterceptor(JwtTokenUtil jwtTokenUtil, SysUserMapper sysUserMapper) {
         this.jwtTokenUtil = jwtTokenUtil;
+        this.sysUserMapper = sysUserMapper;
     }
 
     /**
      * 在 Controller 方法执行前进行登录校验。
+     *
+     * <p>签名和有效期校验通过后，还会查一次用户表：账号已删除，或 token 中的令牌版本号
+     * 与数据库不一致（说明用户已修改密码），都视为登录失效。</p>
      *
      * @param request 当前 HTTP 请求
      * @param response 当前 HTTP 响应
@@ -60,13 +68,26 @@ public class AuthInterceptor implements HandlerInterceptor {
         }
 
         String token = authorization.substring(BEARER_PREFIX.length());
+        Claims claims;
+        Long userId;
         try {
-            Claims claims = jwtTokenUtil.parseToken(token);
-            UserContext.setCurrentUserId(Long.valueOf(claims.getSubject()));
-            return true;
+            claims = jwtTokenUtil.parseToken(token);
+            userId = Long.valueOf(claims.getSubject());
         } catch (Exception exception) {
             throw new BusinessException(401, "登录状态已失效，请重新登录");
         }
+
+        SysUser user = sysUserMapper.selectById(userId);
+        if (user == null) {
+            throw new BusinessException(401, "账号不存在或已被删除，请重新登录");
+        }
+        int currentVersion = user.getTokenVersion() == null ? 0 : user.getTokenVersion();
+        if (JwtTokenUtil.readTokenVersion(claims) != currentVersion) {
+            throw new BusinessException(401, "密码已修改，请使用新密码重新登录");
+        }
+
+        UserContext.setCurrentUserId(userId);
+        return true;
     }
 
     /**

@@ -3,7 +3,7 @@
     <header class="page-header">
       <div>
         <h1 id="profile-title" class="page-title">个人信息</h1>
-        <p class="page-desc">管理你的头像、昵称和联系邮箱。</p>
+        <p class="page-desc">管理你的头像、昵称、联系邮箱和登录密码。</p>
       </div>
     </header>
 
@@ -148,6 +148,80 @@
             </div>
           </fieldset>
         </form>
+
+        <form
+          class="profile-form profile-password-form"
+          novalidate
+          :aria-busy="passwordSubmitting"
+          @submit.prevent="submitPasswordChange"
+        >
+          <h2 class="profile-section-title">修改密码</h2>
+          <p class="profile-section-desc">修改成功后，其他设备上的登录会失效，需要用新密码重新登录。</p>
+          <fieldset :disabled="busy">
+            <legend class="visually-hidden">修改登录密码</legend>
+            <!-- 供浏览器密码管理器识别账号，不参与交互。 -->
+            <input
+              :value="userStore.profile?.username || ''"
+              type="text"
+              autocomplete="username"
+              class="visually-hidden"
+              tabindex="-1"
+              aria-hidden="true"
+              readonly
+            />
+            <div v-for="field in passwordFields" :key="field.name" class="profile-field">
+              <label :for="field.id">{{ field.label }}</label>
+              <input
+                :id="field.id"
+                v-model="passwordForm[field.name]"
+                type="password"
+                :autocomplete="field.autocomplete"
+                maxlength="64"
+                required
+                :aria-invalid="Boolean(passwordErrors[field.name])"
+                :aria-describedby="
+                  [field.help ? field.id + '-help' : '', passwordErrors[field.name] ? field.id + '-error' : '']
+                    .filter(Boolean)
+                    .join(' ') || undefined
+                "
+                @blur="validatePasswordField(field.name)"
+                @input="handlePasswordInput(field.name)"
+              />
+              <p v-if="field.help" :id="field.id + '-help'" class="profile-field-help">{{ field.help }}</p>
+              <p v-if="passwordErrors[field.name]" :id="field.id + '-error'" class="profile-field-error" role="alert">
+                {{ passwordErrors[field.name] }}
+              </p>
+            </div>
+
+            <p v-if="passwordFeedback?.type === 'error'" class="profile-feedback profile-feedback--error" role="alert">
+              {{ passwordFeedback.message }}
+            </p>
+            <div class="profile-form-actions">
+              <p class="profile-save-status" role="status" aria-live="polite">
+                <AppIcon v-if="passwordFeedback?.type === 'success'" name="check" :size="16" />
+                {{
+                  passwordSubmitting
+                    ? '正在修改…'
+                    : passwordFeedback?.type === 'success'
+                      ? passwordFeedback.message
+                      : ''
+                }}
+              </p>
+              <div class="profile-form-buttons">
+                <el-button native-type="button" :disabled="!passwordDirty || busy" @click="resetPasswordForm"
+                  >清空</el-button
+                >
+                <el-button
+                  type="primary"
+                  native-type="submit"
+                  :loading="passwordSubmitting"
+                  :disabled="!passwordDirty || busy"
+                  >{{ passwordSubmitting ? '正在修改…' : '修改密码' }}</el-button
+                >
+              </div>
+            </div>
+          </fieldset>
+        </form>
       </template>
     </div>
   </section>
@@ -155,32 +229,64 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
-import { getProfileApi, updateProfileApi, uploadAvatarApi } from '@/api/modules/auth'
+import { changePasswordApi, getProfileApi, updateProfileApi, uploadAvatarApi } from '@/api/modules/auth'
 import AppIcon from '@/components/AppIcon.vue'
 import { useUserStore, type UserProfile } from '@/stores/user'
 import { resolveAvatarUrl } from '@/utils/avatar'
 import { getErrorMessage } from '@/utils/errorMessage'
 
 type FieldName = 'nickname' | 'email'
+type PasswordFieldName = 'oldPassword' | 'newPassword' | 'confirmPassword'
 type Feedback = { type: 'success' | 'error'; message: string }
+
+const passwordFields: {
+  name: PasswordFieldName
+  id: string
+  label: string
+  autocomplete: string
+  help?: string
+}[] = [
+  { name: 'oldPassword', id: 'profile-old-password', label: '原密码', autocomplete: 'current-password' },
+  {
+    name: 'newPassword',
+    id: 'profile-new-password',
+    label: '新密码',
+    autocomplete: 'new-password',
+    help: '8–20 个字符，需同时包含字母和数字。'
+  },
+  { name: 'confirmPassword', id: 'profile-confirm-password', label: '确认新密码', autocomplete: 'new-password' }
+]
 
 const userStore = useUserStore()
 const form = reactive({ nickname: '', email: '' })
 const savedForm = reactive({ nickname: '', email: '' })
 const fieldErrors = reactive({ nickname: '', email: '' })
+const passwordForm = reactive<Record<PasswordFieldName, string>>({
+  oldPassword: '',
+  newPassword: '',
+  confirmPassword: ''
+})
+const passwordErrors = reactive<Record<PasswordFieldName, string>>({
+  oldPassword: '',
+  newPassword: '',
+  confirmPassword: ''
+})
 const loading = ref(false)
 const loaded = ref(false)
 const submitting = ref(false)
 const avatarUploading = ref(false)
+const passwordSubmitting = ref(false)
 const loadError = ref('')
 const saveFeedback = ref<Feedback | null>(null)
 const avatarFeedback = ref<Feedback | null>(null)
+const passwordFeedback = ref<Feedback | null>(null)
 const avatarLoadFailed = ref(false)
 const avatarInputRef = ref<HTMLInputElement | null>(null)
 const nicknameInputRef = ref<HTMLInputElement | null>(null)
 const emailInputRef = ref<HTMLInputElement | null>(null)
-const busy = computed(() => loading.value || submitting.value || avatarUploading.value)
+const busy = computed(() => loading.value || submitting.value || avatarUploading.value || passwordSubmitting.value)
 const dirty = computed(() => form.nickname.trim() !== savedForm.nickname || form.email.trim() !== savedForm.email)
+const passwordDirty = computed(() => Object.values(passwordForm).some(Boolean))
 const displayName = computed(() => userStore.profile?.nickname || userStore.profile?.username || '学习者')
 const avatarText = computed(() => Array.from(displayName.value)[0]?.toUpperCase() || '学')
 const avatarSrc = computed(() => resolveAvatarUrl(userStore.profile?.avatarUrl))
@@ -310,6 +416,64 @@ async function handleAvatarChange(event: Event) {
   }
 }
 
+function validatePasswordField(field: PasswordFieldName) {
+  const { oldPassword, newPassword, confirmPassword } = passwordForm
+  let message = ''
+  if (field === 'oldPassword') {
+    message = oldPassword ? '' : '请输入原密码'
+  } else if (field === 'newPassword') {
+    if (!newPassword) message = '请输入新密码'
+    else if (newPassword.length < 8 || newPassword.length > 20) message = '新密码需要 8–20 个字符'
+    else if (!/[A-Za-z]/.test(newPassword) || !/[0-9]/.test(newPassword)) message = '新密码需同时包含字母和数字'
+    else if (newPassword === oldPassword) message = '新密码不能与原密码相同'
+  } else {
+    if (!confirmPassword) message = '请再次输入新密码'
+    else if (confirmPassword !== newPassword) message = '两次输入的新密码不一致'
+  }
+  passwordErrors[field] = message
+  return !message
+}
+
+function handlePasswordInput(field: PasswordFieldName) {
+  passwordFeedback.value = null
+  if (passwordErrors[field]) validatePasswordField(field)
+  if (field === 'newPassword' && passwordErrors.confirmPassword) validatePasswordField('confirmPassword')
+}
+
+function resetPasswordForm() {
+  for (const field of passwordFields) {
+    passwordForm[field.name] = ''
+    passwordErrors[field.name] = ''
+  }
+}
+
+async function submitPasswordChange() {
+  if (busy.value || !passwordDirty.value) return
+  const invalidField = passwordFields.find((field) => !validatePasswordField(field.name))
+  if (invalidField) {
+    document.getElementById(invalidField.id)?.focus()
+    return
+  }
+  passwordSubmitting.value = true
+  passwordFeedback.value = null
+  const requestToken = userStore.token
+  try {
+    const response = await changePasswordApi({ ...passwordForm })
+    const token = response.data.data?.token as string | undefined
+    if (!token) throw new Error('未能完成密码修改。')
+    // 旧 token 已在服务端失效，换上新 token 才能继续使用当前页面。
+    if (userStore.token === requestToken) userStore.setToken(token)
+    resetPasswordForm()
+    passwordFeedback.value = { type: 'success', message: '密码已修改，其他设备需要重新登录' }
+  } catch (error) {
+    if (active && userStore.token === requestToken) {
+      passwordFeedback.value = { type: 'error', message: getErrorMessage(error, '密码修改失败，请重试。') }
+    }
+  } finally {
+    passwordSubmitting.value = false
+  }
+}
+
 watch(avatarSrc, () => {
   avatarLoadFailed.value = false
 })
@@ -398,6 +562,20 @@ onUnmounted(() => {
   color: var(--text);
   font-size: 17px;
   font-weight: 600;
+}
+.profile-password-form {
+  margin-top: 36px;
+  padding-top: 28px;
+  border-top: 1px solid var(--line);
+}
+.profile-password-form .profile-section-title {
+  margin-bottom: 6px;
+}
+.profile-section-desc {
+  margin: 0 0 22px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
 }
 .profile-form fieldset {
   min-width: 0;

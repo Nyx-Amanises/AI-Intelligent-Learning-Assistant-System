@@ -72,6 +72,13 @@ public class SysUser extends BaseLogicEntity {
     private Integer status;
 
     /**
+     * 令牌版本号。
+     *
+     * <p>登录令牌中会记录签发时的版本号；修改密码后版本号加一，旧令牌随即失效。</p>
+     */
+    private Integer tokenVersion;
+
+    /**
      * 最近一次登录时间。
      */
     private LocalDateTime lastLoginTime;

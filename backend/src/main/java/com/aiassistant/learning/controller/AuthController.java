@@ -1,12 +1,15 @@
 package com.aiassistant.learning.controller;
 
 import com.aiassistant.learning.common.result.ApiResponse;
+import com.aiassistant.learning.context.UserContext;
+import com.aiassistant.learning.dto.auth.ChangePasswordRequest;
 import com.aiassistant.learning.dto.auth.LoginRequest;
 import com.aiassistant.learning.dto.auth.RegisterRequest;
 import com.aiassistant.learning.service.AuthService;
 import com.aiassistant.learning.vo.auth.LoginVO;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -14,7 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 登录注册相关接口。
  *
- * <p>这个 Controller 负责接收前端发来的注册、登录请求。
+ * <p>这个 Controller 负责接收前端发来的注册、登录、修改密码请求。
  * 它本身不写复杂业务逻辑，而是把请求交给 {@link AuthService} 处理，
  * 这样 Controller 保持简洁，Service 专注业务规则。</p>
  */
@@ -57,5 +60,20 @@ public class AuthController {
     @PostMapping("/login")
     public ApiResponse<LoginVO> login(@Valid @RequestBody LoginRequest request) {
         return ApiResponse.success(authService.login(request));
+    }
+
+    /**
+     * 修改当前登录用户的密码。
+     *
+     * <p>该接口不在拦截器白名单中，必须携带有效 token。修改成功后旧 token 全部失效，
+     * 响应里返回新 token，前端用它替换本地保存的 token。</p>
+     *
+     * @param request 原密码、新密码和确认密码
+     * @return 携带新 token 的登录信息
+     */
+    @PutMapping("/password")
+    public ApiResponse<LoginVO> changePassword(@Valid @RequestBody ChangePasswordRequest request) {
+        Long userId = UserContext.getCurrentUserId();
+        return ApiResponse.success("密码已修改", authService.changePassword(userId, request));
     }
 }

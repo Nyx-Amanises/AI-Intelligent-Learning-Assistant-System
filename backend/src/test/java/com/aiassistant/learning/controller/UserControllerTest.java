@@ -15,7 +15,9 @@ import com.aiassistant.learning.common.exception.GlobalExceptionHandler;
 import com.aiassistant.learning.config.FileStorageProperties;
 import com.aiassistant.learning.context.UserContext;
 import com.aiassistant.learning.dto.user.UpdateProfileRequest;
+import com.aiassistant.learning.entity.SysUser;
 import com.aiassistant.learning.interceptor.AuthInterceptor;
+import com.aiassistant.learning.mapper.SysUserMapper;
 import com.aiassistant.learning.service.SysUserService;
 import com.aiassistant.learning.util.JwtTokenUtil;
 import com.aiassistant.learning.vo.user.UserProfileVO;
@@ -37,6 +39,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 class UserControllerTest {
 
     private final SysUserService users = mock(SysUserService.class);
+    private final SysUserMapper userMapper = mock(SysUserMapper.class);
     private final JwtTokenUtil jwt = mock(JwtTokenUtil.class);
     private final ObjectMapper json = new ObjectMapper();
     private MockMvc mvc;
@@ -45,6 +48,10 @@ class UserControllerTest {
     void setUp() {
         UserContext.clear();
         when(jwt.parseToken("valid-token")).thenReturn(Jwts.claims().subject("7").build());
+        SysUser account = new SysUser();
+        account.setId(7L);
+        account.setTokenVersion(0);
+        when(userMapper.selectById(7L)).thenReturn(account);
         when(users.updateCurrentUserProfile(eq(7L), any(UpdateProfileRequest.class)))
                 .thenAnswer(invocation -> {
                     UpdateProfileRequest request = invocation.getArgument(1);
@@ -54,7 +61,7 @@ class UserControllerTest {
                 });
         mvc = MockMvcBuilders.standaloneSetup(new UserController(users, new FileStorageProperties()))
                 .setControllerAdvice(new GlobalExceptionHandler())
-                .addInterceptors(new AuthInterceptor(jwt))
+                .addInterceptors(new AuthInterceptor(jwt, userMapper))
                 .build();
     }
 

@@ -12,6 +12,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.aiassistant.learning.common.exception.BusinessException;
+import com.aiassistant.learning.dto.auth.ChangePasswordRequest;
 import com.aiassistant.learning.dto.auth.LoginRequest;
 import com.aiassistant.learning.dto.auth.RegisterRequest;
 import com.aiassistant.learning.entity.SysUser;
@@ -94,7 +95,7 @@ class AuthServiceImplTest {
         user.setLastLoginTime(previousLogin);
         when(users.getByUsername("learner")).thenReturn(user);
         when(users.update(any(Wrapper.class))).thenReturn(true);
-        when(jwt.createToken(7L, "learner")).thenReturn("login-token");
+        when(jwt.createToken(7L, "learner", 0)).thenReturn("login-token");
         LoginRequest request = new LoginRequest();
         request.setUsername("learner");
         request.setPassword("123456");
@@ -125,6 +126,109 @@ class AuthServiceImplTest {
         assertEquals(7L, result.getUserId());
         assertEquals("learner", result.getUsername());
         assertEquals("login-token", result.getToken());
+    }
+
+    @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void changesPasswordAndBumpsTokenVersionSoOldTokensExpire() {
+        PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(4);
+        AuthServiceImpl auth = new AuthServiceImpl(users, passwordEncoder, jwt);
+        SysUser user = accountWithPassword(passwordEncoder, "123456", 2);
+        when(users.getRequiredById(7L)).thenReturn(user);
+        when(users.update(any(Wrapper.class))).thenReturn(true);
+        when(jwt.createToken(7L, "learner", 3)).thenReturn("fresh-token");
+
+        LoginVO result = auth.changePassword(7L, passwordRequest("123456", "newPass2026", "newPass2026"));
+
+        ArgumentCaptor<Wrapper<SysUser>> update = ArgumentCaptor.forClass(Wrapper.class);
+        verify(users).update(update.capture());
+        LambdaUpdateWrapper<SysUser> statement = (LambdaUpdateWrapper<SysUser>) update.getValue();
+        Set<String> columns = Arrays.stream(statement.getSqlSet().split(","))
+                .map(assignment -> assignment.substring(0, assignment.indexOf('=')).trim())
+                .collect(Collectors.toSet());
+        assertEquals(Set.of("password_hash", "token_version"), columns);
+        assertTrue(statement.getSqlSegment().contains("token_version ="));
+        String newHash = statement.getParamNameValuePairs().values().stream()
+                .filter(String.class::isInstance).map(String.class::cast)
+                .filter(value -> value.startsWith("$2")).findFirst().orElseThrow();
+        assertTrue(passwordEncoder.matches("newPass2026", newHash));
+        assertTrue(statement.getParamNameValuePairs().containsValue(2));
+        assertTrue(statement.getParamNameValuePairs().containsValue(3));
+        assertEquals("fresh-token", result.getToken());
+        assertEquals(7L, result.getUserId());
+    }
+
+    @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void wrongOldPasswordIsAValidationErrorNotAnAuthFailure() {
+        PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(4);
+        AuthServiceImpl auth = new AuthServiceImpl(users, passwordEncoder, jwt);
+        when(users.getRequiredById(7L)).thenReturn(accountWithPassword(passwordEncoder, "123456", 0));
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> auth.changePassword(7L, passwordRequest("654321", "newPass2026", "newPass2026")));
+
+        assertEquals(400, exception.getCode());
+        assertEquals("原密码不正确", exception.getMessage());
+        verify(users, never()).update(any(Wrapper.class));
+        verifyNoInteractions(jwt);
+    }
+
+    @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void rejectsReusingTheCurrentPassword() {
+        PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(4);
+        AuthServiceImpl auth = new AuthServiceImpl(users, passwordEncoder, jwt);
+        when(users.getRequiredById(7L)).thenReturn(accountWithPassword(passwordEncoder, "oldPass2026", 0));
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> auth.changePassword(7L, passwordRequest("oldPass2026", "oldPass2026", "oldPass2026")));
+
+        assertEquals("新密码不能与原密码相同", exception.getMessage());
+        verify(users, never()).update(any(Wrapper.class));
+    }
+
+    @Test
+    void rejectsMismatchedConfirmationBeforeReadingTheAccount() {
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.changePassword(7L, passwordRequest("123456", "newPass2026", "newPass2027")));
+
+        assertEquals("两次输入的新密码不一致", exception.getMessage());
+        verifyNoInteractions(users, encoder, jwt);
+    }
+
+    @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void concurrentPasswordChangeLosesTheRace() {
+        PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(4);
+        AuthServiceImpl auth = new AuthServiceImpl(users, passwordEncoder, jwt);
+        when(users.getRequiredById(7L)).thenReturn(accountWithPassword(passwordEncoder, "123456", 0));
+        when(users.update(any(Wrapper.class))).thenReturn(false);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> auth.changePassword(7L, passwordRequest("123456", "newPass2026", "newPass2026")));
+
+        assertEquals(409, exception.getCode());
+        verifyNoInteractions(jwt);
+    }
+
+    private SysUser accountWithPassword(PasswordEncoder passwordEncoder, String password, int tokenVersion) {
+        SysUser user = new SysUser();
+        user.setId(7L);
+        user.setUsername("learner");
+        user.setNickname("学习者");
+        user.setPasswordHash(passwordEncoder.encode(password));
+        user.setStatus(1);
+        user.setTokenVersion(tokenVersion);
+        return user;
+    }
+
+    private ChangePasswordRequest passwordRequest(String oldPassword, String newPassword, String confirmPassword) {
+        ChangePasswordRequest request = new ChangePasswordRequest();
+        request.setOldPassword(oldPassword);
+        request.setNewPassword(newPassword);
+        request.setConfirmPassword(confirmPassword);
+        return request;
     }
 
     private RegisterRequest request() {
