@@ -194,10 +194,20 @@ public class AiTaskServiceImpl implements AiTaskService {
 
     /**
      * 创建主观题批改任务；如果同一个练习已经有等待或运行中的任务，则直接复用。
+     *
+     * <p>先校验练习归属：批改任务以发起人的身份和模型配置执行，
+     * 不校验的话，任何人都能触发他人练习的批改并改写对方成绩。</p>
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public AiTaskDetailVO submitPracticeReviewTask(Long userId, Long sessionId) {
+        Long ownedCount = practiceSessionMapper.selectCount(new LambdaQueryWrapper<PracticeSession>()
+                .eq(PracticeSession::getId, sessionId)
+                .eq(PracticeSession::getUserId, userId));
+        if (ownedCount == null || ownedCount == 0) {
+            throw new BusinessException(404, "练习记录不存在");
+        }
+
         AiTask existingTask = findActiveTask(userId, "PRACTICE_REVIEW", "PRACTICE_SESSION", sessionId);
         if (existingTask != null) {
             return cacheTaskDetail(existingTask);

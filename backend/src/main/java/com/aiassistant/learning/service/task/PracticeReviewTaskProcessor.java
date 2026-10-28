@@ -35,6 +35,9 @@ public class PracticeReviewTaskProcessor implements AiTaskProcessor {
 
     /**
      * 触发当前练习中待批改主观题的立即批改，并返回更新后的练习详情。
+     *
+     * <p>批改前再按任务发起人校验一次练习归属（查不到会抛出 404），
+     * 防止修复前已入库的越权任务在重试或重新派发时被执行。</p>
      */
     @Override
     public TaskExecutionResult process(AiTask task) {
@@ -43,6 +46,7 @@ public class PracticeReviewTaskProcessor implements AiTaskProcessor {
             throw new BusinessException("sessionId is required for practice review task");
         }
 
+        practiceService.getPracticeDetail(task.getUserId(), payload.getSessionId());
         practiceService.reviewPendingShortAnswersNow(payload.getSessionId());
         PracticeDetailVO result = practiceService.getPracticeDetail(task.getUserId(), payload.getSessionId());
         return new TaskExecutionResult(writeJson(result), 100);

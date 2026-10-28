@@ -22,4 +22,11 @@ public class LoginRequest {
      */
     @NotBlank(message = "密码不能为空")
     private String password;
+
+    /**
+     * 与注册保持一致，去掉用户名首尾空白。
+     */
+    public void setUsername(String username) {
+        this.username = username == null ? null : username.trim();
+    }
 }

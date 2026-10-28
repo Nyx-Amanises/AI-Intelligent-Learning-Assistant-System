@@ -1,6 +1,7 @@
 package com.aiassistant.learning.service.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -12,7 +13,9 @@ import static org.mockito.ArgumentMatchers.isNull;
 
 import com.aiassistant.learning.dto.ai.EmbeddingTaskPayload;
 import com.aiassistant.learning.dto.ai.EmbeddingTaskRequest;
+import com.aiassistant.learning.common.exception.BusinessException;
 import com.aiassistant.learning.entity.AiTask;
+import com.aiassistant.learning.entity.PracticeSession;
 import com.aiassistant.learning.entity.StudyMaterial;
 import com.aiassistant.learning.mapper.AiTaskMapper;
 import com.aiassistant.learning.mapper.AiGenerationRecordMapper;
@@ -50,11 +53,12 @@ class AiTaskServiceImplTest {
     private final AiTaskMapper tasks = mock(AiTaskMapper.class);
     private final AiTaskRedisCacheService cache = mock(AiTaskRedisCacheService.class);
     private final AiTaskService executor = mock(AiTaskService.class);
+    private final PracticeSessionMapper practiceSessions = mock(PracticeSessionMapper.class);
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final AiTaskServiceImpl service = new AiTaskServiceImpl(
             tasks,
             mock(StudyMaterialMapper.class),
-            mock(PracticeSessionMapper.class),
+            practiceSessions,
             mock(QuestionSetMapper.class),
             mock(AiQuestionService.class),
             mock(AiGenerationRecordMapper.class),
@@ -70,6 +74,7 @@ class AiTaskServiceImplTest {
         MapperBuilderAssistant assistant = new MapperBuilderAssistant(new MybatisConfiguration(), "test");
         TableInfoHelper.initTableInfo(assistant, AiTask.class);
         TableInfoHelper.initTableInfo(assistant, StudyMaterial.class);
+        TableInfoHelper.initTableInfo(assistant, PracticeSession.class);
     }
 
     @BeforeEach
@@ -80,6 +85,20 @@ class AiTaskServiceImplTest {
     @AfterEach
     void clearTransactionSynchronization() {
         TransactionSynchronizationManager.clearSynchronization();
+    }
+
+    @Test
+    void refusesToReviewAnotherUsersPracticeSession() {
+        when(practiceSessions.selectCount(any())).thenReturn(0L);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.submitPracticeReviewTask(USER_ID, 99L));
+
+        assertEquals(404, exception.getCode());
+        verify(tasks, never()).selectOne(any());
+        verify(tasks, never()).insert(any(AiTask.class));
+        verifyNoInteractions(executor);
+        assertTrue(TransactionSynchronizationManager.getSynchronizations().isEmpty());
     }
 
     @ParameterizedTest

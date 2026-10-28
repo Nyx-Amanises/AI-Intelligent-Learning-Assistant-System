@@ -226,6 +226,7 @@ const validateField = (field: AuthField) => {
   if (field === 'username') {
     if (!value) message = '请输入用户名。'
     else if (isRegister.value && (value.length < 4 || value.length > 20)) message = '用户名需要 4–20 个字符。'
+    else if (isRegister.value && /\s/.test(value)) message = '用户名不能包含空格。'
   } else if (field === 'password') {
     if (!value) message = '请输入密码。'
     else if (isRegister.value && (form.password.length < 8 || form.password.length > 20))

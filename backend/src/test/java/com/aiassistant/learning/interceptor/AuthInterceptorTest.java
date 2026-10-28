@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.aiassistant.learning.common.exception.BusinessException;
+import com.aiassistant.learning.common.security.RequireAdmin;
 import com.aiassistant.learning.config.JwtProperties;
 import com.aiassistant.learning.context.UserContext;
 import com.aiassistant.learning.entity.SysUser;
@@ -22,6 +23,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.web.method.HandlerMethod;
 
 class AuthInterceptorTest {
 
@@ -100,6 +102,64 @@ class AuthInterceptorTest {
 
         assertEquals(401, exception.getCode());
         verifyNoInteractions(userMapper);
+    }
+
+    @Test
+    void rejectsDisabledAccount() {
+        SysUser disabled = user(0);
+        disabled.setStatus(0);
+        when(userMapper.selectById(7L)).thenReturn(disabled);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> interceptor.preHandle(request(jwt.createToken(7L, "learner", 0)), new MockHttpServletResponse(), null));
+
+        assertEquals(401, exception.getCode());
+        assertEquals("账号已被禁用，请联系管理员", exception.getMessage());
+    }
+
+    @Test
+    void adminOnlyEndpointsRejectOrdinaryUsers() throws Exception {
+        when(userMapper.selectById(7L)).thenReturn(user(0));
+        String token = jwt.createToken(7L, "learner", 0);
+
+        for (HandlerMethod handler : new HandlerMethod[] {
+                handler(new SampleController(), "adminOnly"),
+                handler(new AdminOnlyController(), "anything")}) {
+            BusinessException exception = assertThrows(BusinessException.class,
+                    () -> interceptor.preHandle(request(token), new MockHttpServletResponse(), handler));
+            assertEquals(403, exception.getCode());
+        }
+        assertTrue(interceptor.preHandle(request(token), new MockHttpServletResponse(),
+                handler(new SampleController(), "open")));
+    }
+
+    @Test
+    void adminOnlyEndpointsAcceptAdministrators() throws Exception {
+        SysUser admin = user(0);
+        admin.setRoleCode("ADMIN");
+        when(userMapper.selectById(7L)).thenReturn(admin);
+
+        assertTrue(interceptor.preHandle(request(jwt.createToken(7L, "admin", 0)), new MockHttpServletResponse(),
+                handler(new AdminOnlyController(), "anything")));
+    }
+
+    private HandlerMethod handler(Object controller, String methodName) throws NoSuchMethodException {
+        return new HandlerMethod(controller, controller.getClass().getMethod(methodName));
+    }
+
+    static class SampleController {
+        @RequireAdmin
+        public void adminOnly() {
+        }
+
+        public void open() {
+        }
+    }
+
+    @RequireAdmin
+    static class AdminOnlyController {
+        public void anything() {
+        }
     }
 
     private MockHttpServletRequest request(String token) {

@@ -16,10 +16,13 @@ import lombok.Data;
 public class RegisterRequest {
 
     /**
-     * 用户名，不能为空，长度限制为 4 到 20 位。
+     * 用户名，不能为空，长度限制为 4 到 20 位，不能包含空白字符。
+     *
+     * <p>首尾空白在绑定时去掉，避免出现 " admin" 这种与已有账号看起来相同、实际不同的用户名。</p>
      */
     @NotBlank(message = "用户名不能为空")
     @Size(min = 4, max = 20, message = "用户名长度需在4到20位之间")
+    @Pattern(regexp = "^\\S+$", message = "用户名不能包含空格")
     private String username;
 
     /**
@@ -50,4 +53,8 @@ public class RegisterRequest {
     @Email(message = "邮箱格式不正确")
     @Size(max = 100, message = "邮箱长度不能超过100位")
     private String email;
+
+    public void setUsername(String username) {
+        this.username = username == null ? null : username.trim();
+    }
 }

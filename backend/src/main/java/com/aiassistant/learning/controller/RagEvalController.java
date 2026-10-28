@@ -1,6 +1,7 @@
 package com.aiassistant.learning.controller;
 
 import com.aiassistant.learning.common.result.ApiResponse;
+import com.aiassistant.learning.common.security.RequireAdmin;
 import com.aiassistant.learning.context.UserContext;
 import com.aiassistant.learning.dto.rag.RagEvalDatasetCreateRequest;
 import com.aiassistant.learning.dto.rag.RagEvalDatasetPageQuery;
@@ -28,7 +29,13 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+/**
+ * RAG 检索评测接口。
+ *
+ * <p>评测属于开发者功能，整组接口仅对管理员开放（前端同样只对管理员显示入口）。</p>
+ */
 @Validated
+@RequireAdmin
 @RestController
 @RequestMapping("/api/rag/eval")
 public class RagEvalController {

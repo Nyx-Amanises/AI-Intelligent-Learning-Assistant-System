@@ -238,6 +238,25 @@ class AiConfigServiceImplTest {
     }
 
     @ParameterizedTest
+    @ValueSource(strings = {"admin", " admin", "ADMIN "})
+    void usernameAloneDoesNotGrantAdminRights(String username) {
+        SysUser impostor = new SysUser();
+        impostor.setUsername(username);
+        impostor.setRoleCode("USER");
+        when(users.selectById(USER_ID)).thenReturn(impostor);
+        AiConfigUpdateRequest request = new AiConfigUpdateRequest();
+        request.setBaseUrl("https://attacker.example.test");
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.updateGlobalConfig(USER_ID, request));
+
+        assertEquals(403, exception.getCode());
+        verify(configs, never()).updateById(any(AiConfig.class));
+        verify(configs, never()).insert(any(AiConfig.class));
+        assertFalse(service.getConfig(USER_ID).getCanManageGlobal());
+    }
+
+    @ParameterizedTest
     @CsvSource({"true, true", "false, false", "false, true"})
     void mockOrDisabledConfigCanBeSavedWithoutForwardingSharedKeys(boolean enabled, boolean mockMode) {
         AiConfigUpdateRequest request = new AiConfigUpdateRequest();

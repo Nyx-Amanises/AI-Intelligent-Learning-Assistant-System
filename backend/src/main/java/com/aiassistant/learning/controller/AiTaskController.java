@@ -1,6 +1,7 @@
 package com.aiassistant.learning.controller;
 
 import com.aiassistant.learning.common.result.ApiResponse;
+import com.aiassistant.learning.common.security.RequireAdmin;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import com.aiassistant.learning.context.UserContext;
@@ -172,9 +173,12 @@ public class AiTaskController {
     /**
      * 手动触发任务执行。
      *
+     * <p>用于排查卡在排队状态的任务，属于开发者功能，仅管理员可用。</p>
+     *
      * @param taskId 任务 ID
      * @return 最新任务详情
      */
+    @RequireAdmin
     @PostMapping("/{taskId}/dispatch")
     public ApiResponse<AiTaskDetailVO> dispatch(@PathVariable Long taskId) {
         Long userId = UserContext.getCurrentUserId();

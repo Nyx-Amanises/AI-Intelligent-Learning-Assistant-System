@@ -1,5 +1,6 @@
 package com.aiassistant.learning.dto.auth;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -53,6 +54,28 @@ class RegisterRequestValidationTest {
         request.setPassword("123456");
 
         assertTrue(VALIDATOR.validate(request).isEmpty());
+    }
+
+    @Test
+    void surroundingWhitespaceIsTrimmedSoLookalikeUsernamesCannotBeRegistered() {
+        RegisterRequest request = request("abc12345");
+        request.setUsername("  admin ");
+
+        assertEquals("admin", request.getUsername());
+        assertTrue(VALIDATOR.validate(request).isEmpty());
+
+        LoginRequest login = new LoginRequest();
+        login.setUsername(" admin ");
+        assertEquals("admin", login.getUsername());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"ad min", "admin\tx", "  a b  "})
+    void rejectsUsernamesContainingWhitespace(String username) {
+        RegisterRequest request = request("abc12345");
+        request.setUsername(username);
+
+        assertFalse(VALIDATOR.validateProperty(request, "username").isEmpty());
     }
 
     private RegisterRequest request(String password) {

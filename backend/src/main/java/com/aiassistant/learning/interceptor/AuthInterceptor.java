@@ -1,6 +1,8 @@
 package com.aiassistant.learning.interceptor;
 
 import com.aiassistant.learning.common.exception.BusinessException;
+import com.aiassistant.learning.common.security.RequireAdmin;
+import com.aiassistant.learning.common.security.UserRoles;
 import com.aiassistant.learning.context.UserContext;
 import com.aiassistant.learning.entity.SysUser;
 import com.aiassistant.learning.mapper.SysUserMapper;
@@ -8,8 +10,10 @@ import com.aiassistant.learning.util.JwtTokenUtil;
 import io.jsonwebtoken.Claims;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
+import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerInterceptor;
 
 /**
@@ -85,9 +89,26 @@ public class AuthInterceptor implements HandlerInterceptor {
         if (JwtTokenUtil.readTokenVersion(claims) != currentVersion) {
             throw new BusinessException(401, "密码已修改，请使用新密码重新登录");
         }
+        if (!Integer.valueOf(1).equals(user.getStatus())) {
+            throw new BusinessException(401, "账号已被禁用，请联系管理员");
+        }
+        if (requiresAdmin(handler) && !UserRoles.isAdmin(user)) {
+            throw new BusinessException(403, "仅管理员可以使用该功能");
+        }
 
         UserContext.setCurrentUserId(userId);
         return true;
+    }
+
+    /**
+     * 判断目标接口是否标注了 {@link RequireAdmin}（方法或所在 Controller 类上）。
+     */
+    private boolean requiresAdmin(Object handler) {
+        if (!(handler instanceof HandlerMethod handlerMethod)) {
+            return false;
+        }
+        return handlerMethod.hasMethodAnnotation(RequireAdmin.class)
+                || AnnotatedElementUtils.hasAnnotation(handlerMethod.getBeanType(), RequireAdmin.class);
     }
 
     /**

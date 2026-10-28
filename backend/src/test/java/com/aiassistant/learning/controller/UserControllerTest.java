@@ -50,6 +50,7 @@ class UserControllerTest {
         when(jwt.parseToken("valid-token")).thenReturn(Jwts.claims().subject("7").build());
         SysUser account = new SysUser();
         account.setId(7L);
+        account.setStatus(1);
         account.setTokenVersion(0);
         when(userMapper.selectById(7L)).thenReturn(account);
         when(users.updateCurrentUserProfile(eq(7L), any(UpdateProfileRequest.class)))

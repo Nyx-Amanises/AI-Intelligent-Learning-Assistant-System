@@ -2,11 +2,11 @@ package com.aiassistant.learning.service.impl;
 
 import com.aiassistant.learning.common.exception.BusinessException;
 import com.aiassistant.learning.common.security.SecretCipher;
+import com.aiassistant.learning.common.security.UserRoles;
 import com.aiassistant.learning.config.AiProperties;
 import com.aiassistant.learning.context.UserContext;
 import com.aiassistant.learning.dto.ai.AiConfigUpdateRequest;
 import com.aiassistant.learning.entity.AiConfig;
-import com.aiassistant.learning.entity.SysUser;
 import com.aiassistant.learning.mapper.AiConfigMapper;
 import com.aiassistant.learning.mapper.SysUserMapper;
 import com.aiassistant.learning.service.AiConfigService;
@@ -32,8 +32,6 @@ public class AiConfigServiceImpl implements AiConfigService {
     private static final String SCOPE_GLOBAL = "GLOBAL";
     private static final String SCOPE_USER = "USER";
     private static final long GLOBAL_USER_ID = 0L;
-    private static final String ROLE_ADMIN = "ADMIN";
-    private static final String ADMIN_USERNAME = "admin";
 
     private static final String CHAT_PROVIDER_OPENAI_COMPATIBLE = "OPENAI_COMPATIBLE";
     private static final String CHAT_PROVIDER_DEEPSEEK = "DEEPSEEK";
@@ -555,12 +553,7 @@ public class AiConfigServiceImpl implements AiConfigService {
         if (userId == null) {
             return false;
         }
-        SysUser user = sysUserMapper.selectById(userId);
-        if (user == null) {
-            return false;
-        }
-        return ROLE_ADMIN.equalsIgnoreCase(normalizeText(user.getRoleCode(), false))
-                || ADMIN_USERNAME.equalsIgnoreCase(normalizeText(user.getUsername(), false));
+        return UserRoles.isAdmin(sysUserMapper.selectById(userId));
     }
 
     private void requireUser(Long userId) {
