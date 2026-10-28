@@ -174,6 +174,7 @@ public class AssistantTaskWorkflowExecutor {
                 request.setJudgeCount(task.getJudgeCount());
                 request.setShortAnswerCount(task.getShortAnswerCount());
                 request.setDifficultyLevel(task.getDifficultyLevel());
+                request.setKnowledgePoints(task.getKnowledgePoints());
                 executions.add(questionGenerateTaskAssistantTool.executeRequest(
                         userId,
                         materialId,
@@ -221,6 +222,7 @@ public class AssistantTaskWorkflowExecutor {
                         .judgeCount(options.judgeCount())
                         .shortAnswerCount(options.shortAnswerCount())
                         .difficultyLevel(options.difficultyLevel())
+                        .knowledgePoints(options.knowledgePoints())
                         .adjustmentNote(options.adjustmentNote())
                         .requiresQuestionTypeConfirmation(options.requiresQuestionTypeConfirmation())
                         .build());

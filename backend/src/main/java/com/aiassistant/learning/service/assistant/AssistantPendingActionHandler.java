@@ -229,6 +229,9 @@ public class AssistantPendingActionHandler {
                 sessionState.clearPendingAction(session);
                 return AssistantWorkflowResolution.notHandled();
             }
+            if (resolution.task() != null) {
+                payload.setTasks(List.of(resolution.task()));
+            }
             String promptText = StringUtils.hasText(resolution.promptText())
                     ? resolution.promptText()
                     : taskIntentParser.buildQuestionConfigPrompt(pendingQuestionTask);

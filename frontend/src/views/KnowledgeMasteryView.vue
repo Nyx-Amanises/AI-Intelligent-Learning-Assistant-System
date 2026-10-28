@@ -147,6 +147,7 @@
             ><span>最近练习 {{ formatDateTime(item.lastPracticeTime) }}</span>
           </div>
           <div class="knowledge-record__actions">
+            <button v-if="item.materialId" type="button" @click="goKnowledgePractice(item)">专项练习</button>
             <button type="button" @click="showDetail(item)">
               查看详情 <AppIcon name="arrow-up-right" :size="15" /></button
             ><button type="button" @click="goWrongQuestions(item)">查看错题</button>
@@ -206,7 +207,8 @@
           <p>{{ detail.suggestion }}</p>
         </div>
         <div class="knowledge-detail-actions">
-          <el-button type="primary" @click="focusKnowledgePoint(detail)">按此知识点筛选</el-button
+          <el-button v-if="detail.materialId" type="primary" @click="goKnowledgePractice(detail)">专项练习</el-button>
+          <el-button @click="focusKnowledgePoint(detail)">按此知识点筛选</el-button
           ><el-button @click="goWrongQuestions(detail)">查看相关错题</el-button>
         </div>
       </template>
@@ -424,6 +426,14 @@ const goWrongQuestions = (item: KnowledgeMasteryItem) => {
       keyword: item.knowledgePoint,
       materialId: item.materialId ? String(item.materialId) : undefined
     }
+  })
+}
+
+const goKnowledgePractice = (item: KnowledgeMasteryItem) => {
+  if (!item.materialId) return
+  router.push({
+    path: '/quiz',
+    query: { materialId: String(item.materialId), knowledgePoint: item.knowledgePoint, generate: '1' }
   })
 }
 

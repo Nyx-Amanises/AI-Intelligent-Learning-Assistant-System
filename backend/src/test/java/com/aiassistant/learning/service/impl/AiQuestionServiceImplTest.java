@@ -1,6 +1,7 @@
 package com.aiassistant.learning.service.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -15,6 +16,7 @@ import static org.mockito.Mockito.when;
 
 import com.aiassistant.learning.common.exception.BusinessException;
 import com.aiassistant.learning.dto.ai.QuestionGenerateRequest;
+import com.aiassistant.learning.entity.AiGenerationRecord;
 import com.aiassistant.learning.entity.MaterialSegment;
 import com.aiassistant.learning.entity.QuestionItem;
 import com.aiassistant.learning.entity.QuestionSet;
@@ -277,6 +279,147 @@ class AiQuestionServiceImplTest {
         assertThrows(BusinessException.class, () -> service.createGeneratingQuestionSet(7L, 42L, request));
 
         verifyNoInteractions(questionSets);
+    }
+
+    @Test
+    void knowledgeCandidatesRequireOwnershipBeforeReadingSegments() {
+        when(materials.getOne(any())).thenReturn(null);
+
+        assertThrows(BusinessException.class, () -> service.listKnowledgePoints(7L, 42L));
+
+        verifyNoInteractions(segments);
+    }
+
+    @Test
+    void knowledgeCandidatesComeFromTheOwnedMaterial() {
+        configureScopedMaterial(true);
+
+        assertEquals(List.of("封装", "继承", "无关章节"), service.listKnowledgePoints(7L, 42L));
+
+        verifyNoInteractions(chat, retrieval, questionItems, questionSets);
+    }
+
+    @Test
+    void scopeValidationRejectsMissingEvidenceBeforeCreatingAPlaceholder() {
+        configureScopedMaterial(true);
+        QuestionGenerateRequest request = new QuestionGenerateRequest();
+        request.setKnowledgePoints(List.of("不存在的知识点"));
+
+        assertThrows(BusinessException.class, () -> service.createGeneratingQuestionSet(7L, 42L, request));
+        assertThrows(BusinessException.class, () -> service.generateQuestionSet(7L, 42L, request));
+
+        verifyNoInteractions(questionSets, questionItems, chat, retrieval, records);
+    }
+
+    @Test
+    void scopedPlaceholderNormalizesLabelsAndRequiresEnoughQuestions() {
+        configureScopedMaterial(true);
+        QuestionGenerateRequest request = new QuestionGenerateRequest();
+        request.setSingleCount(1);
+        request.setKnowledgePoints(List.of("封装", "继承"));
+
+        assertThrows(BusinessException.class, () -> service.createGeneratingQuestionSet(7L, 42L, request));
+        verifyNoInteractions(questionSets);
+        request.setKnowledgePoints(List.of(" 封装 ", "封装"));
+
+        service.createGeneratingQuestionSet(7L, 42L, request);
+
+        assertEquals(List.of("封装"), request.getKnowledgePoints());
+    }
+
+    @Test
+    void selectedScopeControlsTheActualPromptAndSavedGenerationRecord() {
+        configureScopedMaterial(false);
+        QuestionGenerateRequest request = new QuestionGenerateRequest();
+        request.setMultipleCount(1);
+        request.setKnowledgePoints(List.of("封装"));
+        when(chat.chat(anyString(), anyString(), anyString(), anyDouble()))
+                .thenReturn(multipleQuestionJson("A,C", "选项D").replace("开发规范", "封装"));
+
+        QuestionSetDetailVO detail = service.generateQuestionSet(7L, 42L, request);
+
+        assertEquals("封装", detail.getQuestions().get(0).getKnowledgePoint());
+        ArgumentCaptor<String> prompt = ArgumentCaptor.forClass(String.class);
+        verify(chat).chat(anyString(), prompt.capture(), anyString(), anyDouble());
+        assertTrue(prompt.getValue().contains("出题范围仅限以下知识点（每个至少出一道题）: 封装"));
+        assertTrue(prompt.getValue().contains("封装通过访问控制隐藏内部实现"));
+        assertFalse(prompt.getValue().contains("继承支持复用已有行为"));
+        assertFalse(prompt.getValue().contains("UNRELATED_MARKER"));
+        ArgumentCaptor<AiGenerationRecord> record = ArgumentCaptor.forClass(AiGenerationRecord.class);
+        verify(records).insert(record.capture());
+        assertEquals(prompt.getValue(), record.getValue().getInputText());
+        verifyNoInteractions(retrieval);
+    }
+
+    @Test
+    void scopedMockQuestionsCoverEachPointWithItsOwnEvidenceAcrossQuestionTypes() {
+        configureScopedMaterial(true);
+        QuestionGenerateRequest request = new QuestionGenerateRequest();
+        request.setSingleCount(1);
+        request.setMultipleCount(1);
+        request.setJudgeCount(1);
+        request.setShortAnswerCount(1);
+        request.setKnowledgePoints(List.of("封装", "继承"));
+
+        QuestionSetDetailVO detail = service.generateQuestionSet(7L, 42L, request);
+
+        assertEquals(List.of("封装", "继承", "封装", "继承"),
+                detail.getQuestions().stream().map(question -> question.getKnowledgePoint()).toList());
+        assertTrue(detail.getQuestions().get(0).getOptionA().contains("访问控制"));
+        assertTrue(detail.getQuestions().get(1).getOptionA().contains("复用已有行为"));
+        assertTrue(detail.getQuestions().get(2).getStemText().contains("访问控制"));
+        assertTrue(detail.getQuestions().get(3).getCorrectAnswer().contains("复用已有行为"));
+        assertTrue(detail.getQuestions().stream().allMatch(question ->
+                question.getAnswerAnalysis().contains(question.getKnowledgePoint())));
+        verifyNoInteractions(retrieval, chat);
+    }
+
+    @Test
+    void modelCannotPublishQuestionsOutsideTheSelectedScope() {
+        configureScopedMaterial(false);
+        QuestionGenerateRequest request = new QuestionGenerateRequest();
+        request.setMultipleCount(1);
+        request.setKnowledgePoints(List.of("封装"));
+        when(chat.chat(anyString(), anyString(), anyString(), anyDouble()))
+                .thenReturn(multipleQuestionJson("A,C", "选项D"));
+
+        assertThrows(BusinessException.class, () -> service.generateQuestionSet(7L, 42L, request));
+
+        verifyNoInteractions(questionSets, questionItems, records);
+    }
+
+    @Test
+    void modelCannotSilentlyOmitOneOfTheSelectedPoints() {
+        configureScopedMaterial(false);
+        QuestionGenerateRequest request = new QuestionGenerateRequest();
+        request.setMultipleCount(2);
+        request.setKnowledgePoints(List.of("封装", "继承"));
+        String oneQuestion = multipleQuestionJson("A,C", "选项D").replace("开发规范", "封装");
+        String question = oneQuestion.substring(oneQuestion.indexOf('[') + 1, oneQuestion.lastIndexOf(']'));
+        when(chat.chat(anyString(), anyString(), anyString(), anyDouble()))
+                .thenReturn("{\"questions\":[" + question + "," + question + "]}");
+
+        assertThrows(BusinessException.class, () -> service.generateQuestionSet(7L, 42L, request));
+
+        verifyNoInteractions(questionSets, questionItems, records);
+    }
+
+    private void configureScopedMaterial(boolean mockMode) {
+        configureGeneration(mockMode);
+        when(segments.selectList(any())).thenReturn(List.of(
+                scopedSegment(1L, "封装", "封装通过访问控制隐藏内部实现。"),
+                scopedSegment(2L, "继承", "继承支持复用已有行为。"),
+                scopedSegment(3L, "无关章节", "UNRELATED_MARKER 与本次考点无关。")));
+    }
+
+    private MaterialSegment scopedSegment(Long id, String title, String content) {
+        MaterialSegment segment = new MaterialSegment();
+        segment.setId(id);
+        segment.setMaterialId(42L);
+        segment.setSegmentNo(id.intValue());
+        segment.setSectionTitle(title);
+        segment.setContentText(content);
+        return segment;
     }
 
     private String multipleQuestionJson(String answer, String optionD) {

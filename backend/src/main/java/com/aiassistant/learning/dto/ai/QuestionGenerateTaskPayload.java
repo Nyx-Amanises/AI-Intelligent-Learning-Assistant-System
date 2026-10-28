@@ -1,6 +1,7 @@
 package com.aiassistant.learning.dto.ai;
 
 import lombok.Data;
+import java.util.List;
 
 /**
  * 题集生成任务载荷。
@@ -27,6 +28,9 @@ public class QuestionGenerateTaskPayload {
      * 题集标题。
      */
     private String title;
+
+    /** 保留提交任务时选定的知识点，重试时不扩大出题范围。 */
+    private List<String> knowledgePoints;
 
     /**
      * 总题目数量。
@@ -60,6 +64,7 @@ public class QuestionGenerateTaskPayload {
         QuestionGenerateRequest request = new QuestionGenerateRequest();
         request.setModelName(modelName);
         request.setTitle(title);
+        request.setKnowledgePoints(knowledgePoints);
         request.setQuestionCount(questionCount);
         request.setSingleCount(singleCount);
         request.setMultipleCount(multipleCount);

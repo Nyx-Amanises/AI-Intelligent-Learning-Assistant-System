@@ -20,6 +20,40 @@ class AssistantTaskIntentParserTest {
     private final AssistantTaskIntentParser parser = new AssistantTaskIntentParser();
 
     @Test
+    void shouldExtractOnlyExplicitKnowledgePointScope() {
+        assertEquals(List.of("事务", "索引"), parser.parseQuestionRequest("围绕事务、索引知识点生成5道多选题", null).knowledgePoints());
+        assertEquals(List.of("C++", "HashMap"), parser.parseQuestionRequest("生成5道题，知识点：C++、HashMap", null).knowledgePoints());
+        assertNull(parser.parseQuestionRequest("根据《Java核心知识》生成5道题", null).knowledgePoints());
+        assertNull(parser.extractMaterialQueryText("围绕“事务”知识点出题"));
+        assertEquals("数据库入门", parser.extractMaterialQueryText("根据《数据库入门》，围绕“事务”知识点出题"));
+    }
+
+    @Test
+    void shouldKeepScopeWhileClarifyingCountsAndReplaceItOnlyWhenExplicit() {
+        AssistantPlannedTask pending = buildPendingQuestionTask();
+        pending.setKnowledgePoints(List.of("事务", "索引"));
+        assertEquals(pending.getKnowledgePoints(), parser.resolveQuestionConfigReply("默认", pending).task().getKnowledgePoints());
+        assertEquals(pending.getKnowledgePoints(), parser.resolveQuestionConfigReply("全出多选题", pending).task().getKnowledgePoints());
+        AssistantTaskIntentParser.QuestionConfigResolution changed = parser.resolveQuestionConfigReply("知识点：锁", pending);
+        assertFalse(changed.resolved());
+        assertEquals(List.of("锁"), changed.task().getKnowledgePoints());
+        assertEquals(List.of("锁"), parser.resolveQuestionConfigReply("默认", changed.task()).task().getKnowledgePoints());
+        assertEquals(List.of("事务", "索引"), pending.getKnowledgePoints());
+        assertEquals(List.of(), parser.resolveQuestionConfigReply("改成整份资料，默认", pending).task().getKnowledgePoints());
+    }
+
+    @Test
+    void shouldPreserveScopeFromStructuredIntentIncludingExplicitClear() {
+        AssistantStructuredIntent structured = AssistantStructuredIntent.builder().knowledgePoints(List.of("HashMap")).build();
+        assertEquals(List.of("HashMap"), parser.parseQuestionRequest("生成题", null, structured).knowledgePoints());
+        AssistantPlannedTask pending = buildPendingQuestionTask();
+        pending.setKnowledgePoints(List.of("事务"));
+        assertEquals(List.of("HashMap"), parser.resolveQuestionConfigReply("默认", pending, structured).task().getKnowledgePoints());
+        structured.setKnowledgePoints(List.of());
+        assertEquals(List.of(), parser.resolveQuestionConfigReply("默认", pending, structured).task().getKnowledgePoints());
+    }
+
+    @Test
     void shouldRecognizeMultipleChoiceCommandsAndExclusiveDistribution() {
         assertTrue(parser.looksLikeQuestionRequest("多选题5道"));
         assertTrue(parser.looksLikeQuestionConfigReply("全出多选题"));

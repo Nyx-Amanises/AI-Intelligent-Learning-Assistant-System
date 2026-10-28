@@ -287,6 +287,11 @@ public class AssistantToolExecutionSupport {
             setIntegerIfPresent(args, "judgeCount", intent::setJudgeCount);
             setIntegerIfPresent(args, "shortAnswerCount", intent::setShortAnswerCount);
             setIntegerIfPresent(args, "difficultyLevel", intent::setDifficultyLevel);
+            if (args.get("knowledgePoints") instanceof List<?> values) {
+                intent.setKnowledgePoints(values.stream().map(value -> value instanceof String ? (String) value : "").toList());
+            } else if (args.get("knowledgePoints") != null) {
+                intent.setKnowledgePoints(List.of(""));
+            }
         }
     }
 
@@ -316,6 +321,8 @@ public class AssistantToolExecutionSupport {
                 .questionCount(structuredIntent == null ? null : structuredIntent.getQuestionCount())
                 .singleCount(structuredIntent == null ? null : structuredIntent.getSingleCount())
                 .multipleCount(structuredIntent == null ? null : structuredIntent.getMultipleCount())
+                .knowledgePoints(structuredIntent == null || structuredIntent.getKnowledgePoints() == null
+                        ? null : new ArrayList<>(structuredIntent.getKnowledgePoints()))
                 .judgeCount(structuredIntent == null ? null : structuredIntent.getJudgeCount())
                 .shortAnswerCount(structuredIntent == null ? null : structuredIntent.getShortAnswerCount())
                 .difficultyLevel(structuredIntent == null ? null : structuredIntent.getDifficultyLevel())

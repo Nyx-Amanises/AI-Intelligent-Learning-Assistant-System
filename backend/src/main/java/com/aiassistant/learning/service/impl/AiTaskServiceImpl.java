@@ -173,6 +173,7 @@ public class AiTaskServiceImpl implements AiTaskService {
         payload.setQuestionSetId(questionSet.getId());
         payload.setModelName(request.getModelName());
         payload.setTitle(request.getTitle());
+        payload.setKnowledgePoints(request.getKnowledgePoints());
         payload.setQuestionCount(request.getQuestionCount());
         payload.setSingleCount(request.getSingleCount());
         payload.setMultipleCount(request.getMultipleCount());

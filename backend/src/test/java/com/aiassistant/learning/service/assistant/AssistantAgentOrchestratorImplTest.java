@@ -355,9 +355,18 @@ class AssistantAgentOrchestratorImplTest {
                         .judgeCount(1)
                         .shortAnswerCount(1)
                         .difficultyLevel(3)
+                        .knowledgePoints(List.of("事务", "索引"))
                         .requiresQuestionTypeConfirmation(true)
                         .build()))
                 .build()));
+        AssistantAgentOrchestrator.AssistantPreparedResult scopeReply =
+                orchestrator.prepare(1L, session, "知识点：HashMap", "gpt-test");
+        assertFalse(scopeReply.useModel());
+        assertEquals("QUESTION_CONFIG", session.getPendingActionType());
+        AssistantPendingActionPayload updatedPayload = objectMapper.readValue(
+                session.getPendingActionPayloadJson(), AssistantPendingActionPayload.class);
+        assertEquals(List.of("HashMap"), updatedPayload.getTasks().get(0).getKnowledgePoints());
+
         String userMessage = "十个，全部做成选择";
         when(structuredIntentExtractor.extract(userMessage, "gpt-test")).thenReturn(AssistantStructuredIntent.builder()
                 .interactionMode("TASK_CONFIG_REPLY")
@@ -390,6 +399,7 @@ class AssistantAgentOrchestratorImplTest {
         assertEquals(10, requestCaptor.getValue().getSingleCount());
         assertEquals(0, requestCaptor.getValue().getJudgeCount());
         assertEquals(0, requestCaptor.getValue().getShortAnswerCount());
+        assertEquals(List.of("HashMap"), requestCaptor.getValue().getKnowledgePoints());
         assertEquals(1, preparedResult.toolExecutions().size());
         assertNull(session.getPendingActionType());
     }

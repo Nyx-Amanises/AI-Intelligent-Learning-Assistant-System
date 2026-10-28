@@ -85,6 +85,7 @@ class QuestionGenerationLifecycleTest {
     void createsAndLinksTheQuestionSetBeforeSchedulingAiWork() throws Exception {
         QuestionGenerateRequest request = new QuestionGenerateRequest();
         request.setMultipleCount(2);
+        request.setKnowledgePoints(List.of("封装", "继承"));
         when(generator.createGeneratingQuestionSet(USER_ID, MATERIAL_ID, request)).thenReturn(questionSet("GENERATING"));
         when(tasks.insert(any(AiTask.class))).thenAnswer(invocation -> {
             AiTask task = invocation.getArgument(0);
@@ -99,6 +100,7 @@ class QuestionGenerationLifecycleTest {
         assertEquals(MATERIAL_ID, payload.getMaterialId());
         assertEquals(2, payload.getMultipleCount());
         assertEquals(2, payload.toRequest().getMultipleCount());
+        assertEquals(List.of("封装", "继承"), payload.toRequest().getKnowledgePoints());
         assertEquals("PENDING", result.getStatus());
         assertEquals("MATERIAL", result.getBizType());
         assertEquals(MATERIAL_ID, result.getBizId());

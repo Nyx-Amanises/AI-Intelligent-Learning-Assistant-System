@@ -36,6 +36,13 @@ public class AssistantTaskIntentParser {
     );
     /** 识别难度等级。 */
     private static final Pattern DIFFICULTY_PATTERN = Pattern.compile("难度\\s*([1-5])");
+    /** 只解析明确的知识点范围语法，不从普通问题或资料标题推断。 */
+    private static final Pattern KNOWLEDGE_SCOPE_PATTERN = Pattern.compile(
+            "(?:围绕|针对|按|关于)\\s*([^。！？\\n]{1,240}?)\\s*(?:这些|这几个|的)?知识点(?=\\s*(?:出|生成|练习)|\\s*[,，。;；！!？?]|$)"
+    );
+    private static final Pattern KNOWLEDGE_LABEL_PATTERN = Pattern.compile(
+            "知识点\\s*[:：]\\s*(.+?)(?=[。！？\\n]|[,，;；]\\s*(?:出|生成|共|总|单选|多选|判断|简答|难度)|$)"
+    );
     /** 识别《资料标题》这种书名号里的标题。 */
     private static final Pattern TITLE_BRACKET_PATTERN = Pattern.compile("《([^》]{2,80})》");
     /** 识别引号里的资料标题。 */
@@ -300,6 +307,7 @@ public class AssistantTaskIntentParser {
                         structuredIntent == null ? null : structuredIntent.getDifficultyLevel(),
                         detectDifficultyLevel(text)
                 ),
+                resolveKnowledgePoints(text, structuredIntent),
                 adjustmentNote,
                 requiresQuestionTypeConfirmation,
                 explicitQuestionCount,
@@ -324,7 +332,8 @@ public class AssistantTaskIntentParser {
         if (!StringUtils.hasText(userMessage)) {
             return null;
         }
-        String text = userMessage.trim();
+        String text = KNOWLEDGE_SCOPE_PATTERN.matcher(userMessage.trim()).replaceAll("");
+        text = KNOWLEDGE_LABEL_PATTERN.matcher(text).replaceAll("");
         Matcher bracketMatcher = TITLE_BRACKET_PATTERN.matcher(text);
         if (bracketMatcher.find()) {
             return cleanMaterialQueryText(bracketMatcher.group(1));
@@ -620,10 +629,13 @@ public class AssistantTaskIntentParser {
         if (!StringUtils.hasText(text)) {
             return new QuestionConfigResolution(false, null, buildQuestionConfigPrompt(pendingTask));
         }
+        List<String> requestedKnowledgePoints = resolveKnowledgePoints(text, structuredIntent);
+        AssistantPlannedTask scopedPendingTask = copyQuestionTask(pendingTask);
+        if (requestedKnowledgePoints != null) scopedPendingTask.setKnowledgePoints(requestedKnowledgePoints);
         boolean defaultChoice = Boolean.TRUE.equals(structuredIntent == null ? null : structuredIntent.getDefaultChoice())
                 || isDefaultChoice(text);
         if (defaultChoice) {
-            AssistantPlannedTask resolvedTask = copyQuestionTask(pendingTask);
+            AssistantPlannedTask resolvedTask = scopedPendingTask;
             resolvedTask.setRequiresQuestionTypeConfirmation(false);
             return new QuestionConfigResolution(true, resolvedTask, null);
         }
@@ -659,7 +671,7 @@ public class AssistantTaskIntentParser {
         boolean shortAnswerSpecified = requestedShortAnswer != null;
         if (!singleSpecified && !multipleSpecified && !judgeSpecified && !shortAnswerSpecified
                 && requestedTotal == null && exclusiveQuestionType == null) {
-            return new QuestionConfigResolution(false, null, buildQuestionConfigPrompt(pendingTask));
+            return new QuestionConfigResolution(false, scopedPendingTask, buildQuestionConfigPrompt(scopedPendingTask));
         }
 
         int targetTotal = requestedTotal == null
@@ -686,11 +698,11 @@ public class AssistantTaskIntentParser {
             targetTotal = configuredTotal;
         }
         if (singleCount < 0 || multipleCount < 0 || judgeCount < 0 || shortAnswerCount < 0) {
-            return new QuestionConfigResolution(false, null, "题型数量不能小于 0，请重新设置。");
+            return new QuestionConfigResolution(false, scopedPendingTask, "题型数量不能小于 0，请重新设置。");
         }
         if ((requestedTotal != null && configuredTotal > targetTotal)
                 || (singleSpecified && judgeSpecified && shortAnswerSpecified && configuredTotal != targetTotal)) {
-            return new QuestionConfigResolution(false, null, "你给的题型数量合计和总题数对不上，我先帮你对齐一下：请告诉我是按总题数调整，还是按题型数量合计为准。");
+            return new QuestionConfigResolution(false, scopedPendingTask, "你给的题型数量合计和总题数对不上，我先帮你对齐一下：请告诉我是按总题数调整，还是按题型数量合计为准。");
         }
 
         if (configuredTotal < targetTotal) {
@@ -707,10 +719,10 @@ public class AssistantTaskIntentParser {
         }
 
         if (singleCount + multipleCount + judgeCount + shortAnswerCount > QUESTION_LIMIT) {
-            return new QuestionConfigResolution(false, null, "当前单次最多支持 20 道题，你可以减少一点题量，或者直接回复“默认”。");
+            return new QuestionConfigResolution(false, scopedPendingTask, "当前单次最多支持 20 道题，你可以减少一点题量，或者直接回复“默认”。");
         }
 
-        AssistantPlannedTask resolvedTask = copyQuestionTask(pendingTask);
+        AssistantPlannedTask resolvedTask = scopedPendingTask;
         resolvedTask.setQuestionCount(singleCount + multipleCount + judgeCount + shortAnswerCount);
         resolvedTask.setSingleCount(singleCount);
         resolvedTask.setMultipleCount(multipleCount);
@@ -749,6 +761,7 @@ public class AssistantTaskIntentParser {
                 || extractTypedCount(text, "判断题", "判断") != null
                 || extractTypedCount(text, "简答题", "简答") != null
                 || detectExclusiveQuestionType(text) != null
+                || hasExplicitKnowledgePointScope(text, null)
                 || containsAny(text, "题型", "题量", "数量");
     }
 
@@ -776,7 +789,9 @@ public class AssistantTaskIntentParser {
         if (questionTask == null) {
             return "出题参数还不够完整。你可以直接说例如“单选 3、多选 3、判断 2、简答 2”，或者回复“默认”。";
         }
-        return "题型数量我还需要你确认一下。你可以直接说例如“单选 3、多选 3、判断 2、简答 2”，"
+        String scopeText = questionTask.getKnowledgePoints() == null || questionTask.getKnowledgePoints().isEmpty()
+                ? "" : "出题知识点：" + String.join("、", questionTask.getKnowledgePoints()) + "。";
+        return scopeText + "题型数量我还需要你确认一下。你可以直接说例如“单选 3、多选 3、判断 2、简答 2”，"
                 + "或者回复“默认”，我就按单选 %s、多选 %s、判断 %s、简答 %s 来出。".formatted(
                 questionTask.getSingleCount(),
                 questionTask.getMultipleCount() == null ? 0 : questionTask.getMultipleCount(),
@@ -795,6 +810,7 @@ public class AssistantTaskIntentParser {
                 .judgeCount(source.getJudgeCount())
                 .shortAnswerCount(source.getShortAnswerCount())
                 .difficultyLevel(source.getDifficultyLevel())
+                .knowledgePoints(source.getKnowledgePoints() == null ? null : new ArrayList<>(source.getKnowledgePoints()))
                 .adjustmentNote(source.getAdjustmentNote())
                 .requiresQuestionTypeConfirmation(source.getRequiresQuestionTypeConfirmation())
                 .build();
@@ -1028,6 +1044,28 @@ public class AssistantTaskIntentParser {
         // “多项选择题”含“选择题”，先移除多选别名，避免同一个数字同时计入两种题型。
         String singleText = text == null ? "" : text.replaceAll("多项选择题|多项选择|多选题|多选", "_MULTIPLE_");
         return extractTypedCount(singleText, "单选题", "单选", "选择题");
+    }
+
+    private List<String> resolveKnowledgePoints(String text, AssistantStructuredIntent structuredIntent) {
+        if (structuredIntent != null && structuredIntent.getKnowledgePoints() != null) {
+            return new ArrayList<>(structuredIntent.getKnowledgePoints());
+        }
+        if (!StringUtils.hasText(text)) return null;
+        if (text.matches("(?s).*(?:(?:改为|改成|切换到|切换为)(?:按)?(?:整份|全部|全篇)资料|不限知识点|全部知识点).*")) {
+            return List.of();
+        }
+        Matcher labelMatcher = KNOWLEDGE_LABEL_PATTERN.matcher(text);
+        Matcher scopeMatcher = KNOWLEDGE_SCOPE_PATTERN.matcher(text);
+        String scope = labelMatcher.find() ? labelMatcher.group(1) : scopeMatcher.find() ? scopeMatcher.group(1) : null;
+        if (scope == null) return null;
+        return java.util.Arrays.stream(scope.split("[、,，;；]|\\s+和\\s+"))
+                .map(value -> value.strip().replaceAll("^[\\\"“‘《]+|[\\\"”’》]+$", "").strip())
+                .distinct()
+                .toList();
+    }
+
+    public boolean hasExplicitKnowledgePointScope(String text, AssistantStructuredIntent structuredIntent) {
+        return resolveKnowledgePoints(text, structuredIntent) != null;
     }
 
     private Integer parseFlexibleInt(String rawValue) {
@@ -1341,6 +1379,7 @@ public class AssistantTaskIntentParser {
             Integer judgeCount,
             Integer shortAnswerCount,
             Integer difficultyLevel,
+            List<String> knowledgePoints,
             String adjustmentNote,
             boolean requiresQuestionTypeConfirmation,
             boolean explicitQuestionCount,

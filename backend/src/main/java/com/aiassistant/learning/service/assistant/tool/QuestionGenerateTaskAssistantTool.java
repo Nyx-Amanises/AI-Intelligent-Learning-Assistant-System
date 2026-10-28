@@ -69,6 +69,7 @@ public class QuestionGenerateTaskAssistantTool extends AbstractAssistantTool {
         request.setJudgeCount(options.judgeCount());
         request.setShortAnswerCount(options.shortAnswerCount());
         request.setDifficultyLevel(options.difficultyLevel());
+        request.setKnowledgePoints(options.knowledgePoints());
         return executeRequest(context.userId(), materialId, request, options.adjustmentNote(), startedAt);
     }
 
@@ -97,6 +98,7 @@ public class QuestionGenerateTaskAssistantTool extends AbstractAssistantTool {
         args.put("judgeCount", request.getJudgeCount());
         args.put("shortAnswerCount", request.getShortAnswerCount());
         args.put("difficultyLevel", request.getDifficultyLevel());
+        args.put("knowledgePoints", request.getKnowledgePoints());
         if (request.getModelName() != null) {
             args.put("modelName", request.getModelName());
         }
@@ -115,6 +117,9 @@ public class QuestionGenerateTaskAssistantTool extends AbstractAssistantTool {
                     detail.getStatus(),
                     adjustmentNote == null ? "" : adjustmentNote
             );
+            if (request.getKnowledgePoints() != null && !request.getKnowledgePoints().isEmpty()) {
+                summary += " 出题知识点：" + String.join("、", request.getKnowledgePoints()) + "。";
+            }
             return success(name(), args, detail, summary.trim(), startedAt);
         } catch (Exception exception) {
             return failure(name(), args, exception.getMessage(), startedAt);

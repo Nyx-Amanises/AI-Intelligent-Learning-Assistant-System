@@ -16,6 +16,7 @@ export interface QuestionGeneratePayload {
   judgeCount?: number
   shortAnswerCount?: number
   difficultyLevel?: number
+  knowledgePoints?: string[]
 }
 
 export interface AiConfigPayload {
@@ -138,6 +139,8 @@ export const getAllSummaryHistoryApi = () => http.get('/ai/summary-history')
 
 export const generateQuestionSetApi = (id: number, data: QuestionGeneratePayload) =>
   http.post(`/ai/material/${id}/question-set`, data)
+
+export const getQuestionKnowledgePointsApi = (id: number) => http.get(`/ai/material/${id}/knowledge-points`)
 
 export const submitSummaryTaskApi = (id: number, data: SummaryPayload) =>
   http.post(`/ai/tasks/material/${id}/summary`, data)

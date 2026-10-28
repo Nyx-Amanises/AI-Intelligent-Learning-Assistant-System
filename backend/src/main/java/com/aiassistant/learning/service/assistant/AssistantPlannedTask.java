@@ -4,6 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import java.util.List;
 
 /**
  * 助手准备提交的 AI 任务参数。
@@ -46,6 +47,9 @@ public class AssistantPlannedTask {
 
     /** 题目难度。 */
     private Integer difficultyLevel;
+
+    /** 指定的知识点范围；空值表示整份资料。 */
+    private List<String> knowledgePoints;
 
     /** 参数自动调整说明。 */
     private String adjustmentNote;

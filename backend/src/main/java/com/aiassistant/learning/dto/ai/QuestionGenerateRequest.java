@@ -3,6 +3,7 @@ package com.aiassistant.learning.dto.ai;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
+import java.util.List;
 import lombok.Data;
 
 /**
@@ -21,6 +22,10 @@ public class QuestionGenerateRequest {
      */
     @Size(max = 200, message = "题集名称长度不能超过200个字符")
     private String title;
+
+    /** 出题知识点；空值或空列表表示整份资料。 */
+    @Size(max = 5, message = "每次最多选择5个知识点")
+    private List<@Size(max = 80, message = "单个知识点不能超过80个字符") String> knowledgePoints;
 
     /**
      * 总题目数量。

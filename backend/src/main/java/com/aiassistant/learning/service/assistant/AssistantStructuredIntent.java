@@ -73,6 +73,9 @@ public class AssistantStructuredIntent {
     /** 多选题数量。 */
     private Integer multipleCount;
 
+    /** 用户明确指定的知识点；null 为未说明，空数组表示整份资料。 */
+    private List<String> knowledgePoints;
+
     /** 判断题数量。 */
     private Integer judgeCount;
 

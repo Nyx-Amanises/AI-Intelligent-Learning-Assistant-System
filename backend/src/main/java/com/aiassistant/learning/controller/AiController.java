@@ -141,13 +141,13 @@ public class AiController {
         return ApiResponse.success(aiSummaryService.listAllSummaries(userId));
     }
 
-    /**
-     * 为指定资料生成题集。
-     *
-     * @param id 资料 ID
-     * @param request 出题参数
-     * @return 生成后的题集详情
-     */
+    /** 获取当前用户资料中的候选出题知识点。 */
+    @GetMapping("/material/{id}/knowledge-points")
+    public ApiResponse<List<String>> knowledgePoints(@PathVariable Long id) {
+        return ApiResponse.success(aiQuestionService.listKnowledgePoints(UserContext.getCurrentUserId(), id));
+    }
+
+    /** 为指定资料生成题集。 */
     @PostMapping("/material/{id}/question-set")
     public ApiResponse<QuestionSetDetailVO> generateQuestionSet(
             @PathVariable Long id,

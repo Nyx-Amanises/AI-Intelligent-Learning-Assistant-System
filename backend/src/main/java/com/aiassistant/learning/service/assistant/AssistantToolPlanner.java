@@ -113,7 +113,7 @@ public class AssistantToolPlanner {
                    - material.chapter_outline：查看资料章节/目录。参数：materialQuery、chapterKeyword。
                    - rag.retrieve：围绕当前资料检索回答。参数：queryText。
                    - task.submit_summary：创建 AI 总结任务。参数：materialQuery、summaryType(STANDARD/OUTLINE/EXAM)、saveAsNote。
-                   - task.submit_question_generate：创建 AI 出题任务。参数：materialQuery、questionCount、singleCount、multipleCount、judgeCount、shortAnswerCount、difficultyLevel。multipleCount 为多选题数量。
+                   - task.submit_question_generate：创建 AI 出题任务。参数：materialQuery、questionCount、singleCount、multipleCount、judgeCount、shortAnswerCount、difficultyLevel、knowledgePoints。multipleCount 为多选题数量；knowledgePoints 是用户明确指定的知识点字符串数组（最多 5 个、每个最多 80 字）；未提及时省略，明确改成整份资料用 []。保留知识点原文，不要写成字符串或从资料名推断。
                    - task.list：查看任务列表。参数：taskTypeFilter、taskStatusFilter。
                    - task.get_status：查看当前/指定任务状态。参数：taskId。
                    - question_set.list：查看题集列表。参数：keyword、status、difficultyLevel、currentMaterialOnly。

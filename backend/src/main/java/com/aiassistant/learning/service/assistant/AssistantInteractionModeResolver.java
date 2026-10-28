@@ -24,7 +24,7 @@ public class AssistantInteractionModeResolver {
     );
     /** 判断用户是否在回复出题配置的提示词。 */
     private static final List<String> QUESTION_CONFIG_REPLY_HINT_KEYWORDS = List.of(
-            "单选", "多选", "多项选择", "选择题", "判断", "简答", "默认", "全部", "全都", "只出", "都出", "题量", "数量", "道题"
+            "单选", "多选", "多项选择", "选择题", "判断", "简答", "默认", "全部", "全都", "只出", "都出", "题量", "数量", "道题", "知识点：", "知识点:"
     );
     /** 判断用户是否在选择候选资料的提示词。 */
     private static final List<String> MATERIAL_SELECTION_REPLY_HINT_KEYWORDS = List.of(
@@ -337,7 +337,7 @@ public class AssistantInteractionModeResolver {
     }
 
     /**
-     * 等待题型配置时，只有纯题型/数量回复会继续原任务。
+     * 等待题型配置时，题型、数量与明确的知识点范围回复继续原任务。
      */
     private boolean shouldInterruptQuestionConfigPending(
             String userMessage,
@@ -351,6 +351,9 @@ public class AssistantInteractionModeResolver {
         if (StringUtils.hasText(taskIntentParser.extractMaterialQueryText(userMessage, structuredIntent))
                 && looksLikeExplicitTaskRequest(userMessage, structuredIntent)) {
             return true;
+        }
+        if (taskIntentParser.hasExplicitKnowledgePointScope(userMessage, structuredIntent)) {
+            return false;
         }
         if (plannedMode == AssistantInteractionMode.STUDY_QA || extractedMode == AssistantInteractionMode.STUDY_QA) {
             return true;
@@ -404,6 +407,7 @@ public class AssistantInteractionModeResolver {
             return true;
         }
         return taskIntentParser.looksLikeQuestionConfigReply(userMessage)
+                || taskIntentParser.hasExplicitKnowledgePointScope(userMessage, structuredIntent)
                 || AssistantToolSupport.containsAnyIgnoreCase(userMessage, QUESTION_CONFIG_REPLY_HINT_KEYWORDS);
     }
 

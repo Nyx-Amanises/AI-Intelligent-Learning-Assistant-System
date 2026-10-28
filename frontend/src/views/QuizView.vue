@@ -174,7 +174,7 @@
     >
       <template #header="{ titleId, titleClass }">
         <h2 :id="titleId" :class="[titleClass, 'dialog-title']">生成一套专属练习</h2>
-        <div class="dialog-subtitle">根据学习资料，定制题型、题量与难度。</div>
+        <div class="dialog-subtitle">根据学习资料，定制出题范围、题型、题量与难度。</div>
       </template>
       <EmptyState
         v-if="!materialsLoading && !materialsError && !materials.length"
@@ -196,11 +196,59 @@
             filterable
             style="width: 100%"
             placeholder="选择练习的资料"
+            aria-label="选择练习的资料"
             :loading="materialsLoading"
           >
             <el-option v-for="item in materials" :key="item.id" :label="item.title" :value="item.id" />
           </el-select>
         </el-form-item>
+        <el-form-item label="出题范围">
+          <el-radio-group v-model="form.scope" aria-label="出题范围">
+            <el-radio-button value="MATERIAL">整份资料</el-radio-button>
+            <el-radio-button value="KNOWLEDGE">指定知识点</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
+        <div v-if="form.scope === 'KNOWLEDGE'" class="quiz-knowledge-scope">
+          <el-form-item label="练习知识点">
+            <el-select
+              :model-value="form.knowledgePoints"
+              multiple
+              filterable
+              allow-create
+              default-first-option
+              :reserve-keyword="false"
+              :multiple-limit="MAX_KNOWLEDGE_POINTS"
+              :loading="knowledgePointsLoading"
+              :disabled="!form.materialId"
+              placeholder="选择知识点，或输入名称后按 Enter 添加"
+              aria-label="练习知识点"
+              style="width: 100%"
+              @update:model-value="updateKnowledgePoints"
+            >
+              <el-option v-for="point in knowledgePointOptions" :key="point" :label="point" :value="point" />
+            </el-select>
+          </el-form-item>
+          <p class="quiz-scope-help">
+            使用资料中出现的知识点名称；每个知识点至少一道题。最多 {{ MAX_KNOWLEDGE_POINTS }} 个，每个不超过
+            {{ MAX_KNOWLEDGE_POINT_LENGTH }} 字。
+          </p>
+          <p v-if="knowledgePointsError" class="quiz-scope-help quiz-inline-note--error" role="alert">
+            {{ knowledgePointsError }}，仍可手动输入。
+            <el-button link type="primary" :loading="knowledgePointsLoading" @click="loadKnowledgePoints"
+              >重试知识点</el-button
+            >
+          </p>
+          <p
+            v-else-if="form.materialId && !knowledgePointsLoading && !knowledgePointOptions.length"
+            class="quiz-scope-help"
+          >
+            暂无推荐知识点，可输入资料中的概念或章节名称，按 Enter 添加。
+          </p>
+          <p v-if="knowledgeScopeError" class="quiz-scope-help quiz-inline-note--error" role="alert">
+            {{ knowledgeScopeError }}
+          </p>
+        </div>
+        <p class="quiz-inline-note quiz-scope-summary" aria-live="polite">本次范围：{{ scopeSummary }}</p>
         <el-form-item label="题集名称"
           ><el-input v-model="form.questionSetTitle" maxlength="200" show-word-limit placeholder="给这次练习起个名字"
         /></el-form-item>
@@ -275,7 +323,7 @@
         <el-button
           type="primary"
           :loading="generating"
-          :disabled="!form.materialId || !materials.length || !isQuestionCountValid"
+          :disabled="!hasSelectedMaterial || !isQuestionCountValid || Boolean(knowledgeScopeError)"
           @click="generateQuestionSet"
           >生成 {{ totalQuestionCount }} 道题</el-button
         >
@@ -353,11 +401,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import {
   getAiConfigApi,
+  getQuestionKnowledgePointsApi,
   submitQuestionGenerateTaskApi,
   type AiConfigResponse,
   type AiTaskDetail
@@ -427,6 +476,8 @@ interface AssistantQuestionContext {
 }
 
 const MAX_QUESTION_COUNT = 20
+const MAX_KNOWLEDGE_POINTS = 5
+const MAX_KNOWLEDGE_POINT_LENGTH = 80
 const FILTERABLE_STATUSES = ['GENERATING', 'PUBLISHED', 'FAILED', 'CANCELLED', 'DISABLED']
 const CARD_HINTS: Record<string, string> = {
   GENERATING: '题目正在生成，完成后可预览和练习。',
@@ -435,6 +486,12 @@ const CARD_HINTS: Record<string, string> = {
 }
 
 const route = useRoute()
+// 保存入口参数，异步加载期间助手上下文的路由更新不影响专项练习预填。
+const initialGenerateRequest = {
+  materialId: Number(route.query.materialId),
+  knowledgePoint: typeof route.query.knowledgePoint === 'string' ? route.query.knowledgePoint.trim() : '',
+  open: route.query.generate === '1'
+}
 const router = useRouter()
 const assistantContext = useAssistantContext()
 const { materials, loading: materialsLoading, error: materialsError, load: loadMaterials } = useParsedMaterials()
@@ -461,9 +518,15 @@ const aiConfig = ref<Pick<AiConfigResponse, 'enabled' | 'mockMode' | 'defaultMod
 })
 const aiConfigLoading = ref(false)
 const aiConfigError = ref('')
+const knowledgePointOptions = ref<string[]>([])
+const knowledgePointsLoading = ref(false)
+const knowledgePointsError = ref('')
+let knowledgePointsRequestId = 0
 
 const form = reactive({
   materialId: undefined as number | undefined,
+  scope: 'MATERIAL' as 'MATERIAL' | 'KNOWLEDGE',
+  knowledgePoints: [] as string[],
   questionSetTitle: '',
   modelName: '',
   singleCount: 2,
@@ -503,8 +566,56 @@ const totalQuestionCount = computed(
 const isQuestionCountValid = computed(
   () => totalQuestionCount.value >= 1 && totalQuestionCount.value <= MAX_QUESTION_COUNT
 )
+const hasSelectedMaterial = computed(() => materials.value.some((item) => item.id === form.materialId))
+const knowledgeScopeError = computed(() => {
+  if (form.scope !== 'KNOWLEDGE') return ''
+  if (!form.knowledgePoints.length) return '请至少选择或输入 1 个知识点。'
+  if (form.knowledgePoints.length > MAX_KNOWLEDGE_POINTS) return `最多选择 ${MAX_KNOWLEDGE_POINTS} 个知识点。`
+  if (form.knowledgePoints.some((point) => !point.trim() || point.length > MAX_KNOWLEDGE_POINT_LENGTH)) {
+    return `知识点名称不能为空，且每个不超过 ${MAX_KNOWLEDGE_POINT_LENGTH} 字。`
+  }
+  if (form.knowledgePoints.length > totalQuestionCount.value)
+    return '题目数量不能少于知识点数量，请增加题量或减少知识点。'
+  return ''
+})
+const scopeSummary = computed(() =>
+  form.scope === 'MATERIAL' ? '整份资料' : form.knowledgePoints.join('、') || '尚未选择知识点'
+)
 
-/** 学习助手应关注的题集/资料：优先预览抽屉，其次列表首项、进行中的任务、生成对话框。 */
+const updateKnowledgePoints = (points: string[]) => {
+  form.knowledgePoints = [...new Set(points.map((point) => point.trim()).filter(Boolean))]
+}
+
+const loadKnowledgePoints = async () => {
+  const materialId = form.materialId
+  const requestId = ++knowledgePointsRequestId
+  knowledgePointOptions.value = []
+  knowledgePointsError.value = ''
+  knowledgePointsLoading.value = Boolean(materialId)
+  if (!materialId) return
+  try {
+    const response = await getQuestionKnowledgePointsApi(materialId)
+    if (viewDisposed || requestId !== knowledgePointsRequestId) return
+    const points: unknown = response.data.data
+    knowledgePointOptions.value = Array.isArray(points)
+      ? [
+          ...new Set(
+            points
+              .filter((point): point is string => typeof point === 'string')
+              .map((point) => point.trim())
+              .filter((point) => point && point.length <= MAX_KNOWLEDGE_POINT_LENGTH)
+          )
+        ]
+      : []
+  } catch (error) {
+    if (!viewDisposed && requestId === knowledgePointsRequestId)
+      knowledgePointsError.value = getErrorMessage(error, '推荐知识点加载失败')
+  } finally {
+    if (!viewDisposed && requestId === knowledgePointsRequestId) knowledgePointsLoading.value = false
+  }
+}
+
+/** 学习助手优先关注当前打开的预览或生成表单，再回退至题集列表。 */
 const preferredAssistantQuestionContext = computed<AssistantQuestionContext>(() => {
   if (drawerVisible.value && questionSetDetail.value?.id) {
     return { questionSetId: questionSetDetail.value.id, materialId: questionSetDetail.value.materialId }
@@ -512,14 +623,14 @@ const preferredAssistantQuestionContext = computed<AssistantQuestionContext>(() 
   if (drawerVisible.value && pendingQuestionContext.value?.questionSetId) {
     return pendingQuestionContext.value
   }
+  if (generateDialogVisible.value && form.materialId) {
+    return { materialId: form.materialId }
+  }
   if (questionSets.value[0]?.id) {
     return { questionSetId: questionSets.value[0].id, materialId: questionSets.value[0].materialId }
   }
   if (currentTask.value?.bizId) {
     return { materialId: Number(currentTask.value.bizId) }
-  }
-  if (generateDialogVisible.value && form.materialId) {
-    return { materialId: form.materialId }
   }
   return {}
 })
@@ -537,9 +648,13 @@ watch(drawerVisible, (visible) => {
 watch(
   () => form.materialId,
   () => {
+    form.knowledgePoints = []
+    void loadKnowledgePoints()
     syncDefaultQuestionSetTitle()
   }
 )
+
+watch([() => form.scope, () => form.knowledgePoints.join('\u0000')], () => syncDefaultQuestionSetTitle())
 
 watch(generateDialogVisible, (visible) => {
   if (!visible) return
@@ -560,7 +675,8 @@ watch(
 
 const buildDefaultQuestionSetTitle = (materialId?: number) => {
   const material = materialId ? materials.value.find((item) => item.id === materialId) : undefined
-  return material?.title ? `${material.title} - AI练习题` : 'AI练习题'
+  const suffix = form.scope === 'KNOWLEDGE' ? `${form.knowledgePoints.join('、') || '知识点'}专项练习` : 'AI练习题'
+  return (material?.title ? `${material.title} - ${suffix}` : suffix).slice(0, 200)
 }
 
 const syncDefaultQuestionSetTitle = () => {
@@ -633,8 +749,12 @@ usePolling(
 
 const generateQuestionSet = async () => {
   if (generating.value) return
-  if (!form.materialId) {
+  if (!form.materialId || !hasSelectedMaterial.value) {
     ElMessage.warning('请先选择资料')
+    return
+  }
+  if (knowledgeScopeError.value) {
+    ElMessage.warning(knowledgeScopeError.value)
     return
   }
   if (totalQuestionCount.value <= 0) {
@@ -658,7 +778,8 @@ const generateQuestionSet = async () => {
       multipleCount: form.multipleCount,
       judgeCount: form.judgeCount,
       shortAnswerCount: form.shortAnswerCount,
-      difficultyLevel: form.difficultyLevel
+      difficultyLevel: form.difficultyLevel,
+      knowledgePoints: form.scope === 'KNOWLEDGE' ? [...form.knowledgePoints] : undefined
     })
     const submittedTask = submitRes.data.data as AiTaskDetail
     if (viewDisposed) return
@@ -764,19 +885,45 @@ const removeQuestionSet = async (id: number) => {
 onMounted(async () => {
   await Promise.all([loadAiConfig(), loadMaterials(), loadQuestionSets()])
   if (viewDisposed) return
-  const queryId = Number(route.query.materialId)
+  const queryId = initialGenerateRequest.materialId
   if (queryId && materials.value.some((item) => item.id === queryId)) {
     form.materialId = queryId
+  }
+  await nextTick()
+  if (initialGenerateRequest.knowledgePoint) {
+    form.scope = 'KNOWLEDGE'
+    if (hasSelectedMaterial.value) updateKnowledgePoints([initialGenerateRequest.knowledgePoint])
+  }
+  if (initialGenerateRequest.open) {
+    generateDialogVisible.value = true
+    if (!hasSelectedMaterial.value) ElMessage.warning('请先选择可用的已解析资料，再设置知识点。')
   }
   syncDefaultQuestionSetTitle()
 })
 
 onUnmounted(() => {
   viewDisposed = true
+  knowledgePointsRequestId++
 })
 </script>
 
 <style scoped>
+.quiz-knowledge-scope {
+  margin-bottom: 16px;
+}
+.quiz-knowledge-scope :deep(.el-form-item) {
+  margin-bottom: 8px;
+}
+.quiz-scope-help {
+  margin: 6px 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.quiz-scope-summary {
+  overflow-wrap: anywhere;
+}
 .quiz-view .workspace-panel {
   background: transparent;
   border: 0;

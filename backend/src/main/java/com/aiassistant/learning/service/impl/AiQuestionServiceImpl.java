@@ -2,6 +2,7 @@ package com.aiassistant.learning.service.impl;
 
 import com.aiassistant.learning.common.exception.BusinessException;
 import com.aiassistant.learning.common.util.MultipleChoiceAnswers;
+import com.aiassistant.learning.common.util.QuestionKnowledgeScope;
 import com.aiassistant.learning.dto.ai.QuestionGenerateRequest;
 import com.aiassistant.learning.entity.AiGenerationRecord;
 import com.aiassistant.learning.entity.MaterialSegment;
@@ -130,6 +131,11 @@ public class AiQuestionServiceImpl implements AiQuestionService {
     public QuestionSet createGeneratingQuestionSet(Long userId, Long materialId, QuestionGenerateRequest request) {
         StudyMaterial material = getOwnedMaterial(userId, materialId);
         QuestionPlan plan = resolveQuestionPlan(request);
+        List<String> points = QuestionKnowledgeScope.normalize(request.getKnowledgePoints(), plan.totalCount());
+        if (!points.isEmpty()) {
+            QuestionKnowledgeScope.selectSegments(listMaterialSegments(materialId), points);
+        }
+        request.setKnowledgePoints(points);
         QuestionSet questionSet = new QuestionSet();
         questionSet.setUserId(userId);
         questionSet.setMaterialId(materialId);
@@ -142,6 +148,18 @@ public class AiQuestionServiceImpl implements AiQuestionService {
         questionSet.setDeleted(0);
         questionSetMapper.insert(questionSet);
         return questionSet;
+    }
+
+    @Override
+    public List<String> listKnowledgePoints(Long userId, Long materialId) {
+        getOwnedMaterial(userId, materialId);
+        return QuestionKnowledgeScope.candidates(listMaterialSegments(materialId));
+    }
+
+    private List<MaterialSegment> listMaterialSegments(Long materialId) {
+        return materialSegmentMapper.selectList(new LambdaQueryWrapper<MaterialSegment>()
+                .eq(MaterialSegment::getMaterialId, materialId)
+                .orderByAsc(MaterialSegment::getSegmentNo));
     }
 
     private StudyMaterial getOwnedMaterial(Long userId, Long materialId) {
@@ -190,26 +208,27 @@ public class AiQuestionServiceImpl implements AiQuestionService {
             }
         }
 
-        List<MaterialSegment> segments = materialSegmentMapper.selectList(new LambdaQueryWrapper<MaterialSegment>()
-                .eq(MaterialSegment::getMaterialId, materialId)
-                .orderByAsc(MaterialSegment::getSegmentNo));
+        List<MaterialSegment> segments = listMaterialSegments(materialId);
         if (segments.isEmpty()) {
             throw new BusinessException("请先准备资料内容，再生成题目");
         }
 
         QuestionPlan questionPlan = resolveQuestionPlan(request);
+        List<String> knowledgePoints = QuestionKnowledgeScope.normalize(request.getKnowledgePoints(), questionPlan.totalCount());
+        List<MaterialSegment> scopedSegments = knowledgePoints.isEmpty()
+                ? List.of() : QuestionKnowledgeScope.selectSegments(segments, knowledgePoints);
         int difficultyLevel = request.getDifficultyLevel() == null ? 3 : request.getDifficultyLevel();
         String defaultModel = aiConfigService.getResolvedConfig().defaultModel();
         String modelName = StringUtils.hasText(request.getModelName()) ? request.getModelName() : defaultModel;
         String promptText = buildQuestionSystemPrompt();
-        List<MaterialSegment> contextSegments = resolveQuestionContextSegments(
+        List<MaterialSegment> contextSegments = knowledgePoints.isEmpty() ? resolveQuestionContextSegments(
                 userId,
                 material,
                 segments,
                 questionPlan,
                 difficultyLevel
-        );
-        String inputText = buildQuestionUserPrompt(material, contextSegments, questionPlan, difficultyLevel);
+        ) : scopedSegments;
+        String inputText = buildQuestionUserPrompt(material, contextSegments, questionPlan, difficultyLevel, knowledgePoints);
 
         // 阶段二：调用模型。此时没有任何事务打开。
         LocalDateTime start = LocalDateTime.now();
@@ -218,8 +237,10 @@ public class AiQuestionServiceImpl implements AiQuestionService {
                 contextSegments,
                 questionPlan,
                 difficultyLevel,
-                modelName
+                modelName,
+                knowledgePoints
         );
+        validateKnowledgeCoverage(generatedQuestions, knowledgePoints);
         int responseTimeMs = (int) Duration.between(start, LocalDateTime.now()).toMillis();
 
         // 阶段三：短事务落库。
@@ -348,17 +369,20 @@ public class AiQuestionServiceImpl implements AiQuestionService {
             List<MaterialSegment> segments,
             QuestionPlan questionPlan,
             int difficultyLevel,
-            String modelName
+            String modelName,
+            List<String> knowledgePoints
     ) {
         AiConfigService.ResolvedAiConfig config = aiConfigService.getResolvedConfig();
         if (!Boolean.TRUE.equals(config.enabled())) {
             throw new BusinessException("AI 功能未启用");
         }
         if (Boolean.TRUE.equals(config.mockMode())) {
-            return buildMockQuestions(material, segments, questionPlan, difficultyLevel);
+            return knowledgePoints.isEmpty()
+                    ? buildMockQuestions(material, segments, questionPlan, difficultyLevel)
+                    : buildScopedMockQuestions(segments, questionPlan, difficultyLevel, knowledgePoints);
         }
 
-        String userPrompt = buildQuestionUserPrompt(material, segments, questionPlan, difficultyLevel);
+        String userPrompt = buildQuestionUserPrompt(material, segments, questionPlan, difficultyLevel, knowledgePoints);
         String content = aiChatService.chat(buildQuestionSystemPrompt(), userPrompt, modelName, 0.4);
         return parseGeneratedQuestions(content, questionPlan);
     }
@@ -451,7 +475,8 @@ public class AiQuestionServiceImpl implements AiQuestionService {
             StudyMaterial material,
             List<MaterialSegment> segments,
             QuestionPlan questionPlan,
-            int difficultyLevel
+            int difficultyLevel,
+            List<String> knowledgePoints
     ) {
         StringBuilder builder = new StringBuilder();
         builder.append("请基于以下检索出的资料摘录生成 ").append(questionPlan.totalCount()).append(" 道题。").append(System.lineSeparator());
@@ -461,7 +486,16 @@ public class AiQuestionServiceImpl implements AiQuestionService {
                 .append(questionPlan.shortAnswerCount()).append(" 道。").append(System.lineSeparator());
         builder.append("请严格按照上述题型数量输出，不要缺少，也不要额外增加其他题型。").append(System.lineSeparator());
         builder.append("难度等级: ").append(difficultyLevel).append(" / 5").append(System.lineSeparator());
-        builder.append("题目尽量覆盖不同知识点，严格保留用户指定的题型组合。").append(System.lineSeparator());
+        if (!knowledgePoints.isEmpty()) {
+            builder.append("出题范围仅限以下知识点（每个至少出一道题）: ")
+                    .append(String.join("、", knowledgePoints)).append(System.lineSeparator());
+            builder.append("每道题的 knowledgePoint 必须原样使用上述列表中的一个名称；不得使用其他标签、合并标签或扩大范围。")
+                    .append(System.lineSeparator());
+            builder.append("只考查选定知识点，在资料摘录中缺乏依据时不要编造；严格保留指定题型组合。")
+                    .append(System.lineSeparator());
+        } else {
+            builder.append("题目尽量覆盖不同知识点，严格保留用户指定的题型组合。").append(System.lineSeparator());
+        }
         builder.append("优先围绕核心概念、关键流程、重要定义、区别联系、最佳实践、易错点出题，不要围绕目录、附录、参考链接出题。")
                 .append(System.lineSeparator());
         builder.append("题干请直接发问，不要写“根据资料”“资料中”等提示性前缀。").append(System.lineSeparator());
@@ -469,6 +503,9 @@ public class AiQuestionServiceImpl implements AiQuestionService {
         builder.append("资料标题: ").append(material.getTitle()).append(System.lineSeparator());
         builder.append("资料摘录: ").append(System.lineSeparator());
         for (MaterialSegment segment : segments) {
+            if (!knowledgePoints.isEmpty()) {
+                builder.append("[对应知识点: ").append(segment.getKeywords()).append("]");
+            }
             builder.append("[片段#").append(segment.getSegmentNo() == null ? "--" : segment.getSegmentNo()).append("]");
             if (segment.getPageNo() != null) {
                 builder.append("[第 ").append(segment.getPageNo()).append(" 页]");
@@ -1140,6 +1177,82 @@ public class AiQuestionServiceImpl implements AiQuestionService {
             sanitized = sanitized.substring(0, sanitized.length() - 1).trim() + "。";
         }
         return sanitized;
+    }
+
+    /** 选定范围时，返回的知识点标签必须合法，且不能遗漏任何选定知识点。 */
+    private void validateKnowledgeCoverage(List<GeneratedQuestion> questions, List<String> knowledgePoints) {
+        if (knowledgePoints.isEmpty()) {
+            return;
+        }
+        List<String> covered = new ArrayList<>();
+        for (GeneratedQuestion question : questions) {
+            if (!knowledgePoints.contains(question.knowledgePoint())) {
+                throw new BusinessException("AI 返回了所选范围以外的知识点，请重新生成");
+            }
+            covered.add(question.knowledgePoint());
+        }
+        if (!covered.containsAll(knowledgePoints)) {
+            throw new BusinessException("AI 未覆盖全部所选知识点，请重新生成");
+        }
+    }
+
+    /** 演示题也取自当前知识点对应的摘录，便于检查范围、题型和作答流程。 */
+    private List<GeneratedQuestion> buildScopedMockQuestions(
+            List<MaterialSegment> segments,
+            QuestionPlan plan,
+            int difficultyLevel,
+            List<String> points
+    ) {
+        List<String> types = new ArrayList<>();
+        for (int count = 0; count < plan.singleCount(); count++) types.add("SINGLE");
+        for (int count = 0; count < plan.multipleCount(); count++) types.add("MULTIPLE");
+        for (int count = 0; count < plan.judgeCount(); count++) types.add("JUDGE");
+        for (int count = 0; count < plan.shortAnswerCount(); count++) types.add("SHORT_ANSWER");
+        List<GeneratedQuestion> questions = new ArrayList<>();
+        for (int index = 0; index < types.size(); index++) {
+            int pointIndex = index % points.size();
+            String point = points.get(pointIndex);
+            String evidence = scopedMockEvidence(segments.get(pointIndex).getContentText(), point);
+            String analysis = "知识点「" + point + "」的资料依据：“" + evidence + "”。";
+            GeneratedQuestion question = switch (types.get(index)) {
+                case "SINGLE" -> new GeneratedQuestion(
+                        "SINGLE", "关于「" + point + "」，哪项说明有资料依据？",
+                        evidence, "资料未包含该知识点的任何说明", "资料明确否定了所列摘录中的全部内容",
+                        "该知识点与所选资料完全无关", "A", analysis, point, 5);
+                case "MULTIPLE" -> new GeneratedQuestion(
+                        "MULTIPLE", "关于「" + point + "」的摘录，哪些说法成立？",
+                        "摘录包含以下内容：“" + evidence + "”", "该知识点有可供复习的资料依据",
+                        "资料未包含该知识点的任何说明", "摘录与该知识点完全无关", "A,B",
+                        analysis + "A复述摘录，B说明依据存在；C、D与摘录不符。全部选对得分。", point, 5);
+                case "JUDGE" -> new GeneratedQuestion(
+                        "JUDGE", "「" + point + "」的资料说明包含以下内容：“" + evidence + "”。",
+                        "正确", "错误", null, null, "正确", analysis, point, 5);
+                default -> new GeneratedQuestion(
+                        "SHORT_ANSWER", "请概括「" + point + "」的主要内容。",
+                        null, null, null, null, evidence, analysis + "回答应覆盖摘录中的关键表述。", point,
+                        difficultyLevel >= 4 ? 15 : 10);
+            };
+            questions.add(question);
+        }
+        return questions;
+    }
+
+    private String scopedMockEvidence(String content, String point) {
+        String[] sentences = content.split("(?<=[。！？])|\\R+");
+        String evidence = content;
+        for (String sentence : sentences) {
+            if (sentence.toLowerCase(Locale.ROOT).contains(point.toLowerCase(Locale.ROOT))) {
+                evidence = sentence.strip();
+                break;
+            }
+        }
+        if (evidence.length() > 360) {
+            int pointPosition = evidence.toLowerCase(Locale.ROOT).indexOf(point.toLowerCase(Locale.ROOT));
+            int start = Math.max(0, pointPosition - 80);
+            int end = Math.min(evidence.length(), start + 360);
+            evidence = (start > 0 ? "…" : "") + evidence.substring(start, end) + (end < evidence.length() ? "…" : "");
+        }
+        return evidence.strip();
     }
 
     /**

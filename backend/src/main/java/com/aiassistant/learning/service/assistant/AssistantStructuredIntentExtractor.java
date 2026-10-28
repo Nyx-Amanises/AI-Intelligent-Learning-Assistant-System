@@ -105,10 +105,11 @@ public class AssistantStructuredIntentExtractor {
                 14. taskTypeFilter 仅允许：SUMMARY、QUESTION_GENERATE、PRACTICE_REVIEW、EMBEDDING。
                 15. taskStatusFilter 仅允许：PENDING、RUNNING、SUCCESS、FAILED、CANCELLED。
                 16. exclusiveQuestionType 仅允许：SINGLE、MULTIPLE、JUDGE、SHORT_ANSWER。多选题对应 MULTIPLE 和 multipleCount，不能记作单选。
-                17. 如果用户明确要看“已生成 Embedding / 已向量化”的资料，则 embeddingReadyOnly=true。
-                18. 如果用户是在澄清“是哪一份资料 / id 6 还是 id 7 / 当前定位不明确”，则 materialDisambiguation=true。
-                19. 如果用户是在质疑、追问、澄清上一条系统定位/选择/判断，则 contextChallenge=true。
-                20. 如果某字段无法确定，请返回 null；布尔字段默认 false；数组默认 []。
+                17. knowledgePoints 仅提取用户明确指定的出题知识点名称，保持原文大小写，以字符串数组返回；未指定用 null，明确改为整份资料用 []。不要从资料名或普通问答推断知识点。每次最多 5 个，每个不超过 80 字。
+                18. 如果用户明确要看“已生成 Embedding / 已向量化”的资料，则 embeddingReadyOnly=true。
+                19. 如果用户是在澄清“是哪一份资料 / id 6 还是 id 7 / 当前定位不明确”，则 materialDisambiguation=true。
+                20. 如果用户是在质疑、追问、澄清上一条系统定位/选择/判断，则 contextChallenge=true。
+                21. 如果某字段无法确定，请返回 null；布尔字段默认 false；除 knowledgePoints 外的数组默认 []。未指定 knowledgePoints 必须用 null，不能用 [] 清除此前范围。
 
                 输出 JSON schema：
                 {
@@ -130,6 +131,7 @@ public class AssistantStructuredIntentExtractor {
                   "questionCount": null,
                   "singleCount": null,
                   "multipleCount": null,
+                  "knowledgePoints": null,
                   "judgeCount": null,
                   "shortAnswerCount": null,
                   "difficultyLevel": null,
@@ -177,6 +179,7 @@ public class AssistantStructuredIntentExtractor {
                     .questionCount(readNullableInt(root, "questionCount"))
                     .singleCount(readNullableInt(root, "singleCount"))
                     .multipleCount(readNullableInt(root, "multipleCount"))
+                    .knowledgePoints(readKnowledgePoints(root))
                     .judgeCount(readNullableInt(root, "judgeCount"))
                     .shortAnswerCount(readNullableInt(root, "shortAnswerCount"))
                     .difficultyLevel(readNullableInt(root, "difficultyLevel"))
@@ -221,6 +224,18 @@ public class AssistantStructuredIntentExtractor {
             if (item != null && item.isTextual() && StringUtils.hasText(item.asText())) {
                 values.add(item.asText().trim().toUpperCase());
             }
+        }
+        return values;
+    }
+
+    private List<String> readKnowledgePoints(JsonNode root) {
+        JsonNode node = root == null ? null : root.get("knowledgePoints");
+        if (node == null || node.isNull()) return null;
+        if (!node.isArray()) return List.of("");
+        List<String> values = new ArrayList<>();
+        for (JsonNode item : node) {
+            // 交给出题请求校验无效项，不能丢掉无效项后悄悄扩大出题范围。
+            values.add(item != null && item.isTextual() ? item.asText() : "");
         }
         return values;
     }

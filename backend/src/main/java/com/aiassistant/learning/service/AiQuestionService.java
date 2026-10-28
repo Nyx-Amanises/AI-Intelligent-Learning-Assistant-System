@@ -3,11 +3,15 @@ package com.aiassistant.learning.service;
 import com.aiassistant.learning.dto.ai.QuestionGenerateRequest;
 import com.aiassistant.learning.entity.QuestionSet;
 import com.aiassistant.learning.vo.question.QuestionSetDetailVO;
+import java.util.List;
 
 /**
  * AI 题目生成服务接口。
  */
 public interface AiQuestionService {
+
+    /** 从用户拥有的资料中整理可选出题知识点。 */
+    List<String> listKnowledgePoints(Long userId, Long materialId);
 
     /**
      * 创建生成中的题集记录，不调用 AI，供异步任务在提交时使用。
