@@ -14,6 +14,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.aiassistant.learning.common.exception.BusinessException;
+import com.aiassistant.learning.common.security.OutboundUrlGuard;
 import com.aiassistant.learning.common.security.SecretCipher;
 import com.aiassistant.learning.config.AiProperties;
 import com.aiassistant.learning.dto.ai.AiConfigUpdateRequest;
@@ -49,7 +50,8 @@ class AiConfigServiceImplTest {
     private final SysUserMapper users = mock(SysUserMapper.class);
     private final AiProperties properties = new AiProperties();
     private final SecretCipher cipher = SecretCipher.forPassphrase("unit-test-encryption-key-0123456789");
-    private final AiConfigServiceImpl service = new AiConfigServiceImpl(properties, new ObjectMapper(), configs, users, cipher);
+    private final AiConfigServiceImpl service = new AiConfigServiceImpl(
+            properties, new ObjectMapper(), configs, users, cipher, new OutboundUrlGuard(properties));
 
     @TempDir
     Path temporaryDirectory;
@@ -339,6 +341,40 @@ class AiConfigServiceImplTest {
 
         global.setBaseUrl(null);
         assertEquals("environment-test-key", service.getResolvedConfig(USER_ID).apiKey());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"http://169.254.169.254", "http://127.0.0.1:8083", "http://192.168.0.10", "file:///etc"})
+    void personalConfigCannotPointAtInternalOrNonHttpAddresses(String baseUrl) {
+        AiConfigUpdateRequest request = new AiConfigUpdateRequest();
+        request.setMockMode(true);
+        request.setBaseUrl(baseUrl);
+
+        assertThrows(BusinessException.class, () -> service.updateConfig(USER_ID, request));
+        verify(configs, never()).insert(any(AiConfig.class));
+    }
+
+    @Test
+    void embeddingPathCannotSmuggleInAnotherHost() {
+        AiConfigUpdateRequest request = new AiConfigUpdateRequest();
+        request.setEmbeddingPath("http://169.254.169.254/latest/meta-data");
+        request.setEmbeddingApiKey("personal-embedding-test-key");
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> service.updateConfig(USER_ID, request));
+
+        assertTrue(exception.getMessage().contains("接口路径"));
+        verify(configs, never()).insert(any(AiConfig.class));
+    }
+
+    @Test
+    void sharedConfigCannotPointAtInternalAddressesEither() {
+        actAsAdmin();
+        AiConfigUpdateRequest request = new AiConfigUpdateRequest();
+        request.setBaseUrl("http://10.1.2.3");
+        request.setApiKey("new-shared-key");
+
+        assertThrows(BusinessException.class, () -> service.updateGlobalConfig(USER_ID, request));
+        verify(configs, never()).updateById(any(AiConfig.class));
     }
 
     private void actAsAdmin() {

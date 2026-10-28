@@ -79,4 +79,12 @@ public class AiProperties {
      * AI 配置文件路径，用于保存或读取运行时配置。
      */
     private String configFile;
+
+    /**
+     * 是否允许 AI 服务地址指向本机或内网。
+     *
+     * <p>默认关闭，防止用户把 Base URL 配成内网地址，借服务器访问内网服务（SSRF）。
+     * 需要连接本机部署的模型服务（如 Ollama）时再开启。</p>
+     */
+    private Boolean allowPrivateNetwork;
 }

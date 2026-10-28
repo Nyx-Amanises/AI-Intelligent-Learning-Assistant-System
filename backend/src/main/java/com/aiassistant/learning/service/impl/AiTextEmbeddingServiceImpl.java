@@ -2,13 +2,18 @@ package com.aiassistant.learning.service.impl;
 
 import lombok.extern.slf4j.Slf4j;
 import com.aiassistant.learning.common.exception.BusinessException;
+import com.aiassistant.learning.common.security.OutboundUrlGuard;
 import com.aiassistant.learning.service.AiConfigService;
 import com.aiassistant.learning.service.TextEmbeddingService;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.ResourceAccessException;
@@ -33,9 +38,19 @@ public class AiTextEmbeddingServiceImpl implements TextEmbeddingService {
 
     /** AI 配置服务。 */
     private final AiConfigService aiConfigService;
+    /** 发请求前校验目标地址，防止 SSRF。 */
+    private final OutboundUrlGuard outboundUrlGuard;
+    /** 不跟随重定向的 HTTP 客户端，避免被 3xx 引到未经校验的地址。 */
+    private final JdkClientHttpRequestFactory requestFactory;
 
-    public AiTextEmbeddingServiceImpl(AiConfigService aiConfigService) {
+    public AiTextEmbeddingServiceImpl(AiConfigService aiConfigService, OutboundUrlGuard outboundUrlGuard) {
         this.aiConfigService = aiConfigService;
+        this.outboundUrlGuard = outboundUrlGuard;
+        this.requestFactory = new JdkClientHttpRequestFactory(HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(20))
+                .followRedirects(HttpClient.Redirect.NEVER)
+                .build());
+        this.requestFactory.setReadTimeout(Duration.ofMinutes(2));
     }
 
     /**
@@ -82,22 +97,26 @@ public class AiTextEmbeddingServiceImpl implements TextEmbeddingService {
             throw new BusinessException("Embedding Path 未配置");
         }
 
+        // 先拼出最终地址并校验，再带上 API Key 发请求；路径不能把请求引到 Base URL 之外的主机。
+        URI endpoint = OutboundUrlGuard.joinUrl(embeddingBaseUrl, embeddingPath, "Embedding 接口地址");
+        outboundUrlGuard.checkRequestTarget(endpoint, "Embedding 接口地址");
+
         try {
             RestClient restClient = RestClient.builder()
-                    .baseUrl(embeddingBaseUrl.trim())
+                    .requestFactory(requestFactory)
                     .build();
 
             List<List<Double>> vectors = switch (providerType) {
                 case PROVIDER_ARK_MULTIMODAL_TEXT -> embedByArkMultimodal(
                         restClient,
-                        embeddingPath,
+                        endpoint,
                         embeddingApiKey,
                         resolvedModel,
                         texts
                 );
                 case PROVIDER_OPENAI_COMPATIBLE -> embedByOpenAiCompatible(
                         restClient,
-                        embeddingPath,
+                        endpoint,
                         embeddingApiKey,
                         resolvedModel,
                         texts
@@ -113,12 +132,12 @@ public class AiTextEmbeddingServiceImpl implements TextEmbeddingService {
         } catch (BusinessException exception) {
             throw exception;
         } catch (RestClientResponseException exception) {
-            String responseBody = StringUtils.hasText(exception.getResponseBodyAsString())
-                    ? exception.getResponseBodyAsString()
-                    : exception.getStatusText();
+            String responseBody = exception.getResponseBodyAsString();
+            int statusCode = exception.getStatusCode().value();
+            log.warn("Embedding 接口返回错误 HTTP {}: {}", statusCode, AiProviderErrorMessages.forLog(responseBody));
             throw new BusinessException(
                     500,
-                    "调用 Embedding 接口失败: HTTP " + exception.getStatusCode().value() + " " + truncateMessage(responseBody, 240)
+                    "调用 Embedding 接口失败: " + AiProviderErrorMessages.describe(statusCode, responseBody)
             );
         } catch (ResourceAccessException exception) {
             throw new BusinessException(
@@ -136,13 +155,13 @@ public class AiTextEmbeddingServiceImpl implements TextEmbeddingService {
      */
     private List<List<Double>> embedByOpenAiCompatible(
             RestClient restClient,
-            String embeddingPath,
+            URI endpoint,
             String embeddingApiKey,
             String modelName,
             List<String> texts
     ) {
         Map<String, Object> response = restClient.post()
-                .uri(embeddingPath)
+                .uri(endpoint)
                 .contentType(MediaType.APPLICATION_JSON)
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + embeddingApiKey)
                 .body(Map.of(
@@ -159,7 +178,7 @@ public class AiTextEmbeddingServiceImpl implements TextEmbeddingService {
      */
     private List<List<Double>> embedByArkMultimodal(
             RestClient restClient,
-            String embeddingPath,
+            URI endpoint,
             String embeddingApiKey,
             String modelName,
             List<String> texts
@@ -167,7 +186,7 @@ public class AiTextEmbeddingServiceImpl implements TextEmbeddingService {
         List<List<Double>> vectors = new ArrayList<>(texts.size());
         for (String text : texts) {
             Map<String, Object> response = restClient.post()
-                    .uri(embeddingPath)
+                    .uri(endpoint)
                     .contentType(MediaType.APPLICATION_JSON)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + embeddingApiKey)
                     .body(Map.of(

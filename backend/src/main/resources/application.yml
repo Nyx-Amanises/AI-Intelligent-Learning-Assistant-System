@@ -57,6 +57,8 @@ app:
     default-model: ${APP_AI_DEFAULT_MODEL:gpt-4o-mini}
     default-embedding-model: ${APP_AI_DEFAULT_EMBEDDING_MODEL:text-embedding-3-small}
     config-file: ${APP_AI_CONFIG_FILE:./runtime/ai-config.json}
+    # 是否允许 AI 服务地址指向本机 / 内网（例如本地 Ollama）。默认关闭以防 SSRF
+    allow-private-network: ${APP_AI_ALLOW_PRIVATE_NETWORK:false}
   qdrant:
     enabled: ${APP_QDRANT_ENABLED:true}
     base-url: ${APP_QDRANT_BASE_URL:http://127.0.0.1:6333}

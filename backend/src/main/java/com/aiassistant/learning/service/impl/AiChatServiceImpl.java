@@ -3,6 +3,7 @@ package com.aiassistant.learning.service.impl;
 import lombok.extern.slf4j.Slf4j;
 import com.aiassistant.learning.common.exception.AiStreamAbortedException;
 import com.aiassistant.learning.common.exception.BusinessException;
+import com.aiassistant.learning.common.security.OutboundUrlGuard;
 import com.aiassistant.learning.service.AiChatService;
 import com.aiassistant.learning.service.AiConfigService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -37,14 +38,18 @@ public class AiChatServiceImpl implements AiChatService {
     private final AiConfigService aiConfigService;
     /** JSON 解析工具。 */
     private final ObjectMapper objectMapper;
-    /** Java 标准 HTTP 客户端。 */
+    /** Java 标准 HTTP 客户端。默认不跟随重定向，避免被 3xx 引到未经校验的地址。 */
     private final HttpClient httpClient;
+    /** 发请求前校验目标地址，防止 SSRF。 */
+    private final OutboundUrlGuard outboundUrlGuard;
 
-    public AiChatServiceImpl(AiConfigService aiConfigService, ObjectMapper objectMapper) {
+    public AiChatServiceImpl(AiConfigService aiConfigService, ObjectMapper objectMapper, OutboundUrlGuard outboundUrlGuard) {
         this.aiConfigService = aiConfigService;
         this.objectMapper = objectMapper;
+        this.outboundUrlGuard = outboundUrlGuard;
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(20))
+                .followRedirects(HttpClient.Redirect.NEVER)
                 .build();
     }
 
@@ -104,9 +109,11 @@ public class AiChatServiceImpl implements AiChatService {
         try {
             HttpResponse<InputStream> response = httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                String responseBody = readStreamBody(response.body());
+                log.warn("AI 流式接口返回错误 HTTP {}: {}", response.statusCode(), AiProviderErrorMessages.forLog(responseBody));
                 throw new BusinessException(
                         500,
-                        "调用 AI 接口失败: HTTP " + response.statusCode() + " " + truncateMessage(readStreamBody(response.body()), 300)
+                        "调用 AI 接口失败: " + AiProviderErrorMessages.describe(response.statusCode(), responseBody)
                 );
             }
 
@@ -249,10 +256,14 @@ public class AiChatServiceImpl implements AiChatService {
 
     /**
      * 构建带认证头的 HTTP 请求。
+     *
+     * <p>先按最终 URL 校验目标地址，再放上 API Key：地址可能来自用户配置，不能把请求和密钥发到内网或本机。</p>
      */
     private HttpRequest buildHttpRequest(AiConfigService.ResolvedAiConfig config, Map<String, Object> requestBody) {
         try {
-            return HttpRequest.newBuilder(buildChatUri(config.baseUrl(), config.chatPath()))
+            URI target = OutboundUrlGuard.joinUrl(config.baseUrl(), config.chatPath(), "AI 接口地址");
+            outboundUrlGuard.checkRequestTarget(target, "AI 接口地址");
+            return HttpRequest.newBuilder(target)
                     .timeout(Duration.ofMinutes(3))
                     .header("Content-Type", "application/json")
                     .header("Authorization", "Bearer " + config.apiKey())
@@ -266,43 +277,14 @@ public class AiChatServiceImpl implements AiChatService {
     }
 
     /**
-     * 拼接 Base URL 与接口路径。
-     */
-    private URI buildChatUri(String baseUrl, String chatPath) {
-        if (!StringUtils.hasText(baseUrl)) {
-            throw new BusinessException("AI Base URL 未配置");
-        }
-        if (!StringUtils.hasText(chatPath)) {
-            throw new BusinessException("AI Chat Path 未配置");
-        }
-
-        String normalizedBaseUrl = baseUrl.trim();
-        String normalizedPath = chatPath.trim();
-        boolean baseEndsWithSlash = normalizedBaseUrl.endsWith("/");
-        boolean pathStartsWithSlash = normalizedPath.startsWith("/");
-
-        String fullUrl;
-        if (baseEndsWithSlash && pathStartsWithSlash) {
-            fullUrl = normalizedBaseUrl + normalizedPath.substring(1);
-        } else if (!baseEndsWithSlash && !pathStartsWithSlash) {
-            fullUrl = normalizedBaseUrl + "/" + normalizedPath;
-        } else {
-            fullUrl = normalizedBaseUrl + normalizedPath;
-        }
-        return URI.create(fullUrl);
-    }
-
-    /**
-     * 检查 HTTP 状态码是否成功。
+     * 检查 HTTP 状态码是否成功。失败时只把服务商的错误说明返回前端，原始响应写日志。
      */
     private void ensureSuccessStatus(int statusCode, String responseBody) {
         if (statusCode >= 200 && statusCode < 300) {
             return;
         }
-        throw new BusinessException(
-                500,
-                "调用 AI 接口失败: HTTP " + statusCode + " " + truncateMessage(responseBody, 300)
-        );
+        log.warn("AI 接口返回错误 HTTP {}: {}", statusCode, AiProviderErrorMessages.forLog(responseBody));
+        throw new BusinessException(500, "调用 AI 接口失败: " + AiProviderErrorMessages.describe(statusCode, responseBody));
     }
 
     /**

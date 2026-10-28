@@ -1,6 +1,7 @@
 package com.aiassistant.learning.service.impl;
 
 import com.aiassistant.learning.common.exception.BusinessException;
+import com.aiassistant.learning.common.security.OutboundUrlGuard;
 import com.aiassistant.learning.common.security.SecretCipher;
 import com.aiassistant.learning.common.security.UserRoles;
 import com.aiassistant.learning.config.AiProperties;
@@ -51,19 +52,23 @@ public class AiConfigServiceImpl implements AiConfigService {
     private final SysUserMapper sysUserMapper;
     /** API Key 落库前加密、读出后解密。 */
     private final SecretCipher secretCipher;
+    /** 校验用户填写的服务地址，防止 SSRF。 */
+    private final OutboundUrlGuard outboundUrlGuard;
 
     public AiConfigServiceImpl(
             AiProperties aiProperties,
             ObjectMapper objectMapper,
             AiConfigMapper aiConfigMapper,
             SysUserMapper sysUserMapper,
-            SecretCipher secretCipher
+            SecretCipher secretCipher,
+            OutboundUrlGuard outboundUrlGuard
     ) {
         this.aiProperties = aiProperties;
         this.objectMapper = objectMapper;
         this.aiConfigMapper = aiConfigMapper;
         this.sysUserMapper = sysUserMapper;
         this.secretCipher = secretCipher;
+        this.outboundUrlGuard = outboundUrlGuard;
     }
 
     @Override
@@ -84,6 +89,7 @@ public class AiConfigServiceImpl implements AiConfigService {
                 sharedFallback,
                 false
         );
+        validateEndpoints(target);
         validateConfig(applySharedSecretsWhenEndpointMatches(target, sharedFallback));
         upsertConfig(existing, SCOPE_USER, userId, target);
         return getConfig(userId);
@@ -117,6 +123,7 @@ public class AiConfigServiceImpl implements AiConfigService {
                 legacyFallback,
                 true
         );
+        validateEndpoints(target);
         validateConfig(target);
         upsertConfig(existing, SCOPE_GLOBAL, GLOBAL_USER_ID, target);
         return getGlobalConfig(userId);
@@ -279,6 +286,20 @@ public class AiConfigServiceImpl implements AiConfigService {
      * 可沿用的 Key 及其原本对应的服务地址。
      */
     private record SecretSource(String secret, String url) {
+    }
+
+    /**
+     * 校验要保存的聊天 / 向量服务地址（Base URL + 接口路径），拒绝非 http(s)、内网、本机等地址。
+     *
+     * <p>Mock 或关闭状态下也校验：地址保存后随时可能被切换为真实调用。</p>
+     */
+    private void validateEndpoints(ConfigDraft draft) {
+        ResolvedAiConfig config = toResolvedConfig(draft);
+        outboundUrlGuard.validateConfiguredUrl(
+                OutboundUrlGuard.joinUrl(config.baseUrl(), config.chatPath(), "聊天服务地址").toString(), "聊天服务地址");
+        outboundUrlGuard.validateConfiguredUrl(
+                OutboundUrlGuard.joinUrl(config.embeddingBaseUrl(), config.embeddingPath(), "向量服务地址").toString(),
+                "向量服务地址");
     }
 
     private void validateConfig(ConfigDraft draft) {
