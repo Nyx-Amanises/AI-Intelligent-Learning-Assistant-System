@@ -84,6 +84,7 @@ Or use the repository `render.yaml` Blueprint.
 Required Render variables:
 
 ```text
+SPRING_PROFILES_ACTIVE=prod
 APP_CORS_ALLOWED_ORIGINS=https://ai-intelligent-learning-assistant-s.vercel.app
 APP_FILE_UPLOAD_DIR=/tmp/ai-learning-uploads
 APP_AI_CONFIG_FILE=/tmp/ai-config.json
@@ -108,6 +109,8 @@ APP_QDRANT_COLLECTION_NAME=material_segment_vectors
 ```
 
 AI keys do not need to be set in Render if the `admin` user configures the shared key in the app.
+
+`SPRING_PROFILES_ACTIVE=prod` turns on strict startup checks: the backend refuses to start unless `SPRING_DATASOURCE_PASSWORD`, `APP_JWT_SECRET` (at least 32 characters) and `APP_SECRET_ENCRYPTION_KEY` (at least 16 characters) are set explicitly. `render.yaml` sets the profile and generates the two secrets, but only for services managed by the Blueprint; if the service was created by hand in the dashboard, add these variables there yourself. Keep `APP_SECRET_ENCRYPTION_KEY` stable: changing it makes API keys already saved in the database unreadable, and they have to be entered again.
 
 ## 5. Update Vercel
 
