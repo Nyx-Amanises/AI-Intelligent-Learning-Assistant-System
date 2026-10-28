@@ -42,6 +42,7 @@
           </el-select>
           <el-select v-model="filters.questionType" clearable placeholder="全部题型" aria-label="筛选题型">
             <el-option label="单选题" value="SINGLE" />
+            <el-option label="多选题" value="MULTIPLE" />
             <el-option label="判断题" value="JUDGE" />
             <el-option label="简答题" value="SHORT_ANSWER" />
             <el-option v-if="userStore.isAdmin" label="简答题（旧版）" value="SHORT" />
@@ -147,13 +148,17 @@
               v-for="option in buildOptions(detail)"
               :key="option.value"
               :class="{
-                'wrong-option--correct': detail.correctAnswer === option.value,
-                'wrong-option--selected': detail.userAnswer === option.value && detail.correctAnswer !== option.value
+                'wrong-option--correct': answerIncludesOption(detail, detail.correctAnswer, option.value),
+                'wrong-option--selected':
+                  answerIncludesOption(detail, detail.userAnswer, option.value) &&
+                  !answerIncludesOption(detail, detail.correctAnswer, option.value)
               }"
             >
-              <span>{{ option.value }}. {{ option.label }}</span>
-              <small v-if="detail.correctAnswer === option.value">正确答案</small
-              ><small v-else-if="detail.userAnswer === option.value">我的选择</small>
+              <span>{{ option.label }}</span>
+              <small v-if="answerIncludesOption(detail, detail.correctAnswer, option.value)">{{
+                answerIncludesOption(detail, detail.userAnswer, option.value) ? '正确 · 已选' : '正确 · 未选'
+              }}</small
+              ><small v-else-if="answerIncludesOption(detail, detail.userAnswer, option.value)">我的选择</small>
             </div>
           </div>
         </div>
@@ -161,11 +166,11 @@
         <div class="wrong-answer-comparison">
           <div>
             <span>我的答案</span>
-            <p>{{ formatAnswerText(detail, detail.userAnswer) }}</p>
+            <p>{{ formatAnswer(detail, detail.userAnswer) }}</p>
           </div>
           <div class="wrong-answer-comparison__reference">
             <span>参考答案</span>
-            <p>{{ formatAnswerText(detail, detail.correctAnswer) }}</p>
+            <p>{{ formatAnswer(detail, detail.correctAnswer) }}</p>
           </div>
         </div>
         <div v-if="detail.answerAnalysis" class="wrong-analysis">
@@ -205,6 +210,7 @@ import EmptyState from '@/components/EmptyState.vue'
 import IconMenuButton from '@/components/IconMenuButton.vue'
 import ListSectionHeading from '@/components/ListSectionHeading.vue'
 import StatusPill from '@/components/StatusPill.vue'
+import { answerIncludesOption, buildOptions, formatAnswer } from '@/components/practice/practiceHelpers'
 import { useAutoListQuery } from '@/composables/useAutoListQuery'
 import { useLatestRequest } from '@/composables/useLatestRequest'
 import { useParsedMaterials } from '@/composables/useParsedMaterials'
@@ -245,18 +251,6 @@ const filters = reactive({
 
 const hasFilters = computed(() => Boolean(filters.keyword || filters.materialId || filters.questionType))
 
-const buildOptions = (item: WrongQuestionItem) =>
-  [
-    { value: 'A', label: item.optionA },
-    { value: 'B', label: item.optionB },
-    { value: 'C', label: item.optionC },
-    { value: 'D', label: item.optionD }
-  ].filter((option) => Boolean(option.label))
-const formatAnswerText = (item: WrongQuestionItem, value?: string) => {
-  if (!value) return '未作答'
-  const option = buildOptions(item).find((entry) => entry.value === value)
-  return option ? `${option.value}. ${option.label}` : value
-}
 const hasOptions = (item: WrongQuestionItem) => Boolean(item.optionA || item.optionB || item.optionC || item.optionD)
 const handleQuestionAction = (command: string, item: WrongQuestionItem) => {
   if (command === 'practice') goPractice(item.sessionId)

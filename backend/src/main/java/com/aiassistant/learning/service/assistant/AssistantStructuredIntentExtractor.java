@@ -104,7 +104,7 @@ public class AssistantStructuredIntentExtractor {
                 13. requestedTaskTypes 仅允许：SUMMARY、QUESTION_GENERATE。
                 14. taskTypeFilter 仅允许：SUMMARY、QUESTION_GENERATE、PRACTICE_REVIEW、EMBEDDING。
                 15. taskStatusFilter 仅允许：PENDING、RUNNING、SUCCESS、FAILED、CANCELLED。
-                16. exclusiveQuestionType 仅允许：SINGLE、JUDGE、SHORT_ANSWER。
+                16. exclusiveQuestionType 仅允许：SINGLE、MULTIPLE、JUDGE、SHORT_ANSWER。多选题对应 MULTIPLE 和 multipleCount，不能记作单选。
                 17. 如果用户明确要看“已生成 Embedding / 已向量化”的资料，则 embeddingReadyOnly=true。
                 18. 如果用户是在澄清“是哪一份资料 / id 6 还是 id 7 / 当前定位不明确”，则 materialDisambiguation=true。
                 19. 如果用户是在质疑、追问、澄清上一条系统定位/选择/判断，则 contextChallenge=true。
@@ -129,6 +129,7 @@ public class AssistantStructuredIntentExtractor {
                   "chapterKeyword": null,
                   "questionCount": null,
                   "singleCount": null,
+                  "multipleCount": null,
                   "judgeCount": null,
                   "shortAnswerCount": null,
                   "difficultyLevel": null,
@@ -175,6 +176,7 @@ public class AssistantStructuredIntentExtractor {
                     .chapterKeyword(readNullableText(root, "chapterKeyword"))
                     .questionCount(readNullableInt(root, "questionCount"))
                     .singleCount(readNullableInt(root, "singleCount"))
+                    .multipleCount(readNullableInt(root, "multipleCount"))
                     .judgeCount(readNullableInt(root, "judgeCount"))
                     .shortAnswerCount(readNullableInt(root, "shortAnswerCount"))
                     .difficultyLevel(readNullableInt(root, "difficultyLevel"))

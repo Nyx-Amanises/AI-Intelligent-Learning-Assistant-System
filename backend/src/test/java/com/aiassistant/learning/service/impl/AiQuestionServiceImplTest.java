@@ -37,6 +37,8 @@ import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -189,6 +191,100 @@ class AiQuestionServiceImplTest {
         assertEquals("PUBLISHED", result.getStatus());
         assertEquals(5, result.getQuestions().size());
         verify(questionSets).insert(any(QuestionSet.class));
+    }
+
+    @Test
+    void multipleOnlyPlanAndMockGenerationProduceUsableQuestions() {
+        configureGeneration(true);
+        QuestionGenerateRequest request = new QuestionGenerateRequest();
+        request.setMultipleCount(3);
+
+        QuestionSet placeholder = service.createGeneratingQuestionSet(7L, 42L, request);
+        QuestionSetDetailVO detail = service.generateQuestionSet(7L, 42L, request);
+
+        assertEquals(3, placeholder.getQuestionCount());
+        assertEquals(3, detail.getQuestionCount());
+        assertEquals(15, detail.getTotalScore());
+        assertTrue(detail.getQuestions().stream().allMatch(question ->
+                "MULTIPLE".equals(question.getQuestionType()) && "A,B".equals(question.getCorrectAnswer())
+                        && question.getOptionD() != null));
+        verifyNoInteractions(chat);
+    }
+
+    @Test
+    void realGenerationHonorsMultipleCountAndNormalizesAnswers() {
+        configureGeneration(false);
+        QuestionGenerateRequest request = new QuestionGenerateRequest();
+        request.setMultipleCount(1);
+        when(chat.chat(anyString(), anyString(), anyString(), anyDouble()))
+                .thenReturn(multipleQuestionJson("c、a", "选项D"));
+
+        QuestionSetDetailVO detail = service.generateQuestionSet(7L, 42L, request);
+
+        assertEquals("MULTIPLE", detail.getQuestions().get(0).getQuestionType());
+        assertEquals("A,C", detail.getQuestions().get(0).getCorrectAnswer());
+        ArgumentCaptor<String> systemPrompt = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> userPrompt = ArgumentCaptor.forClass(String.class);
+        verify(chat).chat(systemPrompt.capture(), userPrompt.capture(), anyString(), anyDouble());
+        assertTrue(systemPrompt.getValue().contains("MULTIPLE"));
+        assertTrue(userPrompt.getValue().contains("多选题 1 道"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "A", "A,A", "A,E", "答案为 A,C", "A,", "A,C<script>"})
+    void invalidModelMultipleAnswersNeverPublishAQuestionSet(String answer) {
+        configureGeneration(false);
+        QuestionGenerateRequest request = new QuestionGenerateRequest();
+        request.setMultipleCount(1);
+        when(chat.chat(anyString(), anyString(), anyString(), anyDouble()))
+                .thenReturn(multipleQuestionJson(answer, "选项D"));
+
+        assertThrows(BusinessException.class, () -> service.generateQuestionSet(7L, 42L, request));
+
+        verifyNoInteractions(questionSets, questionItems, records);
+    }
+
+    @Test
+    void incompleteMultipleOptionsNeverPublishAQuestionSet() {
+        configureGeneration(false);
+        QuestionGenerateRequest request = new QuestionGenerateRequest();
+        request.setMultipleCount(1);
+        when(chat.chat(anyString(), anyString(), anyString(), anyDouble()))
+                .thenReturn(multipleQuestionJson("A,C", ""));
+
+        assertThrows(BusinessException.class, () -> service.generateQuestionSet(7L, 42L, request));
+
+        verifyNoInteractions(questionSets, questionItems, records);
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {-1, 21, Integer.MAX_VALUE})
+    void invalidMultipleCountsDoNotCreatePlaceholders(int count) {
+        QuestionGenerateRequest request = new QuestionGenerateRequest();
+        request.setMultipleCount(count);
+
+        assertThrows(BusinessException.class, () -> service.createGeneratingQuestionSet(7L, 42L, request));
+
+        verifyNoInteractions(questionSets);
+    }
+
+    @Test
+    void combinedCountsCannotExceedTwenty() {
+        QuestionGenerateRequest request = new QuestionGenerateRequest();
+        request.setSingleCount(12);
+        request.setMultipleCount(9);
+
+        assertThrows(BusinessException.class, () -> service.createGeneratingQuestionSet(7L, 42L, request));
+
+        verifyNoInteractions(questionSets);
+    }
+
+    private String multipleQuestionJson(String answer, String optionD) {
+        return """
+                {"questions":[{"questionType":"MULTIPLE","stemText":"哪些选项正确？",
+                "optionA":"选项A","optionB":"选项B","optionC":"选项C","optionD":"%s",
+                "correctAnswer":"%s","answerAnalysis":"A和C正确","knowledgePoint":"开发规范","score":5}]}
+                """.formatted(optionD, answer);
     }
 
     private void configureGeneration(boolean mockMode) {

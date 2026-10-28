@@ -1,6 +1,7 @@
 package com.aiassistant.learning.service.impl;
 
 import com.aiassistant.learning.common.exception.BusinessException;
+import com.aiassistant.learning.common.util.MultipleChoiceAnswers;
 import com.aiassistant.learning.dto.practice.PracticeAnswerRequest;
 import com.aiassistant.learning.dto.practice.PracticeStartRequest;
 import com.aiassistant.learning.dto.practice.PracticeSubmitRequest;
@@ -634,6 +635,11 @@ public class PracticeServiceImpl implements PracticeService {
     private boolean isCorrect(QuestionItem question, String userAnswer) {
         if (!StringUtils.hasText(userAnswer) || !StringUtils.hasText(question.getCorrectAnswer())) {
             return false;
+        }
+        if (MultipleChoiceAnswers.isMultiple(question.getQuestionType())) {
+            String expected = MultipleChoiceAnswers.normalize(question.getCorrectAnswer());
+            String actual = MultipleChoiceAnswers.normalize(userAnswer);
+            return expected != null && expected.contains(",") && expected.equals(actual);
         }
         return question.getCorrectAnswer().trim().equalsIgnoreCase(userAnswer.trim());
     }

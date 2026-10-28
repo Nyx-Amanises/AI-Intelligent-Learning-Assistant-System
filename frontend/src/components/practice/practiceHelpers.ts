@@ -65,17 +65,24 @@ export interface AnswerOption {
   label: string
 }
 
-/**
- * 多选题答案的分隔符。后端判分是对 correctAnswer 与 userAnswer 做整串比较，
- * 出题模板目前只产生 SINGLE / JUDGE / SHORT_ANSWER，没有 MULTI 的示例，这里按英文逗号约定（如 "A,C"）。
- */
+/** 多选题答案按字母排序，以英文逗号分隔（如 "A,C"），后端按选项集合全对判分。 */
 export const MULTI_ANSWER_SEPARATOR = ','
 
-const QUESTION_TYPE_ORDER: Record<string, number> = { SINGLE: 1, MULTI: 2, JUDGE: 3, SHORT: 4, SHORT_ANSWER: 4 }
+type OptionQuestion = Pick<PracticeAnswer, 'questionType' | 'optionA' | 'optionB' | 'optionC' | 'optionD'>
+
+const QUESTION_TYPE_ORDER: Record<string, number> = {
+  SINGLE: 1,
+  MULTIPLE: 2,
+  MULTI: 2,
+  JUDGE: 3,
+  SHORT: 4,
+  SHORT_ANSWER: 4
+}
 
 const upper = (value?: string | null) => String(value || '').toUpperCase()
 
-export const isMultiQuestion = (answer: PracticeAnswer) => upper(answer.questionType) === 'MULTI'
+export const isMultiQuestion = (answer: Pick<PracticeAnswer, 'questionType'>) =>
+  ['MULTIPLE', 'MULTI'].includes(upper(answer.questionType))
 export const isChoiceQuestion = (answer: PracticeAnswer) => isChoiceType(answer.questionType)
 export const isShortQuestion = (answer: PracticeAnswer) => isShortAnswerType(answer.questionType)
 export const isPendingReview = (answer: PracticeAnswer) => upper(answer.reviewMode) === 'AI_PENDING'
@@ -86,13 +93,18 @@ export const hasAnswerValue = (value?: string | null) => Boolean(String(value ||
 export const splitMultiAnswer = (value?: string | null) =>
   String(value || '')
     .split(MULTI_ANSWER_SEPARATOR)
-    .map((item) => item.trim())
+    .map((item) => item.trim().toUpperCase())
     .filter(Boolean)
 
 export const joinMultiAnswer = (values: string[]) =>
-  [...values].sort((a, b) => a.localeCompare(b)).join(MULTI_ANSWER_SEPARATOR)
+  [...new Set(values.map((value) => value.trim().toUpperCase()).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b))
+    .join(MULTI_ANSWER_SEPARATOR)
 
-export const buildOptions = (answer: PracticeAnswer): AnswerOption[] => {
+export const answerIncludesOption = (answer: OptionQuestion, value: string | undefined, optionValue: string) =>
+  isMultiQuestion(answer) ? splitMultiAnswer(value).includes(optionValue) : String(value || '').trim() === optionValue
+
+export const buildOptions = (answer: OptionQuestion): AnswerOption[] => {
   if (upper(answer.questionType) === 'JUDGE') {
     return [
       { value: '正确', label: 'A. 正确' },
@@ -108,21 +120,21 @@ export const buildOptions = (answer: PracticeAnswer): AnswerOption[] => {
 }
 
 /** 把存储的答案转成可读文本：选择题显示"A. xxx"，多选题按分隔符逐项展示。 */
-export const formatAnswer = (answer: PracticeAnswer, value?: string | null) => {
+export const formatAnswer = (answer: OptionQuestion, value?: string | null) => {
   if (!hasAnswerValue(value)) return '未作答'
   const text = String(value)
   const type = upper(answer.questionType)
-  if (type !== 'SINGLE' && type !== 'MULTI') return text
+  if (type !== 'SINGLE' && !isMultiQuestion(answer)) return text
   const options = buildOptions(answer)
   const labelOf = (key: string) => options.find((item) => item.value === key.trim())?.label || key
-  return type === 'MULTI' ? splitMultiAnswer(text).map(labelOf).join(' / ') : labelOf(text)
+  return isMultiQuestion(answer) ? splitMultiAnswer(text).map(labelOf).join(' / ') : labelOf(text)
 }
 
 /** 按题型分组并只编一次全局题号（按分组后的顺序）。 */
 export const groupAnswers = (answers: PracticeAnswer[] = []): PracticeSection[] => {
   const groups = new Map<string, PracticeAnswer[]>()
   answers.forEach((item) => {
-    const type = upper(item.questionType) || 'OTHER'
+    const type = isMultiQuestion(item) ? 'MULTIPLE' : upper(item.questionType) || 'OTHER'
     if (!groups.has(type)) groups.set(type, [])
     groups.get(type)?.push(item)
   })

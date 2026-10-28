@@ -62,7 +62,7 @@
           :description="
             hasFilters
               ? '换个关键词或难度，看看其他题集。'
-              : '选择资料，自由组合单选、判断和简答题，找到适合自己的练习节奏。'
+              : '选择资料，自由组合单选、多选、判断和简答题，找到适合自己的练习节奏。'
           "
         >
           <el-button v-if="hasFilters" @click="resetFilters">清除筛选</el-button>
@@ -211,6 +211,9 @@
           <el-form-item label="单选题"
             ><el-input-number v-model="form.singleCount" :min="0" :max="MAX_QUESTION_COUNT" aria-label="单选题数量"
           /></el-form-item>
+          <el-form-item label="多选题"
+            ><el-input-number v-model="form.multipleCount" :min="0" :max="MAX_QUESTION_COUNT" aria-label="多选题数量"
+          /></el-form-item>
           <el-form-item label="判断题"
             ><el-input-number v-model="form.judgeCount" :min="0" :max="MAX_QUESTION_COUNT" aria-label="判断题数量"
           /></el-form-item>
@@ -222,6 +225,7 @@
               aria-label="简答题数量"
           /></el-form-item>
         </div>
+        <p v-if="form.multipleCount" class="quiz-inline-note">多选题：全部选对得分，少选、多选或错选不得分。</p>
         <el-alert
           v-if="!isQuestionCountValid"
           :title="`请选择 1 至 ${MAX_QUESTION_COUNT} 道题，再开始生成。`"
@@ -306,6 +310,9 @@
               ><span>{{ question.score }} 分</span>
             </div>
             <h3>{{ question.sortNo || index + 1 }}. {{ question.stemText }}</h3>
+            <p v-if="isMultiQuestion(question)" class="quiz-inline-note">
+              多选题：全部选对得分，少选、多选或错选不得分。
+            </p>
             <div v-if="question.optionA" class="option-list">
               <div>A. {{ question.optionA }}</div>
               <div v-if="question.optionB">B. {{ question.optionB }}</div>
@@ -315,7 +322,10 @@
             <details class="quiz-answer">
               <summary>查看参考答案与解析</summary>
               <div class="analysis-box">
-                <p><strong>参考答案</strong>{{ question.correctAnswer || '暂无参考答案' }}</p>
+                <p>
+                  <strong>参考答案</strong
+                  >{{ question.correctAnswer ? formatAnswer(question, question.correctAnswer) : '暂无参考答案' }}
+                </p>
                 <p><strong>解析</strong>{{ question.answerAnalysis || '暂无解析' }}</p>
                 <p v-if="question.knowledgePoint"><strong>知识点</strong>{{ question.knowledgePoint }}</p>
               </div>
@@ -376,6 +386,7 @@ import IconMenuButton from '@/components/IconMenuButton.vue'
 import ListSectionHeading from '@/components/ListSectionHeading.vue'
 import SourceSegmentList from '@/components/SourceSegmentList.vue'
 import StatusPill from '@/components/StatusPill.vue'
+import { formatAnswer, isMultiQuestion } from '@/components/practice/practiceHelpers'
 
 /** 题集分页列表项（/question-set/page）。 */
 interface QuestionSetItem {
@@ -455,7 +466,8 @@ const form = reactive({
   materialId: undefined as number | undefined,
   questionSetTitle: '',
   modelName: '',
-  singleCount: 3,
+  singleCount: 2,
+  multipleCount: 1,
   judgeCount: 1,
   shortAnswerCount: 1,
   difficultyLevel: 3
@@ -482,7 +494,11 @@ const autoQuery = useAutoListQuery([() => filters.keyword, () => filters.status,
 })
 
 const totalQuestionCount = computed(
-  () => Number(form.singleCount || 0) + Number(form.judgeCount || 0) + Number(form.shortAnswerCount || 0)
+  () =>
+    Number(form.singleCount || 0) +
+    Number(form.multipleCount || 0) +
+    Number(form.judgeCount || 0) +
+    Number(form.shortAnswerCount || 0)
 )
 const isQuestionCountValid = computed(
   () => totalQuestionCount.value >= 1 && totalQuestionCount.value <= MAX_QUESTION_COUNT
@@ -639,6 +655,7 @@ const generateQuestionSet = async () => {
       title: form.questionSetTitle.trim() || undefined,
       questionCount: totalQuestionCount.value,
       singleCount: form.singleCount,
+      multipleCount: form.multipleCount,
       judgeCount: form.judgeCount,
       shortAnswerCount: form.shortAnswerCount,
       difficultyLevel: form.difficultyLevel
@@ -955,7 +972,7 @@ onUnmounted(() => {
 }
 .quiz-count-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
 }
 .quiz-count-grid :deep(.el-input-number) {

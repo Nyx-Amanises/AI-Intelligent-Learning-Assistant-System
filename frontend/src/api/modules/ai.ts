@@ -12,6 +12,7 @@ export interface QuestionGeneratePayload {
   title?: string
   questionCount?: number
   singleCount?: number
+  multipleCount?: number
   judgeCount?: number
   shortAnswerCount?: number
   difficultyLevel?: number

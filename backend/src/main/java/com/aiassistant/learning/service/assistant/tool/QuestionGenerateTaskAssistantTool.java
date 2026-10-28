@@ -65,6 +65,7 @@ public class QuestionGenerateTaskAssistantTool extends AbstractAssistantTool {
         request.setModelName(options.modelName());
         request.setQuestionCount(options.questionCount());
         request.setSingleCount(options.singleCount());
+        request.setMultipleCount(options.multipleCount());
         request.setJudgeCount(options.judgeCount());
         request.setShortAnswerCount(options.shortAnswerCount());
         request.setDifficultyLevel(options.difficultyLevel());
@@ -92,6 +93,7 @@ public class QuestionGenerateTaskAssistantTool extends AbstractAssistantTool {
         args.put("materialId", materialId);
         args.put("questionCount", request.getQuestionCount());
         args.put("singleCount", request.getSingleCount());
+        args.put("multipleCount", request.getMultipleCount());
         args.put("judgeCount", request.getJudgeCount());
         args.put("shortAnswerCount", request.getShortAnswerCount());
         args.put("difficultyLevel", request.getDifficultyLevel());
@@ -103,8 +105,9 @@ public class QuestionGenerateTaskAssistantTool extends AbstractAssistantTool {
         }
         try {
             AiTaskDetailVO detail = aiTaskService.submitQuestionGenerateTask(userId, materialId, request);
-            String summary = "已为当前资料创建 AI 出题任务（单选 %s、判断 %s、简答 %s，难度 %s），任务号 #%s，当前状态 %s。%s".formatted(
+            String summary = "已为当前资料创建 AI 出题任务（单选 %s、多选 %s、判断 %s、简答 %s，难度 %s），任务号 #%s，当前状态 %s。%s".formatted(
                     request.getSingleCount(),
+                    request.getMultipleCount() == null ? 0 : request.getMultipleCount(),
                     request.getJudgeCount(),
                     request.getShortAnswerCount(),
                     request.getDifficultyLevel(),

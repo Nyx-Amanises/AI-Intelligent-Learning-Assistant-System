@@ -170,6 +170,7 @@ public class AssistantTaskWorkflowExecutor {
                 request.setModelName(task.getModelName());
                 request.setQuestionCount(task.getQuestionCount());
                 request.setSingleCount(task.getSingleCount());
+                request.setMultipleCount(task.getMultipleCount());
                 request.setJudgeCount(task.getJudgeCount());
                 request.setShortAnswerCount(task.getShortAnswerCount());
                 request.setDifficultyLevel(task.getDifficultyLevel());
@@ -216,6 +217,7 @@ public class AssistantTaskWorkflowExecutor {
                         .modelName(options.modelName())
                         .questionCount(options.questionCount())
                         .singleCount(options.singleCount())
+                        .multipleCount(options.multipleCount())
                         .judgeCount(options.judgeCount())
                         .shortAnswerCount(options.shortAnswerCount())
                         .difficultyLevel(options.difficultyLevel())

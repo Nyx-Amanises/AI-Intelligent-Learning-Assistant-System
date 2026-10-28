@@ -36,6 +36,11 @@ public class QuestionGenerateRequest {
     @Max(value = 20, message = "单选题数量不能超过20")
     private Integer singleCount;
 
+    /** 多选题数量。 */
+    @Min(value = 0, message = "多选题数量不能小于0")
+    @Max(value = 20, message = "多选题数量不能超过20")
+    private Integer multipleCount;
+
     /**
      * 判断题数量。
      */

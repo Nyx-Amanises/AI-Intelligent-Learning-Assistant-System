@@ -1,6 +1,7 @@
 package com.aiassistant.learning.service.impl;
 
 import com.aiassistant.learning.common.exception.BusinessException;
+import com.aiassistant.learning.common.util.MultipleChoiceAnswers;
 import com.aiassistant.learning.dto.ai.QuestionGenerateRequest;
 import com.aiassistant.learning.entity.AiGenerationRecord;
 import com.aiassistant.learning.entity.MaterialSegment;
@@ -396,6 +397,7 @@ public class AiQuestionServiceImpl implements AiQuestionService {
                 + " 生成练习题"
                 + " 总题量 " + questionPlan.totalCount()
                 + " 单选题 " + questionPlan.singleCount()
+                + " 多选题 " + questionPlan.multipleCount()
                 + " 判断题 " + questionPlan.judgeCount()
                 + " 简答题 " + questionPlan.shortAnswerCount()
                 + " 难度 " + difficultyLevel
@@ -431,8 +433,10 @@ public class AiQuestionServiceImpl implements AiQuestionService {
                     }
                   ]
                 }
-                questionType 只允许 SINGLE、JUDGE、SHORT_ANSWER。
+                questionType 只允许 SINGLE、MULTIPLE、JUDGE、SHORT_ANSWER。
                 SINGLE 必须提供 optionA 到 optionD，correctAnswer 用 A/B/C/D。
+                MULTIPLE 必须提供 optionA 到 optionD，至少两个正确选项；correctAnswer 用按字母排序、逗号分隔的字符串，例如 A,C 或 A,B,D，不能使用数组。
+                多选题按全部选对计分，少选、多选、错选均为零分，解析须说明每个选项是否正确。
                 JUDGE 必须提供 optionA=正确、optionB=错误，correctAnswer 用 正确 或 错误。
                 SHORT_ANSWER 不要提供 optionC/optionD，可不提供 optionA/optionB。
                 score 必须是正整数。
@@ -451,12 +455,13 @@ public class AiQuestionServiceImpl implements AiQuestionService {
     ) {
         StringBuilder builder = new StringBuilder();
         builder.append("请基于以下检索出的资料摘录生成 ").append(questionPlan.totalCount()).append(" 道题。").append(System.lineSeparator());
-        builder.append("题型要求: 单选题 ").append(questionPlan.singleCount()).append(" 道，判断题 ")
+        builder.append("题型要求: 单选题 ").append(questionPlan.singleCount()).append(" 道，多选题 ")
+                .append(questionPlan.multipleCount()).append(" 道，判断题 ")
                 .append(questionPlan.judgeCount()).append(" 道，简答题 ")
                 .append(questionPlan.shortAnswerCount()).append(" 道。").append(System.lineSeparator());
         builder.append("请严格按照上述题型数量输出，不要缺少，也不要额外增加其他题型。").append(System.lineSeparator());
         builder.append("难度等级: ").append(difficultyLevel).append(" / 5").append(System.lineSeparator());
-        builder.append("题目尽量覆盖不同知识点，题型可以混合，但优先使用单选题和判断题。").append(System.lineSeparator());
+        builder.append("题目尽量覆盖不同知识点，严格保留用户指定的题型组合。").append(System.lineSeparator());
         builder.append("优先围绕核心概念、关键流程、重要定义、区别联系、最佳实践、易错点出题，不要围绕目录、附录、参考链接出题。")
                 .append(System.lineSeparator());
         builder.append("题干请直接发问，不要写“根据资料”“资料中”等提示性前缀。").append(System.lineSeparator());
@@ -484,26 +489,35 @@ public class AiQuestionServiceImpl implements AiQuestionService {
      */
     private QuestionPlan resolveQuestionPlan(QuestionGenerateRequest request) {
         Integer singleCount = request.getSingleCount();
+        Integer multipleCount = request.getMultipleCount();
         Integer judgeCount = request.getJudgeCount();
         Integer shortAnswerCount = request.getShortAnswerCount();
-        boolean explicitTypeCount = singleCount != null || judgeCount != null || shortAnswerCount != null;
+        boolean explicitTypeCount = singleCount != null || multipleCount != null || judgeCount != null || shortAnswerCount != null;
 
         if (!explicitTypeCount) {
             int total = request.getQuestionCount() == null ? 5 : request.getQuestionCount();
             return buildDefaultQuestionPlan(total);
         }
 
-        int resolvedSingle = Math.max(0, singleCount == null ? 0 : singleCount);
-        int resolvedJudge = Math.max(0, judgeCount == null ? 0 : judgeCount);
-        int resolvedShort = Math.max(0, shortAnswerCount == null ? 0 : shortAnswerCount);
-        int total = resolvedSingle + resolvedJudge + resolvedShort;
+        int resolvedSingle = validateTypeCount(singleCount);
+        int resolvedMultiple = validateTypeCount(multipleCount);
+        int resolvedJudge = validateTypeCount(judgeCount);
+        int resolvedShort = validateTypeCount(shortAnswerCount);
+        int total = resolvedSingle + resolvedMultiple + resolvedJudge + resolvedShort;
         if (total <= 0) {
             throw new BusinessException("请至少选择一种题型并设置数量");
         }
         if (total > 20) {
             throw new BusinessException("题目总数最多为20道");
         }
-        return new QuestionPlan(resolvedSingle, resolvedJudge, resolvedShort, total);
+        return new QuestionPlan(resolvedSingle, resolvedMultiple, resolvedJudge, resolvedShort, total);
+    }
+
+    private int validateTypeCount(Integer count) {
+        if (count != null && (count < 0 || count > 20)) {
+            throw new BusinessException("各题型数量必须在0至20之间");
+        }
+        return count == null ? 0 : count;
     }
 
     /**
@@ -538,7 +552,7 @@ public class AiQuestionServiceImpl implements AiQuestionService {
                 shortAnswerCount--;
             }
         }
-        return new QuestionPlan(singleCount, judgeCount, shortAnswerCount, total);
+        return new QuestionPlan(singleCount, 0, judgeCount, shortAnswerCount, total);
     }
 
     /**
@@ -906,6 +920,7 @@ public class AiQuestionServiceImpl implements AiQuestionService {
     private List<GeneratedQuestion> normalizeQuestionsByPlan(List<GeneratedQuestion> questions, QuestionPlan questionPlan) {
         Map<String, List<GeneratedQuestion>> grouped = new LinkedHashMap<>();
         grouped.put("SINGLE", new ArrayList<>());
+        grouped.put("MULTIPLE", new ArrayList<>());
         grouped.put("JUDGE", new ArrayList<>());
         grouped.put("SHORT_ANSWER", new ArrayList<>());
 
@@ -930,6 +945,7 @@ public class AiQuestionServiceImpl implements AiQuestionService {
 
         List<GeneratedQuestion> normalized = new ArrayList<>();
         appendQuestionsByType(normalized, grouped.get("SINGLE"), questionPlan.singleCount(), "单选题");
+        appendQuestionsByType(normalized, grouped.get("MULTIPLE"), questionPlan.multipleCount(), "多选题");
         appendQuestionsByType(normalized, grouped.get("JUDGE"), questionPlan.judgeCount(), "判断题");
         appendQuestionsByType(normalized, grouped.get("SHORT_ANSWER"), questionPlan.shortAnswerCount(), "简答题");
         return normalized;
@@ -959,6 +975,7 @@ public class AiQuestionServiceImpl implements AiQuestionService {
     private String normalizeQuestionType(String questionType) {
         String normalized = StringUtils.hasText(questionType) ? questionType.trim().toUpperCase() : "";
         return switch (normalized) {
+            case "MULTI" -> "MULTIPLE";
             case "SHORT" -> "SHORT_ANSWER";
             default -> normalized;
         };
@@ -981,6 +998,11 @@ public class AiQuestionServiceImpl implements AiQuestionService {
                     continue;
                 }
                 String questionType = normalizeQuestionType(item.questionType);
+                if ("MULTIPLE".equals(questionType)
+                        && (!StringUtils.hasText(item.optionA) || !StringUtils.hasText(item.optionB)
+                        || !StringUtils.hasText(item.optionC) || !StringUtils.hasText(item.optionD))) {
+                    throw new BusinessException("AI 返回的多选题缺少选项，请重试");
+                }
                 questions.add(new GeneratedQuestion(
                         questionType,
                         sanitizeQuestionStem(item.stemText, questionType),
@@ -1047,6 +1069,13 @@ public class AiQuestionServiceImpl implements AiQuestionService {
      * 归一化正确答案格式。
      */
     private String normalizeCorrectAnswer(String questionType, String value) {
+        if ("MULTIPLE".equals(questionType)) {
+            String answer = MultipleChoiceAnswers.normalize(value);
+            if (answer == null || !answer.contains(",")) {
+                throw new BusinessException("AI 返回的多选题答案无效，必须包含至少两个不同的 A-D 选项，请重试");
+            }
+            return answer;
+        }
         String normalized = trimToNull(value);
         if (!StringUtils.hasText(normalized)) {
             return switch (questionType) {
@@ -1144,6 +1173,20 @@ public class AiQuestionServiceImpl implements AiQuestionService {
                     5
             ));
         }
+        for (int i = 1; i <= questionPlan.multipleCount(); i++) {
+            questions.add(new GeneratedQuestion(
+                    "MULTIPLE",
+                    "哪些学习方式有助于理解该资料的核心内容？",
+                    "梳理核心概念与定义",
+                    "结合具体场景分析应用",
+                    "只记目录而不理解内容",
+                    "忽略概念之间的联系",
+                    "A,B",
+                    "A、B 有助于理解核心知识；C、D 无法建立完整的知识理解。本题全部选对得分。",
+                    material.getTitle(),
+                    5
+            ));
+        }
         for (int i = 1; i <= questionPlan.judgeCount(); i++) {
             questions.add(new GeneratedQuestion(
                     "JUDGE",
@@ -1211,6 +1254,7 @@ public class AiQuestionServiceImpl implements AiQuestionService {
      */
     private record QuestionPlan(
             int singleCount,
+            int multipleCount,
             int judgeCount,
             int shortAnswerCount,
             int totalCount

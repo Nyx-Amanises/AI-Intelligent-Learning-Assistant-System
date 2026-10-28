@@ -19,6 +19,86 @@ class AssistantTaskIntentParserTest {
     /** 被测试的意图解析器。 */
     private final AssistantTaskIntentParser parser = new AssistantTaskIntentParser();
 
+    @Test
+    void shouldRecognizeMultipleChoiceCommandsAndExclusiveDistribution() {
+        assertTrue(parser.looksLikeQuestionRequest("多选题5道"));
+        assertTrue(parser.looksLikeQuestionConfigReply("全出多选题"));
+        AssistantTaskIntentParser.QuestionTaskOptions options =
+                parser.parseQuestionRequest("全出多选题，一共10道", null);
+        assertEquals(10, options.questionCount());
+        assertEquals(10, options.multipleCount());
+        assertEquals(0, options.singleCount());
+        assertEquals(0, options.judgeCount());
+        assertEquals(0, options.shortAnswerCount());
+        assertFalse(options.requiresQuestionTypeConfirmation());
+    }
+
+    @Test
+    void shouldNotCountMultipleChoiceAliasAsSingleChoice() {
+        AssistantTaskIntentParser.QuestionTaskOptions options =
+                parser.parseQuestionRequest("多项选择题2道，单选题3道，判断题1道，简答题1道", null);
+        assertEquals(7, options.questionCount());
+        assertEquals(2, options.multipleCount());
+        assertEquals(3, options.singleCount());
+        assertEquals(1, options.judgeCount());
+        assertEquals(1, options.shortAnswerCount());
+    }
+
+    @Test
+    void shouldResolveMultipleOnlyReplyWithoutAddingUnrequestedQuestionTypes() {
+        AssistantTaskIntentParser.QuestionConfigResolution resolution =
+                parser.resolveQuestionConfigReply("2道多选题", buildPendingQuestionTask());
+        assertTrue(resolution.resolved());
+        assertEquals(2, resolution.task().getQuestionCount());
+        assertEquals(2, resolution.task().getMultipleCount());
+        assertEquals(0, resolution.task().getSingleCount());
+        assertEquals(0, resolution.task().getJudgeCount());
+        assertEquals(0, resolution.task().getShortAnswerCount());
+    }
+
+    @Test
+    void shouldResolveExclusiveMultipleReplyAndStructuredIntent() {
+        AssistantTaskIntentParser.QuestionConfigResolution natural =
+                parser.resolveQuestionConfigReply("全出多选题，一共10道", buildPendingQuestionTask());
+        assertTrue(natural.resolved());
+        assertEquals(10, natural.task().getMultipleCount());
+        AssistantTaskIntentParser.QuestionConfigResolution structured = parser.resolveQuestionConfigReply(
+                "都按这个题型出", buildPendingQuestionTask(), AssistantStructuredIntent.builder()
+                        .questionCount(8).exclusiveQuestionType("MULTIPLE").build());
+        assertTrue(structured.resolved());
+        assertEquals(8, structured.task().getMultipleCount());
+        assertEquals(0, structured.task().getSingleCount());
+        AssistantTaskIntentParser.QuestionTaskOptions mixed = parser.parseQuestionRequest(
+                "生成练习题", null, AssistantStructuredIntent.builder()
+                        .singleCount(1).multipleCount(2).judgeCount(1).shortAnswerCount(0).build());
+        assertEquals(4, mixed.questionCount());
+        assertEquals(2, mixed.multipleCount());
+    }
+
+    @Test
+    void shouldIncludeMultipleChoicesInLimitAndTotalValidation() {
+        AssistantTaskIntentParser.QuestionTaskOptions limited =
+                parser.parseQuestionRequest("单选10道，多选20道", null);
+        assertEquals(20, limited.questionCount());
+        assertEquals(20, limited.singleCount() + limited.multipleCount() + limited.judgeCount() + limited.shortAnswerCount());
+        assertTrue(limited.multipleCount() > 0);
+        assertNotNull(limited.adjustmentNote());
+        assertFalse(parser.resolveQuestionConfigReply("单选10道，多选20道", buildPendingQuestionTask()).resolved());
+        assertFalse(parser.resolveQuestionConfigReply("一共5道，单选3道，多选3道", buildPendingQuestionTask()).resolved());
+    }
+
+    @Test
+    void shouldPreserveDefaultDistributionAndMultipleCountWhenConfirming() {
+        assertEquals(0, parser.parseQuestionRequest("生成5道题，默认", null).multipleCount());
+        AssistantPlannedTask pending = buildPendingQuestionTask();
+        pending.setSingleCount(1);
+        pending.setMultipleCount(2);
+        AssistantTaskIntentParser.QuestionConfigResolution resolution = parser.resolveQuestionConfigReply("默认", pending);
+        assertTrue(resolution.resolved());
+        assertEquals(2, resolution.task().getMultipleCount());
+        assertTrue(parser.buildQuestionConfigPrompt(pending).contains("多选 2"));
+    }
+
     /**
      * 验证“全出单选题，一共10道”能把总数和单选数量都解析成 10。
      */

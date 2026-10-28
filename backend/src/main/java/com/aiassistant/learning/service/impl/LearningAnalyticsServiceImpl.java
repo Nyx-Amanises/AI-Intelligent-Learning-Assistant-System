@@ -404,6 +404,7 @@ public class LearningAnalyticsServiceImpl implements LearningAnalyticsService {
     private String questionTypeLabel(String questionType) {
         return switch (nullToDefault(questionType, "UNKNOWN").toUpperCase()) {
             case "SINGLE" -> "单选题";
+            case "MULTIPLE", "MULTI" -> "多选题";
             case "JUDGE" -> "判断题";
             case "SHORT", "SHORT_ANSWER" -> "简答题";
             default -> "其他题型";

@@ -75,7 +75,7 @@ public class AssistantTaskIntentParser {
             "上传的资料", "已上传资料", "上传了的资料", "全部学习资料"
     );
     private static final List<String> SUMMARY_KEYWORDS = List.of("生成总结", "生成ai总结", "帮我总结", "总结一下", "做个总结", "提纲", "大纲", "考点", "考试重点");
-    private static final List<String> QUESTION_KEYWORDS = List.of("生成题", "生成练习题", "出题", "来一套题", "生成题集", "单选题", "判断题", "简答题");
+    private static final List<String> QUESTION_KEYWORDS = List.of("生成题", "生成练习题", "出题", "来一套题", "生成题集", "单选题", "多选题", "多项选择题", "判断题", "简答题");
     private static final List<String> TASK_LIST_KEYWORDS = List.of(
             "任务列表", "全部任务", "所有任务", "最近任务", "最新任务", "任务记录", "有哪些任务", "什么任务", "失败任务", "处理中任务", "等待中的任务"
     );
@@ -93,8 +93,8 @@ public class AssistantTaskIntentParser {
     /** 识别出题意图的正则。 */
     private static final List<Pattern> QUESTION_INTENT_PATTERNS = List.of(
             Pattern.compile("(?:生成|出|来|给我|做|整理|再来).{0,8}(?:题|题目|练习题|题集|试题|卷子)"),
-            Pattern.compile("(?:单选题|单选|选择题|判断题|判断|简答题|简答)\\s*[0-9一二两三四五六七八九十百]+\\s*(?:道|个)?"),
-            Pattern.compile("[0-9一二两三四五六七八九十百]+\\s*(?:道|个)?\\s*(?:单选题|单选|选择题|判断题|判断|简答题|简答)")
+            Pattern.compile("(?:单选题|单选|多选题|多选|多项选择题|多项选择|选择题|判断题|判断|简答题|简答)\\s*[0-9一二两三四五六七八九十百]+\\s*(?:道|个)?"),
+            Pattern.compile("[0-9一二两三四五六七八九十百]+\\s*(?:道|个)?\\s*(?:单选题|单选|多选题|多选|多项选择题|多项选择|选择题|判断题|判断|简答题|简答)")
     );
 
     /**
@@ -203,7 +203,11 @@ public class AssistantTaskIntentParser {
         );
         Integer requestedSingle = firstNonNull(
                 structuredIntent == null ? null : structuredIntent.getSingleCount(),
-                extractTypedCount(text, "单选题", "单选", "选择题")
+                extractSingleCount(text)
+        );
+        Integer requestedMultiple = firstNonNull(
+                structuredIntent == null ? null : structuredIntent.getMultipleCount(),
+                extractTypedCount(text, "多选题", "多选", "多项选择题", "多项选择")
         );
         Integer requestedJudge = firstNonNull(
                 structuredIntent == null ? null : structuredIntent.getJudgeCount(),
@@ -221,31 +225,36 @@ public class AssistantTaskIntentParser {
         );
 
         boolean singleSpecified = requestedSingle != null;
+        boolean multipleSpecified = requestedMultiple != null;
         boolean judgeSpecified = requestedJudge != null;
         boolean shortAnswerSpecified = requestedShortAnswer != null;
-        boolean explicitDistribution = singleSpecified || judgeSpecified || shortAnswerSpecified || exclusiveQuestionType != null;
+        boolean explicitDistribution = singleSpecified || multipleSpecified || judgeSpecified || shortAnswerSpecified || exclusiveQuestionType != null;
         boolean explicitQuestionCount = requestedTotal != null;
 
         int questionCount = explicitQuestionCount ? Math.max(1, requestedTotal) : 5;
         int singleCount;
+        int multipleCount;
         int judgeCount;
         int shortAnswerCount;
 
         if (!explicitDistribution) {
-            int[] defaults = distributeByWeights(questionCount, new int[]{3, 1, 1});
+            int[] defaults = distributeByWeights(questionCount, new int[]{3, 0, 1, 1});
             singleCount = defaults[0];
-            judgeCount = defaults[1];
-            shortAnswerCount = defaults[2];
-        } else if (exclusiveQuestionType != null && !singleSpecified && !judgeSpecified && !shortAnswerSpecified) {
+            multipleCount = defaults[1];
+            judgeCount = defaults[2];
+            shortAnswerCount = defaults[3];
+        } else if (exclusiveQuestionType != null && !singleSpecified && !multipleSpecified && !judgeSpecified && !shortAnswerSpecified) {
             int[] exclusiveDistribution = buildExclusiveQuestionTypeDistribution(questionCount, exclusiveQuestionType);
             singleCount = exclusiveDistribution[0];
-            judgeCount = exclusiveDistribution[1];
-            shortAnswerCount = exclusiveDistribution[2];
+            multipleCount = exclusiveDistribution[1];
+            judgeCount = exclusiveDistribution[2];
+            shortAnswerCount = exclusiveDistribution[3];
         } else {
             singleCount = requestedSingle == null ? 0 : Math.max(0, requestedSingle);
+            multipleCount = requestedMultiple == null ? 0 : Math.max(0, requestedMultiple);
             judgeCount = requestedJudge == null ? 0 : Math.max(0, requestedJudge);
             shortAnswerCount = requestedShortAnswer == null ? 0 : Math.max(0, requestedShortAnswer);
-            int currentTotal = singleCount + judgeCount + shortAnswerCount;
+            int currentTotal = singleCount + multipleCount + judgeCount + shortAnswerCount;
             if (explicitQuestionCount && requestedTotal > currentTotal) {
                 int[] remainder = distributeMissingQuestionTypes(
                         requestedTotal - currentTotal,
@@ -254,24 +263,27 @@ public class AssistantTaskIntentParser {
                         shortAnswerSpecified
                 );
                 singleCount += remainder[0];
-                judgeCount += remainder[1];
-                shortAnswerCount += remainder[2];
+                multipleCount += remainder[1];
+                judgeCount += remainder[2];
+                shortAnswerCount += remainder[3];
             }
             questionCount = Math.max(currentTotal, explicitQuestionCount ? requestedTotal : currentTotal);
-            if (singleCount + judgeCount + shortAnswerCount <= 0) {
-                int[] defaults = distributeByWeights(questionCount, new int[]{3, 1, 1});
+            if (singleCount + multipleCount + judgeCount + shortAnswerCount <= 0) {
+                int[] defaults = distributeByWeights(questionCount, new int[]{3, 0, 1, 1});
                 singleCount = defaults[0];
-                judgeCount = defaults[1];
-                shortAnswerCount = defaults[2];
+                multipleCount = defaults[1];
+                judgeCount = defaults[2];
+                shortAnswerCount = defaults[3];
             }
         }
 
         String adjustmentNote = null;
         if (questionCount > QUESTION_LIMIT) {
-            int[] scaled = distributeByWeights(QUESTION_LIMIT, new int[]{singleCount, judgeCount, shortAnswerCount});
+            int[] scaled = distributeByWeights(QUESTION_LIMIT, new int[]{singleCount, multipleCount, judgeCount, shortAnswerCount});
             singleCount = scaled[0];
-            judgeCount = scaled[1];
-            shortAnswerCount = scaled[2];
+            multipleCount = scaled[1];
+            judgeCount = scaled[2];
+            shortAnswerCount = scaled[3];
             questionCount = QUESTION_LIMIT;
             adjustmentNote = "系统当前单次最多支持 20 道题，已自动按上限提交。";
         }
@@ -281,6 +293,7 @@ public class AssistantTaskIntentParser {
                 resolveModelName(text, fallbackModelName),
                 questionCount,
                 singleCount,
+                multipleCount,
                 judgeCount,
                 shortAnswerCount,
                 firstNonNull(
@@ -621,7 +634,11 @@ public class AssistantTaskIntentParser {
         );
         Integer requestedSingle = firstNonNull(
                 structuredIntent == null ? null : structuredIntent.getSingleCount(),
-                extractTypedCount(text, "单选题", "单选", "选择题")
+                extractSingleCount(text)
+        );
+        Integer requestedMultiple = firstNonNull(
+                structuredIntent == null ? null : structuredIntent.getMultipleCount(),
+                extractTypedCount(text, "多选题", "多选", "多项选择题", "多项选择")
         );
         Integer requestedJudge = firstNonNull(
                 structuredIntent == null ? null : structuredIntent.getJudgeCount(),
@@ -637,9 +654,10 @@ public class AssistantTaskIntentParser {
         );
 
         boolean singleSpecified = requestedSingle != null;
+        boolean multipleSpecified = requestedMultiple != null;
         boolean judgeSpecified = requestedJudge != null;
         boolean shortAnswerSpecified = requestedShortAnswer != null;
-        if (!singleSpecified && !judgeSpecified && !shortAnswerSpecified
+        if (!singleSpecified && !multipleSpecified && !judgeSpecified && !shortAnswerSpecified
                 && requestedTotal == null && exclusiveQuestionType == null) {
             return new QuestionConfigResolution(false, null, buildQuestionConfigPrompt(pendingTask));
         }
@@ -648,21 +666,30 @@ public class AssistantTaskIntentParser {
                 ? (pendingTask.getQuestionCount() == null ? 5 : pendingTask.getQuestionCount())
                 : Math.max(1, requestedTotal);
         int singleCount;
+        int multipleCount;
         int judgeCount;
         int shortAnswerCount;
-        if (exclusiveQuestionType != null && !singleSpecified && !judgeSpecified && !shortAnswerSpecified) {
+        if (exclusiveQuestionType != null && !singleSpecified && !multipleSpecified && !judgeSpecified && !shortAnswerSpecified) {
             int[] exclusiveDistribution = buildExclusiveQuestionTypeDistribution(targetTotal, exclusiveQuestionType);
             singleCount = exclusiveDistribution[0];
-            judgeCount = exclusiveDistribution[1];
-            shortAnswerCount = exclusiveDistribution[2];
+            multipleCount = exclusiveDistribution[1];
+            judgeCount = exclusiveDistribution[2];
+            shortAnswerCount = exclusiveDistribution[3];
         } else {
             singleCount = requestedSingle == null ? 0 : requestedSingle;
+            multipleCount = requestedMultiple == null ? 0 : requestedMultiple;
             judgeCount = requestedJudge == null ? 0 : requestedJudge;
             shortAnswerCount = requestedShortAnswer == null ? 0 : requestedShortAnswer;
         }
-        int configuredTotal = singleCount + judgeCount + shortAnswerCount;
-
-        if (singleSpecified && judgeSpecified && shortAnswerSpecified && configuredTotal != targetTotal) {
+        int configuredTotal = singleCount + multipleCount + judgeCount + shortAnswerCount;
+        if (requestedTotal == null && configuredTotal > 0) {
+            targetTotal = configuredTotal;
+        }
+        if (singleCount < 0 || multipleCount < 0 || judgeCount < 0 || shortAnswerCount < 0) {
+            return new QuestionConfigResolution(false, null, "题型数量不能小于 0，请重新设置。");
+        }
+        if ((requestedTotal != null && configuredTotal > targetTotal)
+                || (singleSpecified && judgeSpecified && shortAnswerSpecified && configuredTotal != targetTotal)) {
             return new QuestionConfigResolution(false, null, "你给的题型数量合计和总题数对不上，我先帮你对齐一下：请告诉我是按总题数调整，还是按题型数量合计为准。");
         }
 
@@ -674,17 +701,19 @@ public class AssistantTaskIntentParser {
                     shortAnswerSpecified
             );
             singleCount += remainder[0];
-            judgeCount += remainder[1];
-            shortAnswerCount += remainder[2];
+            multipleCount += remainder[1];
+            judgeCount += remainder[2];
+            shortAnswerCount += remainder[3];
         }
 
-        if (singleCount + judgeCount + shortAnswerCount > QUESTION_LIMIT) {
+        if (singleCount + multipleCount + judgeCount + shortAnswerCount > QUESTION_LIMIT) {
             return new QuestionConfigResolution(false, null, "当前单次最多支持 20 道题，你可以减少一点题量，或者直接回复“默认”。");
         }
 
         AssistantPlannedTask resolvedTask = copyQuestionTask(pendingTask);
-        resolvedTask.setQuestionCount(singleCount + judgeCount + shortAnswerCount);
+        resolvedTask.setQuestionCount(singleCount + multipleCount + judgeCount + shortAnswerCount);
         resolvedTask.setSingleCount(singleCount);
+        resolvedTask.setMultipleCount(multipleCount);
         resolvedTask.setJudgeCount(judgeCount);
         resolvedTask.setShortAnswerCount(shortAnswerCount);
         resolvedTask.setRequiresQuestionTypeConfirmation(false);
@@ -715,7 +744,8 @@ public class AssistantTaskIntentParser {
         String text = userMessage.trim();
         return isDefaultChoice(text)
                 || extractTotalQuestionCount(text) != null
-                || extractTypedCount(text, "单选题", "单选", "选择题") != null
+                || extractSingleCount(text) != null
+                || extractTypedCount(text, "多选题", "多选", "多项选择题", "多项选择") != null
                 || extractTypedCount(text, "判断题", "判断") != null
                 || extractTypedCount(text, "简答题", "简答") != null
                 || detectExclusiveQuestionType(text) != null
@@ -744,11 +774,12 @@ public class AssistantTaskIntentParser {
      */
     public String buildQuestionConfigPrompt(AssistantPlannedTask questionTask) {
         if (questionTask == null) {
-            return "出题参数还不够完整。你可以直接说例如“单选 6、判断 2、简答 2”，或者回复“默认”。";
+            return "出题参数还不够完整。你可以直接说例如“单选 3、多选 3、判断 2、简答 2”，或者回复“默认”。";
         }
-        return "题型数量我还需要你确认一下。你可以直接说例如“单选 6、判断 2、简答 2”，"
-                + "或者回复“默认”，我就按单选 %s、判断 %s、简答 %s 来出。".formatted(
+        return "题型数量我还需要你确认一下。你可以直接说例如“单选 3、多选 3、判断 2、简答 2”，"
+                + "或者回复“默认”，我就按单选 %s、多选 %s、判断 %s、简答 %s 来出。".formatted(
                 questionTask.getSingleCount(),
+                questionTask.getMultipleCount() == null ? 0 : questionTask.getMultipleCount(),
                 questionTask.getJudgeCount(),
                 questionTask.getShortAnswerCount()
         );
@@ -760,6 +791,7 @@ public class AssistantTaskIntentParser {
                 .modelName(source.getModelName())
                 .questionCount(source.getQuestionCount())
                 .singleCount(source.getSingleCount())
+                .multipleCount(source.getMultipleCount())
                 .judgeCount(source.getJudgeCount())
                 .shortAnswerCount(source.getShortAnswerCount())
                 .difficultyLevel(source.getDifficultyLevel())
@@ -774,6 +806,9 @@ public class AssistantTaskIntentParser {
         }
         if (!containsAny(text, "全部", "全都", "都", "全出", "只出", "只要")) {
             return null;
+        }
+        if (containsAny(text, "多选题", "多选", "多项选择题", "多项选择")) {
+            return "MULTIPLE";
         }
         if (containsAny(text, "单选题", "单选", "选择题")) {
             return "SINGLE";
@@ -790,9 +825,10 @@ public class AssistantTaskIntentParser {
     private int[] buildExclusiveQuestionTypeDistribution(int total, String exclusiveQuestionType) {
         int normalizedTotal = Math.max(1, total);
         return switch (exclusiveQuestionType) {
-            case "JUDGE" -> new int[]{0, normalizedTotal, 0};
-            case "SHORT_ANSWER" -> new int[]{0, 0, normalizedTotal};
-            default -> new int[]{normalizedTotal, 0, 0};
+            case "MULTIPLE" -> new int[]{0, normalizedTotal, 0, 0};
+            case "JUDGE" -> new int[]{0, 0, normalizedTotal, 0};
+            case "SHORT_ANSWER" -> new int[]{0, 0, 0, normalizedTotal};
+            default -> new int[]{normalizedTotal, 0, 0, 0};
         };
     }
 
@@ -988,6 +1024,12 @@ public class AssistantTaskIntentParser {
         return null;
     }
 
+    private Integer extractSingleCount(String text) {
+        // “多项选择题”含“选择题”，先移除多选别名，避免同一个数字同时计入两种题型。
+        String singleText = text == null ? "" : text.replaceAll("多项选择题|多项选择|多选题|多选", "_MULTIPLE_");
+        return extractTypedCount(singleText, "单选题", "单选", "选择题");
+    }
+
     private Integer parseFlexibleInt(String rawValue) {
         if (!StringUtils.hasText(rawValue)) {
             return null;
@@ -1049,13 +1091,15 @@ public class AssistantTaskIntentParser {
     ) {
         return distributeByWeights(total, new int[]{
                 singleSpecified ? 0 : 3,
+                // 未指定多选题时保留原有默认题型分配。
+                0,
                 judgeSpecified ? 0 : 1,
                 shortAnswerSpecified ? 0 : 1
         });
     }
 
     private int[] distributeByWeights(int total, int[] weights) {
-        int[] results = new int[]{0, 0, 0};
+        int[] results = new int[weights.length];
         if (total <= 0) {
             return results;
         }
@@ -1293,6 +1337,7 @@ public class AssistantTaskIntentParser {
             String modelName,
             Integer questionCount,
             Integer singleCount,
+            Integer multipleCount,
             Integer judgeCount,
             Integer shortAnswerCount,
             Integer difficultyLevel,

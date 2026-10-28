@@ -69,9 +69,9 @@
           ><el-option v-for="item in masteryLevelOptions" :key="item.level" :label="item.label" :value="item.level"
         /></el-select>
         <el-select v-model="filters.questionType" clearable placeholder="全部题型" aria-label="筛选题型"
-          ><el-option label="单选题" value="SINGLE" /><el-option label="判断题" value="JUDGE" /><el-option
-            label="简答题"
-            value="SHORT"
+          ><el-option label="单选题" value="SINGLE" /><el-option label="多选题" value="MULTIPLE" /><el-option
+            label="判断题"
+            value="JUDGE" /><el-option label="简答题" value="SHORT"
         /></el-select>
         <button type="button" class="knowledge-reset" @click="resetFilters">重置条件</button>
       </div>
@@ -227,6 +227,7 @@ import {
 import { getMaterialPageApi, type MaterialPageItem } from '@/api/modules/material'
 import { useAutoListQuery } from '@/composables/useAutoListQuery'
 import { MASTERY_LEVELS, MASTERY_REVIEW_THRESHOLD, masteryColorByPercent } from '@/utils/mastery'
+import { formatQuestionTypes } from '@/utils/labels'
 
 const router = useRouter()
 const route = useRoute()
@@ -319,29 +320,6 @@ const formatDateTime = (value?: string) => {
     return '--'
   }
   return value.replace('T', ' ').slice(0, 16)
-}
-
-const formatQuestionTypes = (value?: string) => {
-  if (!value) {
-    return '题型未记录'
-  }
-  const labels = value
-    .split(',')
-    .filter(Boolean)
-    .map((item) => {
-      switch (item.toUpperCase()) {
-        case 'SINGLE':
-          return '单选题'
-        case 'JUDGE':
-          return '判断题'
-        case 'SHORT':
-        case 'SHORT_ANSWER':
-          return '简答题'
-        default:
-          return item
-      }
-    })
-  return [...new Set(labels)].join(' / ')
 }
 
 const applyOverview = (data: KnowledgeMasteryOverviewPayload) => {

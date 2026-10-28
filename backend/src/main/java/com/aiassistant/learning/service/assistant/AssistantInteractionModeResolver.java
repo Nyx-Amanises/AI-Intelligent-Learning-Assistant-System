@@ -24,7 +24,7 @@ public class AssistantInteractionModeResolver {
     );
     /** 判断用户是否在回复出题配置的提示词。 */
     private static final List<String> QUESTION_CONFIG_REPLY_HINT_KEYWORDS = List.of(
-            "单选", "选择题", "判断", "简答", "默认", "全部", "全都", "只出", "都出", "题量", "数量", "道题"
+            "单选", "多选", "多项选择", "选择题", "判断", "简答", "默认", "全部", "全都", "只出", "都出", "题量", "数量", "道题"
     );
     /** 判断用户是否在选择候选资料的提示词。 */
     private static final List<String> MATERIAL_SELECTION_REPLY_HINT_KEYWORDS = List.of(

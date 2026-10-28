@@ -283,6 +283,7 @@ public class AssistantToolExecutionSupport {
             setIfPresent(args, "exclusiveQuestionType", intent::setExclusiveQuestionType);
             setIntegerIfPresent(args, "questionCount", intent::setQuestionCount);
             setIntegerIfPresent(args, "singleCount", intent::setSingleCount);
+            setIntegerIfPresent(args, "multipleCount", intent::setMultipleCount);
             setIntegerIfPresent(args, "judgeCount", intent::setJudgeCount);
             setIntegerIfPresent(args, "shortAnswerCount", intent::setShortAnswerCount);
             setIntegerIfPresent(args, "difficultyLevel", intent::setDifficultyLevel);
@@ -314,6 +315,7 @@ public class AssistantToolExecutionSupport {
                 .chapterKeyword(structuredIntent == null ? null : structuredIntent.getChapterKeyword())
                 .questionCount(structuredIntent == null ? null : structuredIntent.getQuestionCount())
                 .singleCount(structuredIntent == null ? null : structuredIntent.getSingleCount())
+                .multipleCount(structuredIntent == null ? null : structuredIntent.getMultipleCount())
                 .judgeCount(structuredIntent == null ? null : structuredIntent.getJudgeCount())
                 .shortAnswerCount(structuredIntent == null ? null : structuredIntent.getShortAnswerCount())
                 .difficultyLevel(structuredIntent == null ? null : structuredIntent.getDifficultyLevel())

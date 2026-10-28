@@ -8,6 +8,7 @@ const upper = (value?: string | null) => String(value || '').toUpperCase()
 
 export const QUESTION_TYPE_LABELS: Record<string, string> = {
   SINGLE: '单选题',
+  MULTIPLE: '多选题',
   MULTI: '多选题',
   JUDGE: '判断题',
   SHORT: '简答题',
@@ -28,7 +29,7 @@ export const formatQuestionTypes = (value?: string | null, fallback = '题型未
 }
 
 export const isShortAnswerType = (value?: string | null) => ['SHORT', 'SHORT_ANSWER'].includes(upper(value))
-export const isChoiceType = (value?: string | null) => ['SINGLE', 'MULTI', 'JUDGE'].includes(upper(value))
+export const isChoiceType = (value?: string | null) => ['SINGLE', 'MULTIPLE', 'MULTI', 'JUDGE'].includes(upper(value))
 
 export const DIFFICULTY_LABELS: Record<number, string> = { 1: '入门', 2: '基础', 3: '适中', 4: '进阶', 5: '挑战' }
 

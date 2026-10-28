@@ -46,6 +46,8 @@ import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -290,6 +292,59 @@ class PracticeServiceImplTest {
         assertThrows(BusinessException.class, () -> service.deletePracticeSession(USER_ID, 501L));
         assertThrows(BusinessException.class, () -> service.waitForAiReview(USER_ID, 501L, 1000L));
         verify(answers, never()).delete(any());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"A,C", "C,A", "ca", "c、a", "A C", "A,A,C"})
+    void multipleChoiceScoresTheSameCompleteSetRegardlessOfOrder(String userAnswer) {
+        PracticeSession session = inProgressSession();
+        when(sessions.selectOne(any())).thenReturn(session);
+        when(questionItems.selectList(any())).thenReturn(List.of(question(1L, "MULTIPLE", "A,C", 5)));
+
+        PracticeDetailVO detail = service.submitPractice(USER_ID, submitRequest(answer(1L, userAnswer)));
+
+        assertEquals(1, session.getCorrectCount());
+        assertEquals(5, session.getObtainedScore());
+        assertEquals("RULE", detail.getAnswers().get(0).getReviewMode());
+        assertEquals(0, storedAnswers.get(0).getMarkedWrong());
+        verifyNoInteractions(aiChatService);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "A", "A,B,C", "B,D", "A,C,E", "A,C?", "答案为 A,C", "A,C,"})
+    void incompleteExtraOrMalformedMultipleAnswersReceiveNoPartialCredit(String userAnswer) {
+        PracticeSession session = inProgressSession();
+        when(sessions.selectOne(any())).thenReturn(session);
+        when(questionItems.selectList(any())).thenReturn(List.of(question(1L, "MULTIPLE", "A,C", 5)));
+
+        service.submitPractice(USER_ID, submitRequest(answer(1L, userAnswer)));
+
+        assertEquals(0, session.getCorrectCount());
+        assertEquals(0, session.getObtainedScore());
+        assertEquals(1, storedAnswers.get(0).getMarkedWrong());
+    }
+
+    @Test
+    void legacyMultiTypeUsesSetBasedScoring() {
+        when(sessions.selectOne(any())).thenReturn(inProgressSession());
+        when(questionItems.selectList(any())).thenReturn(List.of(question(1L, "MULTI", "AC", 5)));
+
+        PracticeDetailVO detail = service.submitPractice(USER_ID, submitRequest(answer(1L, "C,A")));
+
+        assertEquals(1, detail.getAnswers().get(0).getIsCorrect());
+        assertEquals(5, detail.getAnswers().get(0).getObtainedScore());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"A", "A,E", "bad answer", ""})
+    void malformedMultipleReferencesCannotScoreAsCorrect(String reference) {
+        when(sessions.selectOne(any())).thenReturn(inProgressSession());
+        when(questionItems.selectList(any())).thenReturn(List.of(question(1L, "MULTIPLE", reference, 5)));
+
+        PracticeDetailVO detail = service.submitPractice(USER_ID, submitRequest(answer(1L, reference)));
+
+        assertEquals(0, detail.getAnswers().get(0).getIsCorrect());
+        assertEquals(0, detail.getAnswers().get(0).getObtainedScore());
     }
 
     private PracticeSession submittedSessionWithPendingShortAnswer(String referenceAnswer, String userAnswer) {

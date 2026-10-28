@@ -103,7 +103,7 @@ public class AssistantPendingDecisionPlanner {
 
                 重要判断规则：
                 1. 当前 pendingActionType=QUESTION_CONFIG 时，只有“题量/题型/难度/默认配置”这类回复才是 CONTINUE。
-                   例：10道单选、单选5判断3简答2、默认、难度3。
+                   例：10道单选、全出多选题、单选3多选2判断3简答2、默认、难度3。
                 2. QUESTION_CONFIG 状态下，如果用户新消息里出现新的资料名、要求根据另一份资料出题/总结/讲解/查资料，应为 INTERRUPT。
                 3. 当前 pendingActionType=MATERIAL_SELECTION 时，只有用户在选择候选资料、回复序号、资料ID、这份/那份，才是 CONTINUE。
                 4. MATERIAL_SELECTION 状态下，如果用户改成问知识点、查任务、查资料列表、普通聊天或创建另一个任务，应为 INTERRUPT。

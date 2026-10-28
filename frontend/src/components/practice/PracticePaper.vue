@@ -58,6 +58,9 @@
           <span class="practice-paper-question__type">{{ formatQuestionType(answer.questionType) }}</span>
         </div>
         <h3 :id="'stem-' + answer.questionId" class="practice-paper-question__stem">{{ answer.stemText }}</h3>
+        <p v-if="isMultiQuestion(answer)" class="practice-paper-question__hint">
+          请选择所有符合题意的选项。全部选对得分，少选、多选或错选不得分。
+        </p>
 
         <el-checkbox-group
           v-if="isMultiQuestion(answer)"
@@ -73,6 +76,14 @@
             :value="option.value"
             border
             class="choice-option practice-paper-choice"
+            :class="{
+              'practice-paper-choice--correct':
+                submitted && answerIncludesOption(answer, answer.correctAnswer, option.value),
+              'practice-paper-choice--incorrect':
+                submitted &&
+                answerIncludesOption(answer, answer.userAnswer, option.value) &&
+                !answerIncludesOption(answer, answer.correctAnswer, option.value)
+            }"
             >{{ option.label }}</el-checkbox
           >
         </el-checkbox-group>
@@ -173,6 +184,7 @@ import SourceSegmentList from '@/components/SourceSegmentList.vue'
 import { formatDateTime } from '@/utils/format'
 import { formatQuestionType } from '@/utils/labels'
 import {
+  answerIncludesOption,
   buildOptions,
   formatAnswer,
   isChoiceQuestion,
@@ -369,6 +381,12 @@ const setAnswer = (questionId: number, value: string) => {
   gap: 10px;
   margin-top: 0;
 }
+.practice-paper-question__hint {
+  margin: -6px 0 16px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.8;
+}
 .practice-paper-choice-group :deep(.el-radio.is-bordered),
 .practice-paper-choice-group :deep(.el-checkbox.is-bordered) {
   width: 100%;
@@ -403,6 +421,14 @@ const setAnswer = (questionId: number, value: string) => {
 .practice-paper-choice-group :deep(.el-radio.is-disabled .el-radio__label),
 .practice-paper-choice-group :deep(.el-checkbox.is-disabled .el-checkbox__label) {
   color: var(--text);
+}
+.practice-paper-choice-group :deep(.el-checkbox.practice-paper-choice--correct) {
+  border-color: var(--el-color-success);
+  background: var(--el-color-success-light-9);
+}
+.practice-paper-choice-group :deep(.el-checkbox.practice-paper-choice--incorrect) {
+  border-color: var(--el-color-danger);
+  background: var(--el-color-danger-light-9);
 }
 .practice-paper-result {
   margin-top: 20px;

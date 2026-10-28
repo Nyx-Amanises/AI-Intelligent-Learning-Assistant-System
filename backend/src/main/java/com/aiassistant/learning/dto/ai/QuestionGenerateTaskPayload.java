@@ -38,6 +38,9 @@ public class QuestionGenerateTaskPayload {
      */
     private Integer singleCount;
 
+    /** 多选题数量，旧任务为空时按 0 处理。 */
+    private Integer multipleCount;
+
     /**
      * 判断题数量。
      */
@@ -59,6 +62,7 @@ public class QuestionGenerateTaskPayload {
         request.setTitle(title);
         request.setQuestionCount(questionCount);
         request.setSingleCount(singleCount);
+        request.setMultipleCount(multipleCount);
         request.setJudgeCount(judgeCount);
         request.setShortAnswerCount(shortAnswerCount);
         request.setDifficultyLevel(difficultyLevel);

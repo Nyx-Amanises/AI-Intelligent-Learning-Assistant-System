@@ -70,6 +70,9 @@ public class AssistantStructuredIntent {
     /** 单选题数量。 */
     private Integer singleCount;
 
+    /** 多选题数量。 */
+    private Integer multipleCount;
+
     /** 判断题数量。 */
     private Integer judgeCount;
 

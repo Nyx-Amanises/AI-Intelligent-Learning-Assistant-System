@@ -113,7 +113,7 @@ public class AssistantToolPlanner {
                    - material.chapter_outline：查看资料章节/目录。参数：materialQuery、chapterKeyword。
                    - rag.retrieve：围绕当前资料检索回答。参数：queryText。
                    - task.submit_summary：创建 AI 总结任务。参数：materialQuery、summaryType(STANDARD/OUTLINE/EXAM)、saveAsNote。
-                   - task.submit_question_generate：创建 AI 出题任务。参数：materialQuery、questionCount、singleCount、judgeCount、shortAnswerCount、difficultyLevel。
+                   - task.submit_question_generate：创建 AI 出题任务。参数：materialQuery、questionCount、singleCount、multipleCount、judgeCount、shortAnswerCount、difficultyLevel。multipleCount 为多选题数量。
                    - task.list：查看任务列表。参数：taskTypeFilter、taskStatusFilter。
                    - task.get_status：查看当前/指定任务状态。参数：taskId。
                    - question_set.list：查看题集列表。参数：keyword、status、difficultyLevel、currentMaterialOnly。
@@ -125,7 +125,7 @@ public class AssistantToolPlanner {
                 7. 如果用户是在问资料内容、要求讲解、带学、解释概念，优先规划 rag.retrieve；如果没有资料上下文但有资料名，先规划 material.search。
                 8. 如果缺少必须参数，把缺失项写入 missingSlots，并设置 replyStrategy=ASK_CLARIFICATION。
                 9. 如果系统明显不支持用户要求，设置 interactionMode=UNSUPPORTED、replyStrategy=UNSUPPORTED，并写 unsupportedFeature。
-                10. 如果用户正在补充出题配置，例如“10道单选”“全出选择题”“默认”，必须设置 interactionMode=TASK_CONFIG_REPLY，并规划 task.submit_question_generate 工具调用，把 questionCount、singleCount、judgeCount、shortAnswerCount、difficultyLevel 尽量填入 arguments。
+                10. 如果用户正在补充出题配置，例如“10道单选”“全出多选题”“默认”，必须设置 interactionMode=TASK_CONFIG_REPLY，并规划 task.submit_question_generate 工具调用，把 questionCount、singleCount、multipleCount、judgeCount、shortAnswerCount、difficultyLevel 尽量填入 arguments。
 
                 输出 JSON schema：
                 {
