@@ -1,5 +1,5 @@
 <template>
-  <div class="donut-chart">
+  <div class="donut-chart-layout">
     <div class="donut-chart__ring" :style="ringStyle" aria-hidden="true">
       <div>
         <strong>{{ total }}</strong
@@ -64,7 +64,7 @@ const ringStyle = computed(() => {
 </script>
 
 <style scoped>
-.donut-chart {
+.donut-chart-layout {
   display: grid;
   grid-template-columns: 140px minmax(0, 1fr);
   align-items: center;
@@ -131,7 +131,7 @@ const ringStyle = computed(() => {
   font-variant-numeric: tabular-nums;
 }
 @media (max-width: 1000px) {
-  .donut-chart {
+  .donut-chart-layout {
     grid-template-columns: 114px minmax(0, 1fr);
     gap: 20px;
   }
@@ -141,7 +141,7 @@ const ringStyle = computed(() => {
   }
 }
 @media (max-width: 760px) {
-  .donut-chart {
+  .donut-chart-layout {
     grid-template-columns: 140px minmax(0, 1fr);
     gap: 32px;
   }
@@ -151,7 +151,7 @@ const ringStyle = computed(() => {
   }
 }
 @media (max-width: 520px) {
-  .donut-chart {
+  .donut-chart-layout {
     grid-template-columns: 122px minmax(0, 1fr);
     gap: 24px;
   }

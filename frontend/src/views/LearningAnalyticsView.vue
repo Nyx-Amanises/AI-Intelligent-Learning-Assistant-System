@@ -102,7 +102,7 @@
       <span class="statistics-loading__line"></span>正在整理学习记录…
     </div>
     <template v-else-if="hasLoaded && !loadError">
-      <div v-if="!analytics.totalQuestionAttempts" class="statistics-empty-intro">
+      <div v-if="!analytics.totalPracticeCount" class="statistics-empty-intro">
         <div>
           <h2>
             {{ hasFilters ? '这个范围内还没有练习记录' : '完成一次练习，留下第一份记录' }}
@@ -118,6 +118,9 @@
           >
         </div>
       </div>
+      <p v-else-if="!analytics.totalQuestionAttempts" class="statistics-range-hint" role="status">
+        已记录练习次数，评分数据暂未就绪。
+      </p>
 
       <div class="statistics-sheet">
         <section class="statistics-overview" aria-labelledby="statistics-overview-title">
@@ -127,23 +130,25 @@
           </div>
           <StatTiles :items="overviewTiles" />
           <div class="statistics-overview__notes">
-            <span
+            <span v-if="analytics.totalQuestionAttempts"
               >平均得分率 <b>{{ formatNumber(analytics.averageScoreRate) }}%</b></span
             >
-            <span
+            <span v-if="analytics.totalQuestionAttempts"
               >错题次数 <b>{{ formatNumber(analytics.wrongAttemptCount) }}</b></span
             >
             <span>来自已提交的练习记录</span>
           </div>
         </section>
 
+        <PracticeCountTrendChart :trend="analytics.practiceCountTrend" />
+
         <section class="statistics-trend" aria-labelledby="statistics-trend-title">
           <div class="statistics-section-heading">
             <div>
-              <h2 id="statistics-trend-title">练习趋势</h2>
+              <h2 id="statistics-trend-title">练习表现趋势</h2>
               <p>
                 按提交顺序，展示{{ filters.days || isCustomRange ? '所选时间内' : '' }}最近
-                {{ analytics.practiceTrend.length }} 次练习。
+                {{ analytics.practiceTrend.length }} 次评分已完成的练习。
               </p>
             </div>
             <div class="statistics-metric-switch" role="group" aria-label="趋势统计指标">
@@ -173,7 +178,13 @@
             >
             <template #empty
               ><AppIcon name="analytics" :size="32" />
-              <p>练习后，变化会从这里开始。</p></template
+              <p>
+                {{
+                  analytics.totalPracticeCount
+                    ? '暂无评分已完成的练习，评分就绪后会显示表现趋势。'
+                    : '练习后，变化会从这里开始。'
+                }}
+              </p></template
             >
           </TrendLineChart>
         </section>
@@ -306,6 +317,7 @@ import { useRouter } from 'vue-router'
 import AppIcon from '@/components/AppIcon.vue'
 import StatTiles, { type StatTileItem } from '@/components/StatTiles.vue'
 import TrendLineChart, { type TrendChartPoint } from '@/components/charts/TrendLineChart.vue'
+import PracticeCountTrendChart from '@/components/charts/PracticeCountTrendChart.vue'
 import DonutChart, { type DonutSegment } from '@/components/charts/DonutChart.vue'
 import BarRow from '@/components/charts/BarRow.vue'
 import { MASTERY_REVIEW_THRESHOLD, masteryColor } from '@/utils/mastery'
@@ -409,7 +421,12 @@ const overviewTiles = computed<StatTileItem[]>(() => [
   { key: 'practice', label: '完成练习', value: formatNumber(analytics.totalPracticeCount), unit: '次' },
   { key: 'attempts', label: '累计作答', value: formatNumber(analytics.totalQuestionAttempts), unit: '次' },
   { key: 'duration', label: '练习时长', value: studyDuration.value.value, unit: studyDuration.value.unit },
-  { key: 'accuracy', label: '平均正确率', value: formatNumber(analytics.averageAccuracyRate), unit: '%' }
+  {
+    key: 'accuracy',
+    label: '平均正确率',
+    value: analytics.totalQuestionAttempts ? formatNumber(analytics.averageAccuracyRate) : '—',
+    unit: analytics.totalQuestionAttempts ? '%' : ''
+  }
 ])
 const masterySegments = computed<DonutSegment[]>(() =>
   analytics.masteryDistribution.map((item) => ({
@@ -450,6 +467,7 @@ const formatTrendPoint = (point: PracticeTrendPoint) =>
   ' 题正确'
 
 const applyAnalytics = (data: LearningAnalyticsOverviewPayload) => {
+  analytics.practiceCountTrend = data.practiceCountTrend || null
   analytics.totalPracticeCount = data.totalPracticeCount || 0
   analytics.totalQuestionAttempts = data.totalQuestionAttempts || 0
   analytics.wrongAttemptCount = data.wrongAttemptCount || 0

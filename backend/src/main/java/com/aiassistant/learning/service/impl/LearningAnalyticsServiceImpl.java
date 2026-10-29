@@ -2,6 +2,7 @@ package com.aiassistant.learning.service.impl;
 
 import com.aiassistant.learning.common.util.KnowledgePointLabels;
 import com.aiassistant.learning.common.util.AnalyticsDateRange;
+import com.aiassistant.learning.common.util.PracticeCountTrends;
 import com.aiassistant.learning.dto.analytics.LearningAnalyticsQuery;
 import com.aiassistant.learning.entity.PracticeAnswer;
 import com.aiassistant.learning.entity.PracticeSession;
@@ -16,6 +17,7 @@ import com.aiassistant.learning.vo.analytics.LearningAnalyticsOverviewVO;
 import com.aiassistant.learning.vo.analytics.MasteryDistributionVO;
 import com.aiassistant.learning.vo.analytics.MaterialPerformanceVO;
 import com.aiassistant.learning.vo.analytics.PracticeTrendPointVO;
+import com.aiassistant.learning.vo.analytics.PracticeCountTrendVO;
 import com.aiassistant.learning.vo.analytics.QuestionTypePerformanceVO;
 import com.aiassistant.learning.vo.analytics.WeakKnowledgePointVO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -34,6 +36,8 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 /**
@@ -96,8 +100,10 @@ public class LearningAnalyticsServiceImpl implements LearningAnalyticsService {
      * @return 学习分析总览
      */
     @Override
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public LearningAnalyticsOverviewVO overview(Long userId, LearningAnalyticsQuery query) {
-        AnalyticsDateRange dateRange = AnalyticsDateRange.resolve(query, LocalDate.now());
+        LocalDate today = LocalDate.now();
+        AnalyticsDateRange dateRange = AnalyticsDateRange.resolve(query, today);
         LambdaQueryWrapper<PracticeSession> sessionQuery = new LambdaQueryWrapper<PracticeSession>()
                 .eq(PracticeSession::getUserId, userId)
                 .eq(PracticeSession::getSessionStatus, SESSION_STATUS_SUBMITTED)
@@ -106,24 +112,29 @@ public class LearningAnalyticsServiceImpl implements LearningAnalyticsService {
                 .lt(dateRange.endDate() != null, PracticeSession::getSubmitTime, dateRange.endExclusive())
                 .orderByAsc(PracticeSession::getSubmitTime);
         List<PracticeSession> sessions = practiceSessionMapper.selectList(sessionQuery);
+        PracticeCountTrendVO countTrend = PracticeCountTrends.build(sessions, dateRange.startDate(), dateRange.endDate(), today);
         if (sessions.isEmpty()) {
-            return emptyOverview();
+            return emptyOverview(countTrend);
         }
 
         Map<Long, PracticeSession> sessionMap = sessions.stream()
                 .collect(Collectors.toMap(PracticeSession::getId, Function.identity()));
         List<PracticeAnswer> answers = practiceAnswerMapper.selectList(new LambdaQueryWrapper<PracticeAnswer>()
                 .in(PracticeAnswer::getSessionId, sessionMap.keySet()));
+        Set<Long> pendingSessionIds = answers.stream()
+                .filter(answer -> REVIEW_MODE_AI_PENDING.equalsIgnoreCase(nullToEmpty(answer.getReviewMode())))
+                .map(PracticeAnswer::getSessionId)
+                .collect(Collectors.toSet());
         answers = answers.stream()
                 .filter(answer -> !REVIEW_MODE_AI_PENDING.equalsIgnoreCase(nullToEmpty(answer.getReviewMode())))
                 .toList();
-        if (answers.isEmpty()) {
-            return emptyOverview();
-        }
-
         Map<Long, QuestionItem> questionMap = loadQuestionMap(answers);
         Map<Long, StudyMaterial> materialMap = loadMaterialMap(sessions);
-        List<PracticeTrendPointVO> practiceTrend = buildPracticeTrend(sessions, answers, materialMap, query.getTrendLimit());
+        Set<Long> reviewedSessionIds = answers.stream().map(PracticeAnswer::getSessionId).collect(Collectors.toSet());
+        List<PracticeSession> scoredSessions = sessions.stream()
+                .filter(session -> reviewedSessionIds.contains(session.getId()) && !pendingSessionIds.contains(session.getId()))
+                .toList();
+        List<PracticeTrendPointVO> practiceTrend = buildPracticeTrend(scoredSessions, answers, materialMap, query.getTrendLimit());
         Map<String, StatAccumulator> questionTypeStats = new HashMap<>();
         Map<Long, StatAccumulator> materialStats = new HashMap<>();
         Map<String, KnowledgeAccumulator> knowledgeStats = new HashMap<>();
@@ -177,6 +188,7 @@ public class LearningAnalyticsServiceImpl implements LearningAnalyticsService {
                 .questionTypePerformance(buildQuestionTypePerformance(questionTypeStats))
                 .materialPerformance(buildMaterialPerformance(materialStats, materialMap))
                 .practiceTrend(practiceTrend)
+                .practiceCountTrend(countTrend)
                 .weakKnowledgePoints(weakPoints)
                 .build();
     }
@@ -362,7 +374,7 @@ public class LearningAnalyticsServiceImpl implements LearningAnalyticsService {
      *
      * @return 空总览对象
      */
-    private LearningAnalyticsOverviewVO emptyOverview() {
+    private LearningAnalyticsOverviewVO emptyOverview(PracticeCountTrendVO countTrend) {
         return LearningAnalyticsOverviewVO.builder()
                 .totalPracticeCount(0)
                 .totalQuestionAttempts(0)
@@ -376,6 +388,7 @@ public class LearningAnalyticsServiceImpl implements LearningAnalyticsService {
                 .questionTypePerformance(List.of())
                 .materialPerformance(List.of())
                 .practiceTrend(List.of())
+                .practiceCountTrend(countTrend)
                 .weakKnowledgePoints(List.of())
                 .build();
     }

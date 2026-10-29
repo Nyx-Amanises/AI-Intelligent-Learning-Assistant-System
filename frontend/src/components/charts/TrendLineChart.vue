@@ -1,5 +1,14 @@
 <template>
-  <figure v-if="points.length" class="trend-chart">
+  <figure
+    v-if="points.length"
+    class="trend-line-chart"
+    :class="{ 'trend-line-chart--counts': integerTicks }"
+    :style="
+      integerTicks
+        ? { '--count-axis-width': `${Math.max(46, String(Math.ceil(safeMax)).length * 8 + 20)}px` }
+        : undefined
+    "
+  >
     <div class="trend-chart__frame">
       <div class="trend-chart__y-axis" aria-hidden="true">
         <span v-for="tick in axisTicks" :key="tick.value" :style="{ top: tick.y + 'px' }"
@@ -13,6 +22,7 @@
           :height="size.height"
           role="group"
           :aria-label="ariaLabel"
+          @pointerdown="selectNearest"
         >
           <line
             v-for="tick in axisTicks"
@@ -38,6 +48,9 @@
             :aria-label="point.ariaLabel || point.label + ' ' + point.value + unit"
             @mouseenter="select(point)"
             @focus="select(point)"
+            @click="select(point)"
+            @keydown.enter.prevent="select(point)"
+            @keydown.space.prevent="select(point)"
           >
             <title>{{ point.ariaLabel || point.label + ' ' + point.value + unit }}</title>
           </circle>
@@ -89,8 +102,9 @@ const props = withDefaults(
     max?: number
     unit?: string
     ariaLabel?: string
+    integerTicks?: boolean
   }>(),
-  { max: 100, unit: '%', ariaLabel: '趋势图' }
+  { max: 100, unit: '%', ariaLabel: '趋势图', integerTicks: false }
 )
 
 const emit = defineEmits<{ select: [point: T] }>()
@@ -156,9 +170,12 @@ const safeMax = computed(() => Math.max(1, Number(props.max) || 100))
 const clamp = (value: number) => Math.min(safeMax.value, Math.max(0, Number(value) || 0))
 const toY = (value: number) => plot.value.bottom - ((plot.value.bottom - plot.value.top) * clamp(value)) / safeMax.value
 
-const axisTicks = computed(() =>
-  [safeMax.value, safeMax.value / 2, 0].map((value) => ({ value: Math.round(value * 10) / 10, y: toY(value) }))
-)
+const axisTicks = computed(() => {
+  const values = [safeMax.value, safeMax.value / 2, 0].map((value) =>
+    props.integerTicks ? Math.round(value) : Math.round(value * 10) / 10
+  )
+  return [...new Set(values)].map((value) => ({ value, y: toY(value) }))
+})
 
 const plotPoints = computed(() => {
   const list = props.points
@@ -187,10 +204,20 @@ const select = (point: T) => {
   selectedId.value = point.id
   emit('select', point)
 }
+
+const selectNearest = (event: PointerEvent) => {
+  const bounds = (event.currentTarget as SVGSVGElement).getBoundingClientRect()
+  const x = ((event.clientX - bounds.left) / Math.max(1, bounds.width)) * size.width
+  const point = plotPoints.value.reduce<(typeof plotPoints.value)[number] | undefined>(
+    (nearest, candidate) => (!nearest || Math.abs(candidate.x - x) < Math.abs(nearest.x - x) ? candidate : nearest),
+    undefined
+  )
+  if (point) select(point)
+}
 </script>
 
 <style scoped>
-.trend-chart {
+.trend-line-chart {
   margin: 0;
 }
 .trend-chart__frame {
@@ -218,6 +245,7 @@ const select = (point: T) => {
   position: absolute;
   right: 0;
   transform: translateY(-50%);
+  white-space: nowrap;
 }
 .trend-chart__grid {
   stroke: var(--line);
@@ -298,6 +326,15 @@ const select = (point: T) => {
   margin: 0;
   color: var(--muted);
   font-size: 13px;
+}
+.trend-line-chart--counts .trend-chart__frame {
+  padding-left: var(--count-axis-width);
+}
+.trend-line-chart--counts .trend-chart__x-axis {
+  margin-left: var(--count-axis-width);
+}
+.trend-line-chart--counts .trend-chart__y-axis {
+  width: calc(var(--count-axis-width) - 8px);
 }
 @media (max-width: 520px) {
   .trend-chart__frame {

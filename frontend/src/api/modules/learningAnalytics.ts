@@ -55,6 +55,7 @@ export interface WeakKnowledgePointItem {
 }
 
 export interface LearningAnalyticsOverviewPayload {
+  practiceCountTrend?: PracticeCountTrend | null
   totalPracticeCount: number
   totalQuestionAttempts: number
   wrongAttemptCount: number
@@ -68,6 +69,14 @@ export interface LearningAnalyticsOverviewPayload {
   materialPerformance: MaterialPerformanceItem[]
   practiceTrend: PracticeTrendPoint[]
   weakKnowledgePoints: WeakKnowledgePointItem[]
+}
+
+export interface PracticeCountTrend {
+  granularity: 'DAY' | 'WEEK' | 'MONTH'
+  startDate: string
+  endDate: string
+  points: { startDate: string; endDate: string; count: number }[]
+  undatedCount: number
 }
 
 export interface LearningAnalyticsQuery {

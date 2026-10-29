@@ -54,6 +54,7 @@ declare module 'vue' {
     LearningNoteContent: typeof import('./components/LearningNoteContent.vue')['default']
     ListSectionHeading: typeof import('./components/ListSectionHeading.vue')['default']
     PracticeAnswerSheet: typeof import('./components/practice/PracticeAnswerSheet.vue')['default']
+    PracticeCountTrendChart: typeof import('./components/charts/PracticeCountTrendChart.vue')['default']
     PracticeHistoryList: typeof import('./components/practice/PracticeHistoryList.vue')['default']
     PracticePaper: typeof import('./components/practice/PracticePaper.vue')['default']
     RenameDialog: typeof import('./components/RenameDialog.vue')['default']

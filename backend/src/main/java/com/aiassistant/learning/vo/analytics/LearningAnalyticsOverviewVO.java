@@ -72,6 +72,9 @@ public class LearningAnalyticsOverviewVO {
      */
     private List<PracticeTrendPointVO> practiceTrend;
 
+    /** 按提交日期统计的完整练习次数趋势，不受最近练习展示上限影响。 */
+    private PracticeCountTrendVO practiceCountTrend;
+
     /**
      * 薄弱知识点列表。
      */
