@@ -15,7 +15,6 @@ import com.aiassistant.learning.mapper.PracticeAnswerMapper;
 import com.aiassistant.learning.mapper.PracticeSessionMapper;
 import com.aiassistant.learning.mapper.QuestionItemMapper;
 import com.aiassistant.learning.service.StudyMaterialService;
-import com.aiassistant.learning.vo.analytics.WeakKnowledgePointVO;
 import com.aiassistant.learning.vo.mastery.KnowledgeMasteryItemVO;
 import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
@@ -91,7 +90,9 @@ class KnowledgePointAggregationTest {
         assertEquals(3, mastery.getTotalKnowledgePoints());
         assertEquals(3, analytics.getTotalKnowledgePoints());
         assertEquals(4, analytics.getTotalQuestionAttempts());
-        assertEquals(masteryByLabel.keySet(), analytics.getWeakKnowledgePoints().stream()
-                .map(WeakKnowledgePointVO::getKnowledgePoint).collect(Collectors.toSet()));
+        assertEquals(3, mastery.getInsufficientCount());
+        assertEquals(3, analytics.getInsufficientKnowledgePointCount());
+        assertEquals(List.of(), mastery.getWeakestPoints());
+        assertEquals(List.of(), analytics.getWeakKnowledgePoints());
     }
 }

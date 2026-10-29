@@ -34,7 +34,7 @@ public class KnowledgeMasteryQuery {
     private String questionType;
 
     /**
-     * 按掌握等级筛选，例如 MASTERED、GOOD、WEAK、RISK。
+     * 按掌握等级筛选：MASTERED、GOOD、WEAK、RISK、INSUFFICIENT。
      */
     private String masteryLevel;
 

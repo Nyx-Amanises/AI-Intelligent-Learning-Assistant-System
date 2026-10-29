@@ -48,6 +48,12 @@ export interface WeakKnowledgePointItem {
   materialId?: number
   materialTitle?: string
   attemptCount: number
+  uniqueQuestionCount: number
+  requiredQuestionCount: number
+  assessmentEligible: boolean
+  assessmentReason: string
+  masteryLevel: string
+  masteryLabel: string
   wrongCount: number
   masteryPercent: number
   scoreRate: number
@@ -62,6 +68,7 @@ export interface LearningAnalyticsOverviewPayload {
   totalStudySeconds: number
   totalKnowledgePoints: number
   weakKnowledgePointCount: number
+  insufficientKnowledgePointCount: number
   averageAccuracyRate: number
   averageScoreRate: number
   masteryDistribution: MasteryDistributionItem[]

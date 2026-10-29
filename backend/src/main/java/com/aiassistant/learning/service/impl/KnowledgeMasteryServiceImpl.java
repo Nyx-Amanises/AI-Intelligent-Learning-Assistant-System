@@ -1,6 +1,8 @@
 package com.aiassistant.learning.service.impl;
 
 import com.aiassistant.learning.common.util.KnowledgePointLabels;
+import com.aiassistant.learning.common.util.KnowledgeMasteryAssessment;
+import com.aiassistant.learning.common.util.KnowledgeMasteryAssessment.Level;
 import com.aiassistant.learning.dto.mastery.KnowledgeMasteryQuery;
 import com.aiassistant.learning.entity.PracticeAnswer;
 import com.aiassistant.learning.entity.PracticeSession;
@@ -241,9 +243,10 @@ public class KnowledgeMasteryServiceImpl implements KnowledgeMasteryService {
 
         int totalAttempts = items.stream().mapToInt(KnowledgeMasteryItemVO::getAttemptCount).sum();
         int wrongAttempts = items.stream().mapToInt(KnowledgeMasteryItemVO::getWrongCount).sum();
-        int averageMastery = items.isEmpty()
-                ? 0
-                : (int) Math.round(items.stream().mapToInt(KnowledgeMasteryItemVO::getMasteryPercent).average().orElse(0D));
+        List<KnowledgeMasteryItemVO> assessed = items.stream().filter(item -> Boolean.TRUE.equals(item.getAssessmentEligible())).toList();
+        Integer averageMastery = assessed.isEmpty()
+                ? null
+                : (int) Math.round(assessed.stream().mapToInt(KnowledgeMasteryItemVO::getMasteryPercent).average().orElse(0D));
 
         return KnowledgeMasteryOverviewVO.builder()
                 .totalKnowledgePoints(items.size())
@@ -253,8 +256,10 @@ public class KnowledgeMasteryServiceImpl implements KnowledgeMasteryService {
                 .goodCount(countByLevel(items, "GOOD"))
                 .weakCount(countByLevel(items, "WEAK"))
                 .riskCount(countByLevel(items, "RISK"))
+                .insufficientCount(countByLevel(items, "INSUFFICIENT"))
+                .assessedKnowledgePointCount(assessed.size())
                 .averageMasteryPercent(averageMastery)
-                .weakestPoints(items.stream().limit(5).toList())
+                .weakestPoints(assessed.stream().filter(item -> item.getMasteryPercent() < 70).limit(5).toList())
                 .page(page)
                 .build();
     }
@@ -347,7 +352,9 @@ public class KnowledgeMasteryServiceImpl implements KnowledgeMasteryService {
                 .goodCount(0)
                 .weakCount(0)
                 .riskCount(0)
-                .averageMasteryPercent(0)
+                .insufficientCount(0)
+                .assessedKnowledgePointCount(0)
+                .averageMasteryPercent(null)
                 .weakestPoints(List.of())
                 .page(page)
                 .build();
@@ -376,6 +383,10 @@ public class KnowledgeMasteryServiceImpl implements KnowledgeMasteryService {
         private final String materialTitle;
         private final Set<Long> questionIds = new HashSet<>();
         private final Set<String> questionTypes = new HashSet<>();
+        private int gradedAttemptCount;
+        private int gradedCorrectCount;
+        private int gradedTotalScore;
+        private int gradedObtainedScore;
         private int attemptCount;
         private int correctCount;
         private int wrongCount;
@@ -405,8 +416,12 @@ public class KnowledgeMasteryServiceImpl implements KnowledgeMasteryService {
          */
         private void add(PracticeAnswer answer, QuestionItem question, PracticeSession session) {
             attemptCount++;
-            if (question.getId() != null) {
-                questionIds.add(question.getId());
+            if (KnowledgeMasteryAssessment.isGraded(answer.getIsCorrect())) {
+                if (question.getId() != null) questionIds.add(question.getId());
+                gradedAttemptCount++;
+                if (answer.getIsCorrect() == 1) gradedCorrectCount++;
+                gradedTotalScore += safeInt(question.getScore());
+                gradedObtainedScore += safeInt(answer.getObtainedScore());
             }
             if (StringUtils.hasText(question.getQuestionType())) {
                 questionTypes.add(question.getQuestionType());
@@ -433,17 +448,20 @@ public class KnowledgeMasteryServiceImpl implements KnowledgeMasteryService {
          */
         private KnowledgeMasteryItemVO toVO() {
             BigDecimal accuracyRate = percent(correctCount, attemptCount);
-            BigDecimal scoreRate = percent(obtainedScore, totalScore);
-            int masteryPercent = totalScore > 0
-                    ? scoreRate.setScale(0, RoundingMode.HALF_UP).intValue()
-                    : accuracyRate.setScale(0, RoundingMode.HALF_UP).intValue();
-            MasteryLevel level = resolveLevel(masteryPercent);
+            BigDecimal scoreRate = gradedTotalScore > 0 ? percent(gradedObtainedScore, gradedTotalScore)
+                    : percent(gradedCorrectCount, gradedAttemptCount);
+            int masteryPercent = scoreRate.setScale(0, RoundingMode.HALF_UP).intValue();
+            KnowledgeMasteryAssessment assessment = KnowledgeMasteryAssessment.assess(knowledgePoint, questionIds.size(), masteryPercent);
+            Level level = assessment.level();
             return KnowledgeMasteryItemVO.builder()
                     .knowledgePoint(knowledgePoint)
                     .materialId(materialId)
                     .materialTitle(materialTitle)
                     .attemptCount(attemptCount)
                     .uniqueQuestionCount(questionIds.size())
+                    .requiredQuestionCount(KnowledgeMasteryAssessment.REQUIRED_QUESTION_COUNT)
+                    .assessmentEligible(assessment.eligible())
+                    .assessmentReason(assessment.reason())
                     .correctCount(correctCount)
                     .wrongCount(wrongCount)
                     .totalScore(totalScore)
@@ -452,8 +470,8 @@ public class KnowledgeMasteryServiceImpl implements KnowledgeMasteryService {
                     .scoreRate(scoreRate)
                     .masteryPercent(masteryPercent)
                     .masteryLevel(level.name())
-                    .masteryLabel(level.label)
-                    .suggestion(suggestion(level, attemptCount, wrongCount))
+                    .masteryLabel(level.label())
+                    .suggestion(assessment.eligible() ? suggestion(level, wrongCount) : assessment.reason())
                     .questionTypes(questionTypes.stream().sorted().collect(Collectors.joining(",")))
                     .lastPracticeTime(lastPracticeTime)
                     .build();
@@ -486,36 +504,13 @@ public class KnowledgeMasteryServiceImpl implements KnowledgeMasteryService {
         }
 
         /**
-         * 根据掌握度百分比判断掌握等级。
-         *
-         * @param masteryPercent 掌握度百分比
-         * @return 掌握等级
-         */
-        private static MasteryLevel resolveLevel(int masteryPercent) {
-            if (masteryPercent >= 85) {
-                return MasteryLevel.MASTERED;
-            }
-            if (masteryPercent >= 70) {
-                return MasteryLevel.GOOD;
-            }
-            if (masteryPercent >= 50) {
-                return MasteryLevel.WEAK;
-            }
-            return MasteryLevel.RISK;
-        }
-
-        /**
          * 生成学习建议。
          *
          * @param level 掌握等级
-         * @param attemptCount 作答次数
          * @param wrongCount 错误次数
          * @return 中文学习建议
          */
-        private static String suggestion(MasteryLevel level, int attemptCount, int wrongCount) {
-            if (attemptCount < 2) {
-                return "样本还偏少，建议再做几道同知识点题目，让掌握度更稳定。";
-            }
+        private static String suggestion(Level level, int wrongCount) {
             return switch (level) {
                 case MASTERED -> "掌握度较高，可以提高题目难度或进入下一知识点。";
                 case GOOD -> "基本掌握，建议间隔复习一次，避免后续遗忘。";
@@ -523,23 +518,9 @@ public class KnowledgeMasteryServiceImpl implements KnowledgeMasteryService {
                         ? "建议先查看错题解析，再生成同类题巩固。"
                         : "建议补做几道同类题，确认是否真的掌握。";
                 case RISK -> "这是当前薄弱点，建议回看资料核心段落，并重新生成针对性练习。";
+                case INSUFFICIENT -> "请补充不同题目的已评分作答后再评估。";
             };
         }
     }
 
-    /**
-     * 知识点掌握等级。
-     */
-    private enum MasteryLevel {
-        MASTERED("已掌握"),
-        GOOD("基本掌握"),
-        WEAK("待巩固"),
-        RISK("薄弱");
-
-        private final String label;
-
-        MasteryLevel(String label) {
-            this.label = label;
-        }
-    }
 }

@@ -37,9 +37,16 @@
         ><span
           >基本掌握 <b>{{ overview.goodCount }}</b></span
         ><span
+          >待评估 <b>{{ overview.insufficientCount }}</b></span
+        ><span
           >错题次数 <b>{{ overview.wrongAttempts }}</b></span
         ><span>{{ hasFilters ? '当前筛选范围的累计记录' : '全部练习的累计记录' }}</span>
       </div>
+      <p class="knowledge-assessment-rule">
+        完成至少
+        {{ MASTERY_REQUIRED_QUESTION_COUNT }} 道不同的已评分题目后，才评估掌握等级；重复作答同一题不增加覆盖题数。
+        未标注知识点的题目需先完善标注。待评估知识点的样本得分仅供参考，不计入平均掌握度或薄弱推荐。
+      </p>
     </section>
 
     <section class="knowledge-library" aria-labelledby="knowledge-list-title">
@@ -109,6 +116,14 @@
           </article>
         </div>
       </div>
+      <p
+        v-else-if="hasLoaded && !loadError && overview.insufficientCount"
+        class="knowledge-assessment-note"
+        role="status"
+      >
+        {{ overview.assessedKnowledgePointCount ? '当前没有需要优先复习的已评估知识点。' : '当前知识点均待评估。' }}
+        还有 {{ overview.insufficientCount }} 个知识点需补充不同题目的评分记录或完善标注，暂不判断是否薄弱。
+      </p>
 
       <div v-if="loading && !hasLoaded" class="knowledge-state" role="status">正在整理知识掌握情况…</div>
       <div v-else-if="loadError" class="knowledge-notice" role="alert">
@@ -149,20 +164,32 @@
           </div>
           <div class="knowledge-record__mastery">
             <div>
-              <strong :class="'knowledge-level--' + item.masteryLevel.toLowerCase()">{{ item.masteryLabel }}</strong
-              ><b>{{ item.masteryPercent }}<small>%</small></b>
+              <strong :class="'knowledge-level--' + displayMasteryLevel(item).toLowerCase()">{{
+                isMasteryAssessed(item) ? item.masteryLabel : '待评估'
+              }}</strong
+              ><b :class="{ 'knowledge-sample-score': !isMasteryAssessed(item) }"
+                >{{ hasScoredQuestions(item) ? item.masteryPercent : '—'
+                }}<small v-if="hasScoredQuestions(item)">%</small></b
+              >
             </div>
             <el-progress
+              v-if="hasScoredQuestions(item)"
               :percentage="item.masteryPercent"
               :stroke-width="5"
               :show-text="false"
-              :color="masteryColorByPercent(item.masteryPercent)"
-              :aria-label="item.knowledgePoint + '掌握度'"
+              :color="masteryColor(displayMasteryLevel(item))"
+              :aria-label="item.knowledgePoint + (isMasteryAssessed(item) ? '掌握度' : '样本得分')"
             />
+            <span>{{
+              isMasteryAssessed(item) ? '掌握度' : hasScoredQuestions(item) ? '样本得分，仅供参考' : '暂无已评分题目'
+            }}</span>
+            <span class="knowledge-question-coverage"
+              >不同已评分题 {{ item.uniqueQuestionCount }} / {{ requiredQuestionCount(item) }} 道</span
+            >
             <span>{{ item.correctCount }} / {{ item.attemptCount }} 次正确</span>
           </div>
           <div class="knowledge-record__context">
-            <p>{{ item.suggestion }}</p>
+            <p>{{ isMasteryAssessed(item) ? item.suggestion : assessmentReason(item) }}</p>
             <span>得分 {{ item.obtainedScore }} / {{ item.totalScore }} · 错题 {{ item.wrongCount }}</span
             ><span>最近练习 {{ formatDateTime(item.lastPracticeTime) }}</span>
             <p v-if="practiceUnavailableReason(item)" class="knowledge-practice-reason">
@@ -208,19 +235,28 @@
         <dl class="knowledge-detail-facts">
           <div>
             <dt>掌握状态</dt>
-            <dd>{{ detail.masteryLabel }} · {{ detail.masteryPercent }}%</dd>
+            <dd :style="{ color: masteryColor(displayMasteryLevel(detail)) }">
+              {{ isMasteryAssessed(detail) ? detail.masteryLabel : '待评估' }}
+            </dd>
           </div>
           <div>
-            <dt>题目覆盖</dt>
-            <dd>{{ detail.uniqueQuestionCount }} 道题 · {{ detail.attemptCount }} 次作答</dd>
+            <dt>{{ isMasteryAssessed(detail) ? '掌握度' : '样本得分（仅供参考）' }}</dt>
+            <dd>{{ hasScoredQuestions(detail) ? detail.masteryPercent + '%' : '— · 暂无评分' }}</dd>
           </div>
           <div>
-            <dt>正确率</dt>
+            <dt>不同已评分题目覆盖</dt>
+            <dd>
+              {{ detail.uniqueQuestionCount }} / {{ requiredQuestionCount(detail) }} 道 · 累计
+              {{ detail.attemptCount }} 次作答
+            </dd>
+          </div>
+          <div>
+            <dt>累计作答正确率</dt>
             <dd>{{ detail.accuracyRate }}%</dd>
           </div>
           <div>
-            <dt>得分率</dt>
-            <dd>{{ detail.scoreRate }}%</dd>
+            <dt>已评分作答得分率</dt>
+            <dd>{{ hasScoredQuestions(detail) ? detail.scoreRate + '%' : '— · 暂无评分' }}</dd>
           </div>
           <div>
             <dt>错题次数</dt>
@@ -232,8 +268,13 @@
           </div>
         </dl>
         <div class="knowledge-detail-advice">
-          <h3>复习建议</h3>
-          <p>{{ detail.suggestion }}</p>
+          <h3>{{ isMasteryAssessed(detail) ? '复习建议' : '评估说明' }}</h3>
+          <p>{{ isMasteryAssessed(detail) ? detail.suggestion : assessmentReason(detail) }}</p>
+          <p>
+            至少需要
+            {{ requiredQuestionCount(detail) }}
+            道不同的已评分题目。重复作答同一题不增加覆盖题数；掌握度按已评分作答的得分率计算。
+          </p>
         </div>
         <div class="knowledge-detail-actions">
           <el-button
@@ -265,7 +306,13 @@ import {
 } from '@/api/modules/knowledgeMastery'
 import { getMaterialPageApi, type MaterialPageItem } from '@/api/modules/material'
 import { useAutoListQuery } from '@/composables/useAutoListQuery'
-import { MASTERY_LEVELS, MASTERY_REVIEW_THRESHOLD, masteryColorByPercent } from '@/utils/mastery'
+import {
+  MASTERY_LEVELS,
+  MASTERY_REQUIRED_QUESTION_COUNT,
+  isMasteryAssessed,
+  needsKnowledgeReview,
+  masteryColor
+} from '@/utils/mastery'
 import { formatQuestionTypes } from '@/utils/labels'
 import { knowledgePracticeUnavailableReason } from '@/utils/knowledgePractice'
 
@@ -293,24 +340,34 @@ const overview = reactive({
   goodCount: 0,
   weakCount: 0,
   riskCount: 0,
-  averageMasteryPercent: 0,
+  insufficientCount: 0,
+  assessedKnowledgePointCount: 0,
+  averageMasteryPercent: null as number | null,
   weakestPoints: [] as KnowledgeMasteryItem[]
 })
 
-const reviewPoints = computed(() =>
-  overview.weakestPoints.filter((item) => Number(item.masteryPercent) < MASTERY_REVIEW_THRESHOLD)
-)
+const reviewPoints = computed(() => overview.weakestPoints.filter(needsKnowledgeReview))
+const requiredQuestionCount = (item: KnowledgeMasteryItem) =>
+  item.requiredQuestionCount || MASTERY_REQUIRED_QUESTION_COUNT
+const hasScoredQuestions = (item: KnowledgeMasteryItem) => item.uniqueQuestionCount > 0
+const displayMasteryLevel = (item: KnowledgeMasteryItem) =>
+  isMasteryAssessed(item) ? item.masteryLevel : 'INSUFFICIENT'
+const assessmentReason = (item: KnowledgeMasteryItem) =>
+  item.assessmentReason ||
+  `已覆盖 ${item.uniqueQuestionCount} 道不同的已评分题目，至少需要 ${requiredQuestionCount(item)} 道后再评估。`
 
-// 筛选项按掌握度从低到高排列
+// 待评估优先列出，其余筛选项按掌握度从低到高排列。
 const masteryLevelOptions = [...MASTERY_LEVELS].reverse()
 const levelMin = (level: string) => MASTERY_LEVELS.find((item) => item.level === level)?.min ?? 0
 const overviewTiles = computed<StatTileItem[]>(() => [
   {
     key: 'average',
     label: '平均掌握度',
-    value: overview.averageMasteryPercent,
-    unit: '%',
-    note: overview.totalAttempts + ' 次作答记录'
+    value: overview.averageMasteryPercent ?? '—',
+    unit: overview.averageMasteryPercent === null ? '' : '%',
+    note: overview.assessedKnowledgePointCount
+      ? `仅统计 ${overview.assessedKnowledgePointCount} 个已评估知识点`
+      : '暂无可评估知识点'
   },
   { key: 'mastered', label: '已掌握', value: overview.masteredCount, note: '掌握度 ≥ ' + levelMin('MASTERED') + '%' },
   {
@@ -334,7 +391,11 @@ const filters = reactive({
     typeof route.query.materialId === 'string' && Number(route.query.materialId)
       ? Number(route.query.materialId)
       : (undefined as number | undefined),
-  masteryLevel: '',
+  masteryLevel:
+    typeof route.query.masteryLevel === 'string' &&
+    masteryLevelOptions.some((item) => item.level === route.query.masteryLevel)
+      ? route.query.masteryLevel
+      : '',
   questionType: ''
 })
 
@@ -370,7 +431,9 @@ const applyOverview = (data: KnowledgeMasteryOverviewPayload) => {
   overview.goodCount = data.goodCount || 0
   overview.weakCount = data.weakCount || 0
   overview.riskCount = data.riskCount || 0
-  overview.averageMasteryPercent = data.averageMasteryPercent || 0
+  overview.insufficientCount = data.insufficientCount || 0
+  overview.assessedKnowledgePointCount = data.assessedKnowledgePointCount || 0
+  overview.averageMasteryPercent = data.averageMasteryPercent ?? null
   overview.weakestPoints = data.weakestPoints || []
   records.value = data.page?.records || []
   total.value = data.page?.total || 0
@@ -577,6 +640,17 @@ void loadMastery()
 .knowledge-overview__notes > span:last-child {
   margin-left: auto;
 }
+.knowledge-assessment-rule,
+.knowledge-assessment-note {
+  margin: 18px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.9;
+}
+.knowledge-assessment-note {
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+}
 .knowledge-section-heading {
   margin-bottom: 22px;
 }
@@ -763,6 +837,10 @@ void loadMastery()
 }
 .knowledge-level--risk {
   color: var(--red);
+}
+.knowledge-level--insufficient,
+.knowledge-sample-score {
+  color: var(--muted);
 }
 .knowledge-record__context p {
   margin: 0 0 10px;

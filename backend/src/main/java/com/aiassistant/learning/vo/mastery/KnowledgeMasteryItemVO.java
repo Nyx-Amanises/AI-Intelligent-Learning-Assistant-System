@@ -33,9 +33,16 @@ public class KnowledgeMasteryItemVO {
     private Integer attemptCount;
 
     /**
-     * 涉及的不同题目数量。
+     * 已完成有效评分的不同题目数量；重复作答同题只计一道。
      */
     private Integer uniqueQuestionCount;
+
+    /** 形成掌握等级所需的最少不同已评分题目数。 */
+    private Integer requiredQuestionCount;
+    /** 样本充足且为真实知识点时才可判定掌握等级。 */
+    private Boolean assessmentEligible;
+    /** 本次评估或暂不评估的原因。 */
+    private String assessmentReason;
 
     /**
      * 正确次数。
@@ -63,17 +70,17 @@ public class KnowledgeMasteryItemVO {
     private BigDecimal accuracyRate;
 
     /**
-     * 得分率百分比。
+     * 已评分作答的得分率百分比；无分值时按已评分作答正确率计算。
      */
     private BigDecimal scoreRate;
 
     /**
-     * 掌握度百分比，优先使用得分率计算。
+     * 已评分作答得分率的整数值；仅在 assessmentEligible 为 true 时代表掌握度。
      */
     private Integer masteryPercent;
 
     /**
-     * 掌握等级编码，例如 MASTERED、GOOD、WEAK、RISK。
+     * 掌握等级编码：MASTERED、GOOD、WEAK、RISK、INSUFFICIENT。
      */
     private String masteryLevel;
 

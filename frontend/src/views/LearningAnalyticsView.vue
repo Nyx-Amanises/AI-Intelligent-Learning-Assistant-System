@@ -190,13 +190,16 @@
         </section>
       </div>
 
-      <template v-if="analytics.totalQuestionAttempts">
+      <template v-if="analytics.totalQuestionAttempts || analytics.totalKnowledgePoints">
         <div class="statistics-breakdowns">
           <section class="statistics-distribution" aria-labelledby="statistics-mastery-title">
             <div class="statistics-section-heading">
               <div>
                 <h2 id="statistics-mastery-title">知识掌握</h2>
-                <p>{{ analytics.totalKnowledgePoints }} 个知识点 · {{ analytics.weakKnowledgePointCount }} 个待复习</p>
+                <p>
+                  {{ analytics.totalKnowledgePoints }} 个知识点 · {{ analytics.weakKnowledgePointCount }} 个待复习 ·
+                  {{ analytics.insufficientKnowledgePointCount }} 个待评估
+                </p>
               </div>
               <RouterLink
                 class="statistics-text-link"
@@ -213,6 +216,13 @@
               center-label="知识点"
               legend-label="知识点掌握度分布"
             />
+            <p class="statistics-assessment-note">
+              至少完成
+              {{
+                MASTERY_REQUIRED_QUESTION_COUNT
+              }}
+              道不同的已评分题目后才评估等级，未标注知识点的题目需先完善标注。待评估知识点不计入薄弱推荐。
+            </p>
           </section>
 
           <section class="statistics-question-types" aria-labelledby="statistics-types-title">
@@ -241,7 +251,7 @@
           <div class="statistics-section-heading">
             <div>
               <h2 id="statistics-review-title">值得再练一次</h2>
-              <p>优先复习掌握度低于 {{ MASTERY_REVIEW_THRESHOLD }}% 的知识点。</p>
+              <p>优先复习已评估且掌握度低于 {{ MASTERY_REVIEW_THRESHOLD }}% 的知识点。</p>
             </div>
             <RouterLink class="statistics-text-link" to="/wrong-questions"
               >查看错题 <AppIcon name="arrow-right" :size="16"
@@ -276,7 +286,23 @@
             </article>
           </div>
           <p v-else class="statistics-empty-note">
-            目前没有掌握度低于 {{ MASTERY_REVIEW_THRESHOLD }}% 的知识点，继续保持。
+            {{
+              analytics.insufficientKnowledgePointCount
+                ? `暂无需要优先复习的已评估知识点。还有 ${analytics.insufficientKnowledgePointCount} 个知识点待评估，请补充不同题目的评分记录或完善标注后再判断。`
+                : `当前已评估的知识点中，没有掌握度低于 ${MASTERY_REVIEW_THRESHOLD}% 的知识点。`
+            }}
+            <RouterLink
+              v-if="analytics.insufficientKnowledgePointCount"
+              class="statistics-text-link"
+              :to="{
+                path: '/mastery',
+                query: {
+                  masteryLevel: 'INSUFFICIENT',
+                  materialId: filters.materialId ? String(filters.materialId) : undefined
+                }
+              }"
+              >查看待评估知识点 <AppIcon name="arrow-right" :size="16"
+            /></RouterLink>
           </p>
         </section>
 
@@ -328,7 +354,12 @@ import TrendLineChart, { type TrendChartPoint } from '@/components/charts/TrendL
 import PracticeCountTrendChart from '@/components/charts/PracticeCountTrendChart.vue'
 import DonutChart, { type DonutSegment } from '@/components/charts/DonutChart.vue'
 import BarRow from '@/components/charts/BarRow.vue'
-import { MASTERY_REVIEW_THRESHOLD, masteryColor } from '@/utils/mastery'
+import {
+  MASTERY_REVIEW_THRESHOLD,
+  MASTERY_REQUIRED_QUESTION_COUNT,
+  needsKnowledgeReview,
+  masteryColor
+} from '@/utils/mastery'
 import { knowledgePracticeUnavailableReason } from '@/utils/knowledgePractice'
 import {
   getLearningAnalyticsOverviewApi,
@@ -406,6 +437,7 @@ const analytics = reactive<LearningAnalyticsOverviewPayload>({
   totalStudySeconds: 0,
   totalKnowledgePoints: 0,
   weakKnowledgePointCount: 0,
+  insufficientKnowledgePointCount: 0,
   averageAccuracyRate: 0,
   averageScoreRate: 0,
   masteryDistribution: [],
@@ -423,9 +455,7 @@ const studyDuration = computed(() => {
     ? { value: formatNumber(seconds), unit: '秒' }
     : { value: formatNumber(Math.floor(seconds / 60)), unit: '分钟' }
 })
-const reviewPoints = computed(() =>
-  analytics.weakKnowledgePoints.filter((item) => Number(item.masteryPercent) < MASTERY_REVIEW_THRESHOLD)
-)
+const reviewPoints = computed(() => analytics.weakKnowledgePoints.filter(needsKnowledgeReview))
 const overviewTiles = computed<StatTileItem[]>(() => [
   { key: 'practice', label: '完成练习', value: formatNumber(analytics.totalPracticeCount), unit: '次' },
   { key: 'attempts', label: '累计作答', value: formatNumber(analytics.totalQuestionAttempts), unit: '次' },
@@ -483,6 +513,7 @@ const applyAnalytics = (data: LearningAnalyticsOverviewPayload) => {
   analytics.totalStudySeconds = data.totalStudySeconds || 0
   analytics.totalKnowledgePoints = data.totalKnowledgePoints || 0
   analytics.weakKnowledgePointCount = data.weakKnowledgePointCount || 0
+  analytics.insufficientKnowledgePointCount = data.insufficientKnowledgePointCount || 0
   analytics.averageAccuracyRate = Number(data.averageAccuracyRate || 0)
   analytics.averageScoreRate = Number(data.averageScoreRate || 0)
   analytics.masteryDistribution = data.masteryDistribution || []
@@ -862,6 +893,12 @@ void loadAnalytics()
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   column-gap: 48px;
+}
+.statistics-assessment-note {
+  margin: 22px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.8;
 }
 .statistics-review-row {
   display: grid;

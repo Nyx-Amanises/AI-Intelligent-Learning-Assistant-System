@@ -6,6 +6,9 @@ export interface KnowledgeMasteryItem {
   materialTitle?: string
   attemptCount: number
   uniqueQuestionCount: number
+  requiredQuestionCount: number
+  assessmentEligible: boolean
+  assessmentReason: string
   correctCount: number
   wrongCount: number
   totalScore: number
@@ -36,7 +39,9 @@ export interface KnowledgeMasteryOverviewPayload {
   goodCount: number
   weakCount: number
   riskCount: number
-  averageMasteryPercent: number
+  insufficientCount: number
+  assessedKnowledgePointCount: number
+  averageMasteryPercent: number | null
   weakestPoints: KnowledgeMasteryItem[]
   page: KnowledgeMasteryPagePayload
 }

@@ -32,6 +32,17 @@ public class WeakKnowledgePointVO {
      */
     private Integer attemptCount;
 
+    /** 已完成有效评分的不同题目数量；重复作答同题只计一道。 */
+    private Integer uniqueQuestionCount;
+    /** 判定掌握等级所需的最少不同已评分题目数。 */
+    private Integer requiredQuestionCount;
+    /** 样本充足且为真实知识点时才可判定掌握等级。 */
+    private Boolean assessmentEligible;
+    /** 本次评估或暂不评估的原因。 */
+    private String assessmentReason;
+    private String masteryLevel;
+    private String masteryLabel;
+
     /**
      * 错误次数。
      */

@@ -47,8 +47,12 @@ public class KnowledgeMasteryOverviewVO {
      */
     private Integer riskCount;
 
+    /** 样本不足或缺少知识点标注的待评估条目数。 */
+    private Integer insufficientCount;
+    private Integer assessedKnowledgePointCount;
+
     /**
-     * 平均掌握度百分比。
+     * 仅对可评估知识点计算的平均掌握度；没有可评估知识点时为 null。
      */
     private Integer averageMasteryPercent;
 

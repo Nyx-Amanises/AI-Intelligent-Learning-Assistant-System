@@ -1,6 +1,8 @@
 package com.aiassistant.learning.service.impl;
 
 import com.aiassistant.learning.common.util.KnowledgePointLabels;
+import com.aiassistant.learning.common.util.KnowledgeMasteryAssessment;
+import com.aiassistant.learning.common.util.KnowledgeMasteryAssessment.Level;
 import com.aiassistant.learning.common.util.AnalyticsDateRange;
 import com.aiassistant.learning.common.util.PracticeCountTrends;
 import com.aiassistant.learning.dto.analytics.LearningAnalyticsQuery;
@@ -168,6 +170,7 @@ public class LearningAnalyticsServiceImpl implements LearningAnalyticsService {
         List<MasteryDistributionVO> distribution = buildMasteryDistribution(knowledgeAccumulators);
         List<WeakKnowledgePointVO> weakPoints = knowledgeAccumulators.stream()
                 .map(KnowledgeAccumulator::toWeakVO)
+                .filter(item -> Boolean.TRUE.equals(item.getAssessmentEligible()) && item.getMasteryPercent() < 70)
                 .sorted(Comparator
                         .comparing(WeakKnowledgePointVO::getMasteryPercent)
                         .thenComparing(WeakKnowledgePointVO::getWrongCount, Comparator.reverseOrder())
@@ -181,7 +184,9 @@ public class LearningAnalyticsServiceImpl implements LearningAnalyticsService {
                 .wrongAttemptCount(totalStats.wrongCount)
                 .totalStudySeconds(totalStudySeconds(sessions))
                 .totalKnowledgePoints(knowledgeAccumulators.size())
-                .weakKnowledgePointCount((int) knowledgeAccumulators.stream().filter(item -> item.masteryPercent() < 70).count())
+                .weakKnowledgePointCount((int) knowledgeAccumulators.stream()
+                        .filter(item -> item.assessment().eligible() && item.masteryPercent() < 70).count())
+                .insufficientKnowledgePointCount((int) knowledgeAccumulators.stream().filter(item -> !item.assessment().eligible()).count())
                 .averageAccuracyRate(totalStats.accuracyRate())
                 .averageScoreRate(totalStats.scoreRate())
                 .masteryDistribution(distribution)
@@ -336,21 +341,21 @@ public class LearningAnalyticsServiceImpl implements LearningAnalyticsService {
      * @return 掌握度分布列表
      */
     private List<MasteryDistributionVO> buildMasteryDistribution(List<KnowledgeAccumulator> knowledgeAccumulators) {
-        Map<MasteryLevel, Integer> counter = new HashMap<>();
-        for (MasteryLevel level : MasteryLevel.values()) {
+        Map<Level, Integer> counter = new HashMap<>();
+        for (Level level : Level.values()) {
             counter.put(level, 0);
         }
         for (KnowledgeAccumulator accumulator : knowledgeAccumulators) {
-            MasteryLevel level = MasteryLevel.resolve(accumulator.masteryPercent());
+            Level level = accumulator.assessment().level();
             counter.put(level, counter.get(level) + 1);
         }
         int total = knowledgeAccumulators.size();
         List<MasteryDistributionVO> result = new ArrayList<>();
-        for (MasteryLevel level : MasteryLevel.values()) {
+        for (Level level : Level.values()) {
             int count = counter.get(level);
             result.add(MasteryDistributionVO.builder()
                     .level(level.name())
-                    .label(level.label)
+                    .label(level.label())
                     .count(count)
                     .percent(percent(count, total))
                     .build());
@@ -382,6 +387,7 @@ public class LearningAnalyticsServiceImpl implements LearningAnalyticsService {
                 .totalStudySeconds(0L)
                 .totalKnowledgePoints(0)
                 .weakKnowledgePointCount(0)
+                .insufficientKnowledgePointCount(0)
                 .averageAccuracyRate(BigDecimal.ZERO)
                 .averageScoreRate(BigDecimal.ZERO)
                 .masteryDistribution(buildMasteryDistribution(List.of()))
@@ -528,7 +534,13 @@ public class LearningAnalyticsServiceImpl implements LearningAnalyticsService {
         private final String knowledgePoint;
         private final Long materialId;
         private final String materialTitle;
+        private final Set<Long> questionIds = new HashSet<>();
+        private int gradedAttemptCount;
+        private int gradedCorrectCount;
+        private int gradedTotalScore;
+        private int gradedObtainedScore;
         private int attemptCount;
+        private int correctCount;
         private int wrongCount;
         private int totalScore;
         private int obtainedScore;
@@ -556,6 +568,16 @@ public class LearningAnalyticsServiceImpl implements LearningAnalyticsService {
          */
         private void add(PracticeAnswer answer, QuestionItem question, PracticeSession session) {
             attemptCount++;
+            if (KnowledgeMasteryAssessment.isGraded(answer.getIsCorrect())) {
+                if (question.getId() != null) questionIds.add(question.getId());
+                gradedAttemptCount++;
+                if (answer.getIsCorrect() == 1) gradedCorrectCount++;
+                gradedTotalScore += safeInt(question.getScore());
+                gradedObtainedScore += safeInt(answer.getObtainedScore());
+            }
+            if (answer.getIsCorrect() != null && answer.getIsCorrect() == 1) {
+                correctCount++;
+            }
             if (answer.getMarkedWrong() != null && answer.getMarkedWrong() == 1
                     || answer.getIsCorrect() != null && answer.getIsCorrect() == 0) {
                 wrongCount++;
@@ -574,8 +596,16 @@ public class LearningAnalyticsServiceImpl implements LearningAnalyticsService {
          * @return 掌握度百分比
          */
         private int masteryPercent() {
-            BigDecimal rate = totalScore > 0 ? percent(obtainedScore, totalScore) : percent(attemptCount - wrongCount, attemptCount);
-            return rate.setScale(0, RoundingMode.HALF_UP).intValue();
+            return scoreRate().setScale(0, RoundingMode.HALF_UP).intValue();
+        }
+
+        private BigDecimal scoreRate() {
+            return gradedTotalScore > 0 ? percent(gradedObtainedScore, gradedTotalScore)
+                    : percent(gradedCorrectCount, gradedAttemptCount);
+        }
+
+        private KnowledgeMasteryAssessment assessment() {
+            return KnowledgeMasteryAssessment.assess(knowledgePoint, questionIds.size(), masteryPercent());
         }
 
         /**
@@ -584,45 +614,24 @@ public class LearningAnalyticsServiceImpl implements LearningAnalyticsService {
          * @return 薄弱知识点 VO
          */
         private WeakKnowledgePointVO toWeakVO() {
+            KnowledgeMasteryAssessment assessment = assessment();
             return WeakKnowledgePointVO.builder()
                     .knowledgePoint(knowledgePoint)
                     .materialId(materialId)
                     .materialTitle(materialTitle)
                     .attemptCount(attemptCount)
+                    .uniqueQuestionCount(questionIds.size())
+                    .requiredQuestionCount(KnowledgeMasteryAssessment.REQUIRED_QUESTION_COUNT)
+                    .assessmentEligible(assessment.eligible())
+                    .assessmentReason(assessment.reason())
+                    .masteryLevel(assessment.level().name())
+                    .masteryLabel(assessment.level().label())
                     .wrongCount(wrongCount)
                     .masteryPercent(masteryPercent())
-                    .scoreRate(totalScore > 0 ? percent(obtainedScore, totalScore) : percent(attemptCount - wrongCount, attemptCount))
+                    .scoreRate(scoreRate())
                     .lastPracticeTime(lastPracticeTime)
                     .build();
         }
     }
 
-    /**
-     * 掌握度等级。
-     */
-    private enum MasteryLevel {
-        MASTERED("已掌握"),
-        GOOD("基本掌握"),
-        WEAK("待巩固"),
-        RISK("薄弱");
-
-        private final String label;
-
-        MasteryLevel(String label) {
-            this.label = label;
-        }
-
-        private static MasteryLevel resolve(int masteryPercent) {
-            if (masteryPercent >= 85) {
-                return MASTERED;
-            }
-            if (masteryPercent >= 70) {
-                return GOOD;
-            }
-            if (masteryPercent >= 50) {
-                return WEAK;
-            }
-            return RISK;
-        }
-    }
 }

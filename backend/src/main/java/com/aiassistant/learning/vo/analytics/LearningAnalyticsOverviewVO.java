@@ -42,6 +42,9 @@ public class LearningAnalyticsOverviewVO {
      */
     private Integer weakKnowledgePointCount;
 
+    /** 尚不能形成掌握等级的知识点数量。 */
+    private Integer insufficientKnowledgePointCount;
+
     /**
      * 平均正确率。
      */
