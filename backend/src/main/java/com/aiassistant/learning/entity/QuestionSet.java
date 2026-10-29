@@ -72,4 +72,8 @@ public class QuestionSet extends BaseLogicEntity {
     /** 出题时实际发送的资料摘录，随题集发布原子保存；列表查询不加载正文。 */
     @TableField(select = false)
     private String sourceSegmentsJson;
+
+    /** 可复用的出题参数；历史题集为空，重新生成前须明确确认范围。 */
+    @TableField(select = false)
+    private String generationRequestJson;
 }

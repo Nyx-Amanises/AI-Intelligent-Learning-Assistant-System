@@ -138,6 +138,7 @@ public class AiQuestionServiceImpl implements AiQuestionService {
         }
         request.setKnowledgePoints(points);
         QuestionSet questionSet = new QuestionSet();
+        questionSet.setGenerationRequestJson(encodeGenerationRequest(request, plan, request.getModelName()));
         questionSet.setUserId(userId);
         questionSet.setMaterialId(materialId);
         questionSet.setTitle(resolveQuestionSetTitle(material, request));
@@ -283,6 +284,7 @@ public class AiQuestionServiceImpl implements AiQuestionService {
         questionSet.setDifficultyLevel(difficultyLevel);
         List<RetrievedSegmentVO> sources = toRetrievedSegmentVOListFromMaterialSegments(contextSegments);
         questionSet.setSourceSegmentsJson(QuestionSetSources.encode(objectMapper, sources));
+        questionSet.setGenerationRequestJson(encodeGenerationRequest(request, resolveQuestionPlan(request), modelName));
         questionSet.setStatus("PUBLISHED");
         if (questionSetId == null) {
             questionSetMapper.insert(questionSet);
@@ -295,6 +297,7 @@ public class AiQuestionServiceImpl implements AiQuestionService {
                     .set(QuestionSet::getTotalScore, questionSet.getTotalScore())
                     .set(QuestionSet::getDifficultyLevel, difficultyLevel)
                     .set(QuestionSet::getSourceSegmentsJson, questionSet.getSourceSegmentsJson())
+                    .set(QuestionSet::getGenerationRequestJson, questionSet.getGenerationRequestJson())
                     .set(QuestionSet::getStatus, "PUBLISHED")
                     .set(QuestionSet::getUpdatedAt, LocalDateTime.now()));
             if (updated == 0) {
@@ -366,9 +369,26 @@ public class AiQuestionServiceImpl implements AiQuestionService {
                 .build();
     }
 
-    /**
-     * 根据 AI 配置决定使用真实模型还是 Mock 题目。
-     */
+    /** 将最终题型计划和实际模型一并保存，后续重开题集不依赖任务中心历史记录。 */
+    private String encodeGenerationRequest(QuestionGenerateRequest request, QuestionPlan plan, String modelName) {
+        QuestionGenerateRequest snapshot = new QuestionGenerateRequest();
+        snapshot.setTitle(request.getTitle());
+        snapshot.setModelName(modelName);
+        snapshot.setSingleCount(plan.singleCount());
+        snapshot.setMultipleCount(plan.multipleCount());
+        snapshot.setJudgeCount(plan.judgeCount());
+        snapshot.setShortAnswerCount(plan.shortAnswerCount());
+        snapshot.setQuestionCount(plan.totalCount());
+        snapshot.setDifficultyLevel(request.getDifficultyLevel() == null ? 3 : request.getDifficultyLevel());
+        snapshot.setKnowledgePoints(QuestionKnowledgeScope.normalize(request.getKnowledgePoints(), plan.totalCount()));
+        try {
+            return objectMapper.writeValueAsString(snapshot);
+        } catch (Exception exception) {
+            throw new BusinessException("保存出题配置失败，题集未发布");
+        }
+    }
+
+    /** 根据 AI 配置决定使用真实模型还是 Mock 题目。 */
     private List<GeneratedQuestion> callAiOrMock(
             StudyMaterial material,
             List<MaterialSegment> segments,

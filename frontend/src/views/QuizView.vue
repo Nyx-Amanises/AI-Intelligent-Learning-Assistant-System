@@ -6,7 +6,7 @@
         <h1 class="page-title">练习题集</h1>
         <p class="page-desc">选一套题，把理解再加深一点。</p>
       </div>
-      <el-button type="primary" @click="generateDialogVisible = true">
+      <el-button type="primary" :disabled="generating" @click="openNewGeneration">
         <AppIcon name="plus" :size="17" />
         生成题集
       </el-button>
@@ -66,7 +66,7 @@
           "
         >
           <el-button v-if="hasFilters" @click="resetFilters">清除筛选</el-button>
-          <el-button v-else-if="materials.length" type="primary" @click="generateDialogVisible = true"
+          <el-button v-else-if="materials.length" type="primary" :disabled="generating" @click="openNewGeneration"
             >生成第一套题</el-button
           >
           <el-button v-else type="primary" @click="router.push('/materials')">先添加学习资料</el-button>
@@ -109,6 +109,13 @@
                 >
                 <el-button v-else link :disabled="!canPreviewQuestionSet(item.status)" @click="viewQuestionSet(item)"
                   >预览题目</el-button
+                >
+                <el-button
+                  v-if="canPreviewQuestionSet(item.status)"
+                  link
+                  :disabled="generating"
+                  @click="openRegeneration(item)"
+                  >重新生成</el-button
                 >
                 <el-dropdown
                   trigger="click"
@@ -167,17 +174,31 @@
 
     <el-dialog
       v-model="generateDialogVisible"
-      title="生成一套专属练习"
+      :title="regenerationSourceId ? '重新生成题集' : '生成一套专属练习'"
       width="min(680px, calc(100vw - 32px))"
       destroy-on-close
       class="quiz-generate-dialog"
+      :close-on-click-modal="!generating"
+      :close-on-press-escape="!generating"
+      :show-close="!generating"
     >
       <template #header="{ titleId, titleClass }">
-        <h2 :id="titleId" :class="[titleClass, 'dialog-title']">生成一套专属练习</h2>
+        <h2 :id="titleId" :class="[titleClass, 'dialog-title']">
+          {{ regenerationSourceId ? '重新生成题集' : '生成一套专属练习' }}
+        </h2>
         <div class="dialog-subtitle">根据学习资料，定制出题范围、题型、题量与难度。</div>
       </template>
+      <div v-if="regenerationLoading" class="state-block" aria-live="polite">正在读取原题集的出题设置…</div>
       <EmptyState
-        v-if="!materialsLoading && !materialsError && !materials.length"
+        v-else-if="regenerationError"
+        variant="error"
+        title="暂时无法读取出题设置"
+        :description="regenerationError"
+      >
+        <el-button @click="openNewGeneration">改为生成新题集</el-button>
+      </EmptyState>
+      <EmptyState
+        v-else-if="!regenerationSourceId && !materialsLoading && !materialsError && !materials.length"
         variant="compact"
         icon="folder"
         title="先准备一份学习资料"
@@ -185,7 +206,19 @@
       >
         <el-button type="primary" @click="router.push('/materials')">前往资料库</el-button>
       </EmptyState>
-      <el-form v-else label-position="top">
+      <el-form v-else label-position="top" :disabled="generating">
+        <p v-if="regenerationSourceId" class="quiz-inline-note" role="note">
+          将使用原资料的当前内容生成一套新题，保留原题集及练习记录。
+          {{ regenerationConfig?.notice }}
+        </p>
+        <p
+          v-if="regenerationSourceId && !materialsLoading && !materialsError && !hasSelectedMaterial"
+          class="quiz-inline-note quiz-inline-note--error"
+          role="alert"
+        >
+          原资料已删除或尚未解析完成，无法重新生成。
+          <el-button link type="primary" @click="openNewGeneration">选择其他资料生成新题集</el-button>
+        </p>
         <p v-if="materialsError" class="quiz-inline-note quiz-inline-note--error" role="alert">
           资料列表加载失败：{{ materialsError }}
           <el-button link type="primary" :loading="materialsLoading" @click="loadMaterials">重试</el-button>
@@ -198,6 +231,7 @@
             placeholder="选择练习的资料"
             aria-label="选择练习的资料"
             :loading="materialsLoading"
+            :disabled="Boolean(regenerationSourceId)"
           >
             <el-option v-for="item in materials" :key="item.id" :label="item.title" :value="item.id" />
           </el-select>
@@ -301,6 +335,16 @@
           /></el-form-item>
           <el-button link type="primary" @click="router.push('/ai-config')">管理 AI 设置</el-button>
         </details>
+        <el-checkbox
+          v-if="regenerationConfig?.parameterMode === 'LEGACY_REVIEW'"
+          v-model="regenerationReviewed"
+          class="quiz-regeneration-confirm"
+        >
+          已确认出题范围与模型设置
+        </el-checkbox>
+        <p v-if="regenerationConfig?.parameterMode === 'LEGACY_REVIEW'" class="quiz-scope-help">
+          历史题集未保存原出题范围与模型，当前默认整份资料和默认模型，请核对或修改后勾选确认。
+        </p>
         <p v-if="aiConfigError" class="quiz-inline-note quiz-inline-note--error">
           AI 设置暂时无法读取：{{ aiConfigError }}
           <el-button link type="primary" :loading="aiConfigLoading" @click="loadAiConfig">重试</el-button>
@@ -319,11 +363,18 @@
         />
       </el-form>
       <template #footer>
-        <el-button @click="generateDialogVisible = false">取消</el-button>
+        <el-button :disabled="generating" @click="generateDialogVisible = false">取消</el-button>
         <el-button
           type="primary"
           :loading="generating"
-          :disabled="!hasSelectedMaterial || !isQuestionCountValid || Boolean(knowledgeScopeError)"
+          :disabled="
+            !hasSelectedMaterial ||
+            !isQuestionCountValid ||
+            Boolean(knowledgeScopeError) ||
+            regenerationLoading ||
+            Boolean(regenerationError) ||
+            !regenerationCanSubmit
+          "
           @click="generateQuestionSet"
           >生成 {{ totalQuestionCount }} 道题</el-button
         >
@@ -399,6 +450,12 @@
       <template #footer>
         <el-button @click="drawerVisible = false">关闭预览</el-button>
         <el-button
+          v-if="questionSetDetail && canPreviewQuestionSet(questionSetDetail.status)"
+          :disabled="generating"
+          @click="openRegeneration(questionSetDetail)"
+          >重新生成</el-button
+        >
+        <el-button
           v-if="questionSetDetail"
           type="primary"
           :loading="startingQuestionSetId === questionSetDetail.id"
@@ -423,7 +480,14 @@ import {
   type AiTaskDetail
 } from '@/api/modules/ai'
 import { startPracticeApi } from '@/api/modules/practice'
-import { deleteQuestionSetApi, getQuestionSetDetailApi, getQuestionSetPageApi } from '@/api/modules/question'
+import {
+  deleteQuestionSetApi,
+  getQuestionSetDetailApi,
+  getQuestionSetPageApi,
+  getQuestionRegenerationConfigApi,
+  regenerateQuestionSetApi,
+  type QuestionRegenerationConfig
+} from '@/api/modules/question'
 import { isAiTaskSuccess, isAiTaskTerminal, parseAiTaskResult, waitForAiTaskUntilTerminal } from '@/utils/aiTask'
 import { confirmDanger } from '@/utils/confirm'
 import { getErrorMessage } from '@/utils/errorMessage'
@@ -517,6 +581,15 @@ const generating = ref(false)
 const detailLoading = ref(false)
 const drawerVisible = ref(false)
 const generateDialogVisible = ref(false)
+const regenerationSourceId = ref<number | null>(null)
+const regenerationConfig = ref<QuestionRegenerationConfig | null>(null)
+const regenerationLoading = ref(false)
+const regenerationError = ref('')
+const regenerationReviewed = ref(false)
+let regenerationRequestId = 0
+const regenerationCanSubmit = computed(
+  () => !regenerationSourceId.value || regenerationConfig.value?.parameterMode === 'SAVED' || regenerationReviewed.value
+)
 const actionLoadingId = ref<number | null>(null)
 const startingQuestionSetId = ref<number | null>(null)
 const currentTask = ref<AiTaskDetail | null>(null)
@@ -669,7 +742,11 @@ watch(
 watch([() => form.scope, () => form.knowledgePoints.join('\u0000')], () => syncDefaultQuestionSetTitle())
 
 watch(generateDialogVisible, (visible) => {
-  if (!visible) return
+  if (!visible) {
+    regenerationRequestId++
+    regenerationLoading.value = false
+    return
+  }
   syncDefaultQuestionSetTitle()
   // 首次读取失败时，打开对话框再试一次，避免一直显示过期的提示。
   if (aiConfigError.value && !aiConfigLoading.value) void loadAiConfig()
@@ -692,11 +769,85 @@ const buildDefaultQuestionSetTitle = (materialId?: number) => {
 }
 
 const syncDefaultQuestionSetTitle = () => {
+  if (regenerationSourceId.value) return
   const nextAutoTitle = buildDefaultQuestionSetTitle(form.materialId)
   if (!form.questionSetTitle.trim() || form.questionSetTitle === lastAutoQuestionSetTitle.value) {
     form.questionSetTitle = nextAutoTitle
   }
   lastAutoQuestionSetTitle.value = nextAutoTitle
+}
+
+const openNewGeneration = async () => {
+  if (generating.value) return
+  regenerationRequestId++
+  const wasRegeneration = Boolean(regenerationSourceId.value)
+  regenerationSourceId.value = null
+  regenerationConfig.value = null
+  regenerationLoading.value = false
+  regenerationError.value = ''
+  regenerationReviewed.value = false
+  drawerVisible.value = false
+  if (wasRegeneration) {
+    Object.assign(form, {
+      materialId: undefined,
+      questionSetTitle: '',
+      modelName: '',
+      singleCount: 2,
+      multipleCount: 1,
+      judgeCount: 1,
+      shortAnswerCount: 1,
+      difficultyLevel: 3,
+      scope: 'MATERIAL',
+      knowledgePoints: []
+    })
+    await nextTick()
+  }
+  syncDefaultQuestionSetTitle()
+  generateDialogVisible.value = true
+}
+
+const openRegeneration = async (item: QuestionSetItem) => {
+  if (generating.value || !canPreviewQuestionSet(item.status)) return
+  const requestId = ++regenerationRequestId
+  regenerationSourceId.value = item.id
+  regenerationConfig.value = null
+  regenerationLoading.value = true
+  regenerationError.value = ''
+  regenerationReviewed.value = false
+  drawerVisible.value = false
+  generateDialogVisible.value = true
+  try {
+    const response = await getQuestionRegenerationConfigApi(item.id)
+    if (viewDisposed || requestId !== regenerationRequestId || !generateDialogVisible.value) return
+    const config = response.data.data as QuestionRegenerationConfig
+    if (
+      !config?.request ||
+      config.sourceQuestionSetId !== item.id ||
+      !['SAVED', 'LEGACY_REVIEW'].includes(config.parameterMode)
+    )
+      throw new Error('原题集的出题设置不完整，请稍后重试。')
+    form.materialId = config.materialId
+    await nextTick()
+    if (viewDisposed || requestId !== regenerationRequestId || !generateDialogVisible.value) return
+    const request = config.request
+    Object.assign(form, {
+      questionSetTitle: `${config.title || item.title} - 重新生成`.slice(0, 200),
+      modelName: request.modelName || '',
+      singleCount: request.singleCount ?? 0,
+      multipleCount: request.multipleCount ?? 0,
+      judgeCount: request.judgeCount ?? 0,
+      shortAnswerCount: request.shortAnswerCount ?? 0,
+      difficultyLevel: request.difficultyLevel ?? 3,
+      scope: request.knowledgePoints?.length ? 'KNOWLEDGE' : 'MATERIAL',
+      knowledgePoints: [...(request.knowledgePoints || [])]
+    })
+    regenerationConfig.value = config
+  } catch (error) {
+    if (!viewDisposed && requestId === regenerationRequestId)
+      regenerationError.value = getErrorMessage(error, '读取出题设置失败，请稍后重试。')
+  } finally {
+    if (!viewDisposed && requestId === regenerationRequestId) regenerationLoading.value = false
+  }
 }
 
 const resetFilters = () => {
@@ -760,7 +911,7 @@ usePolling(
 )
 
 const generateQuestionSet = async () => {
-  if (generating.value) return
+  if (generating.value || regenerationLoading.value || regenerationError.value || !regenerationCanSubmit.value) return
   if (!form.materialId || !hasSelectedMaterial.value) {
     ElMessage.warning('请先选择资料')
     return
@@ -781,8 +932,9 @@ const generateQuestionSet = async () => {
   generating.value = true
   currentTask.value = null
   const generatingMaterialId = form.materialId
+  const sourceQuestionSetId = regenerationSourceId.value
   try {
-    const submitRes = await submitQuestionGenerateTaskApi(generatingMaterialId, {
+    const payload = {
       modelName: form.modelName.trim() || undefined,
       title: form.questionSetTitle.trim() || undefined,
       questionCount: totalQuestionCount.value,
@@ -792,7 +944,15 @@ const generateQuestionSet = async () => {
       shortAnswerCount: form.shortAnswerCount,
       difficultyLevel: form.difficultyLevel,
       knowledgePoints: form.scope === 'KNOWLEDGE' ? [...form.knowledgePoints] : undefined
-    })
+    }
+    const submitRes = sourceQuestionSetId
+      ? await regenerateQuestionSetApi(sourceQuestionSetId, {
+          ...payload,
+          modelName: form.modelName.trim(),
+          knowledgePoints: form.scope === 'KNOWLEDGE' ? [...form.knowledgePoints] : [],
+          configurationReviewed: regenerationConfig.value?.parameterMode === 'SAVED' || regenerationReviewed.value
+        })
+      : await submitQuestionGenerateTaskApi(generatingMaterialId, payload)
     const submittedTask = submitRes.data.data as AiTaskDetail
     if (viewDisposed) return
     currentTask.value = submittedTask
@@ -916,10 +1076,19 @@ onMounted(async () => {
 onUnmounted(() => {
   viewDisposed = true
   knowledgePointsRequestId++
+  regenerationRequestId++
 })
 </script>
 
 <style scoped>
+.quiz-regeneration-confirm {
+  height: auto;
+  white-space: normal;
+}
+.quiz-regeneration-confirm :deep(.el-checkbox__label) {
+  white-space: normal;
+  line-height: 1.8;
+}
 .quiz-knowledge-scope {
   margin-bottom: 16px;
 }

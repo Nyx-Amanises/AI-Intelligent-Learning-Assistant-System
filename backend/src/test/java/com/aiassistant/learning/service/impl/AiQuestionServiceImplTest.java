@@ -202,6 +202,15 @@ class AiQuestionServiceImplTest {
         ArgumentCaptor<QuestionSet> inserted = ArgumentCaptor.forClass(QuestionSet.class);
         verify(questionSets).insert(inserted.capture());
         assertEquals(result.getSourceSegments(), QuestionSetSources.decode(new ObjectMapper(), inserted.getValue().getSourceSegmentsJson()));
+        QuestionGenerateRequest savedSettings;
+        try {
+            savedSettings = new ObjectMapper().readValue(inserted.getValue().getGenerationRequestJson(), QuestionGenerateRequest.class);
+        } catch (Exception exception) {
+            throw new AssertionError(exception);
+        }
+        assertEquals("test-model", savedSettings.getModelName());
+        assertEquals(5, savedSettings.getQuestionCount());
+        assertEquals(List.of(), savedSettings.getKnowledgePoints());
     }
 
     @Test

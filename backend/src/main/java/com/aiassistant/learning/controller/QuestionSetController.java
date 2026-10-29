@@ -5,6 +5,11 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import com.aiassistant.learning.context.UserContext;
 import com.aiassistant.learning.service.QuestionSetService;
+import com.aiassistant.learning.service.QuestionSetRegenerationService;
+import com.aiassistant.learning.dto.ai.QuestionRegenerateRequest;
+import com.aiassistant.learning.vo.ai.AiTaskDetailVO;
+import com.aiassistant.learning.vo.question.QuestionRegenerationConfigVO;
+import jakarta.validation.Valid;
 import com.aiassistant.learning.vo.page.PageVO;
 import com.aiassistant.learning.vo.question.QuestionSetDetailVO;
 import com.aiassistant.learning.vo.question.QuestionSetPageVO;
@@ -12,6 +17,8 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -31,14 +38,16 @@ public class QuestionSetController {
     private static final long MAX_PAGE_SIZE = 100;
 
     private final QuestionSetService questionSetService;
+    private final QuestionSetRegenerationService regenerationService;
 
     /**
      * 构造方法注入题集服务。
      *
      * @param questionSetService 题集业务服务
      */
-    public QuestionSetController(QuestionSetService questionSetService) {
+    public QuestionSetController(QuestionSetService questionSetService, QuestionSetRegenerationService regenerationService) {
         this.questionSetService = questionSetService;
+        this.regenerationService = regenerationService;
     }
 
     /**
@@ -81,6 +90,16 @@ public class QuestionSetController {
     public ApiResponse<QuestionSetDetailVO> detail(@PathVariable Long id) {
         Long userId = UserContext.getCurrentUserId();
         return ApiResponse.success(questionSetService.getQuestionSetDetail(userId, id));
+    }
+
+    @GetMapping("/{id}/regeneration-config")
+    public ApiResponse<QuestionRegenerationConfigVO> regenerationConfig(@PathVariable Long id) {
+        return ApiResponse.success(regenerationService.getConfig(UserContext.getCurrentUserId(), id));
+    }
+
+    @PostMapping("/{id}/regenerate")
+    public ApiResponse<AiTaskDetailVO> regenerate(@PathVariable Long id, @Valid @RequestBody QuestionRegenerateRequest request) {
+        return ApiResponse.success("已创建新的出题任务", regenerationService.regenerate(UserContext.getCurrentUserId(), id, request));
     }
 
     /**
