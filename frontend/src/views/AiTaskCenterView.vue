@@ -140,7 +140,7 @@
       </div>
     </div>
 
-    <el-drawer v-model="drawerVisible" title="任务详情" size="54%">
+    <el-drawer v-model="drawerVisible" title="任务详情" size="min(760px, 100vw)">
       <div v-if="detailLoading" class="state-block">正在加载任务详情...</div>
       <template v-else-if="taskDetail">
         <div class="detail-meta-grid">
@@ -230,7 +230,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import {
   deleteAiTaskApi,
   dispatchAiTaskApi,
@@ -249,6 +249,7 @@ import { formatDateTime } from '@/utils/format'
 import { formatTaskStatus, formatTaskType } from '@/utils/labels'
 
 const router = useRouter()
+const route = useRoute()
 const userStore = useUserStore()
 const isAdmin = computed(() => userStore.isAdmin)
 const loading = ref(false)
@@ -553,6 +554,21 @@ watch(hasActiveTasks, (active) => {
     return
   }
   stopAutoRefresh()
+})
+
+watch(
+  () => route.query.taskId,
+  (value) => {
+    const taskId = Number(value)
+    if (Number.isSafeInteger(taskId) && taskId > 0) void openTaskDetail(taskId)
+  },
+  { immediate: true }
+)
+watch(drawerVisible, (visible) => {
+  if (visible || route.path !== '/ai-tasks' || !route.query.taskId) return
+  const query = { ...route.query }
+  delete query.taskId
+  void router.replace({ path: route.path, query })
 })
 
 onMounted(() => loadTasks())

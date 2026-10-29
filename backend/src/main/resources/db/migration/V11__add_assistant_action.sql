@@ -1,0 +1,23 @@
+CREATE TABLE IF NOT EXISTS `assistant_action` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT 'assistant action record id',
+  `action_id` char(36) NOT NULL COMMENT 'opaque action UUID',
+  `session_id` bigint NOT NULL COMMENT 'assistant session id',
+  `user_id` bigint NOT NULL COMMENT 'owner user id',
+  `revision` bigint NOT NULL DEFAULT '1' COMMENT 'preview revision required for confirmation',
+  `status` varchar(20) NOT NULL DEFAULT 'PENDING' COMMENT 'PENDING/CONFIRMED/CANCELLED/EXPIRED/SUPERSEDED',
+  `material_id` bigint NOT NULL COMMENT 'target material id',
+  `material_title` varchar(200) NOT NULL COMMENT 'material title snapshot',
+  `tasks_json` longtext NOT NULL COMMENT 'server-owned normalized task configuration snapshot',
+  `result_json` longtext COMMENT 'saved decision result for idempotent replies',
+  `expires_at` datetime NOT NULL COMMENT 'confirmation expiry time',
+  `decided_at` datetime DEFAULT NULL COMMENT 'confirmation cancellation or invalidation time',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'create time',
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'update time',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_assistant_action_action_id` (`action_id`),
+  KEY `idx_assistant_action_user_session_status` (`user_id`,`session_id`,`status`),
+  KEY `idx_assistant_action_session` (`session_id`),
+  KEY `idx_assistant_action_material` (`material_id`),
+  CONSTRAINT `fk_assistant_action_session` FOREIGN KEY (`session_id`) REFERENCES `assistant_session` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_assistant_action_user` FOREIGN KEY (`user_id`) REFERENCES `sys_user` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='AI assistant action preview and confirmation';

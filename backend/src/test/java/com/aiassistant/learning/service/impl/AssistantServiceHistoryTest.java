@@ -19,6 +19,7 @@ import com.aiassistant.learning.service.assistant.AssistantAgentOrchestrator;
 import com.aiassistant.learning.service.assistant.AssistantAgentOrchestrator.AssistantPreparedResult;
 import com.aiassistant.learning.service.assistant.AssistantConversationHistory;
 import com.aiassistant.learning.service.assistant.AssistantContextBinder;
+import com.aiassistant.learning.service.assistant.AssistantActionService;
 import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
@@ -113,6 +114,24 @@ class AssistantServiceHistoryTest {
         assertEquals(100L, inserted.get(1).getReplyToMessageId());
         assertEquals("TEXT", inserted.get(1).getMessageType());
         verify(orchestrator).captureConversationMemory(7L, session, "那n乘2是多少？", "14");
+    }
+
+    @Test
+    void lateStreamOnlyUpdatesActivityTimeAndCannotRestoreAnOldConfirmation() {
+        List<Runnable> queued = new ArrayList<>();
+        when(orchestrator.prepare(7L, session, "那n乘2是多少？", "test-model", previous)).thenReturn(prepared(false));
+        session.setPendingActionType("ACTION_CONFIRMATION");
+        session.setPendingActionPayloadJson("{\"actionId\":\"old-preview\"}");
+        service(queued::add).streamMessage(7L, 42L, request());
+        clearInvocations(sessions);
+        queued.get(0).run();
+        verify(sessions, never()).updateById(any(AssistantSession.class));
+        ArgumentCaptor<com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<AssistantSession>> update =
+                ArgumentCaptor.forClass(com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper.class);
+        verify(sessions).update(isNull(), update.capture());
+        assertTrue(update.getValue().getSqlSet().contains("last_message_at"));
+        assertFalse(update.getValue().getSqlSet().contains("pending_action"));
+        assertFalse(update.getValue().getSqlSet().contains("current_context"));
     }
 
     @Test
@@ -219,7 +238,7 @@ class AssistantServiceHistoryTest {
     }
 
     private AssistantServiceImpl service(Executor executor) {
-        return new AssistantServiceImpl(sessions, messages, tools, chat, orchestrator, history, mock(AssistantContextBinder.class), new ObjectMapper(), executor);
+        return new AssistantServiceImpl(sessions, messages, tools, chat, orchestrator, history, mock(AssistantContextBinder.class), mock(AssistantActionService.class), new ObjectMapper(), executor);
     }
 
     private AssistantPreparedResult prepared(boolean useModel) {

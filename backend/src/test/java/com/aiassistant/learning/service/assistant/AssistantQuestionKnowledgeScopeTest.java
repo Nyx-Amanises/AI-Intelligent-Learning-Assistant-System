@@ -47,7 +47,7 @@ class AssistantQuestionKnowledgeScopeTest {
     }
 
     @Test
-    void plannedScopeReachesTheTaskRequestAndUserVisibleSummary() throws Exception {
+    void plannedScopeIsPreservedButToolCannotSubmitWithoutConfirmation() throws Exception {
         AssistantToolExecutionSupport support = new AssistantToolExecutionSupport(
                 new AssistantToolRegistry(List.of()), mock(AssistantModelPolicy.class));
         AssistantToolPlan plan = AssistantToolPlan.builder().planned(true).toolCalls(List.of(
@@ -67,12 +67,12 @@ class AssistantQuestionKnowledgeScopeTest {
         AssistantTool.ToolExecutionResult result = tool.execute(new AssistantTool.ToolContext(
                 7L, session, "生成练习题", null, intent));
 
-        ArgumentCaptor<QuestionGenerateRequest> request = ArgumentCaptor.forClass(QuestionGenerateRequest.class);
-        verify(tasks).submitQuestionGenerateTask(eq(7L), eq(42L), request.capture());
-        assertEquals(List.of("事务", "索引"), request.getValue().getKnowledgePoints());
-        assertEquals(2, request.getValue().getMultipleCount());
-        assertTrue(result.summaryText().contains("出题知识点：事务、索引"));
-        assertTrue(mapper.readTree(result.toolArgsJson()).get("knowledgePoints").isArray());
+        org.mockito.Mockito.verifyNoInteractions(tasks);
+        assertEquals("FAILED", result.status());
+        assertTrue(result.errorMessage().contains("确认"));
+        var options = new AssistantTaskIntentParser().parseQuestionRequest("生成练习题", null, intent);
+        assertEquals(List.of("事务", "索引"), options.knowledgePoints());
+        assertEquals(2, options.multipleCount());
         plan.getToolCalls().get(0).setArguments(Map.of("multipleCount", 3));
         assertEquals(List.of("事务", "索引"), support.mergePlanIntoStructuredIntent(intent, plan).getKnowledgePoints());
         plan.getToolCalls().get(0).setArguments(Map.of("knowledgePoints", List.of()));

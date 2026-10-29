@@ -12,6 +12,7 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     AppIcon: typeof import('./components/AppIcon.vue')['default']
+    AssistantActionCard: typeof import('./components/assistant/AssistantActionCard.vue')['default']
     AssistantCitations: typeof import('./components/assistant/AssistantCitations.vue')['default']
     AssistantComposer: typeof import('./components/assistant/AssistantComposer.vue')['default']
     AssistantConversation: typeof import('./components/assistant/AssistantConversation.vue')['default']

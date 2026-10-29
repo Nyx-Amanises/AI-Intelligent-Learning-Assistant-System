@@ -34,6 +34,8 @@ public class AssistantSessionStateSupport {
             return;
         }
         session.setCurrentMaterialId(materialId);
+        session.setCurrentPracticeSessionId(null);
+        session.setCurrentQuestionSetId(null);
         session.setCurrentContextType("MATERIAL");
         session.setCurrentContextId(materialId);
     }

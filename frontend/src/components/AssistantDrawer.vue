@@ -84,11 +84,17 @@
               :memory-map="memoryMap"
               :quick-prompts="quickPrompts"
               :live-announcement="liveAnnouncement"
+              :action="pendingAction"
+              :action-loading="actionLoading"
+              :action-error="actionError"
+              :action-busy="actionBusy"
               @send="sendMessage"
               @stop="stopStreaming"
               @delete="removeSession(sessionDetail.id)"
               @pick-prompt="fillPrompt"
               @open-practice="closePanel"
+              @decide-action="decideAction"
+              @refresh-action="refreshAction"
             />
           </main>
         </div>
@@ -111,6 +117,7 @@ import { ASSISTANT_NAME } from '@/config/brand'
 import { useAssistantPageBinding } from '@/composables/useAssistantPageBinding'
 import { useAssistantSessions } from '@/composables/useAssistantSessions'
 import { useAssistantStream } from '@/composables/useAssistantStream'
+import { useAssistantActions } from '@/composables/useAssistantActions'
 import { useModalShell } from '@/composables/useModalShell'
 
 const props = withDefaults(
@@ -219,6 +226,16 @@ const {
   shouldBindCurrentPage: () => currentBinding.value.bindable,
   requestScroll: (force) => conversationRef.value?.scrollToBottom(force)
 })
+
+const actionSessionId = computed(() => (visible.value ? sessionDetail.value?.id || null : null))
+const {
+  action: pendingAction,
+  loading: actionLoading,
+  error: actionError,
+  busy: actionBusy,
+  refresh: refreshAction,
+  decide: decideAction
+} = useAssistantActions({ sessionId: actionSessionId, sending: sendingMessage })
 
 const busySessionIds = computed(() => sessionPage.records.map((item) => item.id).filter((id) => sessionActionBusy(id)))
 

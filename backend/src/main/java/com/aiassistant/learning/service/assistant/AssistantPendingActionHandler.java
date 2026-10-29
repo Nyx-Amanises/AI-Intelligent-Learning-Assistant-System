@@ -73,6 +73,9 @@ public class AssistantPendingActionHandler {
         }
 
         String pendingActionType = session.getPendingActionType().trim().toUpperCase();
+        if ("ACTION_CONFIRMATION".equals(pendingActionType)) {
+            return resolveActionConfirmation(userId, session, userMessage, structuredIntent, interactionMode, payload);
+        }
         if (modeResolver.shouldInterruptPendingAction(
                 pendingActionType,
                 userMessage,
@@ -98,6 +101,92 @@ public class AssistantPendingActionHandler {
 
         sessionState.clearPendingAction(session);
         return AssistantWorkflowResolution.notHandled();
+    }
+
+    /** 文字确认不会触发副作用；只有专门的动作决定接口可以提交或取消固定预览。 */
+    private AssistantWorkflowResolution resolveActionConfirmation(Long userId, AssistantSession session, String userMessage,
+            AssistantStructuredIntent intent, AssistantInteractionMode interactionMode, AssistantPendingActionPayload payload) {
+        String text = userMessage == null ? "" : userMessage.trim();
+        boolean decisionOnly = text.replaceAll("[\\s，。！!？?、,.]", "")
+                .matches("(?i)(请|帮我)?(确认|确认执行|执行|开始|开始执行|继续|好的|好|可以|可以执行|没问题|就这样|同意|取消|取消执行|算了|不用了|不做了|先不做了|不要执行|停止|yes|ok|no)(吧|了|谢谢)?");
+        if (decisionOnly) return confirmationReminder(payload);
+
+        boolean newMaterial = StringUtils.hasText(taskIntentParser.extractMaterialQueryText(text, intent));
+        boolean newTaskCommand = AssistantToolSupport.containsAnyIgnoreCase(text,
+                List.of("重新", "另外", "新建", "再帮我", "再生成", "换一份", "不要这个", "取消这个"));
+        boolean summaryEdited = !newMaterial && !newTaskCommand && updateSummaryConfiguration(payload, text);
+        boolean configurationEdit = findQuestionTask(payload.getTasks()) != null && !newMaterial && !newTaskCommand
+                && (interactionMode == AssistantInteractionMode.TASK_CONFIG_REPLY
+                    || Boolean.TRUE.equals(intent == null ? null : intent.getQuestionConfigReply())
+                    || AssistantToolSupport.containsAnyIgnoreCase(text,
+                        List.of("改为", "改成", "改一下", "调整", "单选", "多选", "判断", "简答", "题量", "难度", "知识点", "整份资料")));
+        if (configurationEdit) {
+            payload.setActionId(null);
+            sessionState.savePendingAction(session, "QUESTION_CONFIG", payload);
+            return resolveQuestionConfig(userId, session, text, intent, AssistantInteractionMode.TASK_CONFIG_REPLY,
+                    payload, new ArrayList<>(), new ArrayList<>());
+        }
+        if (summaryEdited) {
+            payload.setActionId(null);
+            sessionState.clearPendingAction(session);
+            return taskWorkflowExecutor.executePlannedTasks(userId, session, payload.getMaterialId(), payload.getTasks(),
+                    new ArrayList<>(), new ArrayList<>());
+        }
+        // 新请求和换题让旧卡片失效，由主路由重新规划；当前方法不调用任何任务提交接口。
+        sessionState.clearPendingAction(session);
+        return AssistantWorkflowResolution.notHandled();
+    }
+
+    /** 仅修改原文明确说明的总结字段，避免解析器默认值覆盖卡片中尚未修改的配置。 */
+    private boolean updateSummaryConfiguration(AssistantPendingActionPayload payload, String text) {
+        AssistantPlannedTask task = payload.getTasks() == null ? null : payload.getTasks().stream()
+                .filter(item -> item != null && "SUMMARY".equalsIgnoreCase(item.getTaskType())).findFirst().orElse(null);
+        if (task == null) return false;
+        String summaryType = null;
+        if (AssistantToolSupport.containsAnyIgnoreCase(text, List.of("考试重点", "复习重点", "期末重点", "考点"))) summaryType = "EXAM";
+        else if (AssistantToolSupport.containsAnyIgnoreCase(text, List.of("提纲", "大纲", "outline", "结构化梳理"))) summaryType = "OUTLINE";
+        else if (AssistantToolSupport.containsAnyIgnoreCase(text, List.of("标准总结", "标准摘要", "standard"))) summaryType = "STANDARD";
+        Boolean save = null;
+        if (AssistantToolSupport.containsAnyIgnoreCase(text, List.of("不保存", "不要保存", "先别保存", "仅生成", "只生成", "不存笔记", "不要存笔记"))) save = false;
+        else if (AssistantToolSupport.containsAnyIgnoreCase(text, List.of("保存到笔记", "保存笔记", "存笔记"))) save = true;
+        java.util.regex.Matcher model = java.util.regex.Pattern.compile(
+                "(?i)(?:模型|model)\\s*(?:改为|改成|换成|设为|[:：=])?\\s*([a-zA-Z0-9][a-zA-Z0-9._:/-]*)").matcher(text);
+        String modelName = model.find() ? model.group(1) : null;
+        java.util.regex.Matcher temperature = java.util.regex.Pattern.compile(
+                "(?i)(?:温度|temperature)\\s*(?:改为|改成|设为|[:：=])?\\s*(-?\\d+(?:\\.\\d+)?)").matcher(text);
+        Double temperatureValue = temperature.find() ? Double.valueOf(temperature.group(1)) : null;
+        if (summaryType == null && save == null && modelName == null && temperatureValue == null) return false;
+        if (summaryType != null) task.setSummaryType(summaryType);
+        if (save != null) task.setSaveAsNote(save);
+        if (modelName != null) task.setModelName(modelName);
+        if (temperatureValue != null) task.setTemperature(temperatureValue);
+        return true;
+    }
+
+    private AssistantWorkflowResolution confirmationReminder(AssistantPendingActionPayload payload) {
+        String reply = "请使用动作卡片上的“确认执行”或“取消”按钮，文字回复不会执行或取消任务。";
+        Map<String, Object> args = new LinkedHashMap<>();
+        args.put("actionId", payload.getActionId());
+        return new AssistantWorkflowResolution(true, false,
+                List.of(sessionState.waitingExecution("action.confirm", args, payload, reply)), reply,
+                List.of(Map.of("toolName", "action.confirm", "reason", "等待动作卡片按钮确认")));
+    }
+
+    private AssistantPlannedTask findQuestionTask(List<AssistantPlannedTask> tasks) {
+        if (tasks == null) return null;
+        return tasks.stream().filter(task -> task != null && "QUESTION_GENERATE".equalsIgnoreCase(task.getTaskType()))
+                .filter(task -> Boolean.TRUE.equals(task.getRequiresQuestionTypeConfirmation())).findFirst()
+                .orElseGet(() -> tasks.stream().filter(task -> task != null && "QUESTION_GENERATE".equalsIgnoreCase(task.getTaskType()))
+                        .findFirst().orElse(null));
+    }
+
+    private void replaceQuestionTask(AssistantPendingActionPayload payload, AssistantPlannedTask previous, AssistantPlannedTask replacement) {
+        if (replacement == null) return;
+        List<AssistantPlannedTask> tasks = new ArrayList<>(payload.getTasks() == null ? List.of() : payload.getTasks());
+        int index = tasks.indexOf(previous);
+        if (index >= 0) tasks.set(index, replacement);
+        else tasks.add(replacement);
+        payload.setTasks(tasks);
     }
 
     /**
@@ -217,7 +306,7 @@ public class AssistantPendingActionHandler {
             List<AssistantTool.ToolExecutionResult> executions,
             List<Map<String, Object>> planSnapshot
     ) {
-        AssistantPlannedTask pendingQuestionTask = payload.getTasks().isEmpty() ? null : payload.getTasks().get(0);
+        AssistantPlannedTask pendingQuestionTask = findQuestionTask(payload.getTasks());
         AssistantWorkflowResolution materialDisambiguationResolution = resolveMaterialDisambiguationDuringQuestionConfig(
                 userId, session, userMessage, structuredIntent, payload, executions, planSnapshot);
         if (materialDisambiguationResolution.handled()) {
@@ -231,7 +320,7 @@ public class AssistantPendingActionHandler {
                 return AssistantWorkflowResolution.notHandled();
             }
             if (resolution.task() != null) {
-                payload.setTasks(List.of(resolution.task()));
+                replaceQuestionTask(payload, pendingQuestionTask, resolution.task());
             }
             String promptText = StringUtils.hasText(resolution.promptText())
                     ? resolution.promptText()
@@ -253,7 +342,8 @@ public class AssistantPendingActionHandler {
         if (materialId != null) {
             sessionState.bindMaterialContext(session, materialId);
         }
-        return taskWorkflowExecutor.executePlannedTasks(userId, session, materialId, List.of(resolution.task()), executions, planSnapshot);
+        replaceQuestionTask(payload, pendingQuestionTask, resolution.task());
+        return taskWorkflowExecutor.executePlannedTasks(userId, session, materialId, payload.getTasks(), executions, planSnapshot);
     }
 
     /**
@@ -289,7 +379,7 @@ public class AssistantPendingActionHandler {
         if (searchResult != null && searchResult.getSelectedMaterialId() != null) {
             sessionState.bindMaterialContext(session, searchResult.getSelectedMaterialId());
             payload.setMaterialId(searchResult.getSelectedMaterialId());
-            String promptText = taskIntentParser.buildQuestionConfigPrompt(payload.getTasks().isEmpty() ? null : payload.getTasks().get(0));
+            String promptText = taskIntentParser.buildQuestionConfigPrompt(findQuestionTask(payload.getTasks()));
             payload.setPromptText(promptText);
             sessionState.savePendingAction(session, "QUESTION_CONFIG", payload);
             return new AssistantWorkflowResolution(

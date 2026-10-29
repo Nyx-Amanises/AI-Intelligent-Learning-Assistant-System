@@ -18,6 +18,9 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class AssistantPendingActionPayload {
 
+    /** 服务端持久化的固定动作预览标识。 */
+    private String actionId;
+
     /** 追问用户的提示文本。 */
     private String promptText;
 

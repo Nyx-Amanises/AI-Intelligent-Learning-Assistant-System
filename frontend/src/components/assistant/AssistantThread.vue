@@ -33,6 +33,21 @@
         :memories="memoryMap[message.id] || EMPTY_MEMORIES"
         @open-practice="emit('openPractice')"
       />
+      <AssistantActionCard
+        v-if="action"
+        :action="action"
+        :busy="actionBusy"
+        :loading="actionLoading"
+        :sending="busy"
+        :error="actionError"
+        @decide="emit('decideAction', $event)"
+        @navigate="emit('openPractice')"
+        @refresh="emit('refreshAction')"
+      />
+      <div v-else-if="actionError" class="assistant-thread__action-error" role="alert">
+        <p>{{ actionError }}</p>
+        <button type="button" :disabled="actionLoading" @click="emit('refreshAction')">重新加载确认状态</button>
+      </div>
     </div>
 
     <button
@@ -50,9 +65,16 @@
 
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
-import type { AssistantMessage, AssistantRelevantMemory, AssistantToolCall } from '@/api/modules/assistant'
+import type {
+  AssistantAction,
+  AssistantActionDecision,
+  AssistantMessage,
+  AssistantRelevantMemory,
+  AssistantToolCall
+} from '@/api/modules/assistant'
 import AppIcon from '@/components/AppIcon.vue'
 import AssistantMessageTurn from '@/components/assistant/AssistantMessageTurn.vue'
+import AssistantActionCard from '@/components/assistant/AssistantActionCard.vue'
 
 const props = defineProps<{
   messages: AssistantMessage[]
@@ -65,11 +87,17 @@ const props = defineProps<{
   memoryMap: Record<number, AssistantRelevantMemory[]>
   quickPrompts: string[]
   busy: boolean
+  action: AssistantAction | null
+  actionLoading: boolean
+  actionError: string
+  actionBusy: AssistantActionDecision | null
 }>()
 
 const emit = defineEmits<{
   (event: 'pick-prompt', prompt: string): void
   (event: 'openPractice'): void
+  (event: 'decideAction', decision: AssistantActionDecision): void
+  (event: 'refreshAction'): void
 }>()
 
 const EMPTY_TOOL_CALLS: AssistantToolCall[] = []
@@ -140,6 +168,14 @@ watch(
 )
 
 watch(
+  () => [props.action?.actionId, props.action?.status, props.actionError],
+  async () => {
+    await nextTick()
+    scrollToBottom()
+  }
+)
+
+watch(
   () => props.sessionId,
   async () => {
     stickToBottom.value = true
@@ -200,6 +236,21 @@ defineExpose({ scrollToBottom, jumpToLatest })
   width: min(920px, 100%);
   margin: 0 auto;
   padding: 12px 0 18px;
+}
+.assistant-thread__action-error {
+  width: min(920px, 100%);
+  margin: 12px auto;
+  color: var(--red);
+  font-size: 12px;
+}
+.assistant-thread__action-error button {
+  min-height: 44px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--brand);
+  cursor: pointer;
+  font: inherit;
 }
 
 .assistant-thread__empty strong {

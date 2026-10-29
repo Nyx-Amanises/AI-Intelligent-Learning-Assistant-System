@@ -61,7 +61,7 @@ export const useAssistantStream = (options: AssistantStreamOptions) => {
   )
 
   /**
-   * 助手消息 id -> 该轮对应的工具调用（挂在它前面最近一条用户消息上）。
+   * 助手消息 id -> 该轮对应的工具调用，旧消息回退到前面最近一条用户消息。
    * 在消息列表或工具调用映射变化时只计算一次，模板里不再逐条回溯扫描。
    */
   const relatedToolCallMap = computed(() => {
@@ -73,6 +73,7 @@ export const useAssistantStream = (options: AssistantStreamOptions) => {
         lastUserMessageId = message.id
         continue
       }
+      if (message.messageType === 'ACTION_RESULT') continue
       const parentId = message.replyToMessageId || lastUserMessageId
       const toolCalls = parentId ? toolCallMap.value[parentId] : undefined
       if (toolCalls?.length) {

@@ -50,23 +50,12 @@ public class SummaryTaskAssistantTool extends AbstractAssistantTool {
     }
 
     /**
-     * 从用户消息中解析总结参数并提交任务。
+     * 工具规划阶段禁止直接提交，必须通过服务端固定预览与确认入口。
      */
     @Override
     public ToolExecutionResult execute(ToolContext context) {
         LocalDateTime startedAt = LocalDateTime.now();
-        Long materialId = AssistantToolSupport.resolveMaterialId(context.session());
-        AssistantTaskIntentParser.SummaryTaskOptions options = taskIntentParser.parseSummaryRequest(
-                context.userMessage(),
-                context.modelName(),
-                context.structuredIntent()
-        );
-        SummaryGenerateRequest request = new SummaryGenerateRequest();
-        request.setModelName(options.modelName());
-        request.setSummaryType(options.summaryType());
-        request.setSaveAsNote(options.saveAsNote());
-        request.setTemperature(options.temperature());
-        return executeRequest(context.userId(), materialId, request, startedAt);
+        return failure(name(), Map.of(), "创建任务需要先生成动作预览，再点击“确认执行”。", startedAt);
     }
 
     /**

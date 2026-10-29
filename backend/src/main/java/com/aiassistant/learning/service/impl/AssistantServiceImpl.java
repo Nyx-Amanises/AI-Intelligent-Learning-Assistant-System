@@ -17,6 +17,7 @@ import com.aiassistant.learning.service.AssistantService;
 import com.aiassistant.learning.service.assistant.AssistantAgentOrchestrator;
 import com.aiassistant.learning.service.assistant.AssistantConversationHistory;
 import com.aiassistant.learning.service.assistant.AssistantContextBinder;
+import com.aiassistant.learning.service.assistant.AssistantActionService;
 import com.aiassistant.learning.service.assistant.AssistantTool;
 import com.aiassistant.learning.vo.assistant.AssistantChatReplyVO;
 import com.aiassistant.learning.vo.assistant.AssistantMessageVO;
@@ -26,6 +27,7 @@ import com.aiassistant.learning.vo.assistant.AssistantSessionPageVO;
 import com.aiassistant.learning.vo.assistant.AssistantToolCallVO;
 import com.aiassistant.learning.vo.page.PageVO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -71,6 +73,7 @@ public class AssistantServiceImpl implements AssistantService {
     private final AssistantAgentOrchestrator assistantAgentOrchestrator;
     private final AssistantConversationHistory conversationHistory;
     private final AssistantContextBinder contextBinder;
+    private final AssistantActionService actionService;
     /** JSON 解析工具。 */
     private final ObjectMapper objectMapper;
     /** 流式回复使用独立的有界线程池（见 AsyncExecutorConfig），避免阻塞 Web 请求线程。 */
@@ -84,6 +87,7 @@ public class AssistantServiceImpl implements AssistantService {
             AssistantAgentOrchestrator assistantAgentOrchestrator,
             AssistantConversationHistory conversationHistory,
             AssistantContextBinder contextBinder,
+            AssistantActionService actionService,
             ObjectMapper objectMapper,
             @Qualifier("assistantStreamExecutor") Executor assistantStreamExecutor
     ) {
@@ -95,6 +99,7 @@ public class AssistantServiceImpl implements AssistantService {
         this.assistantAgentOrchestrator = assistantAgentOrchestrator;
         this.conversationHistory = conversationHistory;
         this.contextBinder = contextBinder;
+        this.actionService = actionService;
         this.objectMapper = objectMapper;
     }
 
@@ -183,7 +188,8 @@ public class AssistantServiceImpl implements AssistantService {
 
         AssistantSession session = getOwnedSession(userId, sessionId);
         session.setTitle(normalizedTitle);
-        assistantSessionMapper.updateById(session);
+        assistantSessionMapper.update(null, new LambdaUpdateWrapper<AssistantSession>()
+                .eq(AssistantSession::getId, sessionId).set(AssistantSession::getTitle, normalizedTitle));
         return buildSessionDetail(
                 session,
                 loadMessages(session.getId(), 30),
@@ -199,7 +205,8 @@ public class AssistantServiceImpl implements AssistantService {
     public AssistantSessionDetailVO updateSessionPinned(Long userId, Long sessionId, boolean pinned) {
         AssistantSession session = getOwnedSession(userId, sessionId);
         session.setPinned(pinned ? 1 : 0);
-        assistantSessionMapper.updateById(session);
+        assistantSessionMapper.update(null, new LambdaUpdateWrapper<AssistantSession>()
+                .eq(AssistantSession::getId, sessionId).set(AssistantSession::getPinned, session.getPinned()));
         return buildSessionDetail(
                 session,
                 loadMessages(session.getId(), 30),
@@ -213,7 +220,7 @@ public class AssistantServiceImpl implements AssistantService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public AssistantChatReplyVO sendMessage(Long userId, Long sessionId, AssistantMessageSendRequest request) {
-        AssistantSession session = getOwnedSession(userId, sessionId);
+        AssistantSession session = getOwnedSessionForUpdate(userId, sessionId);
         AssistantMessage userMessage = persistUserMessage(userId, session, request);
         List<AiChatService.ChatMessage> history = conversationHistory.loadBefore(userId, sessionId, userMessage.getId());
         AssistantAgentOrchestrator.AssistantAgentResult agentResult = assistantAgentOrchestrator.respond(
@@ -240,6 +247,7 @@ public class AssistantServiceImpl implements AssistantService {
 
         List<AssistantToolCall> toolCalls = saveToolCalls(session.getId(), userMessage.getId(), agentResult.toolExecutions());
         syncSessionContextFromToolCalls(session, agentResult.toolExecutions());
+        actionService.reconcilePending(session);
         session.setLastMessageAt(LocalDateTime.now());
         assistantSessionMapper.updateById(session);
 
@@ -250,8 +258,9 @@ public class AssistantServiceImpl implements AssistantService {
      * 流式发送消息：先准备工具和提示词，再通过 SSE 持续推送回复。
      */
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public SseEmitter streamMessage(Long userId, Long sessionId, AssistantMessageSendRequest request) {
-        AssistantSession session = getOwnedSession(userId, sessionId);
+        AssistantSession session = getOwnedSessionForUpdate(userId, sessionId);
         AssistantMessage userMessage = persistUserMessage(userId, session, request);
         List<AiChatService.ChatMessage> history = conversationHistory.loadBefore(userId, sessionId, userMessage.getId());
         AssistantAgentOrchestrator.AssistantPreparedResult preparedResult = assistantAgentOrchestrator.prepare(
@@ -261,6 +270,10 @@ public class AssistantServiceImpl implements AssistantService {
                 request.getModelName(),
                 history
         );
+
+        // 准备阶段在会话锁内保存状态；流式回包晚到时不再覆盖新请求或确认结果。
+        actionService.reconcilePending(session);
+        assistantSessionMapper.updateById(session);
 
         SseEmitter emitter = new SseEmitter(300000L);
         try {
@@ -287,7 +300,7 @@ public class AssistantServiceImpl implements AssistantService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteSession(Long userId, Long sessionId) {
-        AssistantSession session = getOwnedSession(userId, sessionId);
+        AssistantSession session = getOwnedSessionForUpdate(userId, sessionId);
         assistantToolCallMapper.delete(new LambdaQueryWrapper<AssistantToolCall>()
                 .eq(AssistantToolCall::getSessionId, session.getId()));
         assistantMessageMapper.delete(new LambdaQueryWrapper<AssistantMessage>()
@@ -516,9 +529,10 @@ public class AssistantServiceImpl implements AssistantService {
 
         List<AssistantTool.ToolExecutionResult> executions = preparedResult.toolExecutions();
         List<AssistantToolCall> toolCalls = saveToolCalls(session.getId(), userMessage.getId(), executions);
-        syncSessionContextFromToolCalls(session, executions);
         session.setLastMessageAt(LocalDateTime.now());
-        assistantSessionMapper.updateById(session);
+        assistantSessionMapper.update(null, new LambdaUpdateWrapper<AssistantSession>()
+                .eq(AssistantSession::getId, session.getId())
+                .set(AssistantSession::getLastMessageAt, session.getLastMessageAt()));
         if ("TEXT".equals(messageType)) {
             assistantAgentOrchestrator.captureConversationMemory(userId, session, request.getContentText().trim(), assistantReply);
         }
@@ -600,6 +614,13 @@ public class AssistantServiceImpl implements AssistantService {
         if (session == null) {
             throw new BusinessException(404, "会话不存在");
         }
+        return session;
+    }
+
+    private AssistantSession getOwnedSessionForUpdate(Long userId, Long sessionId) {
+        AssistantSession session = assistantSessionMapper.selectOne(new LambdaQueryWrapper<AssistantSession>()
+                .eq(AssistantSession::getId, sessionId).eq(AssistantSession::getUserId, userId).last("for update"));
+        if (session == null) throw new BusinessException(404, "会话不存在");
         return session;
     }
 

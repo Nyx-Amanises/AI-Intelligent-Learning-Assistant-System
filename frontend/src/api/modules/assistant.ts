@@ -134,6 +134,38 @@ export interface AssistantChatReply {
   usedMemories: AssistantRelevantMemory[]
 }
 
+export interface AssistantPlannedTask {
+  taskType: string
+  modelName?: string
+  summaryType?: string
+  saveAsNote?: boolean
+  temperature?: number
+  questionCount?: number
+  singleCount?: number
+  multipleCount?: number
+  judgeCount?: number
+  shortAnswerCount?: number
+  difficultyLevel?: number
+  knowledgePoints?: string[]
+  adjustmentNote?: string
+  requiresQuestionTypeConfirmation?: boolean
+}
+
+export interface AssistantAction {
+  actionId: string
+  sessionId: number
+  revision: number
+  status: string
+  expiresAt?: string
+  materialId?: number
+  materialTitle?: string
+  tasks: AssistantPlannedTask[]
+  taskIds: number[]
+  message?: string
+}
+
+export type AssistantActionDecision = 'CONFIRM' | 'CANCEL'
+
 export interface AssistantStreamTracePayload {
   modelName?: string
   reasoningJson?: string
@@ -203,6 +235,17 @@ export const sendAssistantMessageApi = (sessionId: number, data: AssistantMessag
   http.post(`/assistant/sessions/${sessionId}/messages`, data)
 
 export const deleteAssistantSessionApi = (sessionId: number) => http.delete(`/assistant/sessions/${sessionId}`)
+
+export const getAssistantPendingActionApi = (sessionId: number) =>
+  http.get(`/assistant/sessions/${sessionId}/actions/pending`)
+
+export const decideAssistantActionApi = (
+  sessionId: number,
+  actionId: string,
+  revision: number,
+  decision: AssistantActionDecision
+) =>
+  http.post(`/assistant/sessions/${sessionId}/actions/${encodeURIComponent(actionId)}/decision`, { revision, decision })
 
 export const streamAssistantMessageApi = async (options: AssistantStreamOptions) => {
   const userStore = useUserStore()

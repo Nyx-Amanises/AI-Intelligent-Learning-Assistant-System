@@ -64,6 +64,7 @@ class AssistantAgentOrchestratorImplTest {
     private final SummaryTaskAssistantTool summaryTaskAssistantTool = Mockito.mock(SummaryTaskAssistantTool.class);
     /** 模拟出题任务工具。 */
     private final QuestionGenerateTaskAssistantTool questionGenerateTaskAssistantTool = Mockito.mock(QuestionGenerateTaskAssistantTool.class);
+    private final AssistantActionService actionService = Mockito.mock(AssistantActionService.class);
     /** JSON 工具，用于构造和解析 pendingActionPayload。 */
     private final ObjectMapper objectMapper = new ObjectMapper();
     /** 真实的任务意图解析器，用来覆盖规则解析逻辑。 */
@@ -73,6 +74,13 @@ class AssistantAgentOrchestratorImplTest {
      * 每个测试默认不返回相关记忆，并配置一个可用的测试模型。
      */
     AssistantAgentOrchestratorImplTest() {
+        when(actionService.createPreview(Mockito.anyLong(), Mockito.any(), Mockito.anyLong(), Mockito.anyList()))
+                .thenAnswer(inv -> {
+                    AssistantSession session = inv.getArgument(1);
+                    session.setPendingActionType("ACTION_CONFIRMATION");
+                    return com.aiassistant.learning.vo.assistant.AssistantActionVO.builder().actionId("preview-test")
+                            .status("PENDING").tasks(inv.getArgument(3)).build();
+                });
         when(assistantMemoryService.findRelevantMemories(Mockito.anyLong(), Mockito.any(), Mockito.anyString(), Mockito.anyInt()))
                 .thenReturn(List.of());
         when(aiConfigService.getResolvedConfig()).thenReturn(new AiConfigService.ResolvedAiConfig(
@@ -378,34 +386,21 @@ class AssistantAgentOrchestratorImplTest {
                 .questionCount(10)
                 .exclusiveQuestionType("SINGLE")
                 .build());
-        when(questionGenerateTaskAssistantTool.executeRequest(eq(1L), eq(7L), Mockito.any(QuestionGenerateRequest.class), isNull()))
-                .thenAnswer(invocation -> {
-                    QuestionGenerateRequest request = invocation.getArgument(2);
-                    LocalDateTime now = LocalDateTime.now();
-                    return new AssistantTool.ToolExecutionResult(
-                            "task.submit_question_generate",
-                            "SUCCESS",
-                            "{\"materialId\":7}",
-                            "{\"questionCount\":" + request.getQuestionCount() + "}",
-                            "已创建出题任务",
-                            null,
-                            now,
-                            now
-                    );
-                });
-
         AssistantAgentOrchestrator.AssistantPreparedResult preparedResult =
                 orchestrator.prepare(1L, session, userMessage, "gpt-test");
 
-        ArgumentCaptor<QuestionGenerateRequest> requestCaptor = ArgumentCaptor.forClass(QuestionGenerateRequest.class);
-        verify(questionGenerateTaskAssistantTool).executeRequest(eq(1L), eq(7L), requestCaptor.capture(), isNull());
-        assertEquals(10, requestCaptor.getValue().getQuestionCount());
-        assertEquals(10, requestCaptor.getValue().getSingleCount());
-        assertEquals(0, requestCaptor.getValue().getJudgeCount());
-        assertEquals(0, requestCaptor.getValue().getShortAnswerCount());
-        assertEquals(List.of("HashMap"), requestCaptor.getValue().getKnowledgePoints());
+        ArgumentCaptor<List<AssistantPlannedTask>> previewCaptor = ArgumentCaptor.forClass(List.class);
+        verify(actionService).createPreview(eq(1L), eq(session), eq(7L), previewCaptor.capture());
+        AssistantPlannedTask preview = previewCaptor.getValue().get(0);
+        assertEquals(10, preview.getQuestionCount());
+        assertEquals(10, preview.getSingleCount());
+        assertEquals(0, preview.getJudgeCount());
+        assertEquals(0, preview.getShortAnswerCount());
+        assertEquals(List.of("HashMap"), preview.getKnowledgePoints());
         assertEquals(1, preparedResult.toolExecutions().size());
-        assertNull(session.getPendingActionType());
+        assertEquals("ACTION_CONFIRMATION", session.getPendingActionType());
+        assertEquals("WAITING", preparedResult.toolExecutions().get(0).status());
+        verifyNoInteractions(questionGenerateTaskAssistantTool);
     }
 
     /**
@@ -868,8 +863,7 @@ class AssistantAgentOrchestratorImplTest {
                 taskIntentParser,
                 sessionState,
                 materialSearchAssistantTool,
-                summaryTaskAssistantTool,
-                questionGenerateTaskAssistantTool
+                actionService
         );
         AssistantPendingActionHandler pendingActionHandler = new AssistantPendingActionHandler(
                 taskIntentParser,

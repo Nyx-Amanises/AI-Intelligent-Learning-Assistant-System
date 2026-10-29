@@ -41,18 +41,23 @@ public class AssistantSession extends BaseEntity {
     private Integer pinned;
 
     /** 当前上下文类型。 */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String currentContextType;
 
     /** 当前通用上下文 ID。 */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private Long currentContextId;
 
     /** 当前资料 ID。 */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private Long currentMaterialId;
 
     /** 当前题集 ID。 */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private Long currentQuestionSetId;
 
     /** 当前练习会话 ID。 */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private Long currentPracticeSessionId;
 
     /** 等待用户确认的动作类型。 */

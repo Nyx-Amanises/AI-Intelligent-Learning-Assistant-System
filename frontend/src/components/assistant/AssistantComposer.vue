@@ -37,7 +37,7 @@
         v-else
         type="button"
         class="assistant-send-button"
-        :disabled="sending || !modelValue.trim()"
+        :disabled="disabled || sending || !modelValue.trim()"
         @click="emit('send')"
       >
         {{ sendLabel }}
@@ -56,12 +56,14 @@ const props = withDefaults(
     /** hero：首页大输入框；dock：会话底部输入条。 */
     variant?: 'hero' | 'dock'
     sending?: boolean
+    disabled?: boolean
     /** 显示在字数前面的说明（首页用来展示对话范围）。 */
     metaLabel?: string
   }>(),
   {
     variant: 'dock',
     sending: false,
+    disabled: false,
     metaLabel: ''
   }
 )
@@ -91,6 +93,7 @@ const handleKeydown = (event: KeyboardEvent) => {
   if (event.isComposing || event.keyCode === 229) return
   if (event.key === 'Enter' && !event.shiftKey) {
     event.preventDefault()
+    if (props.disabled || props.sending || !props.modelValue.trim()) return
     emit('send')
   }
 }

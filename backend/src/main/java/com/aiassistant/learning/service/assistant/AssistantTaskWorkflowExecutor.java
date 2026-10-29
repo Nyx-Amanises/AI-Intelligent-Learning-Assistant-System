@@ -1,11 +1,7 @@
 package com.aiassistant.learning.service.assistant;
 
-import com.aiassistant.learning.dto.ai.QuestionGenerateRequest;
-import com.aiassistant.learning.dto.ai.SummaryGenerateRequest;
 import com.aiassistant.learning.entity.AssistantSession;
 import com.aiassistant.learning.service.assistant.tool.MaterialSearchAssistantTool;
-import com.aiassistant.learning.service.assistant.tool.QuestionGenerateTaskAssistantTool;
-import com.aiassistant.learning.service.assistant.tool.SummaryTaskAssistantTool;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -13,9 +9,9 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 /**
- * 任务创建工作流：把“帮我总结 / 出 10 道题”这类请求变成已提交的 AI 任务。
+ * 任务创建工作流：把“帮我总结 / 出 10 道题”这类请求变成待确认的 AI 任务预览。
  *
- * <p>负责解析任务参数、定位目标资料（必要时挂起等待用户选择）、以及最终提交总结 / 出题任务。
+ * <p>负责解析任务参数、定位目标资料（必要时挂起等待用户选择）、以及最终生成总结 / 出题任务确认卡片。
  * 出题任务在需要用户确认题型时，会把任务挂到 QUESTION_CONFIG 待确认动作上。</p>
  */
 @Component
@@ -24,21 +20,18 @@ public class AssistantTaskWorkflowExecutor {
     private final AssistantTaskIntentParser taskIntentParser;
     private final AssistantSessionStateSupport sessionState;
     private final MaterialSearchAssistantTool materialSearchAssistantTool;
-    private final SummaryTaskAssistantTool summaryTaskAssistantTool;
-    private final QuestionGenerateTaskAssistantTool questionGenerateTaskAssistantTool;
+    private final AssistantActionService actionService;
 
     public AssistantTaskWorkflowExecutor(
             AssistantTaskIntentParser taskIntentParser,
             AssistantSessionStateSupport sessionState,
             MaterialSearchAssistantTool materialSearchAssistantTool,
-            SummaryTaskAssistantTool summaryTaskAssistantTool,
-            QuestionGenerateTaskAssistantTool questionGenerateTaskAssistantTool
+            AssistantActionService actionService
     ) {
         this.taskIntentParser = taskIntentParser;
         this.sessionState = sessionState;
         this.materialSearchAssistantTool = materialSearchAssistantTool;
-        this.summaryTaskAssistantTool = summaryTaskAssistantTool;
-        this.questionGenerateTaskAssistantTool = questionGenerateTaskAssistantTool;
+        this.actionService = actionService;
     }
 
     /**
@@ -65,7 +58,7 @@ public class AssistantTaskWorkflowExecutor {
         if (!StringUtils.hasText(explicitMaterialQuery)) {
             materialId = AssistantToolSupport.resolveMaterialId(session);
         }
-        if (materialId == null) {
+        if (materialId == null && !StringUtils.hasText(explicitMaterialQuery)) {
             materialId = sessionState.resolveMaterialIdFromQuestionSetContext(userId, session);
         }
         if (materialId == null) {
@@ -115,7 +108,7 @@ public class AssistantTaskWorkflowExecutor {
     }
 
     /**
-     * 执行已经规划好的任务列表。
+     * 为已经规划好的任务列表补齐配置并生成确认预览。
      *
      * <p>{@code executions} 和 {@code planSnapshot} 是调用方传入的可变列表，本方法会往里追加内容。</p>
      */
@@ -132,61 +125,24 @@ public class AssistantTaskWorkflowExecutor {
         }
 
         for (AssistantPlannedTask task : tasks) {
-            if (task == null || !StringUtils.hasText(task.getTaskType())) {
-                continue;
-            }
-            String taskType = task.getTaskType().trim().toUpperCase();
-            if ("SUMMARY".equals(taskType)) {
-                planSnapshot.add(Map.of("toolName", "task.submit_summary", "reason", "按当前资料提交总结任务"));
-                SummaryGenerateRequest request = new SummaryGenerateRequest();
-                request.setModelName(task.getModelName());
-                request.setSummaryType(task.getSummaryType());
-                request.setSaveAsNote(task.getSaveAsNote());
-                request.setTemperature(task.getTemperature());
-                executions.add(summaryTaskAssistantTool.executeRequest(userId, materialId, request));
-                continue;
-            }
-            if ("QUESTION_GENERATE".equals(taskType)) {
-                if (Boolean.TRUE.equals(task.getRequiresQuestionTypeConfirmation())) {
-                    String promptText = taskIntentParser.buildQuestionConfigPrompt(task);
-                    AssistantPendingActionPayload payload = AssistantPendingActionPayload.builder()
-                            .promptText(promptText)
-                            .materialId(materialId)
-                            .tasks(List.of(task))
-                            .build();
-                    sessionState.savePendingAction(session, "QUESTION_CONFIG", payload);
-                    planSnapshot.add(Map.of("toolName", "task.submit_question_generate", "reason", "等待用户确认题型数量"));
-                    executions.add(sessionState.waitingExecution(
-                            "task.submit_question_generate",
-                            Map.of("materialId", materialId, "questionCount", task.getQuestionCount()),
-                            payload,
-                            promptText
-                    ));
-                    return new AssistantWorkflowResolution(true, false, executions, null, planSnapshot);
-                }
-
-                planSnapshot.add(Map.of("toolName", "task.submit_question_generate", "reason", "按当前资料提交出题任务"));
-                QuestionGenerateRequest request = new QuestionGenerateRequest();
-                request.setModelName(task.getModelName());
-                request.setQuestionCount(task.getQuestionCount());
-                request.setSingleCount(task.getSingleCount());
-                request.setMultipleCount(task.getMultipleCount());
-                request.setJudgeCount(task.getJudgeCount());
-                request.setShortAnswerCount(task.getShortAnswerCount());
-                request.setDifficultyLevel(task.getDifficultyLevel());
-                request.setKnowledgePoints(task.getKnowledgePoints());
-                executions.add(questionGenerateTaskAssistantTool.executeRequest(
-                        userId,
-                        materialId,
-                        request,
-                        task.getAdjustmentNote()
-                ));
+            if (task != null && "QUESTION_GENERATE".equalsIgnoreCase(task.getTaskType())
+                    && Boolean.TRUE.equals(task.getRequiresQuestionTypeConfirmation())) {
+                String promptText = taskIntentParser.buildQuestionConfigPrompt(task);
+                AssistantPendingActionPayload payload = AssistantPendingActionPayload.builder()
+                        .promptText(promptText).materialId(materialId).tasks(new ArrayList<>(tasks)).build();
+                sessionState.savePendingAction(session, "QUESTION_CONFIG", payload);
+                planSnapshot.add(Map.of("toolName", "task.submit_question_generate", "reason", "先补齐题型数量，所有任务均未提交"));
+                executions.add(sessionState.waitingExecution("task.submit_question_generate",
+                        Map.of("materialId", materialId), payload, promptText));
+                return new AssistantWorkflowResolution(true, false, executions, promptText, planSnapshot);
             }
         }
-        sessionState.clearPendingAction(session);
-        return new AssistantWorkflowResolution(true, false, executions, null, planSnapshot);
+        var action = actionService.createPreview(userId, session, materialId, tasks);
+        String promptText = "任务配置已整理，请核对动作卡片并点击“确认执行”或“取消”。确认前不会创建任务。";
+        planSnapshot.add(Map.of("toolName", "action.confirm", "reason", "等待用户确认固定的任务配置"));
+        executions.add(sessionState.waitingExecution("action.confirm", Map.of("actionId", action.getActionId()), action, promptText));
+        return new AssistantWorkflowResolution(true, false, executions, promptText, planSnapshot);
     }
-
     /**
      * 把用户消息解析成待执行的任务列表（总结 / 出题及各自参数）。
      */

@@ -2,6 +2,7 @@ import type { AssistantToolCall } from '@/api/modules/assistant'
 import { toTimeValue } from '@/utils/assistantFormat'
 
 const TOOL_LABELS: Record<string, string> = {
+  'action.confirm': '核对任务配置',
   'practice.detail': '读取练习作答',
   'practice.list': '查找练习记录',
   'material.list': '查找学习资料',

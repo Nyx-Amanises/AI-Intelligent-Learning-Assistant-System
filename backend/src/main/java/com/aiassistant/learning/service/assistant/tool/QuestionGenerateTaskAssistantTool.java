@@ -50,27 +50,12 @@ public class QuestionGenerateTaskAssistantTool extends AbstractAssistantTool {
     }
 
     /**
-     * 从用户消息中解析出题参数并提交任务。
+     * 工具规划阶段禁止直接提交，必须通过服务端固定预览与确认入口。
      */
     @Override
     public ToolExecutionResult execute(ToolContext context) {
         LocalDateTime startedAt = LocalDateTime.now();
-        Long materialId = AssistantToolSupport.resolveMaterialId(context.session());
-        AssistantTaskIntentParser.QuestionTaskOptions options = taskIntentParser.parseQuestionRequest(
-                context.userMessage(),
-                context.modelName(),
-                context.structuredIntent()
-        );
-        QuestionGenerateRequest request = new QuestionGenerateRequest();
-        request.setModelName(options.modelName());
-        request.setQuestionCount(options.questionCount());
-        request.setSingleCount(options.singleCount());
-        request.setMultipleCount(options.multipleCount());
-        request.setJudgeCount(options.judgeCount());
-        request.setShortAnswerCount(options.shortAnswerCount());
-        request.setDifficultyLevel(options.difficultyLevel());
-        request.setKnowledgePoints(options.knowledgePoints());
-        return executeRequest(context.userId(), materialId, request, options.adjustmentNote(), startedAt);
+        return failure(name(), Map.of(), "创建任务需要先生成动作预览，再点击“确认执行”。", startedAt);
     }
 
     /**

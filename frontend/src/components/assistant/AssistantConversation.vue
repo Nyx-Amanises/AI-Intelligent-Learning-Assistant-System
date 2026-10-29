@@ -19,20 +19,28 @@
       :memory-map="memoryMap"
       :quick-prompts="quickPrompts"
       :busy="sending"
+      :action="action"
+      :action-loading="actionLoading"
+      :action-error="actionError"
+      :action-busy="actionBusy"
       @pick-prompt="emit('pick-prompt', $event)"
       @open-practice="emit('openPractice')"
+      @decide-action="emit('decideAction', $event)"
+      @refresh-action="emit('refreshAction')"
     />
 
     <AssistantComposer
       :model-value="draft"
       variant="dock"
       :sending="sending"
+      :disabled="Boolean(actionBusy)"
       @update:model-value="emit('update:draft', $event)"
       @send="emit('send')"
       @stop="emit('stop')"
     >
       <template #topline>
-        <span v-if="session.currentContextType">{{ contextLabel }}</span>
+        <span v-if="actionBusy">正在处理任务确认，请稍候。</span>
+        <span v-else-if="session.currentContextType">{{ contextLabel }}</span>
         <button type="button" class="assistant-inline-danger" @click="emit('delete')">删除会话</button>
       </template>
     </AssistantComposer>
@@ -41,7 +49,13 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import type { AssistantRelevantMemory, AssistantSessionDetail, AssistantToolCall } from '@/api/modules/assistant'
+import type {
+  AssistantAction,
+  AssistantActionDecision,
+  AssistantRelevantMemory,
+  AssistantSessionDetail,
+  AssistantToolCall
+} from '@/api/modules/assistant'
 import AssistantComposer from '@/components/assistant/AssistantComposer.vue'
 import AssistantThread from '@/components/assistant/AssistantThread.vue'
 import { formatContextLabel, formatDateTime } from '@/utils/assistantFormat'
@@ -56,6 +70,10 @@ const props = defineProps<{
   quickPrompts: string[]
   /** 供读屏软件播报的整轮结果。 */
   liveAnnouncement: string
+  action: AssistantAction | null
+  actionLoading: boolean
+  actionError: string
+  actionBusy: AssistantActionDecision | null
 }>()
 
 const emit = defineEmits<{
@@ -65,6 +83,8 @@ const emit = defineEmits<{
   (event: 'delete'): void
   (event: 'pick-prompt', prompt: string): void
   (event: 'openPractice'): void
+  (event: 'decideAction', decision: AssistantActionDecision): void
+  (event: 'refreshAction'): void
 }>()
 
 const threadRef = ref<InstanceType<typeof AssistantThread> | null>(null)
