@@ -2,6 +2,7 @@ package com.aiassistant.learning.service;
 
 import com.aiassistant.learning.dto.wrongquestion.WrongQuestionPageQuery;
 import com.aiassistant.learning.vo.page.PageVO;
+import com.aiassistant.learning.vo.practice.PracticeDetailVO;
 import com.aiassistant.learning.vo.wrongquestion.WrongQuestionVO;
 
 /**
@@ -28,6 +29,9 @@ public interface WrongQuestionService {
      * @return 错题详情
      */
     WrongQuestionVO getWrongQuestion(Long userId, Long answerId);
+
+    /** 为当前错题新建单题练习，保留原作答和错题标记。 */
+    PracticeDetailVO redoWrongQuestion(Long userId, Long answerId);
 
     /**
      * 将错题移出错题本。

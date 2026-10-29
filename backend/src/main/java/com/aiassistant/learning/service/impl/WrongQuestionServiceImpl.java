@@ -1,6 +1,7 @@
 package com.aiassistant.learning.service.impl;
 
 import com.aiassistant.learning.common.exception.BusinessException;
+import com.aiassistant.learning.dto.practice.PracticeStartRequest;
 import com.aiassistant.learning.dto.wrongquestion.WrongQuestionPageQuery;
 import com.aiassistant.learning.entity.PracticeAnswer;
 import com.aiassistant.learning.entity.PracticeSession;
@@ -12,8 +13,10 @@ import com.aiassistant.learning.mapper.PracticeSessionMapper;
 import com.aiassistant.learning.mapper.QuestionItemMapper;
 import com.aiassistant.learning.mapper.QuestionSetMapper;
 import com.aiassistant.learning.service.StudyMaterialService;
+import com.aiassistant.learning.service.PracticeService;
 import com.aiassistant.learning.service.WrongQuestionService;
 import com.aiassistant.learning.vo.page.PageVO;
+import com.aiassistant.learning.vo.practice.PracticeDetailVO;
 import com.aiassistant.learning.vo.wrongquestion.WrongQuestionVO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import java.util.Comparator;
@@ -48,6 +51,7 @@ public class WrongQuestionServiceImpl implements WrongQuestionService {
     private final QuestionItemMapper questionItemMapper;
     private final QuestionSetMapper questionSetMapper;
     private final StudyMaterialService studyMaterialService;
+    private final PracticeService practiceService;
 
     /**
      * 构造方法注入依赖。
@@ -63,13 +67,15 @@ public class WrongQuestionServiceImpl implements WrongQuestionService {
             PracticeSessionMapper practiceSessionMapper,
             QuestionItemMapper questionItemMapper,
             QuestionSetMapper questionSetMapper,
-            StudyMaterialService studyMaterialService
+            StudyMaterialService studyMaterialService,
+            PracticeService practiceService
     ) {
         this.practiceAnswerMapper = practiceAnswerMapper;
         this.practiceSessionMapper = practiceSessionMapper;
         this.questionItemMapper = questionItemMapper;
         this.questionSetMapper = questionSetMapper;
         this.studyMaterialService = studyMaterialService;
+        this.practiceService = practiceService;
     }
 
     /**
@@ -140,14 +146,28 @@ public class WrongQuestionServiceImpl implements WrongQuestionService {
      */
     @Override
     public WrongQuestionVO getWrongQuestion(Long userId, Long answerId) {
-        PracticeAnswer answer = getOwnedWrongAnswer(userId, answerId);
-        PracticeSession session = practiceSessionMapper.selectById(answer.getSessionId());
+        OwnedWrongAnswer owned = getOwnedWrongAnswer(userId, answerId);
+        PracticeAnswer answer = owned.answer();
+        PracticeSession session = owned.session();
         RelatedData relatedData = loadRelatedData(List.of(session), List.of(answer));
         WrongQuestionVO vo = toWrongQuestionVO(answer, session, relatedData);
         if (vo == null) {
             throw new BusinessException(404, "错题不存在");
         }
         return vo;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public PracticeDetailVO redoWrongQuestion(Long userId, Long answerId) {
+        OwnedWrongAnswer owned = getOwnedWrongAnswer(userId, answerId);
+        if (owned.answer().getQuestionId() == null || owned.session().getQuestionSetId() == null) {
+            throw new BusinessException(404, "错题对应的题目或题集已不存在");
+        }
+        PracticeStartRequest request = new PracticeStartRequest();
+        request.setQuestionSetId(owned.session().getQuestionSetId());
+        request.setQuestionIds(List.of(owned.answer().getQuestionId()));
+        return practiceService.startPractice(userId, request);
     }
 
     /**
@@ -161,7 +181,7 @@ public class WrongQuestionServiceImpl implements WrongQuestionService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void removeFromWrongBook(Long userId, Long answerId) {
-        PracticeAnswer answer = getOwnedWrongAnswer(userId, answerId);
+        PracticeAnswer answer = getOwnedWrongAnswer(userId, answerId).answer();
         answer.setMarkedWrong(0);
         practiceAnswerMapper.updateById(answer);
     }
@@ -173,7 +193,7 @@ public class WrongQuestionServiceImpl implements WrongQuestionService {
      * @param answerId 练习答案记录 ID
      * @return 练习答案记录
      */
-    private PracticeAnswer getOwnedWrongAnswer(Long userId, Long answerId) {
+    private OwnedWrongAnswer getOwnedWrongAnswer(Long userId, Long answerId) {
         PracticeAnswer answer = practiceAnswerMapper.selectById(answerId);
         if (answer == null || answer.getMarkedWrong() == null || answer.getMarkedWrong() != 1) {
             throw new BusinessException(404, "错题不存在");
@@ -182,10 +202,13 @@ public class WrongQuestionServiceImpl implements WrongQuestionService {
                 .eq(PracticeSession::getId, answer.getSessionId())
                 .eq(PracticeSession::getUserId, userId)
                 .last("limit 1"));
-        if (session == null) {
+        if (session == null || !SESSION_STATUS_SUBMITTED.equals(session.getSessionStatus())) {
             throw new BusinessException(404, "错题不存在");
         }
-        return answer;
+        return new OwnedWrongAnswer(answer, session);
+    }
+
+    private record OwnedWrongAnswer(PracticeAnswer answer, PracticeSession session) {
     }
 
     /**

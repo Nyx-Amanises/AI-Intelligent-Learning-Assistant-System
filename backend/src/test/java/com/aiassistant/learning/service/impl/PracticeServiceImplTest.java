@@ -35,11 +35,15 @@ import com.aiassistant.learning.vo.practice.PracticeAnswerVO;
 import com.aiassistant.learning.vo.practice.PracticeDetailVO;
 import com.aiassistant.learning.vo.practice.PracticeReviewStatusVO;
 import com.baomidou.mybatisplus.core.MybatisConfiguration;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
@@ -127,6 +131,7 @@ class PracticeServiceImplTest {
         assertEquals(8, saved.getValue().getTotalScore());
         assertEquals(MATERIAL_ID, saved.getValue().getMaterialId());
         assertEquals(501L, detail.getSessionId());
+        assertNull(detail.getQuestionIds(), "整套练习不应被标识为专项重做");
         assertEquals(2, detail.getAnswers().size());
         assertNull(detail.getAnswers().get(0).getUserAnswer());
     }
@@ -270,8 +275,12 @@ class PracticeServiceImplTest {
         assertThrows(BusinessException.class, () -> service.renamePracticeSession(USER_ID, 501L, "x".repeat(201)));
         service.renamePracticeSession(USER_ID, 501L, "  期中复习  ");
 
-        assertEquals("期中复习", session.getSessionName());
-        verify(sessions).updateById(session);
+        ArgumentCaptor<LambdaUpdateWrapper<PracticeSession>> update = ArgumentCaptor.forClass(LambdaUpdateWrapper.class);
+        verify(sessions).update(any(), update.capture());
+        assertTrue(update.getValue().getSqlSet().contains("session_name="));
+        assertFalse(update.getValue().getSqlSet().contains("session_status"));
+        assertTrue(update.getValue().getParamNameValuePairs().containsValue("期中复习"));
+        verify(sessions, never()).updateById(any(PracticeSession.class));
     }
 
     @Test
@@ -345,6 +354,153 @@ class PracticeServiceImplTest {
 
         assertEquals(0, detail.getAnswers().get(0).getIsCorrect());
         assertEquals(0, detail.getAnswers().get(0).getObtainedScore());
+    }
+
+    @Test
+    void selectedPracticeCreatesANewSessionAndKeepsItsScopeOnRefreshAndSubmission() {
+        when(questionSets.selectOne(any())).thenReturn(questionSet("PUBLISHED"));
+        when(questionItems.selectList(any())).thenReturn(List.of(single(1L, "A", 5), single(2L, "B", 8)));
+        PracticeStartRequest request = new PracticeStartRequest();
+        request.setQuestionSetId(QUESTION_SET_ID);
+        request.setQuestionIds(List.of(2L));
+
+        PracticeDetailVO started = service.startPractice(USER_ID, request);
+
+        ArgumentCaptor<PracticeSession> saved = ArgumentCaptor.forClass(PracticeSession.class);
+        verify(sessions).insert(saved.capture());
+        PracticeSession session = saved.getValue();
+        assertEquals("[2]", session.getQuestionIdsJson());
+        assertEquals("光合作用 - 专项复习", session.getSessionName());
+        assertEquals(List.of(2L), started.getQuestionIds());
+        assertEquals(1, started.getAnswers().size());
+        assertNull(started.getAnswers().get(0).getUserAnswer());
+        assertEquals(8, started.getTotalScore());
+        verifyNoInteractions(answers);
+        verify(sessions, never()).updateById(any(PracticeSession.class));
+
+        when(sessions.selectOne(any())).thenReturn(session);
+        PracticeDetailVO refreshed = service.getPracticeDetail(USER_ID, session.getId());
+        assertEquals(List.of(2L), refreshed.getQuestionIds());
+        assertEquals(1, refreshed.getAnswers().size());
+
+        PracticeDetailVO submitted = service.submitPractice(USER_ID, submitRequest(answer(2L, "B")));
+        assertEquals(1, submitted.getTotalQuestions());
+        assertEquals(8, submitted.getTotalScore());
+        assertEquals(8, submitted.getObtainedScore());
+        assertEquals(new BigDecimal("100.00"), submitted.getAccuracyRate());
+        assertEquals(List.of(2L), storedAnswers.stream().map(PracticeAnswer::getQuestionId).toList());
+    }
+
+    @Test
+    void invalidOrForeignSelectionCannotCreateAPractice() {
+        when(questionSets.selectOne(any())).thenReturn(questionSet("PUBLISHED"));
+        when(questionItems.selectList(any())).thenReturn(List.of(single(1L, "A", 5)));
+        List<List<Long>> invalidSelections = List.of(
+                List.of(), List.of(0L), List.of(-1L), Arrays.asList((Long) null),
+                List.of(1L, 1L), List.of(1L, 99L), java.util.Collections.nCopies(101, 1L));
+        for (List<Long> ids : invalidSelections) {
+            PracticeStartRequest request = new PracticeStartRequest();
+            request.setQuestionSetId(QUESTION_SET_ID);
+            request.setQuestionIds(ids);
+            assertThrows(BusinessException.class, () -> service.startPractice(USER_ID, request));
+        }
+        verifyNoInteractions(sessions, answers);
+    }
+
+    @Test
+    void anotherUsersQuestionSetCannotBeUsedEvenWithValidQuestionIds() {
+        when(questionSets.selectOne(any())).thenReturn(null);
+        PracticeStartRequest request = new PracticeStartRequest();
+        request.setQuestionSetId(QUESTION_SET_ID);
+        request.setQuestionIds(List.of(1L));
+
+        assertThrows(BusinessException.class, () -> service.startPractice(USER_ID, request));
+
+        verifyNoInteractions(questionItems, sessions, answers);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "null", "[]", "[1,1]", "[0]", "[\"1\"]", "[1.5]", "[999999999999999999999]", "{}"})
+    void invalidSavedScopeCannotExpandToTheWholeQuestionSet(String scope) {
+        PracticeSession session = inProgressSession();
+        session.setQuestionIdsJson(scope);
+        when(sessions.selectOne(any())).thenReturn(session);
+        when(questionItems.selectList(any())).thenReturn(List.of(single(1L, "A", 5)));
+
+        assertThrows(BusinessException.class, () -> service.getPracticeDetail(USER_ID, 501L));
+        assertThrows(BusinessException.class, () -> service.submitPractice(USER_ID, submitRequest(answer(1L, "A"))));
+
+        verifyNoInteractions(answers);
+        verify(sessions, never()).updateById(any(PracticeSession.class));
+    }
+
+    @Test
+    void submittingAnUnselectedQuestionDoesNotTouchPreviousAnswers() {
+        PracticeSession session = inProgressSession();
+        session.setQuestionIdsJson("[2]");
+        when(sessions.selectOne(any())).thenReturn(session);
+        when(questionItems.selectList(any())).thenReturn(List.of(single(1L, "A", 5), single(2L, "B", 5)));
+
+        assertThrows(BusinessException.class, () -> service.submitPractice(USER_ID, submitRequest(answer(1L, "A"))));
+
+        verifyNoInteractions(answers);
+        verify(sessions, never()).updateById(any(PracticeSession.class));
+    }
+
+    @Test
+    void aSecondSubmissionCannotReplaceTheOriginalAnswersAndSubmissionLocksTheSession() {
+        PracticeSession session = inProgressSession();
+        when(sessions.selectOne(any())).thenReturn(session);
+        when(questionItems.selectList(any())).thenReturn(List.of(single(1L, "A", 5)));
+
+        service.submitPractice(USER_ID, submitRequest(answer(1L, "A")));
+        assertThrows(BusinessException.class, () -> service.submitPractice(USER_ID, submitRequest(answer(1L, "B"))));
+
+        assertEquals("A", storedAnswers.get(0).getUserAnswer());
+        assertEquals(5, session.getObtainedScore());
+        verify(answers).delete(any());
+        verify(answers).insert(any(PracticeAnswer.class));
+        ArgumentCaptor<LambdaQueryWrapper<PracticeSession>> query = ArgumentCaptor.forClass(LambdaQueryWrapper.class);
+        verify(sessions, times(2)).selectOne(query.capture());
+        assertTrue(query.getAllValues().stream().allMatch(wrapper -> wrapper.getSqlSegment().contains("for update")));
+    }
+
+    @Test
+    void aiReviewAndSummaryOnlyUseQuestionsInTheSavedScope() {
+        PracticeSession session = submittedSessionWithPendingShortAnswer("参考答案", "参考答案");
+        session.setQuestionIdsJson("[3]");
+        when(questionItems.selectList(any())).thenReturn(List.of(single(1L, "A", 99), shortAnswer(3L, "参考答案", 10)));
+        PracticeAnswer unrelated = new PracticeAnswer();
+        unrelated.setQuestionId(1L);
+        unrelated.setIsCorrect(1);
+        unrelated.setObtainedScore(99);
+        unrelated.setReviewMode("RULE");
+        storedAnswers.add(unrelated);
+        when(aiConfigService.getResolvedConfig()).thenReturn(config(true, true, "test-key"));
+
+        service.reviewPendingShortAnswersNow(session.getId());
+
+        assertEquals(1, session.getTotalQuestions());
+        assertEquals(10, session.getTotalScore());
+        assertEquals(10, session.getObtainedScore());
+        assertEquals(1, session.getCorrectCount());
+        assertEquals(new BigDecimal("100.00"), session.getAccuracyRate());
+        verify(answers, never()).updateById(unrelated);
+    }
+
+    @Test
+    void practiceHistoryIncludesScopeAndKeepsLegacyFullPracticeAsNull() {
+        PracticeSession selected = inProgressSession();
+        selected.setQuestionIdsJson("[2,3]");
+        PracticeSession legacy = inProgressSession();
+        Page<PracticeSession> page = new Page<>(1, 10);
+        page.setRecords(List.of(selected, legacy));
+        when(sessions.selectPage(any(), any())).thenReturn(page);
+
+        var result = service.pagePracticeSessions(USER_ID, 1L, 10L);
+
+        assertEquals(List.of(2L, 3L), result.getRecords().get(0).getQuestionIds());
+        assertNull(result.getRecords().get(1).getQuestionIds());
     }
 
     private PracticeSession submittedSessionWithPendingShortAnswer(String referenceAnswer, String userAnswer) {

@@ -25,6 +25,7 @@ import com.aiassistant.learning.vo.practice.PracticeReviewStatusVO;
 import com.aiassistant.learning.vo.practice.PracticeSessionPageVO;
 import com.aiassistant.learning.vo.rag.RetrievedSegmentVO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -186,7 +187,8 @@ public class PracticeServiceImpl implements PracticeService {
             throw new BusinessException("GENERATING".equals(questionSet.getStatus())
                     ? "题集正在生成，请完成后再开始练习" : "当前题集不可练习，请先完成题集生成");
         }
-        List<QuestionItem> questions = listQuestionItems(questionSet.getId());
+        List<Long> requestedIds = validateQuestionIds(request.getQuestionIds());
+        List<QuestionItem> questions = selectQuestions(listQuestionItems(questionSet.getId()), requestedIds);
         if (questions.isEmpty()) {
             throw new BusinessException("当前题集没有题目，无法开始练习");
         }
@@ -194,12 +196,15 @@ public class PracticeServiceImpl implements PracticeService {
         PracticeSession session = new PracticeSession();
         session.setUserId(userId);
         session.setQuestionSetId(questionSet.getId());
+        session.setQuestionIdsJson(requestedIds == null ? null : writeQuestionIds(questions));
         session.setMaterialId(questionSet.getMaterialId());
-        session.setSessionName(questionSet.getTitle() + " - 练习");
+        String suffix = requestedIds == null ? " - 练习" : " - 专项复习";
+        String title = questionSet.getTitle() == null ? "练习题集" : questionSet.getTitle();
+        session.setSessionName(title.substring(0, Math.min(title.length(), 200 - suffix.length())) + suffix);
         session.setStartTime(LocalDateTime.now());
         session.setTotalQuestions(questions.size());
         session.setCorrectCount(0);
-        session.setTotalScore(questions.stream().mapToInt(QuestionItem::getScore).sum());
+        session.setTotalScore(questions.stream().mapToInt(question -> safeScore(question.getScore())).sum());
         session.setObtainedScore(0);
         session.setAccuracyRate(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
         session.setSessionStatus(SESSION_STATUS_IN_PROGRESS);
@@ -224,14 +229,24 @@ public class PracticeServiceImpl implements PracticeService {
         PracticeSession session = practiceSessionMapper.selectOne(new LambdaQueryWrapper<PracticeSession>()
                 .eq(PracticeSession::getId, request.getSessionId())
                 .eq(PracticeSession::getUserId, userId)
-                .last("limit 1"));
+                .last("limit 1 for update"));
         if (session == null) {
             throw new BusinessException(404, "练习记录不存在");
         }
+        if (!SESSION_STATUS_IN_PROGRESS.equals(session.getSessionStatus())) {
+            throw new BusinessException("本次练习已提交，不能重复提交；请重新开始一次练习");
+        }
 
-        List<QuestionItem> questions = listQuestionItems(session.getQuestionSetId());
+        List<QuestionItem> questions = listSessionQuestions(session);
+        if (questions.isEmpty()) {
+            throw new BusinessException("本次练习的题目已不可用，请重新开始练习");
+        }
         Map<Long, PracticeAnswerRequest> answerMap = request.getAnswers().stream()
                 .collect(Collectors.toMap(PracticeAnswerRequest::getQuestionId, Function.identity(), (left, right) -> right));
+        Set<Long> allowedIds = questions.stream().map(QuestionItem::getId).collect(Collectors.toSet());
+        if (!allowedIds.containsAll(answerMap.keySet())) {
+            throw new BusinessException("提交的答案包含本次练习范围之外的题目");
+        }
 
         practiceAnswerMapper.delete(new LambdaQueryWrapper<PracticeAnswer>()
                 .eq(PracticeAnswer::getSessionId, session.getId()));
@@ -268,6 +283,8 @@ public class PracticeServiceImpl implements PracticeService {
         session.setSubmitTime(LocalDateTime.now());
         session.setDurationSeconds((int) ChronoUnit.SECONDS.between(session.getStartTime(), session.getSubmitTime()));
         session.setCorrectCount(correctCount);
+        session.setTotalQuestions(questions.size());
+        session.setTotalScore(questions.stream().mapToInt(question -> safeScore(question.getScore())).sum());
         session.setObtainedScore(obtainedScore);
         session.setAccuracyRate(calculateAccuracy(correctCount, questions.size()));
         session.setSessionStatus(SESSION_STATUS_SUBMITTED);
@@ -302,6 +319,7 @@ public class PracticeServiceImpl implements PracticeService {
                 .map(item -> PracticeSessionPageVO.builder()
                         .id(item.getId())
                         .questionSetId(item.getQuestionSetId())
+                        .questionIds(readQuestionIds(item))
                         .sessionName(item.getSessionName())
                         .totalQuestions(item.getTotalQuestions())
                         .correctCount(item.getCorrectCount())
@@ -338,7 +356,7 @@ public class PracticeServiceImpl implements PracticeService {
             throw new BusinessException(404, "练习记录不存在");
         }
 
-        List<QuestionItem> questions = listQuestionItems(session.getQuestionSetId());
+        List<QuestionItem> questions = listSessionQuestions(session);
         List<PracticeAnswer> answers = practiceAnswerMapper.selectList(new LambdaQueryWrapper<PracticeAnswer>()
                 .eq(PracticeAnswer::getSessionId, sessionId)
                 .orderByAsc(PracticeAnswer::getId));
@@ -362,8 +380,12 @@ public class PracticeServiceImpl implements PracticeService {
         if (session == null) {
             throw new BusinessException(404, "练习记录不存在");
         }
-        session.setSessionName(normalizeSessionName(sessionName));
-        practiceSessionMapper.updateById(session);
+        String normalizedName = normalizeSessionName(sessionName);
+        // 只更新名称，避免与交卷并发时用旧实体把 SUBMITTED 改回 IN_PROGRESS。
+        practiceSessionMapper.update(null, new LambdaUpdateWrapper<PracticeSession>()
+                .eq(PracticeSession::getId, sessionId)
+                .eq(PracticeSession::getUserId, userId)
+                .set(PracticeSession::getSessionName, normalizedName));
     }
 
     /**
@@ -435,7 +457,7 @@ public class PracticeServiceImpl implements PracticeService {
             return;
         }
 
-        List<QuestionItem> questions = listQuestionItems(session.getQuestionSetId());
+        List<QuestionItem> questions = listSessionQuestions(session);
         Map<Long, QuestionItem> questionMap = questions.stream()
                 .collect(Collectors.toMap(QuestionItem::getId, Function.identity()));
 
@@ -528,8 +550,12 @@ public class PracticeServiceImpl implements PracticeService {
             return;
         }
 
+        List<QuestionItem> questions = listSessionQuestions(session);
+        Set<Long> allowedIds = questions.stream().map(QuestionItem::getId).collect(Collectors.toSet());
         List<PracticeAnswer> answers = practiceAnswerMapper.selectList(new LambdaQueryWrapper<PracticeAnswer>()
-                .eq(PracticeAnswer::getSessionId, sessionId));
+                .eq(PracticeAnswer::getSessionId, sessionId)).stream()
+                .filter(answer -> allowedIds.contains(answer.getQuestionId()))
+                .toList();
 
         int correctCount = (int) answers.stream()
                 .filter(answer -> answer.getIsCorrect() != null && answer.getIsCorrect() == 1)
@@ -541,6 +567,8 @@ public class PracticeServiceImpl implements PracticeService {
                 .sum();
 
         session.setCorrectCount(correctCount);
+        session.setTotalQuestions(questions.size());
+        session.setTotalScore(questions.stream().mapToInt(question -> safeScore(question.getScore())).sum());
         session.setObtainedScore(obtainedScore);
         session.setAccuracyRate(calculateAccuracy(correctCount, session.getTotalQuestions() == null ? 0 : session.getTotalQuestions()));
         practiceSessionMapper.updateById(session);
@@ -574,6 +602,59 @@ public class PracticeServiceImpl implements PracticeService {
         return questionItemMapper.selectList(new LambdaQueryWrapper<QuestionItem>()
                 .eq(QuestionItem::getQuestionSetId, questionSetId)
                 .orderByAsc(QuestionItem::getSortNo));
+    }
+
+    /** 非空范围必须完整且合法，不能因异常或过期题号悄悄扩大为整套题。 */
+    private List<Long> validateQuestionIds(List<Long> ids) {
+        if (ids == null) return null;
+        if (ids.isEmpty() || ids.size() > 100) {
+            throw new BusinessException("专项练习题目数量必须在1至100之间");
+        }
+        if (ids.stream().anyMatch(id -> id == null || id <= 0)) {
+            throw new BusinessException("题目ID必须为正整数");
+        }
+        if (new LinkedHashSet<>(ids).size() != ids.size()) {
+            throw new BusinessException("专项练习不能包含重复题目");
+        }
+        return List.copyOf(ids);
+    }
+
+    private List<QuestionItem> selectQuestions(List<QuestionItem> questions, List<Long> ids) {
+        if (ids == null) return questions;
+        Set<Long> selectedIds = new LinkedHashSet<>(ids);
+        List<QuestionItem> selected = questions.stream().filter(question -> selectedIds.contains(question.getId())).toList();
+        if (selected.size() != ids.size()) {
+            throw new BusinessException("所选题目不存在或不属于当前题集，请刷新后重试");
+        }
+        return selected;
+    }
+
+    private List<QuestionItem> listSessionQuestions(PracticeSession session) {
+        return selectQuestions(listQuestionItems(session.getQuestionSetId()), readQuestionIds(session));
+    }
+
+    private String writeQuestionIds(List<QuestionItem> questions) {
+        try {
+            return objectMapper.writeValueAsString(questions.stream().map(QuestionItem::getId).toList());
+        } catch (Exception exception) {
+            throw new BusinessException("保存练习范围失败");
+        }
+    }
+
+    private List<Long> readQuestionIds(PracticeSession session) {
+        if (session.getQuestionIdsJson() == null) return null;
+        try {
+            JsonNode root = objectMapper.readTree(session.getQuestionIdsJson());
+            if (root == null || !root.isArray()) throw new IllegalArgumentException();
+            List<Long> ids = new ArrayList<>();
+            for (JsonNode value : root) {
+                if (!value.isIntegralNumber() || !value.canConvertToLong()) throw new IllegalArgumentException();
+                ids.add(value.longValue());
+            }
+            return validateQuestionIds(ids);
+        } catch (Exception exception) {
+            throw new BusinessException("练习范围记录无效，请重新开始练习");
+        }
     }
 
     /**
@@ -1434,6 +1515,7 @@ public class PracticeServiceImpl implements PracticeService {
         return PracticeDetailVO.builder()
                 .sessionId(session.getId())
                 .questionSetId(session.getQuestionSetId())
+                .questionIds(readQuestionIds(session))
                 .sessionName(session.getSessionName())
                 .totalQuestions(session.getTotalQuestions())
                 .correctCount(session.getCorrectCount())

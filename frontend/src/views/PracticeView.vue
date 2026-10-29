@@ -7,6 +7,13 @@
         </svg>
         <span>返回题集列表</span>
       </RouterLink>
+      <RouterLink
+        v-if="practiceDetail?.questionIds?.length"
+        to="/wrong-questions"
+        class="practice-back-link"
+        @click="savePracticeDraft"
+        >返回错题本</RouterLink
+      >
     </nav>
     <div class="page-header">
       <div>
@@ -61,7 +68,7 @@
           @reload="loadHistory"
           @page-change="loadHistory"
           @rename="openRenameDialog({ id: $event.id, sessionName: $event.sessionName })"
-          @restart="restartPractice($event.questionSetId)"
+          @restart="restartPractice($event.questionSetId, $event.questionIds)"
           @delete="removePractice($event.id)"
         />
       </div>
@@ -85,7 +92,7 @@
             :restarting="restarting"
             @submit="submitPractice"
             @back="returnToQuiz"
-            @restart="restartPractice(practiceDetail.questionSetId)"
+            @restart="restartPractice(practiceDetail.questionSetId, practiceDetail.questionIds)"
             @rename="openRenameDialog({ id: practiceDetail.sessionId, sessionName: practiceDetail.sessionName })"
           />
           <PracticeAnswerSheet
@@ -431,7 +438,7 @@ const renamePracticeSession = async (sessionName: string) => {
   }
 }
 
-const restartPractice = async (questionSetId?: number) => {
+const restartPractice = async (questionSetId?: number, questionIds?: number[] | null) => {
   if (restarting.value) return
   if (!questionSetId) {
     ElMessage.warning('这条记录缺少题集信息，无法重新练习')
@@ -439,7 +446,7 @@ const restartPractice = async (questionSetId?: number) => {
   }
   restarting.value = true
   try {
-    const res = await startPracticeApi(questionSetId)
+    const res = await startPracticeApi(questionSetId, questionIds)
     ElMessage.success('新的练习已开始')
     page.current = 1
     resetReviewTaskWaiting()
@@ -539,6 +546,8 @@ onUnmounted(() => {
 <style scoped>
 .practice-navigation {
   display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
   margin-bottom: 18px;
 }
 .practice-back-link {

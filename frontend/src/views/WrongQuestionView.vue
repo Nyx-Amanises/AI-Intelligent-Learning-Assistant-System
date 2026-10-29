@@ -16,7 +16,7 @@
         <ListSectionHeading
           title="待巩固的题目"
           :count="total"
-          description="练习中的错题与低分简答题，会自动收集在这里。"
+          description="重做会开启独立练习并保留原成绩；巩固后可手动移出错题本。"
           :loading="loading"
           @refresh="loadWrongQuestions"
         />
@@ -98,7 +98,14 @@
                 ><small>{{ formatDate(item.answerTime || item.createdAt) }}</small>
               </div>
               <div class="wrong-question-card__actions">
-                <el-button type="primary" plain @click="openDetail(item)">查看解析</el-button>
+                <el-button
+                  type="primary"
+                  :loading="redoingAnswerId === item.answerId"
+                  :disabled="redoingAnswerId !== null || removingAnswerId !== null"
+                  @click="redoQuestion(item)"
+                  >重做此题</el-button
+                >
+                <el-button plain @click="openDetail(item)">查看解析</el-button>
                 <el-dropdown trigger="click" @command="handleQuestionAction($event, item)">
                   <IconMenuButton label="错题更多操作" :loading="removingAnswerId === item.answerId" />
                   <template #dropdown
@@ -194,7 +201,14 @@
         <template v-if="detail && !detailLoading"
           ><el-button :loading="removingAnswerId === detail.answerId" @click="removeWrongQuestion(detail, true)"
             >移出错题本</el-button
-          ><el-button type="primary" @click="goPractice(detail.sessionId)">查看原练习</el-button></template
+          ><el-button @click="goPractice(detail.sessionId)">查看原练习</el-button>
+          <el-button
+            type="primary"
+            :loading="redoingAnswerId === detail.answerId"
+            :disabled="redoingAnswerId !== null || removingAnswerId !== null"
+            @click="redoQuestion(detail)"
+            >重做此题</el-button
+          ></template
         >
         <el-button v-else @click="drawerVisible = false">关闭</el-button>
       </template>
@@ -203,7 +217,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, onUnmounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import EmptyState from '@/components/EmptyState.vue'
@@ -223,6 +237,7 @@ import {
   getWrongQuestionDetailApi,
   getWrongQuestionPageApi,
   removeWrongQuestionApi,
+  redoWrongQuestionApi,
   type WrongQuestionItem,
   type WrongQuestionPagePayload
 } from '@/api/modules/wrongQuestion'
@@ -235,6 +250,8 @@ const loadError = ref('')
 const detailLoading = ref(false)
 const drawerVisible = ref(false)
 const removingAnswerId = ref<number | null>(null)
+const redoingAnswerId = ref<number | null>(null)
+let viewDisposed = false
 const wrongQuestions = ref<WrongQuestionItem[]>([])
 const detail = ref<WrongQuestionItem | null>(null)
 const total = ref(0)
@@ -321,6 +338,7 @@ const openDetail = async (item: WrongQuestionItem) => {
 }
 
 const removeWrongQuestion = async (item: WrongQuestionItem, closeDrawer = false) => {
+  if (redoingAnswerId.value !== null || removingAnswerId.value !== null) return
   const confirmed = await confirmDanger('移出后这道题不会再显示在错题本中，原练习记录仍会保留，确定继续吗？', {
     title: '移出确认',
     confirmText: '确认移出'
@@ -346,6 +364,23 @@ const removeWrongQuestion = async (item: WrongQuestionItem, closeDrawer = false)
   }
 }
 
+const redoQuestion = async (item: WrongQuestionItem) => {
+  if (redoingAnswerId.value !== null || removingAnswerId.value !== null) return
+  redoingAnswerId.value = item.answerId
+  try {
+    const response = await redoWrongQuestionApi(item.answerId)
+    if (viewDisposed) return
+    const sessionId = Number(response.data.data?.sessionId)
+    if (!Number.isSafeInteger(sessionId) || sessionId <= 0) throw new Error('新练习未能打开，请稍后重试。')
+    ElMessage.success('已开启此题的独立练习，原成绩与错题保留')
+    await router.push({ path: '/practice', query: { sessionId: String(sessionId) } })
+  } catch (error) {
+    if (!viewDisposed) ElMessage.error(getErrorMessage(error, '重做此题失败，请稍后重试。'))
+  } finally {
+    if (!viewDisposed) redoingAnswerId.value = null
+  }
+}
+
 const goPractice = (sessionId?: number) => {
   if (!sessionId) {
     return
@@ -357,6 +392,9 @@ void loadMaterials().then(() => {
   if (materialsError.value) ElMessage.error(materialsError.value)
 })
 void loadWrongQuestions()
+onUnmounted(() => {
+  viewDisposed = true
+})
 </script>
 
 <style scoped>
@@ -481,6 +519,7 @@ void loadWrongQuestions()
 }
 .wrong-question-card__actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   flex-shrink: 0;
   gap: 4px;

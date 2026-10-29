@@ -5,12 +5,14 @@ import com.aiassistant.learning.context.UserContext;
 import com.aiassistant.learning.dto.wrongquestion.WrongQuestionPageQuery;
 import com.aiassistant.learning.service.WrongQuestionService;
 import com.aiassistant.learning.vo.page.PageVO;
+import com.aiassistant.learning.vo.practice.PracticeDetailVO;
 import com.aiassistant.learning.vo.wrongquestion.WrongQuestionVO;
 import jakarta.validation.Valid;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -58,6 +60,11 @@ public class WrongQuestionController {
     public ApiResponse<WrongQuestionVO> detail(@PathVariable Long answerId) {
         Long userId = UserContext.getCurrentUserId();
         return ApiResponse.success(wrongQuestionService.getWrongQuestion(userId, answerId));
+    }
+
+    @PostMapping("/{answerId}/redo")
+    public ApiResponse<PracticeDetailVO> redo(@PathVariable Long answerId) {
+        return ApiResponse.success(wrongQuestionService.redoWrongQuestion(UserContext.getCurrentUserId(), answerId));
     }
 
     /**

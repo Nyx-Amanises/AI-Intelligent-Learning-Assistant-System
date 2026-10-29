@@ -30,6 +30,7 @@ export interface PracticeDetail {
   sessionName: string
   sessionStatus?: string
   questionSetId?: number
+  questionIds?: number[] | null
   totalQuestions?: number
   totalScore?: number
   obtainedScore?: number
@@ -43,6 +44,7 @@ export interface PracticeHistoryItem {
   sessionName: string
   sessionStatus?: string
   questionSetId?: number
+  questionIds?: number[] | null
   totalQuestions?: number
   obtainedScore?: number
   accuracyRate?: number

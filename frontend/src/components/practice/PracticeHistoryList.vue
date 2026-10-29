@@ -12,6 +12,7 @@
               <StatusPill :tone="statusTone(item.sessionStatus)" :label="formatPracticeStatus(item.sessionStatus)" />
             </div>
             <p>{{ item.totalQuestions || 0 }} 道题<span>·</span>{{ describeSubmitTime(item) }}</p>
+            <p v-if="item.questionIds?.length">专项复习 · 再练一次将保留本次题目范围</p>
           </div>
           <div class="practice-record__stats">
             <div>

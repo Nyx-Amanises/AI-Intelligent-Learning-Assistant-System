@@ -2,6 +2,7 @@ package com.aiassistant.learning.vo.practice;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import lombok.Builder;
 import lombok.Data;
 
@@ -21,6 +22,9 @@ public class PracticeSessionPageVO {
      * 题集 ID。
      */
     private Long questionSetId;
+
+    /** 专项练习的选题范围；null 表示原整套练习。 */
+    private List<Long> questionIds;
 
     /**
      * 练习名称。

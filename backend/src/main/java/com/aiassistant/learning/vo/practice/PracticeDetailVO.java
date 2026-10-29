@@ -25,6 +25,9 @@ public class PracticeDetailVO {
      */
     private Long questionSetId;
 
+    /** 专项练习选题范围；null 表示整套练习，与历史列表契约一致。 */
+    private List<Long> questionIds;
+
     /**
      * 练习名称。
      */

@@ -40,6 +40,9 @@ public class PracticeSession extends BaseEntity {
      */
     private Long questionSetId;
 
+    /** 专项练习选题范围的 JSON 数组；null 兼容原整套练习。 */
+    private String questionIdsJson;
+
     /**
      * 题集关联的资料 ID，方便简答题判分时检索原始资料片段。
      */

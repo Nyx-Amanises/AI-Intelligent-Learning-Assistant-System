@@ -6,6 +6,7 @@
           <h2 class="practice-paper-hero__title">{{ practiceDetail.sessionName }}</h2>
           <div class="practice-paper-hero__meta">
             <span>{{ practiceDetail.totalQuestions }} 道题</span>
+            <span v-if="practiceDetail.questionIds?.length">专项复习</span>
             <span>满分 {{ practiceDetail.totalScore || 0 }} 分</span>
             <el-button link @click="emit('rename')">修改名称</el-button>
           </div>
@@ -41,6 +42,13 @@
     </div>
 
     <el-alert v-if="hasPendingAiReview" :title="pendingReviewText" type="info" :closable="false" show-icon />
+    <el-alert
+      v-if="practiceDetail.questionIds?.length"
+      title="本次专项复习单独记录成绩，原练习记录仍会保留。"
+      type="info"
+      :closable="false"
+      show-icon
+    />
 
     <div v-for="(section, sectionIndex) in sections" :key="section.type" class="page-card practice-paper-section">
       <div class="practice-paper-section__title">

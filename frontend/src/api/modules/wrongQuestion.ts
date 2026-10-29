@@ -43,3 +43,5 @@ export const getWrongQuestionPageApi = (params: Record<string, unknown>) =>
 export const getWrongQuestionDetailApi = (answerId: number) => http.get(`/wrong-questions/${answerId}`)
 
 export const removeWrongQuestionApi = (answerId: number) => http.delete(`/wrong-questions/${answerId}`)
+
+export const redoWrongQuestionApi = (answerId: number) => http.post(`/wrong-questions/${answerId}/redo`)

@@ -5,7 +5,8 @@ export interface PracticeAnswerPayload {
   userAnswer: string
 }
 
-export const startPracticeApi = (questionSetId: number) => http.post('/practice/start', { questionSetId })
+export const startPracticeApi = (questionSetId: number, questionIds?: number[] | null) =>
+  http.post('/practice/start', { questionSetId, ...(questionIds?.length ? { questionIds } : {}) })
 
 export const submitPracticeApi = (sessionId: number, answers: PracticeAnswerPayload[]) =>
   http.post('/practice/submit', { sessionId, answers })
