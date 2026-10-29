@@ -58,7 +58,7 @@ class QuestionSetAvailabilityTest {
         PracticeAnswerMapper answers = mock(PracticeAnswerMapper.class);
         QuestionItemMapper questions = mock(QuestionItemMapper.class);
         QuestionSetServiceImpl service = spy(new QuestionSetServiceImpl(
-                questions, sessions, answers, mock(RetrievalService.class)));
+                questions, sessions, answers, new ObjectMapper()));
         QuestionSet questionSet = new QuestionSet();
         questionSet.setId(91L);
         questionSet.setStatus("GENERATING");

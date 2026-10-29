@@ -2,6 +2,7 @@ package com.aiassistant.learning.entity;
 
 import com.aiassistant.learning.common.entity.BaseLogicEntity;
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import java.io.Serial;
@@ -67,4 +68,8 @@ public class QuestionSet extends BaseLogicEntity {
      * 题集状态：GENERATING、PUBLISHED、FAILED、CANCELLED 或 DRAFT。
      */
     private String status;
+
+    /** 出题时实际发送的资料摘录，随题集发布原子保存；列表查询不加载正文。 */
+    @TableField(select = false)
+    private String sourceSegmentsJson;
 }

@@ -380,10 +380,21 @@
             </details>
           </article>
         </div>
-        <details v-if="questionSetDetail.sourceSegments?.length" class="quiz-answer quiz-references">
-          <summary>本次练习的资料出处</summary>
+        <details
+          v-if="questionSetDetail.sourceMode === 'GENERATION_SNAPSHOT' && questionSetDetail.sourceSegments?.length"
+          class="quiz-answer quiz-references"
+        >
+          <summary>出题时的资料依据</summary>
+          <p>以下片段保存于本次出题时，反映生成题目所用的资料内容。</p>
           <SourceSegmentList :segments="questionSetDetail.sourceSegments" compact />
         </details>
+        <p v-else class="quiz-inline-note quiz-references" role="note">
+          {{
+            questionSetDetail.sourceMode === 'GENERATION_SNAPSHOT'
+              ? '该题集未记录可展示的出题依据。'
+              : '该历史题集未保存出题时的资料片段，无法还原原始依据。'
+          }}
+        </p>
       </template>
       <template #footer>
         <el-button @click="drawerVisible = false">关闭预览</el-button>
@@ -467,6 +478,7 @@ interface QuestionSetQuestion {
 /** 题集详情（/question-set/{id}），出题任务成功后的 resultJson 也是同一结构。 */
 interface QuestionSetDetail extends QuestionSetItem {
   questions?: QuestionSetQuestion[]
+  sourceMode?: 'GENERATION_SNAPSHOT' | 'UNAVAILABLE'
   sourceSegments?: SourceSegmentLike[]
 }
 

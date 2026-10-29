@@ -15,6 +15,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.aiassistant.learning.common.exception.BusinessException;
+import com.aiassistant.learning.common.util.QuestionSetSources;
 import com.aiassistant.learning.dto.ai.QuestionGenerateRequest;
 import com.aiassistant.learning.entity.AiGenerationRecord;
 import com.aiassistant.learning.entity.MaterialSegment;
@@ -146,6 +147,11 @@ class AiQuestionServiceImplTest {
         assertTrue(update.getValue().getSqlSegment().contains("status ="));
         assertTrue(update.getValue().getParamNameValuePairs().containsValue("GENERATING"));
         assertTrue(update.getValue().getParamNameValuePairs().containsValue("PUBLISHED"));
+        assertEquals("GENERATION_SNAPSHOT", result.getSourceMode());
+        String snapshot = update.getValue().getParamNameValuePairs().values().stream()
+                .filter(value -> value instanceof String text && text.startsWith("[{\"segmentId\""))
+                .map(Object::toString).findFirst().orElseThrow();
+        assertEquals(result.getSourceSegments(), QuestionSetSources.decode(new ObjectMapper(), snapshot));
     }
 
     @Test
@@ -193,6 +199,9 @@ class AiQuestionServiceImplTest {
         assertEquals("PUBLISHED", result.getStatus());
         assertEquals(5, result.getQuestions().size());
         verify(questionSets).insert(any(QuestionSet.class));
+        ArgumentCaptor<QuestionSet> inserted = ArgumentCaptor.forClass(QuestionSet.class);
+        verify(questionSets).insert(inserted.capture());
+        assertEquals(result.getSourceSegments(), QuestionSetSources.decode(new ObjectMapper(), inserted.getValue().getSourceSegmentsJson()));
     }
 
     @Test

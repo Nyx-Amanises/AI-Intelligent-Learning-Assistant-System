@@ -9,8 +9,8 @@ import com.aiassistant.learning.mapper.PracticeAnswerMapper;
 import com.aiassistant.learning.mapper.PracticeSessionMapper;
 import com.aiassistant.learning.mapper.QuestionItemMapper;
 import com.aiassistant.learning.service.QuestionSetService;
-import com.aiassistant.learning.service.RetrievalService;
-import com.aiassistant.learning.service.VectorStoreService.RetrievedSegment;
+import com.aiassistant.learning.common.util.QuestionSetSources;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.aiassistant.learning.vo.page.PageVO;
 import com.aiassistant.learning.vo.question.QuestionItemVO;
 import com.aiassistant.learning.vo.question.QuestionSetDetailVO;
@@ -19,9 +19,7 @@ import com.aiassistant.learning.vo.rag.RetrievedSegmentVO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -35,15 +33,10 @@ import org.springframework.util.StringUtils;
 public class QuestionSetServiceImpl extends ServiceImpl<com.aiassistant.learning.mapper.QuestionSetMapper, QuestionSet>
         implements QuestionSetService {
 
-    /**
-     * 查询题集来源片段时的最大返回数量。
-     */
-    private static final int QUESTION_SET_SOURCE_LIMIT = 6;
-
     private final QuestionItemMapper questionItemMapper;
     private final PracticeSessionMapper practiceSessionMapper;
     private final PracticeAnswerMapper practiceAnswerMapper;
-    private final RetrievalService retrievalService;
+    private final ObjectMapper objectMapper;
 
     /**
      * 构造方法注入依赖。
@@ -51,18 +44,18 @@ public class QuestionSetServiceImpl extends ServiceImpl<com.aiassistant.learning
      * @param questionItemMapper 题目 Mapper
      * @param practiceSessionMapper 练习会话 Mapper
      * @param practiceAnswerMapper 练习答案 Mapper
-     * @param retrievalService 资料片段检索服务
+     * @param objectMapper 读取生成时保存的资料快照
      */
     public QuestionSetServiceImpl(
             QuestionItemMapper questionItemMapper,
             PracticeSessionMapper practiceSessionMapper,
             PracticeAnswerMapper practiceAnswerMapper,
-            RetrievalService retrievalService
+            ObjectMapper objectMapper
     ) {
         this.questionItemMapper = questionItemMapper;
         this.practiceSessionMapper = practiceSessionMapper;
         this.practiceAnswerMapper = practiceAnswerMapper;
-        this.retrievalService = retrievalService;
+        this.objectMapper = objectMapper;
     }
 
     /**
@@ -180,7 +173,7 @@ public class QuestionSetServiceImpl extends ServiceImpl<com.aiassistant.learning
     /**
      * 查询题集详情。
      *
-     * <p>会校验题集归属，加载题目列表，并尝试根据题目内容检索资料片段作为出题依据。</p>
+     * <p>会校验题集归属，加载题目列表，并读取出题时保存的资料片段快照。</p>
      *
      * @param userId 当前登录用户 ID
      * @param questionSetId 题集 ID
@@ -189,6 +182,10 @@ public class QuestionSetServiceImpl extends ServiceImpl<com.aiassistant.learning
     @Override
     public QuestionSetDetailVO getQuestionSetDetail(Long userId, Long questionSetId) {
         QuestionSet questionSet = this.getOne(new LambdaQueryWrapper<QuestionSet>()
+                .select(QuestionSet::getId, QuestionSet::getUserId, QuestionSet::getMaterialId,
+                        QuestionSet::getTitle, QuestionSet::getQuestionCount, QuestionSet::getTotalScore,
+                        QuestionSet::getDifficultyLevel, QuestionSet::getStatus, QuestionSet::getCreatedAt,
+                        QuestionSet::getSourceSegmentsJson)
                 .eq(QuestionSet::getId, questionSetId)
                 .eq(QuestionSet::getUserId, userId)
                 .last("limit 1"));
@@ -216,7 +213,7 @@ public class QuestionSetServiceImpl extends ServiceImpl<com.aiassistant.learning
                         .sortNo(item.getSortNo())
                         .build())
                 .toList();
-        List<RetrievedSegmentVO> sourceSegments = resolveQuestionSetSourceSegments(userId, questionSet, questions);
+        List<RetrievedSegmentVO> sourceSegments = QuestionSetSources.decode(objectMapper, questionSet.getSourceSegmentsJson());
 
         return QuestionSetDetailVO.builder()
                 .id(questionSet.getId())
@@ -228,92 +225,9 @@ public class QuestionSetServiceImpl extends ServiceImpl<com.aiassistant.learning
                 .status(questionSet.getStatus())
                 .createdAt(questionSet.getCreatedAt())
                 .sourceSegments(sourceSegments)
+                .sourceMode(QuestionSetSources.mode(sourceSegments))
                 .questions(questions)
                 .build();
-    }
-
-    /**
-     * 获取题集相关的资料来源片段。
-     *
-     * <p>如果题集没有关联资料，或者检索服务失败，就返回空列表，不影响题集详情展示。</p>
-     *
-     * @param userId 当前登录用户 ID
-     * @param questionSet 题集实体
-     * @param questions 题目列表
-     * @return 检索到的资料片段
-     */
-    private List<RetrievedSegmentVO> resolveQuestionSetSourceSegments(
-            Long userId,
-            QuestionSet questionSet,
-            List<QuestionItemVO> questions
-    ) {
-        if (questionSet.getMaterialId() == null || questions == null || questions.isEmpty()) {
-            return List.of();
-        }
-
-        try {
-            List<RetrievedSegment> segments = retrievalService.retrieveMaterialSegments(
-                    userId,
-                    questionSet.getMaterialId(),
-                    buildQuestionSetRetrievalQuery(questionSet, questions),
-                    QUESTION_SET_SOURCE_LIMIT
-            );
-            return AiQuestionServiceImpl.toRetrievedSegmentVOList(segments);
-        } catch (Exception exception) {
-            return List.of();
-        }
-    }
-
-    /**
-     * 根据题集和题目内容构造检索查询词。
-     *
-     * <p>查询词会包含题集标题、前几个知识点和部分题干，帮助 RAG 检索找到更贴近题目的资料片段。</p>
-     *
-     * @param questionSet 题集实体
-     * @param questions 题目列表
-     * @return 用于检索资料片段的查询文本
-     */
-    private String buildQuestionSetRetrievalQuery(QuestionSet questionSet, List<QuestionItemVO> questions) {
-        StringBuilder builder = new StringBuilder();
-        builder.append(questionSet.getTitle()).append(" ");
-
-        Set<String> knowledgePoints = new LinkedHashSet<>();
-        for (QuestionItemVO question : questions) {
-            if (StringUtils.hasText(question.getKnowledgePoint())) {
-                knowledgePoints.add(question.getKnowledgePoint().trim());
-            }
-            if (knowledgePoints.size() >= 6) {
-                break;
-            }
-        }
-        if (!knowledgePoints.isEmpty()) {
-            builder.append("知识点 ");
-            builder.append(String.join(" ", knowledgePoints)).append(" ");
-        }
-
-        builder.append("题目主题 ");
-        questions.stream()
-                .map(QuestionItemVO::getStemText)
-                .filter(StringUtils::hasText)
-                .limit(4)
-                .forEach(stem -> builder.append(trimForQuery(stem, 42)).append(" "));
-        builder.append("出题依据 核心知识点 重点概念");
-        return builder.toString().trim();
-    }
-
-    /**
-     * 截断过长的查询文本。
-     *
-     * @param value 原始文本
-     * @param maxLength 最大长度
-     * @return 适合放入检索查询的文本
-     */
-    private String trimForQuery(String value, int maxLength) {
-        if (!StringUtils.hasText(value)) {
-            return "";
-        }
-        String normalized = value.replaceAll("\\s+", " ").trim();
-        return normalized.length() <= maxLength ? normalized : normalized.substring(0, maxLength);
     }
 
     /**

@@ -3,6 +3,7 @@ package com.aiassistant.learning.service.impl;
 import com.aiassistant.learning.common.exception.BusinessException;
 import com.aiassistant.learning.common.util.MultipleChoiceAnswers;
 import com.aiassistant.learning.common.util.QuestionKnowledgeScope;
+import com.aiassistant.learning.common.util.QuestionSetSources;
 import com.aiassistant.learning.dto.ai.QuestionGenerateRequest;
 import com.aiassistant.learning.entity.AiGenerationRecord;
 import com.aiassistant.learning.entity.MaterialSegment;
@@ -280,6 +281,8 @@ public class AiQuestionServiceImpl implements AiQuestionService {
         questionSet.setQuestionCount(generatedQuestions.size());
         questionSet.setTotalScore(generatedQuestions.stream().mapToInt(GeneratedQuestion::score).sum());
         questionSet.setDifficultyLevel(difficultyLevel);
+        List<RetrievedSegmentVO> sources = toRetrievedSegmentVOListFromMaterialSegments(contextSegments);
+        questionSet.setSourceSegmentsJson(QuestionSetSources.encode(objectMapper, sources));
         questionSet.setStatus("PUBLISHED");
         if (questionSetId == null) {
             questionSetMapper.insert(questionSet);
@@ -291,6 +294,7 @@ public class AiQuestionServiceImpl implements AiQuestionService {
                     .set(QuestionSet::getQuestionCount, questionSet.getQuestionCount())
                     .set(QuestionSet::getTotalScore, questionSet.getTotalScore())
                     .set(QuestionSet::getDifficultyLevel, difficultyLevel)
+                    .set(QuestionSet::getSourceSegmentsJson, questionSet.getSourceSegmentsJson())
                     .set(QuestionSet::getStatus, "PUBLISHED")
                     .set(QuestionSet::getUpdatedAt, LocalDateTime.now()));
             if (updated == 0) {
@@ -356,7 +360,8 @@ public class AiQuestionServiceImpl implements AiQuestionService {
                 .difficultyLevel(questionSet.getDifficultyLevel())
                 .status(questionSet.getStatus())
                 .createdAt(questionSet.getCreatedAt())
-                .sourceSegments(toRetrievedSegmentVOListFromMaterialSegments(contextSegments))
+                .sourceSegments(sources)
+                .sourceMode(QuestionSetSources.mode(sources))
                 .questions(questionItems)
                 .build();
     }

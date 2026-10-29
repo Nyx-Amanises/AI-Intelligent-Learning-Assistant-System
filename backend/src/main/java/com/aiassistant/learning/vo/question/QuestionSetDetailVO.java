@@ -56,9 +56,12 @@ public class QuestionSetDetailVO {
     private LocalDateTime createdAt;
 
     /**
-     * 题集生成或展示时参考的资料片段。
+     * 题集生成时实际使用的资料片段快照，不随资料修改或重新检索变化。
      */
     private List<RetrievedSegmentVO> sourceSegments;
+
+    /** GENERATION_SNAPSHOT 为出题时快照；UNAVAILABLE 表示没有可靠的历史快照。 */
+    private String sourceMode;
 
     /**
      * 题目列表。
