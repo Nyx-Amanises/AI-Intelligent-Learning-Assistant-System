@@ -79,14 +79,34 @@
       <div v-if="hasLoaded && !loadError && reviewPoints.length" class="knowledge-priorities">
         <span>优先复习</span>
         <div>
-          <button
+          <article
             v-for="item in reviewPoints"
             :key="String(item.materialId || 0) + '-' + item.knowledgePoint"
-            type="button"
-            @click="focusKnowledgePoint(item)"
+            class="knowledge-priority"
           >
-            {{ item.knowledgePoint }} <small>{{ item.masteryPercent }}%</small>
-          </button>
+            <button
+              type="button"
+              class="knowledge-priority__point"
+              :aria-label="'筛选 ' + item.knowledgePoint"
+              @click="focusKnowledgePoint(item)"
+            >
+              {{ item.knowledgePoint }} <small>{{ item.masteryPercent }}%</small>
+            </button>
+            <span>{{ item.materialTitle || '未关联资料' }}</span>
+            <div class="knowledge-priority__actions">
+              <el-button
+                type="primary"
+                size="small"
+                :disabled="Boolean(practiceUnavailableReason(item))"
+                @click="goKnowledgePractice(item)"
+                >去练习</el-button
+              >
+              <button type="button" @click="goWrongQuestions(item)">查看错题</button>
+            </div>
+            <p v-if="practiceUnavailableReason(item)" class="knowledge-practice-reason">
+              {{ practiceUnavailableReason(item) }}
+            </p>
+          </article>
         </div>
       </div>
 
@@ -145,9 +165,18 @@
             <p>{{ item.suggestion }}</p>
             <span>得分 {{ item.obtainedScore }} / {{ item.totalScore }} · 错题 {{ item.wrongCount }}</span
             ><span>最近练习 {{ formatDateTime(item.lastPracticeTime) }}</span>
+            <p v-if="practiceUnavailableReason(item)" class="knowledge-practice-reason">
+              {{ practiceUnavailableReason(item) }}
+            </p>
           </div>
           <div class="knowledge-record__actions">
-            <button v-if="item.materialId" type="button" @click="goKnowledgePractice(item)">专项练习</button>
+            <button
+              type="button"
+              :disabled="Boolean(practiceUnavailableReason(item))"
+              @click="goKnowledgePractice(item)"
+            >
+              专项练习
+            </button>
             <button type="button" @click="showDetail(item)">
               查看详情 <AppIcon name="arrow-up-right" :size="15" /></button
             ><button type="button" @click="goWrongQuestions(item)">查看错题</button>
@@ -207,10 +236,18 @@
           <p>{{ detail.suggestion }}</p>
         </div>
         <div class="knowledge-detail-actions">
-          <el-button v-if="detail.materialId" type="primary" @click="goKnowledgePractice(detail)">专项练习</el-button>
+          <el-button
+            type="primary"
+            :disabled="Boolean(practiceUnavailableReason(detail))"
+            @click="goKnowledgePractice(detail)"
+            >专项练习</el-button
+          >
           <el-button @click="focusKnowledgePoint(detail)">按此知识点筛选</el-button
           ><el-button @click="goWrongQuestions(detail)">查看相关错题</el-button>
         </div>
+        <p v-if="practiceUnavailableReason(detail)" class="knowledge-practice-reason">
+          {{ practiceUnavailableReason(detail) }}
+        </p>
       </template>
     </el-drawer>
   </section>
@@ -230,6 +267,7 @@ import { getMaterialPageApi, type MaterialPageItem } from '@/api/modules/materia
 import { useAutoListQuery } from '@/composables/useAutoListQuery'
 import { MASTERY_LEVELS, MASTERY_REVIEW_THRESHOLD, masteryColorByPercent } from '@/utils/mastery'
 import { formatQuestionTypes } from '@/utils/labels'
+import { knowledgePracticeUnavailableReason } from '@/utils/knowledgePractice'
 
 const router = useRouter()
 const route = useRoute()
@@ -429,11 +467,18 @@ const goWrongQuestions = (item: KnowledgeMasteryItem) => {
   })
 }
 
+const practiceUnavailableReason = (item: KnowledgeMasteryItem) =>
+  knowledgePracticeUnavailableReason(item, {
+    materials: materials.value,
+    loaded: materialsLoaded.value,
+    loading: materialsLoading.value,
+    error: materialsError.value
+  })
 const goKnowledgePractice = (item: KnowledgeMasteryItem) => {
-  if (!item.materialId) return
+  if (practiceUnavailableReason(item)) return
   router.push({
     path: '/quiz',
-    query: { materialId: String(item.materialId), knowledgePoint: item.knowledgePoint, generate: '1' }
+    query: { materialId: String(item.materialId), knowledgePoint: item.knowledgePoint.trim(), generate: '1' }
   })
 }
 
@@ -588,12 +633,31 @@ void loadMastery()
   font-size: 12px;
 }
 .knowledge-priorities > div {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px 22px;
+  min-width: 0;
+  flex: 1;
+}
+.knowledge-priority {
+  min-width: 0;
+  padding-bottom: 10px;
+}
+.knowledge-priority > span {
+  display: block;
+  margin-bottom: 9px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.knowledge-priority__actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0 22px;
-  min-width: 0;
+  align-items: center;
+  gap: 12px;
 }
-.knowledge-priorities button {
+.knowledge-priority button:not(.el-button) {
   min-height: 40px;
   padding: 8px 0;
   background: transparent;
@@ -606,9 +670,19 @@ void loadMastery()
   line-height: 1.7;
   overflow-wrap: anywhere;
 }
-.knowledge-priorities button:hover {
+.knowledge-priority button:not(.el-button):hover {
   text-decoration: underline;
   text-underline-offset: 4px;
+}
+.knowledge-priority__actions button:not(.el-button) {
+  color: var(--muted);
+}
+.knowledge-practice-reason {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
 }
 .knowledge-priorities small {
   padding-left: 4px;
@@ -729,6 +803,12 @@ void loadMastery()
 .knowledge-record__actions button:hover {
   text-decoration: underline;
   text-underline-offset: 4px;
+}
+.knowledge-record__actions button:disabled {
+  color: var(--muted);
+  opacity: 0.6;
+  cursor: not-allowed;
+  text-decoration: none;
 }
 .knowledge-pagination {
   display: flex;
@@ -982,7 +1062,8 @@ void loadMastery()
   }
   .knowledge-priorities > div {
     margin-top: 7px;
-    gap: 0 20px;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
   }
   .knowledge-record {
     grid-template-columns: minmax(0, 1fr) 116px;
@@ -1017,6 +1098,7 @@ void loadMastery()
   .knowledge-record__actions {
     grid-column: 1 / -1;
     display: flex;
+    flex-wrap: wrap;
     gap: 26px;
     margin-top: -5px;
   }

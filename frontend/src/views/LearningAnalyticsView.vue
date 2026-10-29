@@ -248,12 +248,10 @@
             /></RouterLink>
           </div>
           <div v-if="reviewPoints.length" class="statistics-review-list">
-            <button
+            <article
               v-for="(item, index) in reviewPoints"
               :key="String(item.materialId || 0) + '-' + item.knowledgePoint"
-              type="button"
               class="statistics-review-row"
-              @click="goMastery(item)"
             >
               <span class="statistics-row-index">{{ String(index + 1).padStart(2, '0') }}</span>
               <span class="statistics-review-row__main"
@@ -264,8 +262,18 @@
                 ><strong>{{ item.masteryPercent }}<small>%</small></strong
                 ><small>掌握度 · 错 {{ item.wrongCount }} 次</small></span
               >
-              <AppIcon name="arrow-up-right" :size="18" />
-            </button>
+              <div class="statistics-review-row__actions">
+                <el-button
+                  type="primary"
+                  :disabled="Boolean(practiceUnavailableReason(item))"
+                  @click="goKnowledgePractice(item)"
+                  >去练习</el-button
+                >
+                <button type="button" @click="goMastery(item)">掌握明细</button>
+                <button type="button" @click="goWrongQuestions(item)">查看错题</button>
+                <p v-if="practiceUnavailableReason(item)">{{ practiceUnavailableReason(item) }}</p>
+              </div>
+            </article>
           </div>
           <p v-else class="statistics-empty-note">
             目前没有掌握度低于 {{ MASTERY_REVIEW_THRESHOLD }}% 的知识点，继续保持。
@@ -321,6 +329,7 @@ import PracticeCountTrendChart from '@/components/charts/PracticeCountTrendChart
 import DonutChart, { type DonutSegment } from '@/components/charts/DonutChart.vue'
 import BarRow from '@/components/charts/BarRow.vue'
 import { MASTERY_REVIEW_THRESHOLD, masteryColor } from '@/utils/mastery'
+import { knowledgePracticeUnavailableReason } from '@/utils/knowledgePractice'
 import {
   getLearningAnalyticsOverviewApi,
   type LearningAnalyticsOverviewPayload,
@@ -562,6 +571,26 @@ const goMastery = (item: WeakKnowledgePointItem) =>
   router.push({
     path: '/mastery',
     query: { keyword: item.knowledgePoint, materialId: item.materialId ? String(item.materialId) : undefined }
+  })
+
+const practiceUnavailableReason = (item: WeakKnowledgePointItem) =>
+  knowledgePracticeUnavailableReason(item, {
+    materials: materials.value,
+    loaded: materialsLoaded.value,
+    loading: materialsLoading.value,
+    error: materialsError.value
+  })
+const goKnowledgePractice = (item: WeakKnowledgePointItem) => {
+  if (practiceUnavailableReason(item)) return
+  void router.push({
+    path: '/quiz',
+    query: { materialId: String(item.materialId), knowledgePoint: item.knowledgePoint.trim(), generate: '1' }
+  })
+}
+const goWrongQuestions = (item: WeakKnowledgePointItem) =>
+  router.push({
+    path: '/wrong-questions',
+    query: { knowledgePoint: item.knowledgePoint, materialId: item.materialId ? String(item.materialId) : undefined }
   })
 
 onUnmounted(() => {
@@ -835,7 +864,8 @@ void loadAnalytics()
   column-gap: 48px;
 }
 .statistics-review-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   width: 100%;
   min-width: 0;
@@ -847,14 +877,34 @@ void loadAnalytics()
   color: inherit;
   text-align: left;
   font: inherit;
+}
+.statistics-review-row__actions {
+  grid-column: 2 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+}
+.statistics-review-row__actions > button:not(.el-button) {
+  min-height: 36px;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
   cursor: pointer;
 }
-.statistics-review-row:hover .statistics-review-row__main strong {
+.statistics-review-row__actions > button:not(.el-button):hover {
   color: var(--brand);
 }
-.statistics-review-row > .app-icon {
-  flex-shrink: 0;
+.statistics-review-row__actions p {
+  flex-basis: 100%;
+  margin: 0;
   color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
 }
 .statistics-row-index {
   color: var(--muted);
@@ -1163,9 +1213,6 @@ void loadAnalytics()
   }
   .statistics-row-index {
     font-size: 12px;
-  }
-  .statistics-review-row > .app-icon {
-    width: 15px;
   }
   .statistics-review,
   .statistics-record-columns {

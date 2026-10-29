@@ -188,6 +188,9 @@
         </h2>
         <div class="dialog-subtitle">根据学习资料，定制出题范围、题型、题量与难度。</div>
       </template>
+      <p v-if="practiceEntryNotice" class="quiz-inline-note quiz-inline-note--error" role="alert">
+        {{ practiceEntryNotice }}
+      </p>
       <div v-if="regenerationLoading" class="state-block" aria-live="polite">正在读取原题集的出题设置…</div>
       <EmptyState
         v-else-if="regenerationError"
@@ -492,6 +495,7 @@ import { isAiTaskSuccess, isAiTaskTerminal, parseAiTaskResult, waitForAiTaskUnti
 import { confirmDanger } from '@/utils/confirm'
 import { getErrorMessage } from '@/utils/errorMessage'
 import { formatDate, formatIndex, type SourceSegmentLike } from '@/utils/format'
+import { knowledgePointPracticeReason, knowledgePracticeUnavailableReason } from '@/utils/knowledgePractice'
 import {
   DIFFICULTY_LABELS,
   formatDifficulty,
@@ -570,7 +574,14 @@ const initialGenerateRequest = {
 }
 const router = useRouter()
 const assistantContext = useAssistantContext()
-const { materials, loading: materialsLoading, error: materialsError, load: loadMaterials } = useParsedMaterials()
+const {
+  materials,
+  loading: materialsLoading,
+  loaded: materialsLoaded,
+  error: materialsError,
+  load: loadMaterials
+} = useParsedMaterials()
+const practiceEntryActive = ref(initialGenerateRequest.open)
 
 const questionSets = ref<QuestionSetItem[]>([])
 const total = ref(0)
@@ -652,10 +663,33 @@ const isQuestionCountValid = computed(
   () => totalQuestionCount.value >= 1 && totalQuestionCount.value <= MAX_QUESTION_COUNT
 )
 const hasSelectedMaterial = computed(() => materials.value.some((item) => item.id === form.materialId))
+const practiceEntryNotice = computed(() => {
+  if (!practiceEntryActive.value || regenerationSourceId.value) return ''
+  if (!hasSelectedMaterial.value) {
+    return (
+      knowledgePracticeUnavailableReason(
+        { ...initialGenerateRequest, knowledgePoint: initialGenerateRequest.knowledgePoint || '资料练习' },
+        {
+          materials: materials.value,
+          loaded: materialsLoaded.value,
+          loading: materialsLoading.value,
+          error: materialsError.value
+        }
+      ) || '请选择可用的资料，再设置具体知识点。'
+    )
+  }
+  if (form.scope === 'KNOWLEDGE' && !form.knowledgePoints.length && initialGenerateRequest.knowledgePoint) {
+    const reason = knowledgePointPracticeReason(initialGenerateRequest.knowledgePoint)
+    if (reason) return `${reason} 请在下方手动设置具体知识点。`
+  }
+  return ''
+})
 const knowledgeScopeError = computed(() => {
   if (form.scope !== 'KNOWLEDGE') return ''
   if (!form.knowledgePoints.length) return '请至少选择或输入 1 个知识点。'
   if (form.knowledgePoints.length > MAX_KNOWLEDGE_POINTS) return `最多选择 ${MAX_KNOWLEDGE_POINTS} 个知识点。`
+  if (form.knowledgePoints.some((point) => point.trim() === '未标注知识点'))
+    return '“未标注知识点”是记录占位名称，请选择或输入具体知识点。'
   if (form.knowledgePoints.some((point) => !point.trim() || point.length > MAX_KNOWLEDGE_POINT_LENGTH)) {
     return `知识点名称不能为空，且每个不超过 ${MAX_KNOWLEDGE_POINT_LENGTH} 字。`
   }
@@ -779,6 +813,7 @@ const syncDefaultQuestionSetTitle = () => {
 
 const openNewGeneration = async () => {
   if (generating.value) return
+  practiceEntryActive.value = false
   regenerationRequestId++
   const wasRegeneration = Boolean(regenerationSourceId.value)
   regenerationSourceId.value = null
@@ -1064,11 +1099,11 @@ onMounted(async () => {
   await nextTick()
   if (initialGenerateRequest.knowledgePoint) {
     form.scope = 'KNOWLEDGE'
-    if (hasSelectedMaterial.value) updateKnowledgePoints([initialGenerateRequest.knowledgePoint])
+    if (hasSelectedMaterial.value && !knowledgePointPracticeReason(initialGenerateRequest.knowledgePoint))
+      updateKnowledgePoints([initialGenerateRequest.knowledgePoint])
   }
   if (initialGenerateRequest.open) {
     generateDialogVisible.value = true
-    if (!hasSelectedMaterial.value) ElMessage.warning('请先选择可用的已解析资料，再设置知识点。')
   }
   syncDefaultQuestionSetTitle()
 })
