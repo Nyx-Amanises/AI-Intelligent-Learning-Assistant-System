@@ -37,6 +37,14 @@ export interface WrongQuestionPagePayload {
   records: WrongQuestionItem[]
 }
 
+export interface WrongQuestionKnowledgePoint {
+  knowledgePoint: string
+  wrongCount: number
+}
+
+export const getWrongQuestionKnowledgePointsApi = (params: { materialId?: number; questionType?: string }) =>
+  http.get('/wrong-questions/knowledge-points', { params })
+
 export const getWrongQuestionPageApi = (params: Record<string, unknown>) =>
   http.get('/wrong-questions/page', { params })
 

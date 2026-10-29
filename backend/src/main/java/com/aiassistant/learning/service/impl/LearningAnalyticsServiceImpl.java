@@ -1,5 +1,6 @@
 package com.aiassistant.learning.service.impl;
 
+import com.aiassistant.learning.common.util.KnowledgePointLabels;
 import com.aiassistant.learning.dto.analytics.LearningAnalyticsQuery;
 import com.aiassistant.learning.entity.PracticeAnswer;
 import com.aiassistant.learning.entity.PracticeSession;
@@ -348,28 +349,8 @@ public class LearningAnalyticsServiceImpl implements LearningAnalyticsService {
      * @return 知识点列表
      */
     private List<String> splitKnowledgePoints(String raw) {
-        if (!StringUtils.hasText(raw)) {
-            return List.of(DEFAULT_KNOWLEDGE_POINT);
-        }
-        String normalized = raw.trim()
-                .replace('\n', '，')
-                .replace('\r', '，')
-                .replace('、', '，')
-                .replace('；', '，')
-                .replace(';', '，')
-                .replace('|', '，')
-                .replace('/', '，');
-        List<String> points = new ArrayList<>();
-        for (String part : normalized.split("，")) {
-            String point = part.trim();
-            if (StringUtils.hasText(point) && point.length() <= 80) {
-                points.add(point);
-            }
-        }
-        if (points.isEmpty()) {
-            return List.of(raw.trim());
-        }
-        return points.stream().distinct().toList();
+        List<String> points = KnowledgePointLabels.split(raw);
+        return points.isEmpty() ? List.of(DEFAULT_KNOWLEDGE_POINT) : points;
     }
 
     /**

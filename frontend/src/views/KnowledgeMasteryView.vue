@@ -423,7 +423,7 @@ const goWrongQuestions = (item: KnowledgeMasteryItem) => {
   router.push({
     path: '/wrong-questions',
     query: {
-      keyword: item.knowledgePoint,
+      knowledgePoint: item.knowledgePoint,
       materialId: item.materialId ? String(item.materialId) : undefined
     }
   })

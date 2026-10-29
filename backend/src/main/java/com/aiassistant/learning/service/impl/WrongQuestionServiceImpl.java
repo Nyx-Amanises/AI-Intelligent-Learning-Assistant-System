@@ -1,6 +1,7 @@
 package com.aiassistant.learning.service.impl;
 
 import com.aiassistant.learning.common.exception.BusinessException;
+import com.aiassistant.learning.common.util.KnowledgePointLabels;
 import com.aiassistant.learning.dto.practice.PracticeStartRequest;
 import com.aiassistant.learning.dto.wrongquestion.WrongQuestionPageQuery;
 import com.aiassistant.learning.entity.PracticeAnswer;
@@ -18,6 +19,7 @@ import com.aiassistant.learning.service.WrongQuestionService;
 import com.aiassistant.learning.vo.page.PageVO;
 import com.aiassistant.learning.vo.practice.PracticeDetailVO;
 import com.aiassistant.learning.vo.wrongquestion.WrongQuestionVO;
+import com.aiassistant.learning.vo.wrongquestion.WrongQuestionKnowledgePointVO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import java.util.Comparator;
 import java.util.List;
@@ -25,6 +27,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
@@ -45,6 +48,7 @@ public class WrongQuestionServiceImpl implements WrongQuestionService {
      * 只统计已提交的练习，避免进行中的练习被提前加入错题本。
      */
     private static final String SESSION_STATUS_SUBMITTED = "SUBMITTED";
+    private static final String UNLABELED_KNOWLEDGE_POINT = "未标注知识点";
 
     private final PracticeAnswerMapper practiceAnswerMapper;
     private final PracticeSessionMapper practiceSessionMapper;
@@ -90,13 +94,48 @@ public class WrongQuestionServiceImpl implements WrongQuestionService {
      */
     @Override
     public PageVO<WrongQuestionVO> pageWrongQuestions(Long userId, WrongQuestionPageQuery query) {
+        List<WrongQuestionVO> filtered = listVisibleWrongQuestions(userId, query.getMaterialId(), query.getQuestionType())
+                .stream()
+                .filter(item -> matchesKnowledgePoint(item, query.getKnowledgePoint()))
+                .filter(item -> matchesKeyword(item, query.getKeyword()))
+                .toList();
+
+        long total = filtered.size();
+        long current = query.getCurrent();
+        long size = query.getSize();
+        int fromIndex = (int) Math.min(total, Math.max(0, (current - 1) * size));
+        int toIndex = (int) Math.min(total, fromIndex + size);
+        return PageVO.<WrongQuestionVO>builder()
+                .current(current)
+                .size(size)
+                .total(total)
+                .pages(total == 0 ? 0L : (long) Math.ceil((double) total / size))
+                .records(filtered.subList(fromIndex, toIndex))
+                .build();
+    }
+
+    @Override
+    public List<WrongQuestionKnowledgePointVO> listKnowledgePoints(Long userId, Long materialId, String questionType) {
+        Map<String, Long> counts = new TreeMap<>();
+        for (WrongQuestionVO item : listVisibleWrongQuestions(userId, materialId, questionType)) {
+            for (String label : knowledgePointLabels(item)) {
+                counts.merge(label, 1L, Long::sum);
+            }
+        }
+        return counts.entrySet().stream()
+                .map(entry -> new WrongQuestionKnowledgePointVO(entry.getKey(), entry.getValue()))
+                .toList();
+    }
+
+    /** 分页和候选共享用户、资料、错题状态与题型口径。 */
+    private List<WrongQuestionVO> listVisibleWrongQuestions(Long userId, Long materialId, String questionType) {
         List<PracticeSession> sessions = practiceSessionMapper.selectList(new LambdaQueryWrapper<PracticeSession>()
                 .eq(PracticeSession::getUserId, userId)
                 .eq(PracticeSession::getSessionStatus, SESSION_STATUS_SUBMITTED)
-                .eq(query.getMaterialId() != null, PracticeSession::getMaterialId, query.getMaterialId())
+                .eq(materialId != null, PracticeSession::getMaterialId, materialId)
                 .orderByDesc(PracticeSession::getSubmitTime));
         if (sessions.isEmpty()) {
-            return emptyPage(query);
+            return List.of();
         }
 
         Map<Long, PracticeSession> sessionMap = sessions.stream()
@@ -107,34 +146,18 @@ public class WrongQuestionServiceImpl implements WrongQuestionService {
                 .orderByDesc(PracticeAnswer::getAnswerTime)
                 .orderByDesc(PracticeAnswer::getId));
         if (answers.isEmpty()) {
-            return emptyPage(query);
+            return List.of();
         }
 
         RelatedData relatedData = loadRelatedData(sessions, answers);
-        List<WrongQuestionVO> filtered = answers.stream()
+        return answers.stream()
                 .map(answer -> toWrongQuestionVO(answer, sessionMap.get(answer.getSessionId()), relatedData))
                 .filter(Objects::nonNull)
-                .filter(item -> matchesQuestionType(item, query.getQuestionType()))
-                .filter(item -> matchesKeyword(item, query.getKeyword()))
+                .filter(item -> matchesQuestionType(item, questionType))
                 .sorted(Comparator
                         .comparing(WrongQuestionVO::getAnswerTime, Comparator.nullsLast(Comparator.reverseOrder()))
                         .thenComparing(WrongQuestionVO::getAnswerId, Comparator.reverseOrder()))
                 .toList();
-
-        long total = filtered.size();
-        long current = query.getCurrent();
-        long size = query.getSize();
-        int fromIndex = (int) Math.min(total, Math.max(0, (current - 1) * size));
-        int toIndex = (int) Math.min(total, fromIndex + size);
-        List<WrongQuestionVO> records = filtered.subList(fromIndex, toIndex);
-
-        return PageVO.<WrongQuestionVO>builder()
-                .current(current)
-                .size(size)
-                .total(total)
-                .pages(total == 0 ? 0L : (long) Math.ceil((double) total / size))
-                .records(records)
-                .build();
     }
 
     /**
@@ -312,7 +335,25 @@ public class WrongQuestionServiceImpl implements WrongQuestionService {
      */
     private boolean matchesQuestionType(WrongQuestionVO item, String questionType) {
         return !StringUtils.hasText(questionType)
-                || questionType.trim().equalsIgnoreCase(item.getQuestionType());
+                || normalizeQuestionType(questionType).equals(normalizeQuestionType(item.getQuestionType()));
+    }
+
+    private String normalizeQuestionType(String type) {
+        if (type == null) return "";
+        return switch (type.trim().toUpperCase(Locale.ROOT)) {
+            case "MULTI" -> "MULTIPLE";
+            case "SHORT" -> "SHORT_ANSWER";
+            default -> type.trim().toUpperCase(Locale.ROOT);
+        };
+    }
+
+    private List<String> knowledgePointLabels(WrongQuestionVO item) {
+        List<String> labels = KnowledgePointLabels.split(item.getKnowledgePoint());
+        return labels.isEmpty() ? List.of(UNLABELED_KNOWLEDGE_POINT) : labels;
+    }
+
+    private boolean matchesKnowledgePoint(WrongQuestionVO item, String knowledgePoint) {
+        return !StringUtils.hasText(knowledgePoint) || knowledgePointLabels(item).contains(knowledgePoint.trim());
     }
 
     /**
@@ -345,22 +386,6 @@ public class WrongQuestionServiceImpl implements WrongQuestionService {
      */
     private boolean containsIgnoreCase(String source, String normalizedKeyword) {
         return StringUtils.hasText(source) && source.toLowerCase(Locale.ROOT).contains(normalizedKeyword);
-    }
-
-    /**
-     * 创建空分页结果。
-     *
-     * @param query 分页查询参数
-     * @return 没有记录的分页对象
-     */
-    private PageVO<WrongQuestionVO> emptyPage(WrongQuestionPageQuery query) {
-        return PageVO.<WrongQuestionVO>builder()
-                .current(query.getCurrent())
-                .size(query.getSize())
-                .total(0L)
-                .pages(0L)
-                .records(List.of())
-                .build();
     }
 
     /**

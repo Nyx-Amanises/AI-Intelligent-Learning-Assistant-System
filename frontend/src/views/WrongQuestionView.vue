@@ -45,10 +45,39 @@
             <el-option label="多选题" value="MULTIPLE" />
             <el-option label="判断题" value="JUDGE" />
             <el-option label="简答题" value="SHORT_ANSWER" />
-            <el-option v-if="userStore.isAdmin" label="简答题（旧版）" value="SHORT" />
+          </el-select>
+          <el-select
+            v-model="filters.knowledgePoint"
+            clearable
+            filterable
+            placeholder="全部知识点"
+            aria-label="精确筛选知识点"
+            :loading="knowledgePointsLoading"
+          >
+            <el-option
+              v-if="selectedKnowledgePointMissing"
+              :label="filters.knowledgePoint + '（当前范围无匹配）'"
+              :value="filters.knowledgePoint"
+            />
+            <el-option
+              v-for="item in knowledgePoints"
+              :key="item.knowledgePoint"
+              :label="item.knowledgePoint + '（' + item.wrongCount + ' 道）'"
+              :value="item.knowledgePoint"
+            />
           </el-select>
           <el-button @click="resetFilters">重置</el-button>
         </div>
+        <p v-if="knowledgePointsError" class="wrong-filter-note" role="alert">
+          {{ knowledgePointsError }}，可继续使用其他筛选条件。
+          <el-button link type="primary" :loading="knowledgePointsLoading" @click="loadKnowledgePoints"
+            >重试知识点</el-button
+          >
+        </p>
+        <p v-if="filters.knowledgePoint" class="wrong-filter-note">
+          当前精确筛选：{{ filters.knowledgePoint }}
+          <el-button link @click="filters.knowledgePoint = ''">清除知识点</el-button>
+        </p>
       </div>
 
       <div class="workspace-body">
@@ -69,7 +98,9 @@
           icon="wrong"
           :title="hasFilters ? '没有找到匹配的错题' : '这里暂时没有需要复习的错题'"
           :description="
-            hasFilters ? '试试其他关键词、资料或题型。' : '完成练习后，需要巩固的题目会保存在这里，方便随时回顾。'
+            hasFilters
+              ? '试试其他关键词、资料、题型或知识点。'
+              : '完成练习后，需要巩固的题目会保存在这里，方便随时回顾。'
           "
         >
           <el-button v-if="hasFilters" @click="resetFilters">清除筛选</el-button>
@@ -217,7 +248,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onUnmounted, reactive, ref } from 'vue'
+import { computed, onUnmounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import EmptyState from '@/components/EmptyState.vue'
@@ -228,7 +259,6 @@ import { answerIncludesOption, buildOptions, formatAnswer } from '@/components/p
 import { useAutoListQuery } from '@/composables/useAutoListQuery'
 import { useLatestRequest } from '@/composables/useLatestRequest'
 import { useParsedMaterials } from '@/composables/useParsedMaterials'
-import { useUserStore } from '@/stores/user'
 import { confirmDanger } from '@/utils/confirm'
 import { getErrorMessage } from '@/utils/errorMessage'
 import { formatDate, formatDateTime } from '@/utils/format'
@@ -238,13 +268,14 @@ import {
   getWrongQuestionPageApi,
   removeWrongQuestionApi,
   redoWrongQuestionApi,
+  getWrongQuestionKnowledgePointsApi,
+  type WrongQuestionKnowledgePoint,
   type WrongQuestionItem,
   type WrongQuestionPagePayload
 } from '@/api/modules/wrongQuestion'
 
 const router = useRouter()
 const route = useRoute()
-const userStore = useUserStore()
 const loading = ref(false)
 const loadError = ref('')
 const detailLoading = ref(false)
@@ -255,6 +286,12 @@ let viewDisposed = false
 const wrongQuestions = ref<WrongQuestionItem[]>([])
 const detail = ref<WrongQuestionItem | null>(null)
 const total = ref(0)
+const knowledgePoints = ref<WrongQuestionKnowledgePoint[]>([])
+const knowledgePointsLoading = ref(false)
+const knowledgePointsError = ref('')
+const listRequest = useLatestRequest()
+const knowledgePointsRequest = useLatestRequest()
+const questionTypeAliases: Record<string, string> = { SHORT: 'SHORT_ANSWER', MULTI: 'MULTIPLE' }
 const { materials, loading: materialsLoading, error: materialsError, load: loadMaterials } = useParsedMaterials()
 
 const filters = reactive({
@@ -263,10 +300,21 @@ const filters = reactive({
     typeof route.query.materialId === 'string' && Number(route.query.materialId)
       ? Number(route.query.materialId)
       : (undefined as number | undefined),
-  questionType: typeof route.query.questionType === 'string' ? route.query.questionType : ''
+  questionType:
+    typeof route.query.questionType === 'string'
+      ? questionTypeAliases[route.query.questionType] || route.query.questionType
+      : '',
+  knowledgePoint: typeof route.query.knowledgePoint === 'string' ? route.query.knowledgePoint : ''
 })
 
-const hasFilters = computed(() => Boolean(filters.keyword || filters.materialId || filters.questionType))
+const hasFilters = computed(() =>
+  Boolean(filters.keyword || filters.materialId || filters.questionType || filters.knowledgePoint)
+)
+const selectedKnowledgePointMissing = computed(
+  () =>
+    Boolean(filters.knowledgePoint) &&
+    !knowledgePoints.value.some((item) => item.knowledgePoint === filters.knowledgePoint)
+)
 
 const hasOptions = (item: WrongQuestionItem) => Boolean(item.optionA || item.optionB || item.optionC || item.optionD)
 const handleQuestionAction = (command: string, item: WrongQuestionItem) => {
@@ -280,14 +328,60 @@ const page = reactive({
 })
 
 const autoQuery = useAutoListQuery(
-  [() => filters.keyword, () => filters.materialId, () => filters.questionType],
+  [() => filters.keyword, () => filters.materialId, () => filters.questionType, () => filters.knowledgePoint],
   () => {
     page.current = 1
     return loadWrongQuestions()
   }
 )
 
+// 条件一变就使旧请求失效，包括防抖等待期间到达的响应。
+watch(
+  [() => filters.keyword, () => filters.materialId, () => filters.questionType, () => filters.knowledgePoint],
+  () => {
+    listRequest.invalidate()
+    loading.value = true
+  },
+  { flush: 'sync' }
+)
+
+watch(
+  [() => filters.materialId, () => filters.questionType],
+  () => {
+    knowledgePointsRequest.invalidate()
+    knowledgePoints.value = []
+    knowledgePointsLoading.value = true
+  },
+  { flush: 'sync' }
+)
+
+watch([() => filters.materialId, () => filters.questionType], () => {
+  void loadKnowledgePoints()
+})
+
+const loadKnowledgePoints = async () => {
+  if (viewDisposed) return
+  const requestId = knowledgePointsRequest.begin()
+  knowledgePointsLoading.value = true
+  knowledgePointsError.value = ''
+  try {
+    const response = await getWrongQuestionKnowledgePointsApi({
+      materialId: filters.materialId || undefined,
+      questionType: filters.questionType || undefined
+    })
+    if (viewDisposed || !knowledgePointsRequest.isLatest(requestId)) return
+    knowledgePoints.value = (response.data.data as WrongQuestionKnowledgePoint[]) || []
+  } catch (error) {
+    if (!viewDisposed && knowledgePointsRequest.isLatest(requestId))
+      knowledgePointsError.value = getErrorMessage(error, '知识点选项暂时无法加载')
+  } finally {
+    if (!viewDisposed && knowledgePointsRequest.isLatest(requestId)) knowledgePointsLoading.value = false
+  }
+}
+
 const loadWrongQuestions = async () => {
+  if (viewDisposed) return
+  const requestId = listRequest.begin()
   loading.value = true
   loadError.value = ''
   try {
@@ -296,15 +390,18 @@ const loadWrongQuestions = async () => {
       size: page.size,
       keyword: filters.keyword || undefined,
       materialId: filters.materialId || undefined,
-      questionType: filters.questionType || undefined
+      questionType: filters.questionType || undefined,
+      knowledgePoint: filters.knowledgePoint || undefined
     })
     const data = res.data.data as WrongQuestionPagePayload
+    if (viewDisposed || !listRequest.isLatest(requestId)) return
     wrongQuestions.value = data.records || []
     total.value = data.total || 0
   } catch (error) {
-    loadError.value = getErrorMessage(error, '错题本暂时无法加载，请稍后重试。')
+    if (!viewDisposed && listRequest.isLatest(requestId))
+      loadError.value = getErrorMessage(error, '错题本暂时无法加载，请稍后重试。')
   } finally {
-    loading.value = false
+    if (!viewDisposed && listRequest.isLatest(requestId)) loading.value = false
   }
 }
 
@@ -313,6 +410,7 @@ const resetFilters = () => {
     filters.keyword = ''
     filters.materialId = undefined
     filters.questionType = ''
+    filters.knowledgePoint = ''
     page.current = 1
   })
 }
@@ -356,7 +454,7 @@ const removeWrongQuestion = async (item: WrongQuestionItem, closeDrawer = false)
     if (wrongQuestions.value.length === 1 && page.current > 1) {
       page.current -= 1
     }
-    await loadWrongQuestions()
+    await Promise.all([loadWrongQuestions(), loadKnowledgePoints()])
   } catch (error) {
     ElMessage.error(getErrorMessage(error, '移出错题本失败'))
   } finally {
@@ -392,8 +490,11 @@ void loadMaterials().then(() => {
   if (materialsError.value) ElMessage.error(materialsError.value)
 })
 void loadWrongQuestions()
+void loadKnowledgePoints()
 onUnmounted(() => {
   viewDisposed = true
+  listRequest.invalidate()
+  knowledgePointsRequest.invalidate()
 })
 </script>
 
@@ -403,9 +504,17 @@ onUnmounted(() => {
 }
 .wrong-view .workspace-filter-bar--wrong {
   display: grid;
-  grid-template-columns: minmax(200px, 1.6fr) minmax(150px, 1fr) minmax(130px, 0.75fr) auto;
+  grid-template-columns: minmax(180px, 1.4fr) minmax(130px, 1fr) minmax(115px, 0.8fr) minmax(150px, 1.1fr) auto;
   width: 100%;
   margin-bottom: 0;
+}
+.wrong-filter-note {
+  width: 100%;
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
 }
 .wrong-view .workspace-toolbar {
   margin-top: 6px;

@@ -2,6 +2,7 @@ package com.aiassistant.learning.dto.wrongquestion;
 
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 /**
@@ -37,4 +38,8 @@ public class WrongQuestionPageQuery {
      * 关键词，可匹配题干、知识点、资料标题、题集标题和练习名称。
      */
     private String keyword;
+
+    /** 按完整知识点标签精确筛选，可与关键词同时使用。 */
+    @Size(max = 200, message = "知识点长度不能超过200个字符")
+    private String knowledgePoint;
 }

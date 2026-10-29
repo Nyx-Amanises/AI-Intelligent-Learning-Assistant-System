@@ -4,6 +4,8 @@ import com.aiassistant.learning.dto.wrongquestion.WrongQuestionPageQuery;
 import com.aiassistant.learning.vo.page.PageVO;
 import com.aiassistant.learning.vo.practice.PracticeDetailVO;
 import com.aiassistant.learning.vo.wrongquestion.WrongQuestionVO;
+import com.aiassistant.learning.vo.wrongquestion.WrongQuestionKnowledgePointVO;
+import java.util.List;
 
 /**
  * 错题本业务接口。
@@ -20,6 +22,9 @@ public interface WrongQuestionService {
      * @return 错题分页结果
      */
     PageVO<WrongQuestionVO> pageWrongQuestions(Long userId, WrongQuestionPageQuery query);
+
+    /** 从当前用户的全部可见错题中提供知识点候选，不受分页和关键词影响。 */
+    List<WrongQuestionKnowledgePointVO> listKnowledgePoints(Long userId, Long materialId, String questionType);
 
     /**
      * 查询单道错题详情。

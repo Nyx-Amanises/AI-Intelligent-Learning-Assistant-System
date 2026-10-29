@@ -7,13 +7,16 @@ import com.aiassistant.learning.service.WrongQuestionService;
 import com.aiassistant.learning.vo.page.PageVO;
 import com.aiassistant.learning.vo.practice.PracticeDetailVO;
 import com.aiassistant.learning.vo.wrongquestion.WrongQuestionVO;
+import com.aiassistant.learning.vo.wrongquestion.WrongQuestionKnowledgePointVO;
 import jakarta.validation.Valid;
+import java.util.List;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -48,6 +51,14 @@ public class WrongQuestionController {
     public ApiResponse<PageVO<WrongQuestionVO>> page(@Valid WrongQuestionPageQuery query) {
         Long userId = UserContext.getCurrentUserId();
         return ApiResponse.success(wrongQuestionService.pageWrongQuestions(userId, query));
+    }
+
+    @GetMapping("/knowledge-points")
+    public ApiResponse<List<WrongQuestionKnowledgePointVO>> knowledgePoints(
+            @RequestParam(required = false) Long materialId,
+            @RequestParam(required = false) String questionType) {
+        return ApiResponse.success(wrongQuestionService.listKnowledgePoints(
+                UserContext.getCurrentUserId(), materialId, questionType));
     }
 
     /**
