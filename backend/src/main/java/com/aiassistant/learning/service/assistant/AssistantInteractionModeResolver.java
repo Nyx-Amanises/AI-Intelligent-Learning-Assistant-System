@@ -75,6 +75,15 @@ public class AssistantInteractionModeResolver {
         AssistantInteractionMode pendingMode = normalize(pendingDecision == null ? null : pendingDecision.getInteractionMode());
         AssistantPendingActionPayload pendingPayload = sessionState.readPendingActionPayload(session);
         String pendingActionType = session == null ? null : session.getPendingActionType();
+        AssistantInteractionMode practiceMode = resolvePracticeMode(session, userMessage, structuredIntent);
+        if (practiceMode != AssistantInteractionMode.UNKNOWN) return practiceMode;
+        // 旧练习上下文或模型误判不能压过本轮明确换题。
+        if (plannedMode == AssistantInteractionMode.PRACTICE_QA || plannedMode == AssistantInteractionMode.PRACTICE_BROWSE) {
+            plannedMode = AssistantInteractionMode.UNKNOWN;
+        }
+        if (extractedMode == AssistantInteractionMode.PRACTICE_QA || extractedMode == AssistantInteractionMode.PRACTICE_BROWSE) {
+            extractedMode = AssistantInteractionMode.UNKNOWN;
+        }
         boolean pendingInterrupted = shouldInterruptPendingAction(
                 pendingActionType,
                 userMessage,
@@ -160,6 +169,48 @@ public class AssistantInteractionModeResolver {
         } catch (IllegalArgumentException ignored) {
             return AssistantInteractionMode.UNKNOWN;
         }
+    }
+
+    /** 练习查询先于泛化资料问答，但明确新任务、资料/题集/任务浏览和新知识问题不沿用旧练习。 */
+    private AssistantInteractionMode resolvePracticeMode(AssistantSession session, String userMessage, AssistantStructuredIntent intent) {
+        if (!StringUtils.hasText(userMessage) || looksLikeExplicitTaskRequest(userMessage, intent)
+                || taskIntentParser.looksLikeMaterialBrowseRequest(userMessage, intent)
+                || taskIntentParser.looksLikeTaskListRequest(userMessage, intent)
+                || taskIntentParser.looksLikeQuestionSetListRequest(userMessage, intent)
+                || taskIntentParser.looksLikeChapterBrowseRequest(userMessage, intent)) return AssistantInteractionMode.UNKNOWN;
+        boolean mentionsPractice = userMessage.contains("练习");
+        boolean explicitMaterialQuestion = !mentionsPractice && (userMessage.contains("资料") || userMessage.contains("《"));
+        if (explicitMaterialQuestion) return AssistantInteractionMode.UNKNOWN;
+        Long explicitId = AssistantToolSupport.explicitPracticeSessionId(userMessage);
+        if (explicitId != null) return AssistantInteractionMode.PRACTICE_QA;
+        boolean currentPractice = AssistantToolSupport.containsAnyIgnoreCase(userMessage,
+                List.of("这次练习", "本次练习", "当前练习", "这份练习"));
+        boolean listRequest = AssistantToolSupport.containsAnyIgnoreCase(userMessage,
+                List.of("练习列表", "练习记录列表", "历史练习", "练习历史", "我的练习", "最近练习", "最近的练习", "所有练习"))
+                || (userMessage.contains("练习记录") && !currentPractice
+                    && !AssistantToolSupport.containsAnyIgnoreCase(userMessage, List.of("复盘", "错题", "判分", "得分", "分数", "详情")));
+        boolean selectionFollowUp = AssistantToolSupport.containsAnyIgnoreCase(userMessage,
+                List.of("第一条", "第二条", "第三条", "第1条", "第2条", "第3条", "就这个", "就这条", "那一条", "上一条", "继续", "刚才"));
+        boolean pageFollowUp = AssistantToolSupport.containsAnyIgnoreCase(userMessage, List.of("下一页", "上一页"))
+                || userMessage.matches("(?s).*第\\s*\\d+\\s*页.*");
+        if (listRequest || (Boolean.TRUE.equals(intent == null ? null : intent.getPracticeList())
+                && (mentionsPractice || pageFollowUp))) return AssistantInteractionMode.PRACTICE_BROWSE;
+        if (intent != null && intent.getPracticeSessionId() != null && (mentionsPractice || selectionFollowUp)) {
+            return AssistantInteractionMode.PRACTICE_QA;
+        }
+        boolean review = AssistantToolSupport.containsAnyIgnoreCase(userMessage,
+                List.of("复盘", "错题", "为什么错", "错因", "答错", "判分", "评分", "得分", "分数", "正确率", "我的答案", "参考答案", "这道题", "这题"))
+                || userMessage.matches("(?s).*第\\s*[一二三四五六七八九十百\\d]+\\s*题.*");
+        boolean bound = AssistantToolSupport.resolvePracticeSessionId(session) != null;
+        if (currentPractice || (mentionsPractice && review) || (bound && review)) {
+            return !bound && (intent == null || intent.getPracticeSessionId() == null)
+                    ? AssistantInteractionMode.PRACTICE_BROWSE : AssistantInteractionMode.PRACTICE_QA;
+        }
+        if (bound && intent != null && "PRACTICE_QA".equalsIgnoreCase(intent.getInteractionMode())
+                && AssistantToolSupport.containsAnyIgnoreCase(userMessage, List.of("继续", "详细", "上一题", "刚才", "它", "再解释"))) {
+            return AssistantInteractionMode.PRACTICE_QA;
+        }
+        return AssistantInteractionMode.UNKNOWN;
     }
 
     /**

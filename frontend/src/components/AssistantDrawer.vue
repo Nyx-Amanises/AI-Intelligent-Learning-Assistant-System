@@ -88,6 +88,7 @@
               @stop="stopStreaming"
               @delete="removeSession(sessionDetail.id)"
               @pick-prompt="fillPrompt"
+              @open-practice="closePanel"
             />
           </main>
         </div>
@@ -97,7 +98,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref } from 'vue'
+import { ElMessage } from 'element-plus'
 import { getAiConfigApi } from '@/api/modules/ai'
 import { useUserStore } from '@/stores/user'
 import AppIcon from '@/components/AppIcon.vue'
@@ -257,6 +259,34 @@ const fillPrompt = (prompt: string) => {
   draftMessage.value = prompt
   panelRef.value?.querySelector<HTMLTextAreaElement>('textarea')?.focus()
 }
+
+const openingPractice = ref(false)
+const openPracticeAnalysis = async (practiceSessionId: number) => {
+  if (openingPractice.value) return
+  if (sendingMessage.value) {
+    ElMessage.info('助手正在回复，请先停止生成，再分析这次练习。')
+    openPanel()
+    return
+  }
+  if (currentBinding.value.payload.practiceSessionId !== practiceSessionId) {
+    ElMessage.warning('练习记录正在切换，请打开记录后重试。')
+    return
+  }
+  openingPractice.value = true
+  try {
+    openPanel()
+    await nextTick()
+    if (currentBinding.value.payload.practiceSessionId !== practiceSessionId) return
+    const detail = await createSession(true, true)
+    if (detail?.currentPracticeSessionId === practiceSessionId) {
+      fillPrompt('请分析这次练习的作答情况、失分原因，并给出下一步复习建议。')
+    }
+  } finally {
+    openingPractice.value = false
+  }
+}
+
+defineExpose({ openPracticeAnalysis })
 </script>
 
 <style scoped>

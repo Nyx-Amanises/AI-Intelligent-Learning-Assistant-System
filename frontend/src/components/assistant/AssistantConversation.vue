@@ -20,6 +20,7 @@
       :quick-prompts="quickPrompts"
       :busy="sending"
       @pick-prompt="emit('pick-prompt', $event)"
+      @open-practice="emit('openPractice')"
     />
 
     <AssistantComposer
@@ -63,6 +64,7 @@ const emit = defineEmits<{
   (event: 'stop'): void
   (event: 'delete'): void
   (event: 'pick-prompt', prompt: string): void
+  (event: 'openPractice'): void
 }>()
 
 const threadRef = ref<InstanceType<typeof AssistantThread> | null>(null)

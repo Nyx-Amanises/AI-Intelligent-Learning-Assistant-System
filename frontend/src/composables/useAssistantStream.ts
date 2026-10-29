@@ -73,7 +73,8 @@ export const useAssistantStream = (options: AssistantStreamOptions) => {
         lastUserMessageId = message.id
         continue
       }
-      const toolCalls = lastUserMessageId ? toolCallMap.value[lastUserMessageId] : undefined
+      const parentId = message.replyToMessageId || lastUserMessageId
+      const toolCalls = parentId ? toolCallMap.value[parentId] : undefined
       if (toolCalls?.length) {
         map.set(message.id, toolCalls)
       }

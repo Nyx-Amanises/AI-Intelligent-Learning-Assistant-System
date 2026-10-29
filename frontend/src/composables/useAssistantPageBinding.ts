@@ -1,6 +1,7 @@
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import type { AssistantSessionCreatePayload } from '@/api/modules/assistant'
+import { ASSISTANT_PRACTICE_QUERY_KEY } from '@/composables/useAssistantContext'
 
 /**
  * 当前页面可绑定到助手会话的上下文。
@@ -50,7 +51,7 @@ const toNumeric = (value: unknown): number | undefined => {
     return toNumeric(value[0])
   }
   const parsed = Number(value)
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : undefined
 }
 
 export const useAssistantPageBinding = () => {
@@ -70,6 +71,26 @@ export const useAssistantPageBinding = () => {
     const questionSetId = resolveContextQueryId(ASSISTANT_QUESTION_SET_QUERY_KEY)
     const materialId = resolveContextQueryId(ASSISTANT_MATERIAL_QUERY_KEY)
     const pageLabel = resolveRouteLabel(route.path)
+    const practiceSessionId =
+      route.path === '/practice' ? resolveContextQueryId(ASSISTANT_PRACTICE_QUERY_KEY) : undefined
+
+    if (practiceSessionId && practiceSessionId === toNumeric(route.query.sessionId)) {
+      return {
+        bindable: true,
+        label: `练习 #${practiceSessionId}`,
+        helperText: '已关联当前打开的练习记录，可分析作答、得分与复习重点。',
+        payload: {
+          contextType: 'PRACTICE_SESSION',
+          contextId: practiceSessionId,
+          practiceSessionId,
+          ...(questionSetId ? { questionSetId } : {}),
+          ...(materialId ? { materialId } : {})
+        }
+      }
+    }
+
+    // 练习页只使用已经加载成功的练习记录，不能退回到旧题集或资料上下文。
+    if (route.path === '/practice') return GENERIC_BINDING
 
     if (questionSetId) {
       return {

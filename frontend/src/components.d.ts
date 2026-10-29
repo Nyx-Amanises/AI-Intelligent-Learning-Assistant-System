@@ -20,6 +20,7 @@ declare module 'vue' {
     AssistantMessageTurn: typeof import('./components/assistant/AssistantMessageTurn.vue')['default']
     AssistantSessionSidebar: typeof import('./components/assistant/AssistantSessionSidebar.vue')['default']
     AssistantThread: typeof import('./components/assistant/AssistantThread.vue')['default']
+    AssistantToolActivity: typeof import('./components/assistant/AssistantToolActivity.vue')['default']
     AssistantTopbar: typeof import('./components/assistant/AssistantTopbar.vue')['default']
     BarRow: typeof import('./components/charts/BarRow.vue')['default']
     BrandLogo: typeof import('./components/BrandLogo.vue')['default']

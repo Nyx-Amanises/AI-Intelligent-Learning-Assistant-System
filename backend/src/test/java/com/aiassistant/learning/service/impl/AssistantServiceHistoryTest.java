@@ -18,6 +18,7 @@ import com.aiassistant.learning.service.AiChatService.ChatMessage;
 import com.aiassistant.learning.service.assistant.AssistantAgentOrchestrator;
 import com.aiassistant.learning.service.assistant.AssistantAgentOrchestrator.AssistantPreparedResult;
 import com.aiassistant.learning.service.assistant.AssistantConversationHistory;
+import com.aiassistant.learning.service.assistant.AssistantContextBinder;
 import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
@@ -196,8 +197,29 @@ class AssistantServiceHistoryTest {
         assertTrue(query.getValue().getSqlSegment().contains("ORDER BY id DESC"));
     }
 
+    @Test
+    void toolSummaryAndReplyParentSurviveSavingAndReloading() {
+        var time = LocalDateTime.of(2026, 10, 29, 12, 0);
+        var execution = new com.aiassistant.learning.service.assistant.AssistantTool.ToolExecutionResult(
+                "practice.detail", "SUCCESS", "{\"practiceSessionId\":22}", "{\"sessionId\":22}",
+                "已读取练习22，2道简答题等待评分。", null, time, time.plusSeconds(1));
+        when(orchestrator.respond(7L, session, "那n乘2是多少？", "test-model", previous))
+                .thenReturn(new AssistantAgentOrchestrator.AssistantAgentResult("练习分析", "{}", "{}", "test-model", List.of(execution), List.of()));
+        var reply = service(Runnable::run).sendMessage(7L, 42L, request());
+        assertEquals(100L, reply.getAssistantMessage().getReplyToMessageId());
+        assertEquals(execution.summaryText(), reply.getToolCalls().get(0).getSummaryText());
+        var captured = ArgumentCaptor.forClass(AssistantToolCall.class);
+        verify(tools).insert(captured.capture());
+        assertEquals(execution.summaryText(), captured.getValue().getSummaryText());
+        when(tools.selectList(any())).thenReturn(List.of(captured.getValue()));
+        when(messages.selectList(any())).thenReturn(inserted);
+        var restored = service(Runnable::run).getSessionDetail(7L, 42L, 30);
+        assertEquals(execution.summaryText(), restored.getRecentToolCalls().get(0).getSummaryText());
+        assertEquals(100L, restored.getMessages().get(1).getReplyToMessageId());
+    }
+
     private AssistantServiceImpl service(Executor executor) {
-        return new AssistantServiceImpl(sessions, messages, tools, chat, orchestrator, history, new ObjectMapper(), executor);
+        return new AssistantServiceImpl(sessions, messages, tools, chat, orchestrator, history, mock(AssistantContextBinder.class), new ObjectMapper(), executor);
     }
 
     private AssistantPreparedResult prepared(boolean useModel) {

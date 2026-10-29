@@ -16,6 +16,7 @@ import com.aiassistant.learning.service.AiChatService;
 import com.aiassistant.learning.service.AssistantService;
 import com.aiassistant.learning.service.assistant.AssistantAgentOrchestrator;
 import com.aiassistant.learning.service.assistant.AssistantConversationHistory;
+import com.aiassistant.learning.service.assistant.AssistantContextBinder;
 import com.aiassistant.learning.service.assistant.AssistantTool;
 import com.aiassistant.learning.vo.assistant.AssistantChatReplyVO;
 import com.aiassistant.learning.vo.assistant.AssistantMessageVO;
@@ -69,6 +70,7 @@ public class AssistantServiceImpl implements AssistantService {
     /** Agent 编排器，负责意图识别、工具调用和提示词构造。 */
     private final AssistantAgentOrchestrator assistantAgentOrchestrator;
     private final AssistantConversationHistory conversationHistory;
+    private final AssistantContextBinder contextBinder;
     /** JSON 解析工具。 */
     private final ObjectMapper objectMapper;
     /** 流式回复使用独立的有界线程池（见 AsyncExecutorConfig），避免阻塞 Web 请求线程。 */
@@ -81,6 +83,7 @@ public class AssistantServiceImpl implements AssistantService {
             AiChatService aiChatService,
             AssistantAgentOrchestrator assistantAgentOrchestrator,
             AssistantConversationHistory conversationHistory,
+            AssistantContextBinder contextBinder,
             ObjectMapper objectMapper,
             @Qualifier("assistantStreamExecutor") Executor assistantStreamExecutor
     ) {
@@ -91,6 +94,7 @@ public class AssistantServiceImpl implements AssistantService {
         this.aiChatService = aiChatService;
         this.assistantAgentOrchestrator = assistantAgentOrchestrator;
         this.conversationHistory = conversationHistory;
+        this.contextBinder = contextBinder;
         this.objectMapper = objectMapper;
     }
 
@@ -610,36 +614,7 @@ public class AssistantServiceImpl implements AssistantService {
             Long questionSetId,
             Long practiceSessionId
     ) {
-        boolean explicitContextProvided = materialId != null
-                || questionSetId != null
-                || practiceSessionId != null
-                || StringUtils.hasText(contextType)
-                || contextId != null;
-        if (explicitContextProvided) {
-            session.setPendingActionType(null);
-            session.setPendingActionPayloadJson(null);
-        }
-        if (materialId != null) {
-            session.setCurrentMaterialId(materialId);
-            session.setCurrentContextType("MATERIAL");
-            session.setCurrentContextId(materialId);
-        }
-        if (questionSetId != null) {
-            session.setCurrentQuestionSetId(questionSetId);
-            session.setCurrentContextType("QUESTION_SET");
-            session.setCurrentContextId(questionSetId);
-        }
-        if (practiceSessionId != null) {
-            session.setCurrentPracticeSessionId(practiceSessionId);
-            session.setCurrentContextType("PRACTICE_SESSION");
-            session.setCurrentContextId(practiceSessionId);
-        }
-        if (StringUtils.hasText(contextType)) {
-            session.setCurrentContextType(contextType.trim().toUpperCase());
-        }
-        if (contextId != null) {
-            session.setCurrentContextId(contextId);
-        }
+        contextBinder.bind(session, contextType, contextId, materialId, questionSetId, practiceSessionId);
     }
 
     /**
@@ -718,6 +693,7 @@ public class AssistantServiceImpl implements AssistantService {
     private AssistantMessageVO toMessageVO(AssistantMessage message) {
         return AssistantMessageVO.builder()
                 .id(message.getId())
+                .replyToMessageId(message.getReplyToMessageId())
                 .role(message.getRole())
                 .messageType(message.getMessageType())
                 .contentText(message.getContentText())
@@ -740,6 +716,7 @@ public class AssistantServiceImpl implements AssistantService {
                 .toolName(toolCall.getToolName())
                 .toolArgsJson(toolCall.getToolArgsJson())
                 .toolResultJson(toolCall.getToolResultJson())
+                .summaryText(toolCall.getSummaryText())
                 .status(toolCall.getStatus())
                 .errorMessage(toolCall.getErrorMessage())
                 .startedAt(toolCall.getStartedAt())
@@ -756,6 +733,7 @@ public class AssistantServiceImpl implements AssistantService {
                 .toolName(execution.toolName())
                 .toolArgsJson(execution.toolArgsJson())
                 .toolResultJson(execution.toolResultJson())
+                .summaryText(execution.summaryText())
                 .status(execution.status())
                 .errorMessage(execution.errorMessage())
                 .startedAt(execution.startedAt())
@@ -820,6 +798,7 @@ public class AssistantServiceImpl implements AssistantService {
             toolCall.setToolName(execution.toolName());
             toolCall.setToolArgsJson(execution.toolArgsJson());
             toolCall.setToolResultJson(execution.toolResultJson());
+            toolCall.setSummaryText(execution.summaryText());
             toolCall.setStatus(execution.status());
             toolCall.setErrorMessage(execution.errorMessage());
             toolCall.setStartedAt(execution.startedAt());

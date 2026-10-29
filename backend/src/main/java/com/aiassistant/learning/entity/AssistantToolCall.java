@@ -39,6 +39,9 @@ public class AssistantToolCall extends BaseEntity {
     /** 工具结果 JSON。 */
     private String toolResultJson;
 
+    /** 当次工具执行的可读结果摘要，历史查看不重新计算。 */
+    private String summaryText;
+
     /** 调用状态。 */
     private String status;
 

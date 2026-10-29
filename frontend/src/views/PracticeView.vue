@@ -22,6 +22,9 @@
         <p class="page-desc">专注完成每一道题，也把每一次答错变成进步的起点。</p>
       </div>
       <div class="toolbar toolbar--flush">
+        <el-button v-if="assistantPracticeContext" type="primary" @click="analyzePractice"
+          >让助手分析这次练习</el-button
+        >
         <el-button :loading="historyLoading" @click="loadHistory">刷新记录</el-button>
       </div>
     </div>
@@ -173,6 +176,7 @@ import {
   type PracticeHistoryItem
 } from '@/components/practice/practiceHelpers'
 import { useLatestRequest } from '@/composables/useLatestRequest'
+import { useAssistantContext } from '@/composables/useAssistantContext'
 import { isAiTaskSuccess, isAiTaskTerminal, waitForAiTaskUntilTerminal } from '@/utils/aiTask'
 import { confirmDanger } from '@/utils/confirm'
 import { getErrorMessage } from '@/utils/errorMessage'
@@ -185,6 +189,9 @@ const DRAFT_SAVE_INTERVAL = 800
 
 const route = useRoute()
 const router = useRouter()
+const initialSessionId = Number(route.query.sessionId)
+const assistantContext = useAssistantContext()
+const emit = defineEmits<{ openAssistant: [request: { practiceSessionId: number }] }>()
 const historyRecords = ref<PracticeHistoryItem[]>([])
 const total = ref(0)
 const practiceDetail = ref<PracticeDetail | null>(null)
@@ -207,6 +214,37 @@ const renameTarget = ref<{ id: number; sessionName: string } | null>(null)
 let reviewTaskWaitAborted = false
 let isViewActive = true
 const page = reactive({ current: 1, size: 10 })
+const positiveId = (value?: number) => (Number.isSafeInteger(value) && Number(value) > 0 ? value : undefined)
+const assistantPracticeContext = computed(() => {
+  const detail = practiceDetail.value
+  if (
+    activeTab.value !== 'current' ||
+    detailLoading.value ||
+    detailError.value ||
+    !detail ||
+    detail.sessionId !== detailSessionId.value ||
+    detail.sessionId !== positiveId(Number(route.query.sessionId))
+  )
+    return null
+  const practiceSessionId = positiveId(detail.sessionId)
+  return practiceSessionId
+    ? { practiceSessionId, questionSetId: positiveId(detail.questionSetId), materialId: positiveId(detail.materialId) }
+    : null
+})
+watch(
+  assistantPracticeContext,
+  (context) => {
+    void assistantContext.sync(context || {})
+  },
+  { immediate: true }
+)
+const analyzePractice = async () => {
+  const context = assistantPracticeContext.value
+  if (!context) return
+  await assistantContext.sync(context)
+  if (assistantPracticeContext.value?.practiceSessionId === context.practiceSessionId)
+    emit('openAssistant', { practiceSessionId: context.practiceSessionId })
+}
 
 const isSubmitted = computed(() => isSubmittedStatus(practiceDetail.value?.sessionStatus))
 const hasPendingAiReview = computed(() =>
@@ -407,10 +445,21 @@ const syncSessionQuery = (sessionId?: number | null) => {
 
 const openPracticeFromHistory = async (sessionId: number) => {
   resetReviewTaskWaiting()
+  activeTab.value = 'current'
   syncSessionQuery(sessionId)
   await loadPracticeDetail(sessionId)
-  activeTab.value = 'current'
 }
+
+watch(
+  () => route.query.sessionId,
+  (value) => {
+    const sessionId = positiveId(Number(value))
+    if (!isViewActive || !sessionId || detailSessionId.value === sessionId) return
+    resetReviewTaskWaiting()
+    void loadPracticeDetail(sessionId)
+    activeTab.value = 'current'
+  }
+)
 
 // ---------- 操作 ----------
 
@@ -525,7 +574,7 @@ const submitPractice = async () => {
 onMounted(async () => {
   await loadHistory()
   if (!isViewActive) return
-  const querySessionId = Number(route.query.sessionId)
+  const querySessionId = initialSessionId
   const sessionId = querySessionId || readActivePracticeDraftSessionId()
   if (sessionId) {
     syncSessionQuery(sessionId)

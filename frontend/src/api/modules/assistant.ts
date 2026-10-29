@@ -23,6 +23,7 @@ export interface AssistantMessageSendPayload {
 export interface AssistantMessage {
   id: number
   role: string
+  replyToMessageId?: number
   messageType?: string
   contentText?: string
   reasoningJson?: string
@@ -41,6 +42,7 @@ export interface AssistantToolCall {
   toolName?: string
   toolArgsJson?: string
   toolResultJson?: string
+  summaryText?: string
   status?: string
   errorMessage?: string
   startedAt?: string

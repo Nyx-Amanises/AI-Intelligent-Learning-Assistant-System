@@ -101,7 +101,7 @@ public class AssistantStructuredIntentExtractor {
                 本轮显式修改优先于历史配置；例如本轮改为整份资料时，knowledgePoints 必须为 []，不能恢复历史知识点。
 
                 规则：
-                1. interactionMode 仅允许：TASK_CREATE、TASK_CONFIG_REPLY、MATERIAL_SELECTION、MATERIAL_BROWSE、TASK_BROWSE、QUESTION_SET_BROWSE、CHAPTER_BROWSE、CONTEXT_CHALLENGE、STUDY_QA、CHAT、UNSUPPORTED、UNKNOWN。
+                1. interactionMode 仅允许：TASK_CREATE、TASK_CONFIG_REPLY、MATERIAL_SELECTION、MATERIAL_BROWSE、TASK_BROWSE、QUESTION_SET_BROWSE、PRACTICE_BROWSE、PRACTICE_QA、CHAPTER_BROWSE、CONTEXT_CHALLENGE、STUDY_QA、CHAT、UNSUPPORTED、UNKNOWN。
                 2. 如果用户是在正常聊天、问候、感谢、寒暄，interactionMode=CHAT。
                 3. 如果用户是在提问资料内容、让你讲解知识点、带学、解释概念、根据资料回答问题，interactionMode=STUDY_QA。
                 4. 如果用户是在明确要求“生成总结/出题”，interactionMode=TASK_CREATE。
@@ -123,6 +123,9 @@ public class AssistantStructuredIntentExtractor {
                 20. 如果用户是在质疑、追问、澄清上一条系统定位/选择/判断，则 contextChallenge=true。
                 21. 如果某字段无法确定，请返回 null；布尔字段默认 false；除 knowledgePoints 外的数组默认 []。未指定 knowledgePoints 必须用 null，不能用 [] 清除此前范围。
                 22. 学习问答的 studyQuery 必须是可独立检索的完整本轮问题；结合历史解析“它、上一点、继续”等指代，保留已确定的对象和本轮追问，不得只返回代词或复制上一轮问题。非学习问答或无法确定所指对象时返回 null，不要编造。
+                23. 查询自己的练习历史/列表为 PRACTICE_BROWSE，practiceList=true，practicePage 是本轮明确要求的页码，未指定为 null。查看指定/当前练习的得分、错题、作答或复盘为 PRACTICE_QA，不能当作资料问答。
+                24. practiceSessionId 只能来自本轮明确指定的练习记录 ID，或历史中已经展示且本轮明确选中的练习记录；不要把题号、题集 ID 或列表序号当记录 ID，不要编造。当前练习追问未指定记录时为 null，由服务端沿用上下文。
+                25. 本轮明确改问资料、独立知识问题或创建新任务时，不要恢复历史练习意图；practiceList=false、practiceSessionId=null。
 
                 输出 JSON schema：
                 {
@@ -139,6 +142,9 @@ public class AssistantStructuredIntentExtractor {
                   "questionSetKeyword": null,
                   "questionSetStatus": null,
                   "questionSetDifficultyLevel": null,
+                  "practiceSessionId": null,
+                  "practiceList": false,
+                  "practicePage": null,
                   "chapterBrowse": false,
                   "chapterKeyword": null,
                   "studyQuery": null,
@@ -188,6 +194,9 @@ public class AssistantStructuredIntentExtractor {
                     .questionSetKeyword(readNullableText(root, "questionSetKeyword"))
                     .questionSetStatus(normalizeUpper(readNullableText(root, "questionSetStatus")))
                     .questionSetDifficultyLevel(readNullableInt(root, "questionSetDifficultyLevel"))
+                    .practiceSessionId(readPracticeId(root, "practiceSessionId"))
+                    .practiceList(readNullableBoolean(root, "practiceList"))
+                    .practicePage(readPracticePage(root))
                     .chapterBrowse(readNullableBoolean(root, "chapterBrowse"))
                     .chapterKeyword(readNullableText(root, "chapterKeyword"))
                     .studyQuery(readNullableText(root, "studyQuery"))
@@ -264,6 +273,16 @@ public class AssistantStructuredIntentExtractor {
             return null;
         }
         return node.asText().trim();
+    }
+
+    private Long readPracticeId(JsonNode root, String name) {
+        JsonNode value = root == null ? null : root.get(name);
+        return value == null || value.isNull() ? null : AssistantToolSupport.readPracticeId(value.asText());
+    }
+
+    private Integer readPracticePage(JsonNode root) {
+        Long page = readPracticeId(root, "practicePage");
+        return page == null ? null : page <= 100000 ? page.intValue() : 0;
     }
 
     /**

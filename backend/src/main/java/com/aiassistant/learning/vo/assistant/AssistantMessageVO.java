@@ -14,6 +14,9 @@ public class AssistantMessageVO {
     /** 消息 ID。 */
     private Long id;
 
+    /** 该回复对应的用户消息，用于正确展示交错回复的调用过程。 */
+    private Long replyToMessageId;
+
     /** 消息角色：USER、ASSISTANT、SYSTEM 等。 */
     private String role;
 

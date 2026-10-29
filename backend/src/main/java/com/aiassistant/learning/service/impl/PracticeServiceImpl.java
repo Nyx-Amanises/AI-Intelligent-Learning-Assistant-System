@@ -1514,6 +1514,7 @@ public class PracticeServiceImpl implements PracticeService {
 
         return PracticeDetailVO.builder()
                 .sessionId(session.getId())
+                .materialId(session.getMaterialId())
                 .questionSetId(session.getQuestionSetId())
                 .questionIds(readQuestionIds(session))
                 .sessionName(session.getSessionName())

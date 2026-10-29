@@ -206,7 +206,7 @@
       </form>
     </el-dialog>
 
-    <AssistantDrawer v-model="assistantVisible" :show-launcher="false" />
+    <AssistantDrawer ref="assistantDrawerRef" v-model="assistantVisible" :show-launcher="false" />
   </div>
 </template>
 
@@ -237,6 +237,7 @@ const { currentTheme, themeOptions, currentThemeOption, setTheme } = useTheme()
 const router = useRouter()
 const route = useRoute()
 const assistantVisible = ref(false)
+const assistantDrawerRef = ref<InstanceType<typeof AssistantDrawer> | null>(null)
 const searchVisible = ref(false)
 const searchKeyword = ref('')
 const searchInputRef = ref<{ focus: () => void }>()
@@ -318,8 +319,12 @@ function handleTouchEnd(e: TouchEvent) {
 function openSearch() {
   searchVisible.value = true
 }
-function openAssistant() {
+function openAssistant(request?: { practiceSessionId?: number } | Event) {
   searchVisible.value = false
+  if (request && 'practiceSessionId' in request && request.practiceSessionId) {
+    void assistantDrawerRef.value?.openPracticeAnalysis(request.practiceSessionId)
+    return
+  }
   assistantVisible.value = true
 }
 function searchMaterials() {

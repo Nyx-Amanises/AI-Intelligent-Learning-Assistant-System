@@ -24,8 +24,6 @@ public class AssistantToolExecutionSupport {
 
     /** 用户询问任务状态时的关键词。 */
     private static final List<String> TASK_STATUS_KEYWORDS = List.of("任务", "进度", "执行到哪", "状态");
-    /** 用户询问练习详情时的关键词。 */
-    private static final List<String> PRACTICE_KEYWORDS = List.of("练习", "错题", "判分", "这次练习", "为什么错");
     /** 用户询问题集详情时的关键词。 */
     private static final List<String> QUESTION_SET_KEYWORDS = List.of("题集", "这套题", "题目分布", "题型");
 
@@ -91,9 +89,11 @@ public class AssistantToolExecutionSupport {
         if (interactionMode == AssistantInteractionMode.CHAPTER_BROWSE) {
             addPlan(plan, toolNames, "material.chapter_outline", "用户想查看资料章节、目录或某一章的位置");
         }
-        if (AssistantToolSupport.resolvePracticeSessionId(session) != null
-                && AssistantToolSupport.containsAnyIgnoreCase(normalizedMessage, PRACTICE_KEYWORDS)) {
+        if (interactionMode == AssistantInteractionMode.PRACTICE_QA) {
             addPlan(plan, toolNames, "practice.detail", "当前会话绑定了练习记录");
+        }
+        if (interactionMode == AssistantInteractionMode.PRACTICE_BROWSE) {
+            addPlan(plan, toolNames, "practice.list", "查询自己的练习记录");
         }
         if (interactionMode != AssistantInteractionMode.QUESTION_SET_BROWSE
                 && AssistantToolSupport.resolveQuestionSetId(session) != null
@@ -157,7 +157,7 @@ public class AssistantToolExecutionSupport {
             if (toolCall == null || !StringUtils.hasText(toolCall.getToolName())) {
                 continue;
             }
-            if (isWorkflowManagedTool(toolCall.getToolName())) {
+            if (isWorkflowManagedTool(toolCall.getToolName()) || toolCall.getToolName().startsWith("practice.")) {
                 continue;
             }
             AssistantStructuredIntent toolIntent = cloneIntentWithToolCall(structuredIntent, toolCall);
@@ -189,6 +189,17 @@ public class AssistantToolExecutionSupport {
                 null,
                 planSnapshot
         );
+    }
+
+    /** 练习工具由专用路由确定，避免被资料工作流或模型直接回复提前截断。 */
+    public AssistantWorkflowResolution executePracticeQuery(Long userId, AssistantSession session, String userMessage,
+            String modelName, AssistantStructuredIntent intent, AssistantInteractionMode mode) {
+        String toolName = mode == AssistantInteractionMode.PRACTICE_BROWSE ? "practice.list" : "practice.detail";
+        AssistantTool.ToolExecutionResult result = executeToolByName(toolName, userId, session, userMessage, modelName, intent);
+        if (result == null) return new AssistantWorkflowResolution(true, false, List.of(), "练习查询工具暂时不可用，请稍后重试。", List.of());
+        boolean success = "SUCCESS".equalsIgnoreCase(result.status());
+        return new AssistantWorkflowResolution(true, success && modelPolicy.shouldUseAiModel(), List.of(result),
+                success ? null : result.errorMessage(), List.of(Map.of("toolName", toolName, "reason", "读取用户自己的练习记录")));
     }
 
     /**
@@ -237,6 +248,18 @@ public class AssistantToolExecutionSupport {
         }
         Map<String, Object> args = toolCall.getArguments() == null ? Map.of() : toolCall.getArguments();
         String toolName = toolCall.getToolName();
+        if ("practice.detail".equals(toolName)) {
+            if (args.containsKey("practiceSessionId")) intent.setPracticeSessionId(AssistantToolSupport.readPracticeId(args.get("practiceSessionId")));
+            return;
+        }
+        if ("practice.list".equals(toolName)) {
+            intent.setPracticeList(true);
+            if (args.containsKey("current") && args.get("current") != null) {
+                Long page = AssistantToolSupport.readPracticeId(args.get("current"));
+                intent.setPracticePage(page != null && page <= 100000 ? page.intValue() : 0);
+            }
+            return;
+        }
         if ("rag.retrieve".equals(toolName)) {
             setIfPresent(args, "queryText", intent::setStudyQuery);
             return;
@@ -320,6 +343,9 @@ public class AssistantToolExecutionSupport {
                 .questionSetKeyword(structuredIntent == null ? null : structuredIntent.getQuestionSetKeyword())
                 .questionSetStatus(structuredIntent == null ? null : structuredIntent.getQuestionSetStatus())
                 .questionSetDifficultyLevel(structuredIntent == null ? null : structuredIntent.getQuestionSetDifficultyLevel())
+                .practiceSessionId(structuredIntent == null ? null : structuredIntent.getPracticeSessionId())
+                .practiceList(structuredIntent == null ? null : structuredIntent.getPracticeList())
+                .practicePage(structuredIntent == null ? null : structuredIntent.getPracticePage())
                 .chapterBrowse(structuredIntent == null ? null : structuredIntent.getChapterBrowse())
                 .chapterKeyword(structuredIntent == null ? null : structuredIntent.getChapterKeyword())
                 .studyQuery(structuredIntent == null ? null : structuredIntent.getStudyQuery())

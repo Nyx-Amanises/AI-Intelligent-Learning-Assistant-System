@@ -45,40 +45,16 @@
 
     <AssistantCitations v-if="!isUser && evidence" :evidence="evidence" />
 
-    <details v-if="hasTrace" class="assistant-turn__trace">
-      <summary>查看调用轨迹</summary>
-
-      <div v-if="toolCalls.length" class="assistant-trace-block">
-        <div class="assistant-trace-block__label">工具调用</div>
-        <div class="assistant-trace-chip-row">
-          <span
-            v-for="tool in toolCalls"
-            :key="tool.id"
-            class="assistant-trace-chip"
-            :class="toolStatusClass(tool.status)"
-          >
-            {{ tool.toolName || '未命名工具' }} · {{ tool.status || 'UNKNOWN' }}
-          </span>
-        </div>
-      </div>
-
-      <div v-if="memories.length" class="assistant-trace-block">
+    <AssistantToolActivity v-if="!isUser && toolCalls.length" :tools="toolCalls" @open-practice="emit('openPractice')" />
+    <details v-if="!isUser && memories.length" class="assistant-turn__trace">
+      <summary>参考的学习记忆</summary>
+      <div class="assistant-trace-block">
         <div class="assistant-trace-block__label">参考记忆</div>
         <div class="assistant-trace-chip-row">
           <span v-for="memory in memories" :key="memory.id" class="assistant-trace-chip assistant-trace-chip--memory">
             {{ memory.topicName || memory.memoryType || '会话记忆' }}
           </span>
         </div>
-      </div>
-
-      <div v-if="message.toolPlanJson" class="assistant-trace-block">
-        <div class="assistant-trace-block__label">工具规划</div>
-        <pre>{{ formatJson(message.toolPlanJson) }}</pre>
-      </div>
-
-      <div v-if="message.reasoningJson" class="assistant-trace-block">
-        <div class="assistant-trace-block__label">执行摘要</div>
-        <pre>{{ formatJson(message.reasoningJson) }}</pre>
       </div>
     </details>
   </div>
@@ -90,29 +66,23 @@ import type { AssistantMessage, AssistantRelevantMemory, AssistantToolCall } fro
 import AppIcon from '@/components/AppIcon.vue'
 import LearningNoteContent from '@/components/LearningNoteContent.vue'
 import AssistantCitations from '@/components/assistant/AssistantCitations.vue'
-import { formatDateTime, formatJson, isUserMessage, parseRagEvidence, toolStatusClass } from '@/utils/assistantFormat'
+import AssistantToolActivity from '@/components/assistant/AssistantToolActivity.vue'
+import { formatDateTime, isUserMessage, parseRagEvidence } from '@/utils/assistantFormat'
 
 const props = defineProps<{
   message: AssistantMessage
   /** 这条助手消息是否正在流式生成。 */
   streaming: boolean
-  /** 本轮回复对应的工具调用（挂在前一条用户消息上）。 */
+  /** 本轮回复对应的工具调用（挂在对应的用户消息上）。 */
   toolCalls: AssistantToolCall[]
   memories: AssistantRelevantMemory[]
 }>()
+const emit = defineEmits<{ openPractice: [] }>()
 
 const isUser = computed(() => isUserMessage(props.message.role))
 
 /** 本轮资料问答的检索依据；没有调用 rag.retrieve 时为 null。 */
 const evidence = computed(() => (isUser.value ? null : parseRagEvidence(props.toolCalls)))
-
-const hasTrace = computed(
-  () =>
-    !isUser.value &&
-    Boolean(
-      props.toolCalls.length || props.memories.length || props.message.toolPlanJson || props.message.reasoningJson
-    )
-)
 </script>
 
 <style scoped>

@@ -817,6 +817,45 @@ class AssistantAgentOrchestratorImplTest {
     /**
      * 构造一个测试用编排器。
      */
+    @Test
+    void practiceReviewWinsOverGenericQaAndClearsObsoletePending() {
+        var orchestrator = newOrchestrator(new AssistantToolRegistry(List.of(
+                fakeRagTool(), fakeSuccessTool("practice.detail", "用户答案 B，正确答案 A"))),
+                Mockito.mock(MaterialSearchAssistantTool.class));
+        AssistantSession session = materialSession(7L);
+        session.setCurrentPracticeSessionId(25L);
+        session.setPendingActionType("QUESTION_CONFIG");
+        session.setPendingActionPayloadJson("{}");
+        String message = "这次练习第1题为什么错";
+        when(structuredIntentExtractor.extract(message, "gpt-test"))
+                .thenReturn(AssistantStructuredIntent.builder().interactionMode("STUDY_QA").build());
+        var result = orchestrator.prepare(1L, session, message, "gpt-test");
+        assertEquals(List.of("practice.detail"), result.toolExecutions().stream().map(AssistantTool.ToolExecutionResult::toolName).toList());
+        assertNull(session.getPendingActionType());
+        verifyNoInteractions(summaryTaskAssistantTool, questionGenerateTaskAssistantTool);
+    }
+
+    @Test
+    void unboundPracticeReviewOffersOwnedHistory() {
+        var orchestrator = newOrchestrator(new AssistantToolRegistry(List.of(
+                fakeSuccessTool("practice.list", "练习 #25"))), Mockito.mock(MaterialSearchAssistantTool.class));
+        var result = orchestrator.prepare(1L, materialSession(7L), "请复盘这次练习", "gpt-test");
+        assertEquals(List.of("practice.list"), result.toolExecutions().stream().map(AssistantTool.ToolExecutionResult::toolName).toList());
+    }
+
+    @Test
+    void explicitMaterialQuestionDoesNotReadOldPracticeEvenWhenPlannerSuggestsIt() {
+        var orchestrator = newOrchestrator(new AssistantToolRegistry(List.of(
+                fakeRagTool(), fakeSuccessTool("practice.detail", "旧练习"))), Mockito.mock(MaterialSearchAssistantTool.class));
+        AssistantSession session = materialSession(7L);
+        session.setCurrentPracticeSessionId(25L);
+        String message = "请解释这份资料里的 TCP 握手原理";
+        when(structuredIntentExtractor.extract(message, "gpt-test"))
+                .thenReturn(AssistantStructuredIntent.builder().interactionMode("PRACTICE_QA").practiceSessionId(25L).build());
+        var result = orchestrator.prepare(1L, session, message, "gpt-test");
+        assertEquals(List.of("rag.retrieve"), result.toolExecutions().stream().map(AssistantTool.ToolExecutionResult::toolName).toList());
+    }
+
     private AssistantAgentOrchestratorImpl newOrchestrator(
             AssistantToolRegistry toolRegistry,
             MaterialSearchAssistantTool materialSearchAssistantTool

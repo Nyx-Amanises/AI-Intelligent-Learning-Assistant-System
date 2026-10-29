@@ -61,6 +61,15 @@ public class AssistantStructuredIntent {
     /** 题集难度过滤条件。 */
     private Integer questionSetDifficultyLevel;
 
+    /** 本轮明确指定的练习记录 ID，未指定时沿用当前练习上下文。 */
+    private Long practiceSessionId;
+
+    /** 是否查询自己的练习记录列表。 */
+    private Boolean practiceList;
+
+    /** 练习记录列表页码，默认第一页。 */
+    private Integer practicePage;
+
     /** 是否要查看章节目录。 */
     private Boolean chapterBrowse;
 

@@ -35,6 +35,22 @@ class AssistantStructuredIntentExtractorTest {
     }
 
     @Test
+    void practiceIdsAndPagesRejectFractionsAndOverflowWithoutFallingBack() {
+        when(chat.chat(anyString(), anyString(), eq("gpt-test"), eq(0.1))).thenReturn(
+                "{\"interactionMode\":\"PRACTICE_BROWSE\",\"practiceSessionId\":25,\"practicePage\":2,\"practiceList\":true}",
+                "{\"practiceSessionId\":1.5,\"practicePage\":100001}",
+                "{\"practiceSessionId\":\"99999999999999999999999\"}");
+        var valid = extractor.extract("查看我的练习", null);
+        assertEquals(25L, valid.getPracticeSessionId());
+        assertEquals(2, valid.getPracticePage());
+        assertTrue(valid.getPracticeList());
+        var invalid = extractor.extract("练习记录", null);
+        assertEquals(0L, invalid.getPracticeSessionId());
+        assertEquals(0, invalid.getPracticePage());
+        assertEquals(0L, extractor.extract("练习记录", null).getPracticeSessionId());
+    }
+
+    @Test
     @SuppressWarnings("unchecked")
     void sendsRolePreservingHistoryAndOneCurrentPromptForPronounResolution() {
         List<ChatMessage> history = List.of(

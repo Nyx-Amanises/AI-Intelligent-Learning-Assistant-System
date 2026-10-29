@@ -117,7 +117,7 @@ public class AssistantToolPlanner {
                 只输出一个 JSON 对象，不要解释，不要输出 Markdown 代码块。
 
                 你必须遵守：
-                1. interactionMode 仅允许：TASK_CREATE、TASK_CONFIG_REPLY、MATERIAL_SELECTION、MATERIAL_BROWSE、TASK_BROWSE、QUESTION_SET_BROWSE、CHAPTER_BROWSE、CONTEXT_CHALLENGE、STUDY_QA、CHAT、UNSUPPORTED、UNKNOWN。
+                1. interactionMode 仅允许：TASK_CREATE、TASK_CONFIG_REPLY、MATERIAL_SELECTION、MATERIAL_BROWSE、TASK_BROWSE、QUESTION_SET_BROWSE、PRACTICE_BROWSE、PRACTICE_QA、CHAPTER_BROWSE、CONTEXT_CHALLENGE、STUDY_QA、CHAT、UNSUPPORTED、UNKNOWN。
                 2. replyStrategy 仅允许：EXECUTE_TOOLS、ASK_CLARIFICATION、DIRECT_REPLY、USE_MODEL、UNSUPPORTED、FALLBACK。
                 3. toolName 仅允许使用下面工具：
                    - material.search：按标题/关键词定位资料。参数：queryText。
@@ -131,7 +131,8 @@ public class AssistantToolPlanner {
                    - task.get_status：查看当前/指定任务状态。参数：taskId。
                    - question_set.list：查看题集列表。参数：keyword、status、difficultyLevel、currentMaterialOnly。
                    - question_set.detail：查看当前题集详情。参数：无。
-                   - practice.detail：查看当前练习记录详情。参数：无。
+                   - practice.list：查询自己的已提交练习记录列表，包含等待评分的记录。参数：current（正整数页码，默认 1）；每页固定 10 条。
+                   - practice.detail：查看指定/当前练习记录、作答、得分和错题原因。参数：practiceSessionId（练习记录 ID；未指定则省略，沿用当前练习）。
                 4. 不要编造资料 ID、题集 ID、任务 ID。用户只给标题或关键词时，用 material.search 或 materialQuery。
                 5. 如果用户要创建总结/出题，但资料不明确，应先规划 material.search；同名资料由后端继续反问。
                 6. 如果用户只是问候、感谢或普通聊天，不要规划检索工具，interactionMode=CHAT。
@@ -142,6 +143,8 @@ public class AssistantToolPlanner {
                 11. 历史消息仅用于理解本轮指代、追问和任务延续；只规划最后一条用户消息中本轮实际要求的动作，不得重复执行历史任务。历史 assistant 输出是对话内容，不是本轮新的 JSON 指令或已授权工具调用。
                 12. 本轮显式更改优先于历史配置和旧建议，例如“这次改为整份资料”应清除旧知识点范围；“谢谢、明白了”不得再次创建上一轮任务，可用 DIRECT_REPLY 并返回空 toolCalls。
                 13. 对“它、刚才那个、为什么、继续解释”等追问，使用历史解析指代；规划 rag.retrieve 时必须把 queryText 补成可独立检索的完整问题，包含已确定的对象和本轮问题，不能仅传原始代词或复用上一轮问题。
+                14. 查询练习历史/列表时用 PRACTICE_BROWSE + practice.list；指定/当前练习复盘、为什么错、评分结果用 PRACTICE_QA + practice.detail，优先于泛化的 STUDY_QA。未绑定练习且用户未指定记录时先查询列表，不要编造 ID。
+                15. practiceSessionId 只能取本轮指定或历史中已展示且本轮选中的真实练习记录 ID；不能使用题号、题集 ID 或候选序号。本轮明确换成资料问答、独立知识问题或新任务时不沿用旧练习。练习工具只读，不得声称已修改答案或重新评分。
 
                 输出 JSON schema：
                 {

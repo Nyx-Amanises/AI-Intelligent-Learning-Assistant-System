@@ -26,6 +26,9 @@ public class AssistantToolCallVO {
     /** 工具执行结果 JSON。 */
     private String toolResultJson;
 
+    /** 当次工具执行的可读结果摘要。 */
+    private String summaryText;
+
     /** 调用状态：SUCCESS、FAILED 等。 */
     private String status;
 

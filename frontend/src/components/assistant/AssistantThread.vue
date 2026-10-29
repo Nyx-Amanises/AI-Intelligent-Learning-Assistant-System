@@ -31,6 +31,7 @@
         :streaming="streamingMessageId === message.id"
         :tool-calls="relatedToolCalls.get(message.id) || EMPTY_TOOL_CALLS"
         :memories="memoryMap[message.id] || EMPTY_MEMORIES"
+        @open-practice="emit('openPractice')"
       />
     </div>
 
@@ -68,6 +69,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (event: 'pick-prompt', prompt: string): void
+  (event: 'openPractice'): void
 }>()
 
 const EMPTY_TOOL_CALLS: AssistantToolCall[] = []

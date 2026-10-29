@@ -30,6 +30,7 @@ export interface PracticeDetail {
   sessionName: string
   sessionStatus?: string
   questionSetId?: number
+  materialId?: number
   questionIds?: number[] | null
   totalQuestions?: number
   totalScore?: number

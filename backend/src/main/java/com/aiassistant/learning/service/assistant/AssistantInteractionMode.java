@@ -13,6 +13,8 @@ public enum AssistantInteractionMode {
     MATERIAL_BROWSE,
     TASK_BROWSE,
     QUESTION_SET_BROWSE,
+    PRACTICE_BROWSE,
+    PRACTICE_QA,
     CHAPTER_BROWSE,
     CONTEXT_CHALLENGE,
     STUDY_QA,

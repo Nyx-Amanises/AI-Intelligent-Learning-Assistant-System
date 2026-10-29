@@ -115,8 +115,12 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
                 .toList();
 
         // 1. 先看会话上是否挂着待确认动作。
-        AssistantWorkflowResolution workflowResolution = pendingActionHandler.resolve(
-                userId, session, userMessage, structuredIntent, interactionMode, pendingDecision);
+        boolean practiceRequest = interactionMode == AssistantInteractionMode.PRACTICE_QA
+                || interactionMode == AssistantInteractionMode.PRACTICE_BROWSE;
+        if (practiceRequest) sessionState.clearPendingAction(session);
+        AssistantWorkflowResolution workflowResolution = practiceRequest
+                ? toolExecution.executePracticeQuery(userId, session, userMessage, modelName, structuredIntent, interactionMode)
+                : pendingActionHandler.resolve(userId, session, userMessage, structuredIntent, interactionMode, pendingDecision);
         // 2. 按交互模式进入对应工作流。
         if (!workflowResolution.handled()) {
             workflowResolution = switch (interactionMode) {

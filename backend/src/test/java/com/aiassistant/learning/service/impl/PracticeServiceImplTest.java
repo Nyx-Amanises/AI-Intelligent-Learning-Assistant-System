@@ -131,6 +131,7 @@ class PracticeServiceImplTest {
         assertEquals(8, saved.getValue().getTotalScore());
         assertEquals(MATERIAL_ID, saved.getValue().getMaterialId());
         assertEquals(501L, detail.getSessionId());
+        assertEquals(MATERIAL_ID, detail.getMaterialId());
         assertNull(detail.getQuestionIds(), "整套练习不应被标识为专项重做");
         assertEquals(2, detail.getAnswers().size());
         assertNull(detail.getAnswers().get(0).getUserAnswer());
