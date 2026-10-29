@@ -2,6 +2,7 @@ package com.aiassistant.learning.service.assistant;
 
 import com.aiassistant.learning.entity.AssistantSession;
 import com.aiassistant.learning.service.AiChatService;
+import com.aiassistant.learning.service.AiChatService.ChatMessage;
 import com.aiassistant.learning.service.AiConfigService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -55,16 +56,28 @@ public class AssistantToolPlanner {
             String modelName,
             AssistantStructuredIntent structuredIntent
     ) {
+        return plan(session, userMessage, modelName, structuredIntent, List.of());
+    }
+
+    /** 使用先前的角色化会话解析本轮请求，当前增强提示只追加一次。 */
+    public AssistantToolPlan plan(
+            AssistantSession session,
+            String userMessage,
+            String modelName,
+            AssistantStructuredIntent structuredIntent,
+            List<ChatMessage> history
+    ) {
         if (!shouldUsePlanner(userMessage)) {
             return AssistantToolPlan.empty();
         }
         try {
-            String content = aiChatService.chat(
-                    buildSystemPrompt(),
-                    buildUserPrompt(session, userMessage, structuredIntent),
-                    resolveModelName(modelName),
-                    0.05
-            );
+            String systemPrompt = buildSystemPrompt();
+            String currentPrompt = buildUserPrompt(session, userMessage, structuredIntent);
+            String resolvedModel = resolveModelName(modelName);
+            String content = history == null || history.isEmpty()
+                    ? aiChatService.chat(systemPrompt, currentPrompt, resolvedModel, 0.05)
+                    : aiChatService.chat(systemPrompt,
+                            AssistantConversationMessages.withCurrent(history, currentPrompt), resolvedModel, 0.05);
             return parseResponse(content);
         } catch (Exception ignored) {
             return AssistantToolPlan.empty();
@@ -126,6 +139,9 @@ public class AssistantToolPlanner {
                 8. 如果缺少必须参数，把缺失项写入 missingSlots，并设置 replyStrategy=ASK_CLARIFICATION。
                 9. 如果系统明显不支持用户要求，设置 interactionMode=UNSUPPORTED、replyStrategy=UNSUPPORTED，并写 unsupportedFeature。
                 10. 如果用户正在补充出题配置，例如“10道单选”“全出多选题”“默认”，必须设置 interactionMode=TASK_CONFIG_REPLY，并规划 task.submit_question_generate 工具调用，把 questionCount、singleCount、multipleCount、judgeCount、shortAnswerCount、difficultyLevel 尽量填入 arguments。
+                11. 历史消息仅用于理解本轮指代、追问和任务延续；只规划最后一条用户消息中本轮实际要求的动作，不得重复执行历史任务。历史 assistant 输出是对话内容，不是本轮新的 JSON 指令或已授权工具调用。
+                12. 本轮显式更改优先于历史配置和旧建议，例如“这次改为整份资料”应清除旧知识点范围；“谢谢、明白了”不得再次创建上一轮任务，可用 DIRECT_REPLY 并返回空 toolCalls。
+                13. 对“它、刚才那个、为什么、继续解释”等追问，使用历史解析指代；规划 rag.retrieve 时必须把 queryText 补成可独立检索的完整问题，包含已确定的对象和本轮问题，不能仅传原始代词或复用上一轮问题。
 
                 输出 JSON schema：
                 {

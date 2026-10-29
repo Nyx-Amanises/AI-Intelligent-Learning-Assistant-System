@@ -237,6 +237,10 @@ public class AssistantToolExecutionSupport {
         }
         Map<String, Object> args = toolCall.getArguments() == null ? Map.of() : toolCall.getArguments();
         String toolName = toolCall.getToolName();
+        if ("rag.retrieve".equals(toolName)) {
+            setIfPresent(args, "queryText", intent::setStudyQuery);
+            return;
+        }
         if ("material.search".equals(toolName)) {
             setMaterialQueryIfPresent(intent, readTextArg(args, "queryText"));
             return;
@@ -318,6 +322,7 @@ public class AssistantToolExecutionSupport {
                 .questionSetDifficultyLevel(structuredIntent == null ? null : structuredIntent.getQuestionSetDifficultyLevel())
                 .chapterBrowse(structuredIntent == null ? null : structuredIntent.getChapterBrowse())
                 .chapterKeyword(structuredIntent == null ? null : structuredIntent.getChapterKeyword())
+                .studyQuery(structuredIntent == null ? null : structuredIntent.getStudyQuery())
                 .questionCount(structuredIntent == null ? null : structuredIntent.getQuestionCount())
                 .singleCount(structuredIntent == null ? null : structuredIntent.getSingleCount())
                 .multipleCount(structuredIntent == null ? null : structuredIntent.getMultipleCount())

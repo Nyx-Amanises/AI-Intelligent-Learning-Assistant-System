@@ -33,6 +33,9 @@ public class AssistantPendingActionPayload {
     /** 用户确认后要继续使用的消息。 */
     private String followUpUserMessage;
 
+    /** 已结合会话历史补全的学习问题；资料确认后继续使用，原始消息另行保留。 */
+    private String studyQuery;
+
     /** 章节关键词。 */
     private String chapterKeyword;
 

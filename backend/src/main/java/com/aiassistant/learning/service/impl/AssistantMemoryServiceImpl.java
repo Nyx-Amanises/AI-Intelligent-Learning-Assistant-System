@@ -24,6 +24,8 @@ import org.springframework.util.StringUtils;
 @Service
 public class AssistantMemoryServiceImpl implements AssistantMemoryService {
 
+    private static final List<String> PERSONAL_MEMORY_SCOPES = List.of("PROFILE", "GOAL", "PREFERENCE");
+
     /** 助手记忆表 Mapper。 */
     private final AssistantMemoryMapper assistantMemoryMapper;
 
@@ -36,9 +38,23 @@ public class AssistantMemoryServiceImpl implements AssistantMemoryService {
      */
     @Override
     public List<MemorySnippet> findRelevantMemories(Long userId, String queryText, Integer limit) {
+        return findRelevantMemories(userId, null, queryText, limit);
+    }
+
+    /** 先按用户及会话范围筛选，再排序限量，避免其他会话挤占候选或被当作本轮上下文。 */
+    @Override
+    public List<MemorySnippet> findRelevantMemories(Long userId, Long sessionId, String queryText, Integer limit) {
         int resolvedLimit = limit == null || limit <= 0 ? 3 : Math.min(limit, 10);
         List<AssistantMemory> candidates = assistantMemoryMapper.selectList(new LambdaQueryWrapper<AssistantMemory>()
                 .eq(AssistantMemory::getUserId, userId)
+                .and(scope -> {
+                    scope.in(AssistantMemory::getMemoryScope, PERSONAL_MEMORY_SCOPES);
+                    if (sessionId != null && sessionId > 0) {
+                        scope.or(context -> context.eq(AssistantMemory::getMemoryScope, "CONTEXT")
+                                .eq(AssistantMemory::getSourceType, "ASSISTANT_SESSION")
+                                .eq(AssistantMemory::getSourceId, sessionId));
+                    }
+                })
                 .orderByDesc(AssistantMemory::getImportanceScore)
                 .orderByDesc(AssistantMemory::getLastHitAt)
                 .orderByDesc(AssistantMemory::getUpdatedAt)
@@ -147,7 +163,7 @@ public class AssistantMemoryServiceImpl implements AssistantMemoryService {
      * 保存最近会话上下文，方便后续对话继续承接。
      */
     private void captureContextMemory(Long userId, AssistantSession session, String assistantReply) {
-        if (session == null) {
+        if (session == null || session.getId() == null || session.getId() <= 0) {
             return;
         }
         String summary = buildContextSummary(session);
@@ -188,6 +204,8 @@ public class AssistantMemoryServiceImpl implements AssistantMemoryService {
                 .eq(AssistantMemory::getMemoryScope, memoryScope)
                 .eq(AssistantMemory::getMemoryType, memoryType)
                 .eq(AssistantMemory::getTopicName, topicName)
+                .eq("CONTEXT".equals(memoryScope), AssistantMemory::getSourceType, sourceType)
+                .eq("CONTEXT".equals(memoryScope), AssistantMemory::getSourceId, sourceId)
                 .last("limit 1"));
         if (existing == null) {
             AssistantMemory memory = new AssistantMemory();

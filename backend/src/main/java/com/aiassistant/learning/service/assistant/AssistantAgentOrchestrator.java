@@ -1,6 +1,7 @@
 package com.aiassistant.learning.service.assistant;
 
 import com.aiassistant.learning.entity.AssistantSession;
+import com.aiassistant.learning.service.AiChatService.ChatMessage;
 import java.util.List;
 
 /**
@@ -15,10 +16,17 @@ public interface AssistantAgentOrchestrator {
      */
     AssistantPreparedResult prepare(Long userId, AssistantSession session, String userMessage, String modelName);
 
+    /** 同一轮的规划与最终回复共用这份会话历史快照。 */
+    AssistantPreparedResult prepare(Long userId, AssistantSession session, String userMessage, String modelName,
+                                    List<ChatMessage> history);
+
     /**
      * 非流式完整执行一轮对话并返回助手回复。
      */
     AssistantAgentResult respond(Long userId, AssistantSession session, String userMessage, String modelName);
+
+    AssistantAgentResult respond(Long userId, AssistantSession session, String userMessage, String modelName,
+                                 List<ChatMessage> history);
 
     /**
      * 从对话中沉淀长期记忆。
@@ -46,8 +54,20 @@ public interface AssistantAgentOrchestrator {
             /** 工具执行结果。 */
             List<AssistantTool.ToolExecutionResult> toolExecutions,
             /** 本轮使用的记忆。 */
-            List<MemoryUsage> usedMemories
+            List<MemoryUsage> usedMemories,
+            /** 按角色排序的会话历史与本轮提示词，供同步和流式调用共用。 */
+            List<ChatMessage> messages
     ) {
+        public AssistantPreparedResult {
+            messages = List.copyOf(messages);
+        }
+
+        public AssistantPreparedResult(boolean useModel, String systemPrompt, String userPrompt, String fallbackReply,
+                                       String reasoningJson, String toolPlanJson, String modelName,
+                                       List<AssistantTool.ToolExecutionResult> toolExecutions, List<MemoryUsage> usedMemories) {
+            this(useModel, systemPrompt, userPrompt, fallbackReply, reasoningJson, toolPlanJson, modelName,
+                    toolExecutions, usedMemories, AssistantConversationMessages.withCurrent(List.of(), userPrompt));
+        }
     }
 
     /**

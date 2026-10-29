@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -14,6 +16,7 @@ import static org.mockito.Mockito.when;
 import com.aiassistant.learning.dto.ai.QuestionGenerateRequest;
 import com.aiassistant.learning.entity.AssistantSession;
 import com.aiassistant.learning.service.AiChatService;
+import com.aiassistant.learning.service.AiChatService.ChatMessage;
 import com.aiassistant.learning.service.AiConfigService;
 import com.aiassistant.learning.service.AssistantMemoryService;
 import com.aiassistant.learning.service.QuestionSetService;
@@ -25,6 +28,7 @@ import com.aiassistant.learning.service.assistant.tool.SummaryTaskAssistantTool;
 import com.aiassistant.learning.vo.material.MaterialPageVO;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -69,7 +73,7 @@ class AssistantAgentOrchestratorImplTest {
      * 每个测试默认不返回相关记忆，并配置一个可用的测试模型。
      */
     AssistantAgentOrchestratorImplTest() {
-        when(assistantMemoryService.findRelevantMemories(Mockito.anyLong(), Mockito.anyString(), Mockito.anyInt()))
+        when(assistantMemoryService.findRelevantMemories(Mockito.anyLong(), Mockito.any(), Mockito.anyString(), Mockito.anyInt()))
                 .thenReturn(List.of());
         when(aiConfigService.getResolvedConfig()).thenReturn(new AiConfigService.ResolvedAiConfig(
                 true,
@@ -637,6 +641,177 @@ class AssistantAgentOrchestratorImplTest {
         assertTrue(preparedResult.fallbackReply().contains("请先告诉我资料标题"));
         assertEquals(1, preparedResult.toolExecutions().size());
         verifyNoInteractions(structuredIntentExtractor);
+    }
+
+    @Test
+    void prepareSharesOneHistorySnapshotAcrossPlannerFallbackAndPendingDecision() {
+        AssistantAgentOrchestratorImpl orchestrator = newOrchestrator(
+                new AssistantToolRegistry(List.of()), Mockito.mock(MaterialSearchAssistantTool.class));
+        AssistantSession session = materialSession(7L);
+        session.setId(42L);
+        String current = "刚才第二点能再具体说明吗";
+        List<ChatMessage> history = new ArrayList<>(twoCompletedTurns());
+        List<ChatMessage> originalHistory = List.copyOf(history);
+        AssistantStructuredIntent intent = AssistantStructuredIntent.builder().interactionMode("CHAT").build();
+        when(toolPlanner.plan(eq(session), eq(current), eq("gpt-test"), isNull(), Mockito.anyList()))
+                .thenReturn(AssistantToolPlan.empty());
+        when(structuredIntentExtractor.extract(eq(current), eq("gpt-test"), Mockito.anyList())).thenReturn(intent);
+        when(pendingDecisionPlanner.decide(eq(session), isNull(), eq(current), eq(intent), Mockito.any(),
+                eq("gpt-test"), Mockito.anyList())).thenReturn(AssistantPendingDecision.unknown());
+        when(assistantMemoryService.findRelevantMemories(1L, 42L, current, 3)).thenReturn(List.of(
+                new AssistantMemoryService.MemorySnippet(8L, "PREFERENCE", "RESPONSE_STYLE", "偏好", "喜欢例子", "喜欢例子")));
+
+        var prepared = orchestrator.prepare(1L, session, current, "gpt-test", history);
+
+        ArgumentCaptor<List<ChatMessage>> plannerHistory = chatMessagesCaptor();
+        verify(toolPlanner).plan(eq(session), eq(current), eq("gpt-test"), isNull(), plannerHistory.capture());
+        verify(structuredIntentExtractor).extract(eq(current), eq("gpt-test"), Mockito.same(plannerHistory.getValue()));
+        verify(pendingDecisionPlanner).decide(eq(session), isNull(), eq(current), eq(intent), Mockito.any(),
+                eq("gpt-test"), Mockito.same(plannerHistory.getValue()));
+        verify(assistantMemoryService).findRelevantMemories(1L, 42L, current, 3);
+        assertEquals(originalHistory, plannerHistory.getValue());
+        assertTrue(prepared.useModel());
+        assertEquals(5, prepared.messages().size());
+        assertEquals(originalHistory, prepared.messages().subList(0, 4));
+        assertEquals(List.of("user", "assistant", "user", "assistant", "user"),
+                prepared.messages().stream().map(ChatMessage::role).toList());
+        assertEquals(prepared.userPrompt(), prepared.messages().get(4).content());
+        assertTrue(prepared.userPrompt().contains("materialId=7"));
+        assertTrue(prepared.userPrompt().contains("喜欢例子"));
+        assertCurrentAppearsOnce(prepared.messages(), current);
+        history.clear();
+        assertEquals(originalHistory, plannerHistory.getValue(), "调用方后续修改列表不能改变已准备的会话历史");
+        assertEquals(originalHistory, prepared.messages().subList(0, 4));
+        assertThrows(UnsupportedOperationException.class, () -> prepared.messages().add(new ChatMessage("user", "修改")));
+        verifyNoInteractions(aiChatService);
+    }
+
+    @Test
+    void directPlannerReplyUsesHistoryWithoutCallingTheFinalModelAgain() {
+        AssistantAgentOrchestratorImpl orchestrator = newOrchestrator(
+                new AssistantToolRegistry(List.of()), Mockito.mock(MaterialSearchAssistantTool.class));
+        AssistantSession session = materialSession(7L);
+        session.setId(43L);
+        String current = "把刚才的答案缩成一句话";
+        List<ChatMessage> history = twoCompletedTurns();
+        AssistantToolPlan plan = AssistantToolPlan.builder().planned(true).interactionMode("CHAT")
+                .replyStrategy("DIRECT_REPLY").directReply("HashMap 先定位桶，再比较键。").build();
+        when(toolPlanner.plan(eq(session), eq(current), eq("gpt-test"), isNull(), Mockito.anyList())).thenReturn(plan);
+
+        var reply = orchestrator.respond(1L, session, current, "gpt-test", history);
+
+        ArgumentCaptor<List<ChatMessage>> plannerHistory = chatMessagesCaptor();
+        verify(toolPlanner).plan(eq(session), eq(current), eq("gpt-test"), isNull(), plannerHistory.capture());
+        assertEquals(history, plannerHistory.getValue());
+        verify(pendingDecisionPlanner).decide(eq(session), isNull(), eq(current), Mockito.any(), Mockito.same(plan),
+                eq("gpt-test"), Mockito.same(plannerHistory.getValue()));
+        assertEquals(plan.getDirectReply(), reply.assistantReply());
+        verify(assistantMemoryService).findRelevantMemories(1L, 43L, current, 3);
+        verify(assistantMemoryService).captureConversationMemory(1L, session, current, plan.getDirectReply());
+        verifyNoInteractions(structuredIntentExtractor, aiChatService);
+    }
+
+    @Test
+    void respondSendsHistoricalRolesAndOneEnhancedCurrentMessageToTheListChatApi() {
+        AssistantAgentOrchestratorImpl orchestrator = newOrchestrator(
+                new AssistantToolRegistry(List.of()), Mockito.mock(MaterialSearchAssistantTool.class));
+        AssistantSession session = materialSession(7L);
+        session.setId(44L);
+        String current = "上一个例子再展开一点";
+        List<ChatMessage> history = twoCompletedTurns();
+        AssistantToolPlan plan = AssistantToolPlan.builder().planned(true).interactionMode("CHAT")
+                .replyStrategy("USE_MODEL").build();
+        when(toolPlanner.plan(eq(session), eq(current), eq("gpt-test"), isNull(), Mockito.anyList())).thenReturn(plan);
+        when(aiChatService.chat(Mockito.anyString(), Mockito.<ChatMessage>anyList(), eq("gpt-test"), eq(0.3)))
+                .thenReturn("沿用刚才的碰撞示例，接下来比较键是否相等。");
+
+        var reply = orchestrator.respond(1L, session, current, "gpt-test", history);
+
+        ArgumentCaptor<List<ChatMessage>> finalMessages = chatMessagesCaptor();
+        verify(aiChatService).chat(Mockito.anyString(), finalMessages.capture(), eq("gpt-test"), eq(0.3));
+        assertEquals(history, finalMessages.getValue().subList(0, 4));
+        assertEquals(5, finalMessages.getValue().size());
+        assertEquals("assistant", finalMessages.getValue().get(3).role());
+        assertSame(history.get(3), finalMessages.getValue().get(3));
+        assertEquals("user", finalMessages.getValue().get(4).role());
+        assertTrue(finalMessages.getValue().get(4).content().contains("用户消息："));
+        assertCurrentAppearsOnce(finalMessages.getValue(), current);
+        assertEquals("沿用刚才的碰撞示例，接下来比较键是否相等。", reply.assistantReply());
+        verify(assistantMemoryService).findRelevantMemories(1L, 44L, current, 3);
+        verify(assistantMemoryService).captureConversationMemory(1L, session, current, reply.assistantReply());
+        verify(aiChatService, Mockito.never()).chat(Mockito.anyString(), Mockito.anyString(), Mockito.anyString(), Mockito.anyDouble());
+        verifyNoInteractions(structuredIntentExtractor);
+    }
+
+    @Test
+    void legacyPrepareWithoutHistoryKeepsExistingPlannerCallsAndAllowsAnUnsetSessionId() {
+        AssistantAgentOrchestratorImpl orchestrator = newOrchestrator(
+                new AssistantToolRegistry(List.of()), Mockito.mock(MaterialSearchAssistantTool.class));
+        AssistantSession session = materialSession(7L);
+        when(structuredIntentExtractor.extract("你好", "gpt-test"))
+                .thenReturn(AssistantStructuredIntent.builder().interactionMode("CHAT").build());
+
+        var prepared = orchestrator.prepare(1L, session, "你好", "gpt-test");
+
+        verify(assistantMemoryService).findRelevantMemories(1L, null, "你好", 3);
+        verify(toolPlanner).plan(session, "你好", "gpt-test", null);
+        verify(structuredIntentExtractor).extract("你好", "gpt-test");
+        verify(toolPlanner, Mockito.never()).plan(Mockito.any(), Mockito.anyString(), Mockito.anyString(), Mockito.any(), Mockito.anyList());
+        assertTrue(prepared.useModel());
+        assertEquals(List.of(new ChatMessage("user", prepared.userPrompt())), prepared.messages());
+        assertCurrentAppearsOnce(prepared.messages(), "你好");
+    }
+
+    @Test
+    void followUpUsesResolvedHistoryQueryForRetrievalWhileKeepingTheCurrentWordsInFinalPrompt() {
+        AssistantTool rag = Mockito.mock(AssistantTool.class);
+        when(rag.name()).thenReturn("rag.retrieve");
+        when(rag.supports(Mockito.any())).thenReturn(true);
+        LocalDateTime now = LocalDateTime.now();
+        when(rag.execute(Mockito.any())).thenReturn(new AssistantTool.ToolExecutionResult(
+                "rag.retrieve", "SUCCESS", "{}", "{}", "找到散列碰撞的说明", null, now, now));
+        AssistantAgentOrchestratorImpl orchestrator = newOrchestrator(
+                new AssistantToolRegistry(List.of(rag)), Mockito.mock(MaterialSearchAssistantTool.class));
+        AssistantSession session = materialSession(7L);
+        session.setId(45L);
+        String current = "它为什么还要比较键？";
+        String resolved = "HashMap 发生散列碰撞后为什么还要通过 equals 比较键？";
+        List<ChatMessage> history = twoCompletedTurns();
+        AssistantToolPlan plan = AssistantToolPlan.builder().planned(true).interactionMode("STUDY_QA")
+                .replyStrategy("EXECUTE_TOOLS")
+                .toolCalls(List.of(AssistantToolPlan.ToolCall.builder().toolName("rag.retrieve")
+                        .arguments(Map.of("queryText", resolved)).build())).build();
+        when(toolPlanner.plan(eq(session), eq(current), eq("gpt-test"), isNull(), Mockito.anyList())).thenReturn(plan);
+
+        var prepared = orchestrator.prepare(1L, session, current, "gpt-test", history);
+
+        ArgumentCaptor<AssistantTool.ToolContext> toolContext = ArgumentCaptor.forClass(AssistantTool.ToolContext.class);
+        verify(rag).execute(toolContext.capture());
+        assertEquals(resolved, toolContext.getValue().userMessage());
+        assertEquals(resolved, toolContext.getValue().structuredIntent().getStudyQuery());
+        assertEquals(7L, toolContext.getValue().session().getCurrentMaterialId());
+        assertEquals(history, prepared.messages().subList(0, history.size()));
+        assertCurrentAppearsOnce(prepared.messages(), current);
+        assertTrue(prepared.userPrompt().contains("找到散列碰撞的说明"));
+        assertTrue(prepared.useModel());
+    }
+
+    private List<ChatMessage> twoCompletedTurns() {
+        return List.of(new ChatMessage("user", "HashMap 怎样查找键？"),
+                new ChatMessage("assistant", "第一步定位桶，第二步比较键。"),
+                new ChatMessage("user", "请举个散列碰撞的例子。"),
+                new ChatMessage("assistant", "键甲和键乙进入同一个桶，再通过 equals 区分。"));
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private ArgumentCaptor<List<ChatMessage>> chatMessagesCaptor() {
+        return (ArgumentCaptor) ArgumentCaptor.forClass(List.class);
+    }
+
+    private void assertCurrentAppearsOnce(List<ChatMessage> messages, String current) {
+        assertEquals(1L, messages.stream().filter(item -> item.content().contains(current)).count());
+        String prompt = messages.get(messages.size() - 1).content();
+        assertEquals(prompt.indexOf(current), prompt.lastIndexOf(current));
     }
 
     /**

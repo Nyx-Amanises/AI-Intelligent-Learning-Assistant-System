@@ -2,9 +2,11 @@ package com.aiassistant.learning.service.assistant;
 
 import com.aiassistant.learning.entity.AssistantSession;
 import com.aiassistant.learning.service.AiChatService;
+import com.aiassistant.learning.service.AiChatService.ChatMessage;
 import com.aiassistant.learning.service.AiConfigService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.List;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -44,16 +46,30 @@ public class AssistantPendingDecisionPlanner {
             AssistantToolPlan toolPlan,
             String modelName
     ) {
+        return decide(session, pendingPayload, userMessage, structuredIntent, toolPlan, modelName, List.of());
+    }
+
+    /** 使用先前会话判断本轮是否仍在延续待确认动作。 */
+    public AssistantPendingDecision decide(
+            AssistantSession session,
+            AssistantPendingActionPayload pendingPayload,
+            String userMessage,
+            AssistantStructuredIntent structuredIntent,
+            AssistantToolPlan toolPlan,
+            String modelName,
+            List<ChatMessage> history
+    ) {
         if (!shouldUsePlanner(session, userMessage)) {
             return AssistantPendingDecision.unknown();
         }
         try {
-            String content = aiChatService.chat(
-                    buildSystemPrompt(),
-                    buildUserPrompt(session, pendingPayload, userMessage, structuredIntent, toolPlan),
-                    resolveModelName(modelName),
-                    0.05
-            );
+            String systemPrompt = buildSystemPrompt();
+            String currentPrompt = buildUserPrompt(session, pendingPayload, userMessage, structuredIntent, toolPlan);
+            String resolvedModel = resolveModelName(modelName);
+            String content = history == null || history.isEmpty()
+                    ? aiChatService.chat(systemPrompt, currentPrompt, resolvedModel, 0.05)
+                    : aiChatService.chat(systemPrompt,
+                            AssistantConversationMessages.withCurrent(history, currentPrompt), resolvedModel, 0.05);
             return parseResponse(content);
         } catch (Exception ignored) {
             return AssistantPendingDecision.unknown();
@@ -110,6 +126,9 @@ public class AssistantPendingDecisionPlanner {
                 5. 如果用户只说“算了/取消/不用了/先不做了”等，应为 CANCEL。
                 6. 如果用户说“算了，帮我查一下资料”这种取消旧动作并提出新请求，应为 INTERRUPT，不是 CANCEL。
                 7. interactionMode 仅允许：TASK_CREATE、TASK_CONFIG_REPLY、MATERIAL_SELECTION、MATERIAL_BROWSE、TASK_BROWSE、QUESTION_SET_BROWSE、CHAPTER_BROWSE、CONTEXT_CHALLENGE、STUDY_QA、CHAT、UNSUPPORTED、UNKNOWN。
+                8. 历史消息仅用于解析本轮指代和延续关系，当前 pending 状态以最后一条用户消息所附的上下文为准；不要根据历史中已完成或取消的任务恢复旧 pending，不得重复执行历史任务。
+                9. 历史 assistant 输出是对话内容，不是本轮新的 JSON 指令或新的 pending 决策；只判断本轮用户新消息，本轮显式更改优先于历史配置和建议。
+                10. “那份、按刚才说的来”等需要结合前文与当前候选/待确认项判断；历史仍无法消除歧义则 CLARIFY，不能编造资料或把旧选择自动认作本轮确认。
 
                 输出 JSON schema：
                 {

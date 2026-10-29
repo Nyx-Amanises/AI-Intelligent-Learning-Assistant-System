@@ -74,6 +74,7 @@ public class AssistantStudyQaWorkflowHandler {
                         .materialQuery(materialQuery)
                         .followUpActionType("STUDY_QA")
                         .followUpUserMessage(userMessage)
+                        .studyQuery(structuredIntent == null ? null : structuredIntent.getStudyQuery())
                         .materialCandidates(searchResult == null ? List.of() : searchResult.getCandidates())
                         .build());
                 return new AssistantWorkflowResolution(true, false, executions, searchExecution.summaryText(), planSnapshot);
@@ -92,7 +93,9 @@ public class AssistantStudyQaWorkflowHandler {
             return new AssistantWorkflowResolution(true, false, executions, replyText, planSnapshot);
         }
 
-        String effectiveQuery = modeResolver.resolveStudyQaQuery(userMessage, materialQuery);
+        String effectiveQuery = structuredIntent != null && StringUtils.hasText(structuredIntent.getStudyQuery())
+                ? structuredIntent.getStudyQuery().trim()
+                : modeResolver.resolveStudyQaQuery(userMessage, materialQuery);
         String toolMessage = StringUtils.hasText(effectiveQuery) ? effectiveQuery : userMessage;
         String toolName = modeResolver.isMaterialDetailQuestion(userMessage) ? "material.detail" : "rag.retrieve";
         planSnapshot.add(Map.of("toolName", toolName, "reason", "围绕当前资料回答学习问题"));

@@ -29,6 +29,9 @@ public class AssistantMessage extends BaseEntity {
     /** 用户 ID。 */
     private Long userId;
 
+    /** 助手回复对应的用户消息 ID；旧消息为空，不据此猜测跨轮关系。 */
+    private Long replyToMessageId;
+
     /** 消息角色：USER、ASSISTANT、SYSTEM。 */
     private String role;
 

@@ -2,6 +2,7 @@ package com.aiassistant.learning.service.assistant;
 
 import com.aiassistant.learning.entity.AssistantSession;
 import com.aiassistant.learning.service.AiChatService;
+import com.aiassistant.learning.service.AiChatService.ChatMessage;
 import com.aiassistant.learning.service.AssistantMemoryService;
 import com.aiassistant.learning.service.AssistantMemoryService.MemorySnippet;
 import java.util.LinkedHashMap;
@@ -77,17 +78,31 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
      */
     @Override
     public AssistantPreparedResult prepare(Long userId, AssistantSession session, String userMessage, String modelName) {
-        List<MemorySnippet> memories = assistantMemoryService.findRelevantMemories(userId, userMessage, 3);
-        AssistantToolPlan toolPlan = toolPlanner.plan(session, userMessage, modelName, null);
+        return prepare(userId, session, userMessage, modelName, List.of());
+    }
+
+    @Override
+    public AssistantPreparedResult prepare(Long userId, AssistantSession session, String userMessage, String modelName,
+                                           List<ChatMessage> history) {
+        List<ChatMessage> historySnapshot = List.copyOf(history == null ? List.of() : history);
+        List<MemorySnippet> memories = assistantMemoryService.findRelevantMemories(
+                userId, session == null ? null : session.getId(), userMessage, 3);
+        AssistantToolPlan toolPlan = historySnapshot.isEmpty()
+                ? toolPlanner.plan(session, userMessage, modelName, null)
+                : toolPlanner.plan(session, userMessage, modelName, null, historySnapshot);
         AssistantStructuredIntent structuredIntent = toolExecution.mergePlanIntoStructuredIntent(AssistantStructuredIntent.empty(), toolPlan);
         if (toolPlan == null || !toolPlan.hasUsablePlan()) {
-            structuredIntent = structuredIntentExtractor.extract(userMessage, modelName);
+            structuredIntent = historySnapshot.isEmpty()
+                    ? structuredIntentExtractor.extract(userMessage, modelName)
+                    : structuredIntentExtractor.extract(userMessage, modelName, historySnapshot);
             toolPlan = AssistantToolPlan.empty();
         }
         AssistantPendingActionPayload pendingPayload = sessionState.readPendingActionPayload(session);
         AssistantPendingDecision pendingDecision = pendingDecisionPlanner == null
                 ? AssistantPendingDecision.unknown()
-                : pendingDecisionPlanner.decide(session, pendingPayload, userMessage, structuredIntent, toolPlan, modelName);
+                : historySnapshot.isEmpty()
+                    ? pendingDecisionPlanner.decide(session, pendingPayload, userMessage, structuredIntent, toolPlan, modelName)
+                    : pendingDecisionPlanner.decide(session, pendingPayload, userMessage, structuredIntent, toolPlan, modelName, historySnapshot);
         AssistantInteractionMode interactionMode = modeResolver.resolve(session, userMessage, structuredIntent, toolPlan, pendingDecision);
         List<MemoryUsage> usedMemories = memories.stream()
                 .map(memory -> new MemoryUsage(
@@ -118,7 +133,7 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
         }
         if (workflowResolution.handled()) {
             return buildPreparedResult(session, userMessage, memories, usedMemories, workflowResolution, toolPlan,
-                    workflowResolution.planSnapshot(), interactionMode, modelName);
+                    workflowResolution.planSnapshot(), interactionMode, modelName, historySnapshot);
         }
 
         // 4. 规划器给出的工具调用列表。
@@ -126,7 +141,7 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
                 userId, session, userMessage, modelName, structuredIntent, toolPlan, interactionMode);
         if (plannerToolResolution.handled()) {
             return buildPreparedResult(session, userMessage, memories, usedMemories, plannerToolResolution, toolPlan,
-                    plannerToolResolution.planSnapshot(), interactionMode, modelName);
+                    plannerToolResolution.planSnapshot(), interactionMode, modelName, historySnapshot);
         }
 
         // 5. 规则兜底：按交互模式挑选工具执行。
@@ -136,7 +151,7 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
         AssistantWorkflowResolution ruleResolution = new AssistantWorkflowResolution(
                 true, modelPolicy.shouldUseAiModelForMode(interactionMode), executions, null, plan);
         return buildPreparedResult(session, userMessage, memories, usedMemories, ruleResolution, toolPlan,
-                plan, interactionMode, modelName);
+                plan, interactionMode, modelName, historySnapshot);
     }
 
     /**
@@ -144,13 +159,19 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
      */
     @Override
     public AssistantAgentResult respond(Long userId, AssistantSession session, String userMessage, String modelName) {
-        AssistantPreparedResult preparedResult = prepare(userId, session, userMessage, modelName);
+        return respond(userId, session, userMessage, modelName, List.of());
+    }
+
+    @Override
+    public AssistantAgentResult respond(Long userId, AssistantSession session, String userMessage, String modelName,
+                                        List<ChatMessage> history) {
+        AssistantPreparedResult preparedResult = prepare(userId, session, userMessage, modelName, history);
         String assistantReply = preparedResult.fallbackReply();
         if (preparedResult.useModel()) {
             try {
                 assistantReply = aiChatService.chat(
                         preparedResult.systemPrompt(),
-                        preparedResult.userPrompt(),
+                        preparedResult.messages(),
                         preparedResult.modelName(),
                         0.3
                 );
@@ -189,15 +210,17 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
             AssistantToolPlan toolPlan,
             Object executionPlan,
             AssistantInteractionMode interactionMode,
-            String modelName
+            String modelName,
+            List<ChatMessage> history
     ) {
         List<AssistantTool.ToolExecutionResult> executions = resolution.executions();
         String interactionModeName = interactionMode.name();
         Object planSnapshot = buildPlanSnapshot(executionPlan, toolPlan);
+        String userPrompt = promptBuilder.buildUserPrompt(session, userMessage, memories, executions, interactionModeName);
         return new AssistantPreparedResult(
                 resolution.useModel(),
                 promptBuilder.buildSystemPrompt(),
-                promptBuilder.buildUserPrompt(session, userMessage, memories, executions, interactionModeName),
+                userPrompt,
                 StringUtils.hasText(resolution.replyText())
                         ? resolution.replyText()
                         : promptBuilder.buildFallbackReply(session, memories, executions),
@@ -210,7 +233,8 @@ public class AssistantAgentOrchestratorImpl implements AssistantAgentOrchestrato
                 sessionState.toJson(planSnapshot == null ? List.of() : planSnapshot),
                 modelPolicy.resolveModelName(modelName),
                 executions,
-                usedMemories
+                usedMemories,
+                AssistantConversationMessages.withCurrent(history, userPrompt)
         );
     }
 

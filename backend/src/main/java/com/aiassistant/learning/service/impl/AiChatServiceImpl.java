@@ -28,7 +28,7 @@ import org.springframework.util.StringUtils;
 /**
  * AI 聊天服务实现类。
  *
- * <p>负责把系统提示词和用户提示词组装成 HTTP 请求，并兼容普通 Chat Completions 与 Responses API。</p>
+ * <p>负责把系统提示词和会话消息组装成 HTTP 请求，并兼容普通 Chat Completions 与 Responses API。</p>
  */
 @Slf4j
 @Service
@@ -58,8 +58,13 @@ public class AiChatServiceImpl implements AiChatService {
      */
     @Override
     public String chat(String systemPrompt, String userPrompt, String modelName, Double temperature) {
+        return chat(systemPrompt, List.of(new ChatMessage("user", userPrompt)), modelName, temperature);
+    }
+
+    @Override
+    public String chat(String systemPrompt, List<ChatMessage> messages, String modelName, Double temperature) {
         AiConfigService.ResolvedAiConfig config = validateConfig();
-        Map<String, Object> requestBody = buildChatRequestBody(config, systemPrompt, userPrompt, modelName, temperature, false);
+        Map<String, Object> requestBody = buildChatRequestBody(config, systemPrompt, messages, modelName, temperature, false);
         HttpRequest request = buildHttpRequest(config, requestBody);
 
         try {
@@ -102,8 +107,19 @@ public class AiChatServiceImpl implements AiChatService {
             Double temperature,
             Consumer<String> onDelta
     ) {
+        streamChat(systemPrompt, List.of(new ChatMessage("user", userPrompt)), modelName, temperature, onDelta);
+    }
+
+    @Override
+    public void streamChat(
+            String systemPrompt,
+            List<ChatMessage> messages,
+            String modelName,
+            Double temperature,
+            Consumer<String> onDelta
+    ) {
         AiConfigService.ResolvedAiConfig config = validateConfig();
-        Map<String, Object> requestBody = buildChatRequestBody(config, systemPrompt, userPrompt, modelName, temperature, true);
+        Map<String, Object> requestBody = buildChatRequestBody(config, systemPrompt, messages, modelName, temperature, true);
         HttpRequest request = buildHttpRequest(config, requestBody);
 
         try {
@@ -181,7 +197,7 @@ public class AiChatServiceImpl implements AiChatService {
     private Map<String, Object> buildChatRequestBody(
             AiConfigService.ResolvedAiConfig config,
             String systemPrompt,
-            String userPrompt,
+            List<ChatMessage> messages,
             String modelName,
             Double temperature,
             boolean stream
@@ -189,17 +205,25 @@ public class AiChatServiceImpl implements AiChatService {
         if (!StringUtils.hasText(modelName)) {
             throw new BusinessException("AI 默认模型未配置");
         }
+        if (messages == null || messages.isEmpty() || messages.stream().anyMatch(java.util.Objects::isNull)) {
+            throw new BusinessException("AI 会话消息不能为空");
+        }
+        List<ChatMessage> conversation = List.copyOf(messages);
         if (isResponsesApi(config)) {
-            return buildResponsesRequestBody(systemPrompt, userPrompt, modelName, temperature, stream);
+            return buildResponsesRequestBody(systemPrompt, conversation, modelName, temperature, stream);
         }
         Map<String, Object> requestBody = new LinkedHashMap<>();
         requestBody.put("model", modelName.trim());
         requestBody.put("temperature", temperature == null ? 0.7 : temperature);
         requestBody.put("stream", stream);
-        requestBody.put("messages", List.of(
-                Map.of("role", "system", "content", systemPrompt),
-                Map.of("role", "user", "content", userPrompt)
-        ));
+        List<Map<String, String>> wireMessages = new ArrayList<>();
+        if (StringUtils.hasText(systemPrompt)) {
+            wireMessages.add(Map.of("role", "system", "content", systemPrompt));
+        }
+        for (ChatMessage message : conversation) {
+            wireMessages.add(Map.of("role", message.role(), "content", message.content()));
+        }
+        requestBody.put("messages", wireMessages);
         return requestBody;
     }
 
@@ -208,7 +232,7 @@ public class AiChatServiceImpl implements AiChatService {
      */
     private Map<String, Object> buildResponsesRequestBody(
             String systemPrompt,
-            String userPrompt,
+            List<ChatMessage> messages,
             String modelName,
             Double temperature,
             boolean stream
@@ -219,30 +243,14 @@ public class AiChatServiceImpl implements AiChatService {
         if (stream) {
             requestBody.put("stream", true);
         }
-        requestBody.put("input", List.of(Map.of(
-                "role", "user",
-                "content", List.of(Map.of(
-                        "type", "input_text",
-                        "text", buildResponsesInputText(systemPrompt, userPrompt)
-                ))
-        )));
-        return requestBody;
-    }
-
-    /**
-     * Responses API 没有独立的 system 消息时，把系统提示词合并进 input_text。
-     */
-    private String buildResponsesInputText(String systemPrompt, String userPrompt) {
-        StringBuilder builder = new StringBuilder();
         if (StringUtils.hasText(systemPrompt)) {
-            builder.append("系统指令：").append(System.lineSeparator())
-                    .append(systemPrompt.trim())
-                    .append(System.lineSeparator())
-                    .append(System.lineSeparator());
+            requestBody.put("instructions", systemPrompt);
         }
-        builder.append("用户消息：").append(System.lineSeparator())
-                .append(userPrompt == null ? "" : userPrompt.trim());
-        return builder.toString();
+        // Responses 接受带 role 的文本消息；保持 assistant 角色，不能把历史回答重新当作用户输入。
+        requestBody.put("input", messages.stream()
+                .map(message -> Map.of("role", message.role(), "content", message.content()))
+                .toList());
+        return requestBody;
     }
 
     /**

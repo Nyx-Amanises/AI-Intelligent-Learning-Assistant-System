@@ -9,9 +9,12 @@ import java.util.List;
 public interface AssistantMemoryService {
 
     /**
-     * 根据用户输入查找相关记忆。
+     * 根据用户输入查找个人记忆；未指定会话时不读取会话上下文。
      */
     List<MemorySnippet> findRelevantMemories(Long userId, String queryText, Integer limit);
+
+    /** 个人记忆按用户共享；CONTEXT 仅允许来自当前会话。 */
+    List<MemorySnippet> findRelevantMemories(Long userId, Long sessionId, String queryText, Integer limit);
 
     /**
      * 从一轮对话中提取并保存长期记忆。

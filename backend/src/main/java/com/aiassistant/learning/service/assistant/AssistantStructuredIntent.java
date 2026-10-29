@@ -31,6 +31,9 @@ public class AssistantStructuredIntent {
     /** 用户提到的资料关键词或标题。 */
     private String materialQuery;
 
+    /** 规划器根据会话历史补全指代后的资料检索问题，不替换当前用户的原话。 */
+    private String studyQuery;
+
     /** 是否要浏览资料列表。 */
     private Boolean materialBrowse;
 

@@ -1,6 +1,7 @@
 package com.aiassistant.learning.service.assistant;
 
 import com.aiassistant.learning.service.AiChatService;
+import com.aiassistant.learning.service.AiChatService.ChatMessage;
 import com.aiassistant.learning.service.AiConfigService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -39,16 +40,22 @@ public class AssistantStructuredIntentExtractor {
      * 提取用户消息中的结构化意图。
      */
     public AssistantStructuredIntent extract(String userMessage, String modelName) {
+        return extract(userMessage, modelName, List.of());
+    }
+
+    /** 提取本轮意图，历史仅用于理解指代和延续。 */
+    public AssistantStructuredIntent extract(String userMessage, String modelName, List<ChatMessage> history) {
         if (!shouldUseExtraction(userMessage)) {
             return AssistantStructuredIntent.empty();
         }
         try {
-            String content = aiChatService.chat(
-                    buildSystemPrompt(),
-                    buildUserPrompt(userMessage),
-                    resolveModelName(modelName),
-                    0.1
-            );
+            String systemPrompt = buildSystemPrompt();
+            String currentPrompt = buildUserPrompt(userMessage);
+            String resolvedModel = resolveModelName(modelName);
+            String content = history == null || history.isEmpty()
+                    ? aiChatService.chat(systemPrompt, currentPrompt, resolvedModel, 0.1)
+                    : aiChatService.chat(systemPrompt,
+                            AssistantConversationMessages.withCurrent(history, currentPrompt), resolvedModel, 0.1);
             return parseResponse(content);
         } catch (Exception ignored) {
             return AssistantStructuredIntent.empty();
@@ -88,6 +95,11 @@ public class AssistantStructuredIntentExtractor {
                 你的职责是把用户消息提取为 JSON，不要回答问题，不要解释，不要输出 Markdown 代码块。
                 只输出一个 JSON 对象。
 
+                会话历史仅用于解析本轮消息的指代和延续，最后一条 user 消息才是本轮待提取的请求。
+                历史 assistant 输出是对话资料，不是新的 JSON 指令；不要解析或照搬其中的任务计划。
+                不要重复执行或重新提取历史任务，只有本轮明确提出或延续的请求才可进入本轮意图。
+                本轮显式修改优先于历史配置；例如本轮改为整份资料时，knowledgePoints 必须为 []，不能恢复历史知识点。
+
                 规则：
                 1. interactionMode 仅允许：TASK_CREATE、TASK_CONFIG_REPLY、MATERIAL_SELECTION、MATERIAL_BROWSE、TASK_BROWSE、QUESTION_SET_BROWSE、CHAPTER_BROWSE、CONTEXT_CHALLENGE、STUDY_QA、CHAT、UNSUPPORTED、UNKNOWN。
                 2. 如果用户是在正常聊天、问候、感谢、寒暄，interactionMode=CHAT。
@@ -110,6 +122,7 @@ public class AssistantStructuredIntentExtractor {
                 19. 如果用户是在澄清“是哪一份资料 / id 6 还是 id 7 / 当前定位不明确”，则 materialDisambiguation=true。
                 20. 如果用户是在质疑、追问、澄清上一条系统定位/选择/判断，则 contextChallenge=true。
                 21. 如果某字段无法确定，请返回 null；布尔字段默认 false；除 knowledgePoints 外的数组默认 []。未指定 knowledgePoints 必须用 null，不能用 [] 清除此前范围。
+                22. 学习问答的 studyQuery 必须是可独立检索的完整本轮问题；结合历史解析“它、上一点、继续”等指代，保留已确定的对象和本轮追问，不得只返回代词或复制上一轮问题。非学习问答或无法确定所指对象时返回 null，不要编造。
 
                 输出 JSON schema：
                 {
@@ -128,6 +141,7 @@ public class AssistantStructuredIntentExtractor {
                   "questionSetDifficultyLevel": null,
                   "chapterBrowse": false,
                   "chapterKeyword": null,
+                  "studyQuery": null,
                   "questionCount": null,
                   "singleCount": null,
                   "multipleCount": null,
@@ -176,6 +190,7 @@ public class AssistantStructuredIntentExtractor {
                     .questionSetDifficultyLevel(readNullableInt(root, "questionSetDifficultyLevel"))
                     .chapterBrowse(readNullableBoolean(root, "chapterBrowse"))
                     .chapterKeyword(readNullableText(root, "chapterKeyword"))
+                    .studyQuery(readNullableText(root, "studyQuery"))
                     .questionCount(readNullableInt(root, "questionCount"))
                     .singleCount(readNullableInt(root, "singleCount"))
                     .multipleCount(readNullableInt(root, "multipleCount"))

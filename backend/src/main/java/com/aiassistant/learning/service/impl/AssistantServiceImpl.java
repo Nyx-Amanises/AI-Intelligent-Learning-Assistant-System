@@ -15,6 +15,7 @@ import com.aiassistant.learning.mapper.AssistantToolCallMapper;
 import com.aiassistant.learning.service.AiChatService;
 import com.aiassistant.learning.service.AssistantService;
 import com.aiassistant.learning.service.assistant.AssistantAgentOrchestrator;
+import com.aiassistant.learning.service.assistant.AssistantConversationHistory;
 import com.aiassistant.learning.service.assistant.AssistantTool;
 import com.aiassistant.learning.vo.assistant.AssistantChatReplyVO;
 import com.aiassistant.learning.vo.assistant.AssistantMessageVO;
@@ -67,6 +68,7 @@ public class AssistantServiceImpl implements AssistantService {
     private final AiChatService aiChatService;
     /** Agent 编排器，负责意图识别、工具调用和提示词构造。 */
     private final AssistantAgentOrchestrator assistantAgentOrchestrator;
+    private final AssistantConversationHistory conversationHistory;
     /** JSON 解析工具。 */
     private final ObjectMapper objectMapper;
     /** 流式回复使用独立的有界线程池（见 AsyncExecutorConfig），避免阻塞 Web 请求线程。 */
@@ -78,6 +80,7 @@ public class AssistantServiceImpl implements AssistantService {
             AssistantToolCallMapper assistantToolCallMapper,
             AiChatService aiChatService,
             AssistantAgentOrchestrator assistantAgentOrchestrator,
+            AssistantConversationHistory conversationHistory,
             ObjectMapper objectMapper,
             @Qualifier("assistantStreamExecutor") Executor assistantStreamExecutor
     ) {
@@ -87,6 +90,7 @@ public class AssistantServiceImpl implements AssistantService {
         this.assistantToolCallMapper = assistantToolCallMapper;
         this.aiChatService = aiChatService;
         this.assistantAgentOrchestrator = assistantAgentOrchestrator;
+        this.conversationHistory = conversationHistory;
         this.objectMapper = objectMapper;
     }
 
@@ -207,17 +211,19 @@ public class AssistantServiceImpl implements AssistantService {
     public AssistantChatReplyVO sendMessage(Long userId, Long sessionId, AssistantMessageSendRequest request) {
         AssistantSession session = getOwnedSession(userId, sessionId);
         AssistantMessage userMessage = persistUserMessage(userId, session, request);
-
+        List<AiChatService.ChatMessage> history = conversationHistory.loadBefore(userId, sessionId, userMessage.getId());
         AssistantAgentOrchestrator.AssistantAgentResult agentResult = assistantAgentOrchestrator.respond(
                 userId,
                 session,
                 request.getContentText().trim(),
-                request.getModelName()
+                request.getModelName(),
+                history
         );
 
         AssistantMessage assistantMessage = new AssistantMessage();
         assistantMessage.setSessionId(session.getId());
         assistantMessage.setUserId(userId);
+        assistantMessage.setReplyToMessageId(userMessage.getId());
         assistantMessage.setRole("ASSISTANT");
         assistantMessage.setMessageType("TEXT");
         assistantMessage.setContentText(agentResult.assistantReply());
@@ -243,11 +249,13 @@ public class AssistantServiceImpl implements AssistantService {
     public SseEmitter streamMessage(Long userId, Long sessionId, AssistantMessageSendRequest request) {
         AssistantSession session = getOwnedSession(userId, sessionId);
         AssistantMessage userMessage = persistUserMessage(userId, session, request);
+        List<AiChatService.ChatMessage> history = conversationHistory.loadBefore(userId, sessionId, userMessage.getId());
         AssistantAgentOrchestrator.AssistantPreparedResult preparedResult = assistantAgentOrchestrator.prepare(
                 userId,
                 session,
                 request.getContentText().trim(),
-                request.getModelName()
+                request.getModelName(),
+                history
         );
 
         SseEmitter emitter = new SseEmitter(300000L);
@@ -329,7 +337,7 @@ public class AssistantServiceImpl implements AssistantService {
             if (preparedResult.useModel()) {
                 aiChatService.streamChat(
                         preparedResult.systemPrompt(),
-                        preparedResult.userPrompt(),
+                        preparedResult.messages(),
                         preparedResult.modelName(),
                         0.3,
                         delta -> appendAssistantDelta(emitter, assistantReplyBuilder, delta)
@@ -352,7 +360,8 @@ public class AssistantServiceImpl implements AssistantService {
                     userMessage,
                     request,
                     preparedResult,
-                    assistantReply
+                    assistantReply,
+                    "TEXT"
             );
             replyPersisted = true;
             sendStreamEvent(emitter, Map.of("type", "done", "reply", replyVO));
@@ -366,7 +375,8 @@ public class AssistantServiceImpl implements AssistantService {
         } catch (Exception exception) {
             log.error("助手流式回复失败 userId={} sessionId={}: {}",
                     userId, session.getId(), exception.getMessage(), exception);
-            sendStreamFailureReply(
+            if (!replyPersisted) {
+                sendStreamFailureReply(
                     emitter,
                     userId,
                     session,
@@ -374,7 +384,10 @@ public class AssistantServiceImpl implements AssistantService {
                     request,
                     preparedResult,
                     resolveStreamErrorMessage(exception)
-            );
+                );
+            } else {
+                completeQuietly(emitter);
+            }
         } finally {
             UserContext.clear();
         }
@@ -400,7 +413,8 @@ public class AssistantServiceImpl implements AssistantService {
                     userMessage,
                     request,
                     preparedResult,
-                    assistantReply
+                    assistantReply,
+                    "ERROR"
             );
             sendStreamEvent(emitter, Map.of("type", "delta", "delta", assistantReply));
             sendStreamEvent(emitter, Map.of("type", "done", "reply", replyVO));
@@ -411,7 +425,7 @@ public class AssistantServiceImpl implements AssistantService {
     }
 
     /**
-     * 用户中途停止时保存已生成的部分回复，方便之后回看。一个字都没生成时不落库。
+     * 中断内容单独保存，仅用于回看，不进入模型历史或长期记忆。无内容时保留原来的不落库行为。
      */
     private void persistInterruptedReply(
             Long userId,
@@ -422,11 +436,10 @@ public class AssistantServiceImpl implements AssistantService {
             String partialReply
     ) {
         String trimmed = partialReply == null ? "" : partialReply.trim();
-        if (!StringUtils.hasText(trimmed)) {
-            return;
-        }
+        if (!StringUtils.hasText(trimmed)) return;
         try {
-            persistStreamReply(userId, session, userMessage, request, preparedResult, trimmed + INTERRUPTED_REPLY_SUFFIX);
+            persistStreamReply(userId, session, userMessage, request, preparedResult,
+                    trimmed + INTERRUPTED_REPLY_SUFFIX, "INTERRUPTED");
         } catch (Exception ignored) {
             // 连接已经断开，保存失败也无法再告知前端，这里静默处理。
         }
@@ -480,13 +493,15 @@ public class AssistantServiceImpl implements AssistantService {
             AssistantMessage userMessage,
             AssistantMessageSendRequest request,
             AssistantAgentOrchestrator.AssistantPreparedResult preparedResult,
-            String assistantReply
+            String assistantReply,
+            String messageType
     ) {
         AssistantMessage assistantMessage = new AssistantMessage();
         assistantMessage.setSessionId(session.getId());
         assistantMessage.setUserId(userId);
+        assistantMessage.setReplyToMessageId(userMessage.getId());
         assistantMessage.setRole("ASSISTANT");
-        assistantMessage.setMessageType("TEXT");
+        assistantMessage.setMessageType(messageType);
         assistantMessage.setContentText(assistantReply);
         assistantMessage.setReasoningJson(preparedResult.reasoningJson());
         assistantMessage.setToolPlanJson(preparedResult.toolPlanJson());
@@ -495,11 +510,14 @@ public class AssistantServiceImpl implements AssistantService {
         assistantMessage.setTokenOutput(estimateTokens(assistantReply));
         assistantMessageMapper.insert(assistantMessage);
 
-        List<AssistantToolCall> toolCalls = saveToolCalls(session.getId(), userMessage.getId(), preparedResult.toolExecutions());
-        syncSessionContextFromToolCalls(session, preparedResult.toolExecutions());
+        List<AssistantTool.ToolExecutionResult> executions = preparedResult.toolExecutions();
+        List<AssistantToolCall> toolCalls = saveToolCalls(session.getId(), userMessage.getId(), executions);
+        syncSessionContextFromToolCalls(session, executions);
         session.setLastMessageAt(LocalDateTime.now());
         assistantSessionMapper.updateById(session);
-        assistantAgentOrchestrator.captureConversationMemory(userId, session, request.getContentText().trim(), assistantReply);
+        if ("TEXT".equals(messageType)) {
+            assistantAgentOrchestrator.captureConversationMemory(userId, session, request.getContentText().trim(), assistantReply);
+        }
 
         return buildChatReplyVO(session, userMessage, assistantMessage, toolCalls, preparedResult.usedMemories());
     }
@@ -631,10 +649,10 @@ public class AssistantServiceImpl implements AssistantService {
         int limit = messageLimit == null || messageLimit <= 0 ? 30 : Math.min(messageLimit, 100);
         List<AssistantMessage> messages = assistantMessageMapper.selectList(new LambdaQueryWrapper<AssistantMessage>()
                 .eq(AssistantMessage::getSessionId, sessionId)
-                .orderByDesc(AssistantMessage::getCreatedAt)
+                .orderByDesc(AssistantMessage::getId)
                 .last("limit " + limit));
         return messages.stream()
-                .sorted(Comparator.comparing(AssistantMessage::getCreatedAt))
+                .sorted(Comparator.comparing(AssistantMessage::getId))
                 .toList();
     }
 
@@ -660,7 +678,7 @@ public class AssistantServiceImpl implements AssistantService {
         }
         List<AssistantMessage> messages = assistantMessageMapper.selectList(new LambdaQueryWrapper<AssistantMessage>()
                 .in(AssistantMessage::getSessionId, sessionIds)
-                .orderByDesc(AssistantMessage::getCreatedAt));
+                .orderByDesc(AssistantMessage::getId));
         Map<Long, AssistantMessage> latestMessageMap = new LinkedHashMap<>();
         for (AssistantMessage message : messages) {
             latestMessageMap.putIfAbsent(message.getSessionId(), message);

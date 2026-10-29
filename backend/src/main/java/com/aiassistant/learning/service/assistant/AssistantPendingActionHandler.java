@@ -146,6 +146,7 @@ public class AssistantPendingActionHandler {
                     .materialCandidates(searchResult == null ? List.of() : searchResult.getCandidates())
                     .followUpActionType(payload.getFollowUpActionType())
                     .followUpUserMessage(payload.getFollowUpUserMessage())
+                    .studyQuery(payload.getStudyQuery())
                     .chapterKeyword(payload.getChapterKeyword())
                     .tasks(payload.getTasks())
                     .build();
@@ -346,7 +347,9 @@ public class AssistantPendingActionHandler {
             String followUpMessage = StringUtils.hasText(payload.getFollowUpUserMessage())
                     ? payload.getFollowUpUserMessage()
                     : "继续回答当前资料问题";
-            String effectiveQuery = modeResolver.resolveStudyQaQuery(followUpMessage, payload.getMaterialQuery());
+            String effectiveQuery = StringUtils.hasText(payload.getStudyQuery())
+                    ? payload.getStudyQuery().trim()
+                    : modeResolver.resolveStudyQaQuery(followUpMessage, payload.getMaterialQuery());
             String toolMessage = StringUtils.hasText(effectiveQuery) ? effectiveQuery : followUpMessage;
             String toolName = modeResolver.isMaterialDetailQuestion(followUpMessage) ? "material.detail" : "rag.retrieve";
             String reason = "已确认资料，继续回答用户刚才的问题";
@@ -356,7 +359,7 @@ public class AssistantPendingActionHandler {
                     session,
                     toolMessage,
                     null,
-                    AssistantStructuredIntent.builder().build()
+                    AssistantStructuredIntent.builder().studyQuery(effectiveQuery).build()
             );
             if (execution == null) {
                 return new AssistantWorkflowResolution(true, false, executions, "资料已确认，但我这边暂时还没继续执行后续回答。你可以再问我一次。", planSnapshot);
