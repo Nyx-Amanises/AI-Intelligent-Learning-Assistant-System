@@ -1,6 +1,7 @@
 package com.aiassistant.learning.service.impl;
 
 import com.aiassistant.learning.common.util.KnowledgePointLabels;
+import com.aiassistant.learning.common.util.AnalyticsDateRange;
 import com.aiassistant.learning.dto.analytics.LearningAnalyticsQuery;
 import com.aiassistant.learning.entity.PracticeAnswer;
 import com.aiassistant.learning.entity.PracticeSession;
@@ -21,6 +22,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -95,11 +97,13 @@ public class LearningAnalyticsServiceImpl implements LearningAnalyticsService {
      */
     @Override
     public LearningAnalyticsOverviewVO overview(Long userId, LearningAnalyticsQuery query) {
+        AnalyticsDateRange dateRange = AnalyticsDateRange.resolve(query, LocalDate.now());
         LambdaQueryWrapper<PracticeSession> sessionQuery = new LambdaQueryWrapper<PracticeSession>()
                 .eq(PracticeSession::getUserId, userId)
                 .eq(PracticeSession::getSessionStatus, SESSION_STATUS_SUBMITTED)
                 .eq(query.getMaterialId() != null, PracticeSession::getMaterialId, query.getMaterialId())
-                .ge(query.getDays() != null, PracticeSession::getSubmitTime, resolveStartTime(query.getDays()))
+                .ge(dateRange.startDate() != null, PracticeSession::getSubmitTime, dateRange.startInclusive())
+                .lt(dateRange.endDate() != null, PracticeSession::getSubmitTime, dateRange.endExclusive())
                 .orderByAsc(PracticeSession::getSubmitTime);
         List<PracticeSession> sessions = practiceSessionMapper.selectList(sessionQuery);
         if (sessions.isEmpty()) {
@@ -421,10 +425,6 @@ public class LearningAnalyticsServiceImpl implements LearningAnalyticsService {
      */
     private static int safeInt(Integer value) {
         return value == null ? 0 : value;
-    }
-
-    private static LocalDateTime resolveStartTime(Integer days) {
-        return days == null ? null : LocalDateTime.now().minusDays(days);
     }
 
     private static long totalStudySeconds(List<PracticeSession> sessions) {

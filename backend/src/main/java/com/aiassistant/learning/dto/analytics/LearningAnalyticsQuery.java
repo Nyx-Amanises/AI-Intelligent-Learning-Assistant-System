@@ -2,7 +2,9 @@ package com.aiassistant.learning.dto.analytics;
 
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import java.time.LocalDate;
 import lombok.Data;
+import org.springframework.format.annotation.DateTimeFormat;
 
 /**
  * 学习分析查询参数。
@@ -25,4 +27,12 @@ public class LearningAnalyticsQuery {
     @Min(value = 1, message = "统计天数最小为1")
     @Max(value = 365, message = "统计天数最大为365")
     private Integer days;
+
+    /** 自定义统计起日，与 endDate 成对传入，不能同时使用 days。 */
+    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+    private LocalDate startDate;
+
+    /** 自定义统计止日，包含该日全天。 */
+    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+    private LocalDate endDate;
 }

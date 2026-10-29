@@ -70,5 +70,13 @@ export interface LearningAnalyticsOverviewPayload {
   weakKnowledgePoints: WeakKnowledgePointItem[]
 }
 
-export const getLearningAnalyticsOverviewApi = (params: Record<string, unknown>) =>
+export interface LearningAnalyticsQuery {
+  materialId?: number
+  days?: number
+  startDate?: string
+  endDate?: string
+  trendLimit?: number
+}
+
+export const getLearningAnalyticsOverviewApi = (params: LearningAnalyticsQuery) =>
   http.get('/learning-analytics/overview', { params })

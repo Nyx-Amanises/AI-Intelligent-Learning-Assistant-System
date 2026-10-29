@@ -27,8 +27,8 @@
           v-for="period in periods"
           :key="period.days"
           type="button"
-          :aria-pressed="filters.days === period.days"
-          :class="{ 'is-active': filters.days === period.days }"
+          :aria-pressed="!isCustomRange && filters.days === period.days"
+          :class="{ 'is-active': !isCustomRange && filters.days === period.days }"
           @click="setPeriod(period.days)"
         >
           {{ period.label }}
@@ -46,7 +46,42 @@
       >
         <el-option v-for="item in materials" :key="item.id" :label="item.title" :value="item.id" />
       </el-select>
+      <el-button @click="clearFilters">重置筛选</el-button>
     </div>
+    <form class="statistics-custom-range" @submit.prevent="applyCustomRange">
+      <div class="statistics-date-fields">
+        <label
+          >开始日期<input
+            v-model="draftRange.startDate"
+            type="date"
+            min="1000-01-01"
+            :max="todayDate"
+            aria-label="统计开始日期"
+            @focus="todayDate = localToday()"
+        /></label>
+        <label
+          >结束日期<input
+            v-model="draftRange.endDate"
+            type="date"
+            min="1000-01-01"
+            :max="todayDate"
+            aria-label="统计结束日期"
+            @focus="todayDate = localToday()"
+        /></label>
+        <el-button native-type="submit" :disabled="Boolean(customRangeError)">应用日期范围</el-button>
+      </div>
+      <p
+        v-if="customRangeError && (draftRange.startDate || draftRange.endDate)"
+        class="statistics-range-error"
+        role="alert"
+      >
+        {{ customRangeError }}
+      </p>
+      <p v-else-if="hasUnappliedDates" class="statistics-range-hint">日期尚未应用，统计仍使用下方已应用范围。</p>
+      <p class="statistics-range-hint" aria-live="polite">
+        已应用范围：{{ appliedRangeLabel }} · {{ selectedMaterialTitle }}
+      </p>
+    </form>
 
     <div v-if="materialsError" class="statistics-notice" role="alert">
       <div>
@@ -63,19 +98,19 @@
       <el-button type="primary" :loading="loading" @click="loadAnalytics">重新加载统计</el-button>
     </div>
 
-    <div v-if="loading && !hasLoaded" class="statistics-loading" role="status">
+    <div v-if="loading" class="statistics-loading" role="status">
       <span class="statistics-loading__line"></span>正在整理学习记录…
     </div>
     <template v-else-if="hasLoaded && !loadError">
       <div v-if="!analytics.totalQuestionAttempts" class="statistics-empty-intro">
         <div>
           <h2>
-            {{ filters.days || filters.materialId ? '这个范围内还没有练习记录' : '完成一次练习，留下第一份记录' }}
+            {{ hasFilters ? '这个范围内还没有练习记录' : '完成一次练习，留下第一份记录' }}
           </h2>
           <p>提交练习后，就可以在这里回顾表现与复习重点。</p>
         </div>
         <div class="statistics-empty-actions">
-          <el-button v-if="filters.days || filters.materialId" @click="clearFilters">查看全部记录</el-button>
+          <el-button v-if="hasFilters" @click="clearFilters">查看全部记录</el-button>
           <el-button
             type="primary"
             @click="router.push(materialsLoaded && !materials.length ? '/materials' : '/quiz')"
@@ -107,7 +142,8 @@
             <div>
               <h2 id="statistics-trend-title">练习趋势</h2>
               <p>
-                按提交顺序，展示{{ filters.days ? '所选时间内' : '' }}最近 {{ analytics.practiceTrend.length }} 次练习。
+                按提交顺序，展示{{ filters.days || isCustomRange ? '所选时间内' : '' }}最近
+                {{ analytics.practiceTrend.length }} 次练习。
               </p>
             </div>
             <div class="statistics-metric-switch" role="group" aria-label="趋势统计指标">
@@ -289,13 +325,46 @@ const materialsError = ref('')
 const materialsLoaded = ref(false)
 const materialsLoading = ref(false)
 const materials = ref<MaterialPageItem[]>([])
-const filters = reactive({ materialId: undefined as number | undefined, days: 0 })
+const filters = reactive({ materialId: undefined as number | undefined, days: 0, startDate: '', endDate: '' })
+const draftRange = reactive({ startDate: '', endDate: '' })
+const localToday = () => {
+  const date = new Date()
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+const todayDate = ref(localToday())
+const isCustomRange = computed(() => Boolean(filters.startDate && filters.endDate))
+const hasFilters = computed(() => Boolean(filters.days || filters.materialId || isCustomRange.value))
+const dateRangeError = (startDate: string, endDate: string) => {
+  if (!startDate || !endDate) return '请选择完整的开始和结束日期。'
+  if (![startDate, endDate].every((value) => /^\d{4}-\d{2}-\d{2}$/.test(value))) return '请输入有效日期（年-月-日）。'
+  if (startDate < '1000-01-01' || endDate < '1000-01-01') return '日期不能早于 1000-01-01。'
+  if (startDate > endDate) return '开始日期不能晚于结束日期。'
+  if (endDate > todayDate.value) return '结束日期不能晚于今天。'
+  return ''
+}
+const customRangeError = computed(() => dateRangeError(draftRange.startDate, draftRange.endDate))
+const hasUnappliedDates = computed(
+  () =>
+    Boolean(draftRange.startDate || draftRange.endDate) &&
+    (draftRange.startDate !== filters.startDate || draftRange.endDate !== filters.endDate)
+)
 const periods = [
   { days: 7, label: '近 7 天' },
   { days: 30, label: '近 30 天' },
   { days: 0, label: '全部' }
 ]
-const periodLabel = computed(() => (filters.days ? '近 ' + filters.days + ' 天' : '累计'))
+const appliedRangeLabel = computed(() =>
+  isCustomRange.value
+    ? filters.startDate === filters.endDate
+      ? filters.startDate
+      : `${filters.startDate} 至 ${filters.endDate}`
+    : filters.days
+      ? `近 ${filters.days} 天`
+      : '全部时间'
+)
+const periodLabel = computed(() =>
+  isCustomRange.value ? `${appliedRangeLabel.value} ` : filters.days ? `近 ${filters.days} 天` : '累计'
+)
 const selectedMaterialTitle = computed(() =>
   filters.materialId ? materials.value.find((item) => item.id === filters.materialId)?.title || '所选资料' : '全部资料'
 )
@@ -427,7 +496,9 @@ const loadAnalytics = async () => {
   try {
     const res = await getLearningAnalyticsOverviewApi({
       materialId: filters.materialId || undefined,
-      days: filters.days || undefined,
+      ...(isCustomRange.value
+        ? { startDate: filters.startDate, endDate: filters.endDate }
+        : { days: filters.days || undefined }),
       trendLimit: 30
     })
     if (requestId !== analyticsRequestId) return
@@ -442,13 +513,31 @@ const loadAnalytics = async () => {
 }
 
 const setPeriod = (days: number) => {
-  if (filters.days === days) return
+  const unchanged = !isCustomRange.value && filters.days === days
   filters.days = days
+  filters.startDate = ''
+  filters.endDate = ''
+  draftRange.startDate = ''
+  draftRange.endDate = ''
+  if (unchanged) return
+  void loadAnalytics()
+}
+const applyCustomRange = () => {
+  todayDate.value = localToday()
+  if (customRangeError.value) return
+  if (filters.startDate === draftRange.startDate && filters.endDate === draftRange.endDate) return
+  filters.days = 0
+  filters.startDate = draftRange.startDate
+  filters.endDate = draftRange.endDate
   void loadAnalytics()
 }
 const clearFilters = () => {
   filters.materialId = undefined
   filters.days = 0
+  filters.startDate = ''
+  filters.endDate = ''
+  draftRange.startDate = ''
+  draftRange.endDate = ''
   void loadAnalytics()
 }
 const goMastery = (item: WeakKnowledgePointItem) =>
@@ -533,7 +622,52 @@ void loadAnalytics()
   opacity: 0.6;
 }
 .statistics-filters {
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.statistics-custom-range {
   margin-bottom: 24px;
+}
+.statistics-date-fields {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.statistics-date-fields label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  min-width: 0;
+}
+.statistics-date-fields input {
+  min-width: 0;
+  width: 170px;
+  height: 44px;
+  padding: 0 12px;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font: inherit;
+  color-scheme: light dark;
+}
+.statistics-date-fields .el-button {
+  min-height: 44px;
+}
+.statistics-range-hint,
+.statistics-range-error {
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.statistics-range-hint {
+  color: var(--muted);
+}
+.statistics-range-error {
+  color: var(--el-color-danger);
 }
 .statistics-periods {
   display: inline-flex;
@@ -915,6 +1049,18 @@ void loadAnalytics()
   }
 }
 @media (max-width: 520px) {
+  .statistics-date-fields {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .statistics-date-fields input {
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .statistics-date-fields .el-button {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
   .statistics-heading h1 {
     font-size: 26px;
   }
