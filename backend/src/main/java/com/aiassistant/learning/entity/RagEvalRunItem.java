@@ -19,6 +19,12 @@ import lombok.EqualsAndHashCode;
 @TableName("rag_eval_run_item")
 public class RagEvalRunItem extends BaseEntity {
 
+    private String actualStrategy;
+    private Boolean mockEmbedding;
+    private String queryEmbeddingModel;
+    private String degradeReason;
+    private String retrievedSnapshotJson;
+
     @Serial
     private static final long serialVersionUID = 1L;
 

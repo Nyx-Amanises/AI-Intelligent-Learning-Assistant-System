@@ -26,8 +26,13 @@ public class RetrievalPreviewVO {
     /** 实际命中的分段数量。 */
     private Integer hitCount;
 
-    /** 实际使用的检索方式：VECTOR（向量召回 + 词面重排）或 TEXT（数据库文本检索）。 */
+    /** 实际使用的检索方式：VECTOR（向量召回）或 TEXT（数据库文本检索）。 */
     private String retrievalMode;
+
+    /** 实际执行方案：TEXT / VECTOR_ONLY / VECTOR_RERANK。 */
+    private String strategy;
+
+    private String embeddingModel;
 
     /** 是否因向量检索不可用而降级为文本检索。 */
     private Boolean degraded;

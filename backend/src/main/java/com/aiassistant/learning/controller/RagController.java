@@ -33,10 +33,11 @@ public class RagController {
     public ApiResponse<RetrievalPreviewVO> retrievePreview(
             @PathVariable Long materialId,
             @RequestParam String queryText,
-            @RequestParam(required = false) Integer limit
+            @RequestParam(required = false) Integer limit,
+            @RequestParam(required = false) String strategy
     ) {
         Long userId = UserContext.getCurrentUserId();
-        RetrievalResult result = retrievalService.retrieve(userId, materialId, queryText, limit);
+        RetrievalResult result = retrievalService.retrieve(userId, materialId, queryText, limit, strategy);
         return ApiResponse.success(RetrievalPreviewVO.builder()
                 .materialId(materialId)
                 .materialTitle(result.materialTitle())
@@ -44,6 +45,8 @@ public class RagController {
                 .limit(limit == null || limit <= 0 ? result.hits().size() : limit)
                 .hitCount(result.hits().size())
                 .retrievalMode(result.mode())
+                .strategy(result.strategy())
+                .embeddingModel(result.embeddingModel())
                 .degraded(result.degraded())
                 .degradeReason(result.degradeReason())
                 .mockEmbedding(result.mockEmbedding())

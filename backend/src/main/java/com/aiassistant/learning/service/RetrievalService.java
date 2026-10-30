@@ -8,10 +8,14 @@ import java.util.List;
  */
 public interface RetrievalService {
 
-    /** 检索方式：Qdrant 向量召回 + 词面重排。 */
+    /** 检索方式：Qdrant 向量召回（是否重排由 strategy 区分）。 */
     String MODE_VECTOR = "VECTOR";
     /** 检索方式：直接读取数据库中的资料分段，按词面匹配排序。 */
     String MODE_TEXT = "TEXT";
+
+    String STRATEGY_TEXT = "TEXT";
+    String STRATEGY_VECTOR_ONLY = "VECTOR_ONLY";
+    String STRATEGY_VECTOR_RERANK = "VECTOR_RERANK";
 
     /**
      * 在指定资料范围内检索与问题最相关的分段，并返回检索方式、是否降级等信息。
@@ -26,6 +30,12 @@ public interface RetrievalService {
      * @return 检索结果
      */
     RetrievalResult retrieve(Long userId, Long materialId, String queryText, Integer limit);
+
+    /**
+     * 使用指定方案检索。空方案使用 VECTOR_RERANK；向量不可用时仍降级为 TEXT，
+     * 返回值中的 strategy 记录实际执行方案，调用方另行保存请求方案以区分降级。
+     */
+    RetrievalResult retrieve(Long userId, Long materialId, String queryText, Integer limit, String strategy);
 
     /**
      * 在指定资料范围内检索与问题最相关的分段。
@@ -57,8 +67,24 @@ public interface RetrievalService {
             /** 查询向量是否来自 Mock 模式（文本哈希生成，相似度没有语义意义）。 */
             boolean mockEmbedding,
             /** 按相关性排序后的命中结果。 */
-            List<RetrievalHit> hits
+            List<RetrievalHit> hits,
+            /** 实际执行方案：TEXT / VECTOR_ONLY / VECTOR_RERANK。 */
+            String strategy,
+            /** 实际查询向量模型；未执行向量查询时为空。 */
+            String embeddingModel
     ) {
+        /** 兼容原有调用：历史 VECTOR 结果使用词面重排。 */
+        public RetrievalResult(Long materialId, String materialTitle, String mode, boolean degraded,
+                String degradeReason, boolean mockEmbedding, List<RetrievalHit> hits) {
+            this(materialId, materialTitle, mode, degraded, degradeReason, mockEmbedding, hits,
+                    MODE_TEXT.equals(mode) ? STRATEGY_TEXT : STRATEGY_VECTOR_RERANK, null);
+        }
+
+        public RetrievalResult(Long materialId, String materialTitle, String mode, boolean degraded,
+                String degradeReason, boolean mockEmbedding, List<RetrievalHit> hits, String strategy) {
+            this(materialId, materialTitle, mode, degraded, degradeReason, mockEmbedding, hits, strategy, null);
+        }
+
         /**
          * 只取命中的分段，兼容只关心分段本身的调用方。
          */

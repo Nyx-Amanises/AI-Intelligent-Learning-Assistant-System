@@ -5,6 +5,7 @@ import com.aiassistant.learning.dto.ai.EmbeddingTaskRequest;
 import com.aiassistant.learning.dto.rag.RagEvalDatasetCreateRequest;
 import com.aiassistant.learning.dto.rag.RagEvalDatasetPageQuery;
 import com.aiassistant.learning.dto.rag.RagEvalRunRequest;
+import com.aiassistant.learning.dto.rag.RagEvalRunPageQuery;
 import com.aiassistant.learning.dto.rag.RagEvalSampleBatchCreateRequest;
 import com.aiassistant.learning.dto.rag.RagEvalSampleCreateRequest;
 import com.aiassistant.learning.dto.rag.RagEvalSampleUpdateRequest;
@@ -29,6 +30,7 @@ import com.aiassistant.learning.vo.ai.AiTaskDetailVO;
 import com.aiassistant.learning.vo.rag.CmrcImportResultVO;
 import com.aiassistant.learning.vo.page.PageVO;
 import com.aiassistant.learning.vo.rag.RagEvalDatasetVO;
+import com.aiassistant.learning.vo.rag.RagEvalComparisonVO;
 import com.aiassistant.learning.vo.rag.RagEvalRunItemVO;
 import com.aiassistant.learning.vo.rag.RagEvalRunVO;
 import com.aiassistant.learning.vo.rag.RagEvalSampleVO;
@@ -38,6 +40,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -50,6 +53,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.Comparator;
+import java.util.HexFormat;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
@@ -257,16 +264,29 @@ public class RagEvalServiceImpl implements RagEvalService {
      * <p>每条样本都会调用一次 RAG 检索，然后记录样本级明细，最后汇总成整次运行指标。</p>
      */
     @Override
-    @Transactional(rollbackFor = Exception.class)
+    @Transactional(rollbackFor = Exception.class, isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public RagEvalRunVO runDataset(Long userId, Long datasetId, RagEvalRunRequest request) {
         RagEvalDataset dataset = getUserOwnedDataset(userId, datasetId);
         List<RagEvalSample> samples = selectRunSamples(userId, dataset.getId(), request.getSampleIds());
         if (samples.isEmpty()) {
             throw new BusinessException("评测集暂无样本，请先添加人工标注样本");
         }
+        if (!CollectionUtils.isEmpty(request.getSampleIds())
+                && !new HashSet<>(request.getSampleIds()).equals(
+                        samples.stream().map(RagEvalSample::getId).collect(java.util.stream.Collectors.toSet()))) {
+            throw new BusinessException("指定样本不存在或不属于当前评测集，请刷新后重试");
+        }
 
         int retrievalLimit = resolveLimit(request.getLimit());
-        RagEvalRun run = createRunningRun(userId, dataset, samples.size(), retrievalLimit);
+        String strategy = StringUtils.hasText(request.getStrategy()) ? request.getStrategy().trim() : "VECTOR_RERANK";
+        if (!Set.of("TEXT", "VECTOR_ONLY", "VECTOR_RERANK").contains(strategy)) {
+            throw new BusinessException("不支持的检索方案");
+        }
+        if (request.getName() != null && request.getName().length() > 80) {
+            throw new BusinessException("方案名称最多80字");
+        }
+        Map<String, Object> snapshot = buildParameterSnapshot(userId, samples, strategy, retrievalLimit);
+        RagEvalRun run = createRunningRun(userId, dataset, samples.size(), retrievalLimit, request.getName(), strategy, snapshot);
         List<EvaluatedSample> evaluatedSamples = samples.stream()
                 .map(sample -> evaluateSample(userId, run, sample, retrievalLimit))
                 .toList();
@@ -296,6 +316,142 @@ public class RagEvalServiceImpl implements RagEvalService {
                 .eq(RagEvalRunItem::getUserId, userId)
                 .orderByAsc(RagEvalRunItem::getId));
         return toRunVO(run, items);
+    }
+
+    @Override
+    public PageVO<RagEvalRunVO> pageRuns(Long userId, Long datasetId, RagEvalRunPageQuery query) {
+        getUserOwnedDataset(userId, datasetId);
+        long current = query.getCurrent() == null ? 1 : Math.max(1, query.getCurrent());
+        long size = query.getSize() == null ? 10 : Math.max(1, Math.min(50, query.getSize()));
+        Page<RagEvalRun> page = runMapper.selectPage(new Page<>(current, size), new LambdaQueryWrapper<RagEvalRun>()
+                .eq(RagEvalRun::getUserId, userId).eq(RagEvalRun::getDatasetId, datasetId)
+                .orderByDesc(RagEvalRun::getId));
+        return PageVO.<RagEvalRunVO>builder().current(page.getCurrent()).size(page.getSize())
+                .total(page.getTotal()).pages(page.getPages())
+                .records(page.getRecords().stream().map(run -> toRunVO(run, List.of())).toList()).build();
+    }
+
+    @Override
+    public RagEvalComparisonVO compareRuns(Long userId, Long datasetId, List<Long> runIds) {
+        getUserOwnedDataset(userId, datasetId);
+        if (runIds == null || runIds.size() < 2 || runIds.size() > 3 || runIds.stream().anyMatch(Objects::isNull)
+                || new HashSet<>(runIds).size() != runIds.size()) {
+            throw new BusinessException("请选择同一评测集的2到3条不同运行记录");
+        }
+        List<RagEvalRunVO> runs = runIds.stream().map(id -> getRun(userId, id)).toList();
+        if (runs.stream().anyMatch(run -> !datasetId.equals(run.getDatasetId()))) {
+            throw new BusinessException(404, "评测运行记录不属于当前评测集");
+        }
+        List<String> reasons = new ArrayList<>();
+        if (runs.stream().anyMatch(run -> run.getParameterSnapshot() == null
+                || run.getParameterSnapshot().get("sampleFingerprint") == null
+                || run.getParameterSnapshot().get("corpusFingerprint") == null)) {
+            reasons.add("部分历史运行未记录参数和样本快照，只能并排查看，不能确认实验条件一致");
+        } else {
+            if (runs.stream().map(run -> run.getParameterSnapshot().get("version")).distinct().count() > 1) {
+                reasons.add("检索实现版本不同，参数解释和评分逻辑可能已变化");
+            }
+            if (runs.stream().map(run -> run.getParameterSnapshot().get("sampleFingerprint")).distinct().count() > 1) {
+                reasons.add("样本范围、问题或标准标注不同，请用相同样本重新运行");
+            }
+            if (runs.stream().map(run -> run.getParameterSnapshot().get("corpusFingerprint")).distinct().count() > 1) {
+                reasons.add("资料原文不同或历史原文无法确认一致，分数变化不能单独归因于检索方案");
+            }
+        }
+        if (runs.stream().anyMatch(run -> !"SUCCESS".equals(run.getStatus()))) {
+            reasons.add("包含未完成或有失败样本的运行，请先解决失败原因");
+        }
+        if (runs.stream().anyMatch(run -> !Boolean.FALSE.equals(run.getMockEmbedding()))) {
+            reasons.add("包含模拟向量或未记录向量来源的运行，不能作为真实检索质量依据");
+        }
+        if (runs.stream().anyMatch(run -> run.getDegradedSamples() == null || run.getDegradedSamples() > 0)) {
+            reasons.add("包含检索降级或未记录降级情况的运行，实际方案可能与所选方案不同");
+        }
+        if (runs.stream().map(RagEvalRunVO::getRetrievalLimit).distinct().count() > 1) {
+            reasons.add("Top K 不同，只能比较各自充分召回范围内的指标");
+        }
+        return RagEvalComparisonVO.builder().runs(runs).comparable(reasons.isEmpty()).reasons(reasons).build();
+    }
+
+    /** 在实际运行前保存所有样本涉及的资料版本，不能用评测集的主资料冒充整个运行。 */
+    private Map<String, Object> buildParameterSnapshot(Long userId, List<RagEvalSample> samples,
+            String strategy, int limit) {
+        List<Map<String, Object>> materials = new ArrayList<>();
+        List<Map<String, Object>> corpus = new ArrayList<>();
+        for (Long materialId : samples.stream().map(RagEvalSample::getMaterialId).distinct().sorted().toList()) {
+            // 同一事务内防止重新解析替换原文/分块；按 ID 顺序取共享锁，避免多资料运行交叉等待。
+            StudyMaterial material = studyMaterialService.getOne(new LambdaQueryWrapper<StudyMaterial>()
+                    .eq(StudyMaterial::getId, materialId).eq(StudyMaterial::getUserId, userId)
+                    .last("limit 1 for share"));
+            if (material == null) throw new BusinessException(404, "资料不存在");
+            List<MaterialSegment> segments = materialSegmentMapper.selectList(new LambdaQueryWrapper<MaterialSegment>()
+                    .select(MaterialSegment::getId, MaterialSegment::getSegmentNo, MaterialSegment::getPageNo,
+                            MaterialSegment::getContentText, MaterialSegment::getSectionTitle,
+                            MaterialSegment::getEmbeddingModel, MaterialSegment::getEmbeddingStatus)
+                    .eq(MaterialSegment::getMaterialId, materialId).orderByAsc(MaterialSegment::getSegmentNo)
+                    .last("for share"));
+            Set<Long> segmentIds = segments.stream().map(MaterialSegment::getId).collect(java.util.stream.Collectors.toSet());
+            Set<Integer> pages = segments.stream().map(MaterialSegment::getPageNo).filter(Objects::nonNull)
+                    .collect(java.util.stream.Collectors.toSet());
+            for (RagEvalSample sample : samples) {
+                if (!materialId.equals(sample.getMaterialId())) continue;
+                List<Long> expectedIds = parseLongList(sample.getExpectedSegmentIds());
+                List<Integer> expectedPages = parseIntList(sample.getExpectedPageNos());
+                if ((expectedIds.isEmpty() && expectedPages.isEmpty()) || !segmentIds.containsAll(expectedIds)
+                        || !pages.containsAll(expectedPages)) {
+                    throw new BusinessException(409, "样本 #" + sample.getId()
+                            + " 的标准片段或页码已失效，请在重新分块后更新标注再运行");
+                }
+            }
+            Map<String, Object> entry = new LinkedHashMap<>();
+            entry.put("materialId", materialId);
+            entry.put("title", material.getTitle());
+            entry.put("chunkStrategy", StringUtils.hasText(material.getChunkStrategy()) ? material.getChunkStrategy() : "UNKNOWN");
+            entry.put("chunkSize", material.getChunkSize());
+            entry.put("chunkOverlap", material.getChunkOverlap());
+            entry.put("segmentCount", segments.size());
+            entry.put("contentHash", material.getContentHash());
+            String segmentHash = fingerprint(segments.stream().map(segment -> java.util.Arrays.asList(
+                    segment.getId(), segment.getPageNo(), segment.getSectionTitle(), segment.getContentText())).toList());
+            entry.put("segmentHash", segmentHash);
+            entry.put("indexModels", segments.stream().map(MaterialSegment::getEmbeddingModel)
+                    .filter(StringUtils::hasText).distinct().sorted().toList());
+            entry.put("indexedSegments", segments.stream().filter(s -> "SUCCESS".equals(s.getEmbeddingStatus())).count());
+            materials.add(entry);
+            corpus.add(Map.of("materialId", materialId, "content", StringUtils.hasText(material.getContentHash())
+                    ? material.getContentHash() : "segments:" + segmentHash));
+        }
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+        snapshot.put("version", "retrieval-v2");
+        snapshot.put("strategy", strategy);
+        snapshot.put("limit", limit);
+        if (!"VECTOR_ONLY".equals(strategy)) {
+            snapshot.put("lexicalWeight", 0.90);
+            snapshot.put("titleBoost", 0.12);
+            snapshot.put("exactBoost", 0.18);
+        }
+        if ("VECTOR_RERANK".equals(strategy)) {
+            snapshot.put("oversampleFactor", 3);
+            snapshot.put("minCandidates", 12);
+            snapshot.put("semanticWeight", 0.72);
+        }
+        snapshot.put("materials", materials);
+        snapshot.put("sampleFingerprint", fingerprint(samples.stream().sorted(Comparator.comparing(RagEvalSample::getId))
+                .map(sample -> java.util.Arrays.asList(sample.getId(), sample.getMaterialId(), sample.getQueryText(),
+                        parseLongList(sample.getExpectedSegmentIds()).stream().sorted().toList(),
+                        parseIntList(sample.getExpectedPageNos()).stream().sorted().toList())).toList()));
+        snapshot.put("corpusFingerprint", fingerprint(corpus));
+        return snapshot;
+    }
+
+    private String fingerprint(Object value) {
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                    .digest(objectMapper.writer().with(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS)
+                            .writeValueAsBytes(value)));
+        } catch (NoSuchAlgorithmException | JsonProcessingException exception) {
+            throw new IllegalStateException(exception);
+        }
     }
 
     /**
@@ -353,6 +509,8 @@ public class RagEvalServiceImpl implements RagEvalService {
                 .mapToInt(String::length)
                 .sum());
         material.setDeleted(0);
+        material.setChunkStrategy("ORIGINAL_CONTEXT");
+        material.setContentHash(fingerprint(contextMap.values().stream().map(CmrcContextDraft::context).toList()));
         studyMaterialService.save(material);
 
         int segmentNo = 1;
@@ -469,7 +627,8 @@ public class RagEvalServiceImpl implements RagEvalService {
     /**
      * 创建一条处于 RUNNING 状态的评测运行记录。
      */
-    private RagEvalRun createRunningRun(Long userId, RagEvalDataset dataset, int sampleCount, int retrievalLimit) {
+    private RagEvalRun createRunningRun(Long userId, RagEvalDataset dataset, int sampleCount, int retrievalLimit,
+            String name, String strategy, Map<String, Object> snapshot) {
         LocalDateTime now = LocalDateTime.now();
         RagEvalRun run = new RagEvalRun();
         run.setDatasetId(dataset.getId());
@@ -477,6 +636,9 @@ public class RagEvalServiceImpl implements RagEvalService {
         run.setMaterialId(dataset.getMaterialId());
         run.setStatus("RUNNING");
         run.setRetrievalLimit(retrievalLimit);
+        run.setName(trimToNull(name));
+        run.setStrategy(strategy);
+        run.setParameterSnapshotJson(writeJson(snapshot));
         run.setTotalSamples(sampleCount);
         run.setEvaluatedSamples(0);
         run.setFailedSamples(0);
@@ -511,10 +673,16 @@ public class RagEvalServiceImpl implements RagEvalService {
                     userId,
                     sample.getMaterialId(),
                     sample.getQueryText(),
-                    retrievalLimit
+                    retrievalLimit,
+                    run.getStrategy()
             );
             degradeReason = retrieval.degraded() ? retrieval.degradeReason() : null;
             mockEmbedding = retrieval.mockEmbedding();
+            item.setActualStrategy(retrieval.strategy());
+            item.setMockEmbedding(mockEmbedding);
+            item.setQueryEmbeddingModel(retrieval.embeddingModel());
+            item.setDegradeReason(degradeReason);
+            item.setRetrievedSnapshotJson(writeJson(retrieval.hits()));
             List<RetrievedSegment> retrieved = retrieval.segments();
             List<Long> retrievedSegmentIds = retrieved.stream().map(RetrievedSegment::segmentId).toList();
             List<Integer> retrievedPageNos = retrieved.stream().map(RetrievedSegment::pageNo).filter(Objects::nonNull).toList();
@@ -561,6 +729,16 @@ public class RagEvalServiceImpl implements RagEvalService {
         int evaluated = total - failed;
         run.setEvaluatedSamples(evaluated);
         run.setFailedSamples(failed);
+        Map<String, Object> snapshot = parseObject(run.getParameterSnapshotJson());
+        if (snapshot != null) {
+            snapshot.put("queryModels", runItems.stream().map(RagEvalRunItem::getQueryEmbeddingModel)
+                    .filter(StringUtils::hasText).distinct().sorted().toList());
+            run.setParameterSnapshotJson(writeJson(snapshot));
+        }
+        run.setActualStrategiesJson(writeJson(runItems.stream().map(RagEvalRunItem::getActualStrategy)
+                .filter(Objects::nonNull).distinct().sorted().toList()));
+        run.setMockEmbedding(evaluatedSamples.stream().anyMatch(EvaluatedSample::mockEmbedding));
+        run.setDegradedSamples((int) evaluatedSamples.stream().filter(item -> StringUtils.hasText(item.degradeReason())).count());
         run.setHitAt1(computeHitAtK(runItems, 1));
         run.setHitAt3(computeHitAtK(runItems, 3));
         run.setHitAt5(computeHitAtK(runItems, 5));
@@ -833,6 +1011,12 @@ public class RagEvalServiceImpl implements RagEvalService {
                 .materialId(run.getMaterialId())
                 .status(run.getStatus())
                 .retrievalLimit(run.getRetrievalLimit())
+                .name(run.getName())
+                .strategy(run.getStrategy())
+                .parameterSnapshot(parseObject(run.getParameterSnapshotJson()))
+                .actualStrategies(parseStrings(run.getActualStrategiesJson()))
+                .mockEmbedding(run.getMockEmbedding())
+                .degradedSamples(run.getDegradedSamples())
                 .totalSamples(run.getTotalSamples())
                 .evaluatedSamples(run.getEvaluatedSamples())
                 .failedSamples(run.getFailedSamples())
@@ -860,6 +1044,11 @@ public class RagEvalServiceImpl implements RagEvalService {
                 .sampleId(item.getSampleId())
                 .materialId(item.getMaterialId())
                 .queryText(item.getQueryText())
+                .actualStrategy(item.getActualStrategy())
+                .mockEmbedding(item.getMockEmbedding())
+                .queryEmbeddingModel(item.getQueryEmbeddingModel())
+                .degradeReason(item.getDegradeReason())
+                .retrievedSnapshot(parseTree(item.getRetrievedSnapshotJson()))
                 .expectedSegmentIds(parseLongList(item.getExpectedSegmentIds()))
                 .expectedPageNos(parseIntList(item.getExpectedPageNos()))
                 .retrievedSegmentIds(parseLongList(item.getRetrievedSegmentIds()))
@@ -877,6 +1066,33 @@ public class RagEvalServiceImpl implements RagEvalService {
     /**
      * 读取上传文件内容，并按 UTF-8 解析成字符串。
      */
+    private Map<String, Object> parseObject(String json) {
+        if (!StringUtils.hasText(json)) return null;
+        try {
+            return objectMapper.readValue(json, new TypeReference<Map<String, Object>>() { });
+        } catch (JsonProcessingException exception) {
+            return null;
+        }
+    }
+
+    private List<String> parseStrings(String json) {
+        if (!StringUtils.hasText(json)) return List.of();
+        try {
+            return objectMapper.readValue(json, new TypeReference<List<String>>() { });
+        } catch (JsonProcessingException exception) {
+            return List.of();
+        }
+    }
+
+    private JsonNode parseTree(String json) {
+        if (!StringUtils.hasText(json)) return null;
+        try {
+            return objectMapper.readTree(json);
+        } catch (JsonProcessingException exception) {
+            return null;
+        }
+    }
+
     private String readUploadText(MultipartFile file) {
         try {
             return new String(file.getBytes(), StandardCharsets.UTF_8);

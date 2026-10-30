@@ -3,9 +3,7 @@
     <div class="page-header">
       <div>
         <h1 class="page-title">RAG 评测集</h1>
-        <p class="page-desc">
-          用人工标注样本批量验证检索质量，观察 Hit@K、Recall@K、MRR 和耗时，后续调分段、混合检索、重排时就有指标可对比。
-        </p>
+        <p class="page-desc">用同一组标注样本比较文本检索、纯向量与重排方案，保留每次运行的参数、指标和逐题结果。</p>
       </div>
       <div class="toolbar toolbar--flush">
         <el-button type="primary" @click="openDatasetDialog">新建评测集</el-button>
@@ -89,12 +87,10 @@
               </div>
               <div class="workspace-action-row workspace-action-row--fit" data-label="操作">
                 <el-button link type="primary" @click="selectDataset(item)">配置样本</el-button>
-                <el-button link type="success" :disabled="!item.sampleCount" @click="runDataset(item)"
+                <el-button link type="success" :disabled="!item.sampleCount || runningEval" @click="runDataset(item)"
                   >运行评测</el-button
                 >
-                <el-button link type="info" :disabled="!item.lastRunId" @click="loadRun(item.lastRunId!)"
-                  >查看结果</el-button
-                >
+                <el-button link type="info" @click="selectDataset(item)">运行历史</el-button>
                 <el-button link type="danger" @click="removeDataset(item)">删除</el-button>
               </div>
             </div>
@@ -176,10 +172,110 @@
       </div>
     </div>
 
-    <div v-if="lastRun" class="workspace-panel rag-run-panel">
+    <div v-if="selectedDataset" class="workspace-panel rag-run-panel">
       <div class="workspace-toolbar">
         <div>
-          <h3 class="rag-run-title">最近评测结果 #{{ lastRun.id }}</h3>
+          <h3 class="rag-run-title">运行历史 · {{ selectedDataset.name }}</h3>
+          <p class="page-desc">选择 2–3 次运行并列比较。记录保存当时的参数，切换当前配置不会改写历史。</p>
+        </div>
+        <div class="toolbar toolbar--flush">
+          <el-button :loading="runHistoryLoading" @click="loadRunHistory">刷新历史</el-button>
+          <el-button
+            type="primary"
+            :disabled="!selectedDataset.sampleCount || runningEval"
+            @click="runDataset(selectedDataset)"
+            >运行新方案</el-button
+          >
+        </div>
+      </div>
+      <div class="workspace-body">
+        <div class="rag-history-actions">
+          <span>已选择 {{ selectedRunIds.length }} / 3 次运行</span>
+          <el-button
+            type="primary"
+            plain
+            :disabled="selectedRunIds.length < 2"
+            :loading="comparisonLoading"
+            @click="compareRuns"
+            >对比所选运行</el-button
+          >
+          <el-button :disabled="!selectedRunIds.length" @click="clearComparisonSelection">清除选择</el-button>
+        </div>
+        <div v-if="runHistoryLoading" class="state-block" role="status">正在加载运行历史…</div>
+        <div v-else-if="runHistoryError" class="state-block" role="alert">
+          {{ runHistoryError }}<el-button @click="loadRunHistory">重试</el-button>
+        </div>
+        <div v-else-if="!runHistory.length" class="state-block empty">
+          还没有运行记录。选择检索策略后开始第一次评测。
+        </div>
+        <div v-else class="rag-history-list">
+          <article
+            v-for="run in runHistory"
+            :key="run.id"
+            class="rag-history-row"
+            :class="{ 'rag-history-row--selected': lastRun?.id === run.id }"
+          >
+            <input
+              type="checkbox"
+              :checked="selectedRunIds.includes(run.id)"
+              :disabled="selectedRunIds.length >= 3 && !selectedRunIds.includes(run.id)"
+              :aria-label="`选择 ${run.name || `运行 #${run.id}`} 参与对比`"
+              @change="toggleRunSelection(run.id, ($event.target as HTMLInputElement).checked)"
+            />
+            <div class="rag-history-row__title">
+              <strong>{{ run.name || `运行 #${run.id}` }}</strong
+              ><span>#{{ run.id }} · {{ formatDateTime(run.startedAt) }}</span>
+            </div>
+            <div class="rag-history-row__meta">
+              <span>{{ formatRagStrategy(run.strategy) }} · Top K {{ run.retrievalLimit }}</span
+              ><small
+                >{{ formatRunStatus(run.status) }} · {{ run.evaluatedSamples }}/{{ run.totalSamples }} 样本 · MRR
+                {{ formatMetric(run.mrr) }}</small
+              ><small v-if="!run.parameterSnapshot">参数未记录</small
+              ><small v-else-if="run.mockEmbedding">模拟向量</small
+              ><small v-if="run.degradedSamples">{{ run.degradedSamples }} 条样本降级检索</small>
+            </div>
+            <el-button link type="primary" :loading="runLoading && pendingRunId === run.id" @click="loadRun(run.id)"
+              >查看结果</el-button
+            >
+          </article>
+        </div>
+        <div v-if="runHistoryTotal" class="workspace-pagination">
+          <span>共 {{ runHistoryTotal }} 次运行</span>
+          <el-pagination
+            v-model:current-page="runHistoryPage.current"
+            v-model:page-size="runHistoryPage.size"
+            :page-sizes="[10, 20, 50]"
+            :total="runHistoryTotal"
+            layout="sizes, prev, pager, next"
+            @current-change="loadRunHistory"
+            @size-change="resetRunHistoryPage"
+          />
+        </div>
+      </div>
+    </div>
+
+    <div v-if="comparisonLoading || comparisonError || comparison" class="workspace-panel rag-run-panel">
+      <div class="workspace-toolbar"><h3 class="rag-run-title">方案对比</h3></div>
+      <div class="workspace-body">
+        <div v-if="comparisonLoading" class="state-block" role="status">正在读取所选运行与参数…</div>
+        <div v-else-if="comparisonError" class="state-block" role="alert">
+          {{ comparisonError }}<el-button @click="compareRuns">重试</el-button>
+        </div>
+        <RagRunComparison v-else-if="comparison" :comparison="comparison" />
+      </div>
+    </div>
+
+    <div v-if="runLoading || runError" class="workspace-panel rag-run-panel">
+      <div class="workspace-body state-block" :role="runError ? 'alert' : 'status'">
+        {{ runLoading ? '正在加载评测结果…' : runError
+        }}<el-button v-if="runError && pendingRunId" @click="loadRun(pendingRunId)">重新加载</el-button>
+      </div>
+    </div>
+    <div v-else-if="lastRun" class="workspace-panel rag-run-panel">
+      <div class="workspace-toolbar">
+        <div>
+          <h3 class="rag-run-title">{{ lastRun.name || '评测结果' }} #{{ lastRun.id }}</h3>
           <p class="page-desc">
             状态 {{ formatRunStatus(lastRun.status) }} · 样本 {{ lastRun.evaluatedSamples }}/{{
               lastRun.totalSamples
@@ -194,6 +290,7 @@
       </div>
 
       <div class="workspace-body">
+        <RagRunParameters :run="lastRun" />
         <el-alert
           v-if="lastRun.errorMessage"
           class="rag-run-notice"
@@ -207,15 +304,15 @@
           <div class="summary-overview-card">
             <span>Hit@1 / 3 / 5</span>
             <strong
-              >{{ formatMetric(lastRun.hitAt1) }} / {{ formatMetric(lastRun.hitAt3) }} /
-              {{ formatMetric(lastRun.hitAt5) }}</strong
+              >{{ formatMetric(lastRun.hitAt1) }} / {{ formatMetricAtK(lastRun.hitAt3, 3) }} /
+              {{ formatMetricAtK(lastRun.hitAt5, 5) }}</strong
             >
           </div>
           <div class="summary-overview-card">
             <span>Recall@1 / 3 / 5</span>
             <strong
-              >{{ formatMetric(lastRun.recallAt1) }} / {{ formatMetric(lastRun.recallAt3) }} /
-              {{ formatMetric(lastRun.recallAt5) }}</strong
+              >{{ formatMetric(lastRun.recallAt1) }} / {{ formatMetricAtK(lastRun.recallAt3, 3) }} /
+              {{ formatMetricAtK(lastRun.recallAt5, 5) }}</strong
             >
           </div>
           <div class="summary-overview-card">
@@ -223,6 +320,10 @@
             <strong>{{ formatLatency(lastRun.avgLatencyMs) }}</strong>
           </div>
         </div>
+
+        <p v-if="lastRun.retrievalLimit < 5" class="page-desc">
+          — 表示本次 Top K 未覆盖该指标，不能视为已完成该 K 值的评测。
+        </p>
 
         <div class="workspace-table rag-run-table">
           <div class="workspace-table__head workspace-table__head--rag-run">
@@ -248,13 +349,14 @@
             <div class="task-meta-stack" data-label="实际召回">
               <span>段落 {{ formatNumberList(item.retrievedSegmentIds) }}</span>
               <span>页码 {{ formatNumberList(item.retrievedPageNos) }}</span>
+              <RagRunEvidence :item="item" />
             </div>
             <strong data-label="命中排名" :class="item.hitRank ? 'rag-hit-rank--hit' : 'rag-hit-rank--miss'">
               {{ item.hitRank ? `第 ${item.hitRank} 名` : '未命中' }}
             </strong>
             <div class="task-meta-stack" data-label="指标">
               <span>R@1 {{ formatMetric(item.recallAt1) }}</span>
-              <span>R@3 {{ formatMetric(item.recallAt3) }} · R@5 {{ formatMetric(item.recallAt5) }}</span>
+              <span>R@3 {{ formatMetricAtK(item.recallAt3, 3) }} · R@5 {{ formatMetricAtK(item.recallAt5, 5) }}</span>
               <span v-if="item.errorMessage" class="rag-error-text">{{ item.errorMessage }}</span>
             </div>
           </div>
@@ -441,21 +543,51 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="runDialogVisible" title="运行批量评测" width="520px" destroy-on-close>
+    <el-dialog
+      v-model="runDialogVisible"
+      title="运行新方案"
+      width="min(580px, calc(100vw - 32px))"
+      :close-on-click-modal="!runningEval"
+      :close-on-press-escape="!runningEval"
+      :show-close="!runningEval"
+      destroy-on-close
+    >
       <el-form label-position="top">
-        <el-form-item label="检索返回条数 Limit">
-          <el-input-number v-model="runForm.limit" :min="1" :max="20" style="width: 100%" />
+        <p class="page-desc">评测集：{{ pendingRunDataset?.name }}</p>
+        <el-form-item label="方案名称（选填）"
+          ><el-input
+            v-model="runForm.name"
+            maxlength="80"
+            show-word-limit
+            :disabled="runningEval"
+            placeholder="例如：纯向量基线 / 调整分块后"
+        /></el-form-item>
+        <el-form-item label="检索策略"
+          ><el-select v-model="runForm.strategy" :disabled="runningEval" style="width: 100%"
+            ><el-option
+              v-for="(label, value) in RAG_STRATEGY_LABELS"
+              :key="value"
+              :label="label"
+              :value="value" /></el-select
+        ></el-form-item>
+        <el-form-item label="检索返回条数 Top K">
+          <el-input-number v-model="runForm.limit" :min="1" :max="20" :disabled="runningEval" style="width: 100%" />
         </el-form-item>
       </el-form>
       <el-alert
-        title="运行时会逐条调用当前 RAG 检索接口，因此需要 Qdrant、Embedding 配置和资料向量都可用。"
-        type="warning"
+        :title="
+          runForm.strategy === 'TEXT'
+            ? '文本检索直接匹配已解析资料，不需要向量服务。'
+            : '向量方案需要可用的资料索引；实际降级和模拟向量情况会保存在运行记录中。'
+        "
+        type="info"
         :closable="false"
         show-icon
       />
+      <p class="page-desc">分块使用资料当前已解析的版本。修改大小或重叠需先到资料库重新解析，历史运行会保留原参数。</p>
       <template #footer>
         <div class="toolbar" style="margin-bottom: 0; justify-content: flex-end">
-          <el-button @click="runDialogVisible = false">取消</el-button>
+          <el-button :disabled="runningEval" @click="runDialogVisible = false">取消</el-button>
           <el-button type="primary" :loading="runningEval" @click="confirmRunDataset">开始评测</el-button>
         </div>
       </template>
@@ -489,7 +621,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, onUnmounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadFile } from 'element-plus'
 import { getMaterialDetailApi, getMaterialPageApi, type MaterialPageItem } from '@/api/modules/material'
@@ -500,6 +632,10 @@ import {
   deleteRagEvalSampleApi,
   getRagEvalDatasetPageApi,
   getRagEvalRunApi,
+  getRagEvalRunsApi,
+  compareRagEvalRunsApi,
+  formatRagStrategy,
+  RAG_STRATEGY_LABELS,
   getRagEvalSamplesApi,
   importCmrc2018Api,
   runRagEvalDatasetApi,
@@ -508,6 +644,9 @@ import {
   type RagEvalDataset,
   type RagEvalDatasetPagePayload,
   type RagEvalRun,
+  type RagEvalRunPagePayload,
+  type RagEvalComparison,
+  type RagRetrievalStrategy,
   type RagEvalSample,
   type RagEvalSampleForm
 } from '@/api/modules/ragEval'
@@ -515,6 +654,9 @@ import { useAutoListQuery } from '@/composables/useAutoListQuery'
 import { getErrorMessage } from '@/utils/errorMessage'
 import { useLatestRequest } from '@/composables/useLatestRequest'
 import { formatDateTime, formatSegmentMeta } from '@/utils/format'
+import RagRunParameters from '@/components/rag/RagRunParameters.vue'
+import RagRunComparison from '@/components/rag/RagRunComparison.vue'
+import RagRunEvidence from '@/components/rag/RagRunEvidence.vue'
 
 interface MaterialSegment {
   id: number
@@ -536,6 +678,19 @@ const samples = ref<RagEvalSample[]>([])
 const selectedDataset = ref<RagEvalDataset | null>(null)
 const lastRun = ref<RagEvalRun | null>(null)
 const materialDetail = ref<MaterialDetail | null>(null)
+const runHistory = ref<RagEvalRun[]>([])
+const runHistoryTotal = ref(0)
+const runHistoryLoading = ref(false)
+const runHistoryError = ref('')
+const runHistoryPage = reactive({ current: 1, size: 10 })
+const selectedRunIds = ref<number[]>([])
+const comparison = ref<RagEvalComparison | null>(null)
+const comparisonLoading = ref(false)
+const comparisonError = ref('')
+const runLoading = ref(false)
+const runError = ref('')
+const pendingRunId = ref<number | null>(null)
+let viewDisposed = false
 
 const datasetLoading = ref(false)
 const materialsLoading = ref(false)
@@ -595,7 +750,9 @@ const sampleForm = reactive({
 })
 
 const runForm = reactive({
-  limit: 5
+  limit: 5,
+  strategy: 'VECTOR_RERANK' as RagRetrievalStrategy,
+  name: ''
 })
 
 const cmrcForm = reactive({
@@ -653,6 +810,8 @@ const formatMetric = (value?: number) => {
   }
   return `${(value * 100).toFixed(1)}%`
 }
+const formatMetricAtK = (value: number | undefined, k: number) =>
+  (lastRun.value?.retrievalLimit || 0) < k ? '—' : formatMetric(value)
 
 const formatLatency = (value?: number) => {
   if (typeof value !== 'number') {
@@ -747,6 +906,94 @@ const loadMaterials = async () => {
 
 const datasetRequest = useLatestRequest()
 const sampleRequest = useLatestRequest()
+const runHistoryRequest = useLatestRequest()
+const runRequest = useLatestRequest()
+const comparisonRequest = useLatestRequest()
+const segmentRequest = useLatestRequest()
+
+const clearComparisonSelection = () => {
+  selectedRunIds.value = []
+  comparison.value = null
+  comparisonError.value = ''
+  comparisonLoading.value = false
+  comparisonRequest.invalidate()
+}
+
+const resetSelectedDataset = (dataset: RagEvalDataset | null) => {
+  selectedDataset.value = dataset
+  samples.value = []
+  lastRun.value = null
+  materialDetail.value = null
+  segmentDrawerVisible.value = false
+  runHistory.value = []
+  runHistoryTotal.value = 0
+  runHistoryPage.current = 1
+  runHistoryError.value = ''
+  runError.value = ''
+  pendingRunId.value = null
+  runLoading.value = false
+  sampleLoading.value = false
+  runHistoryLoading.value = false
+  sampleRequest.invalidate()
+  runHistoryRequest.invalidate()
+  runRequest.invalidate()
+  segmentRequest.invalidate()
+  clearComparisonSelection()
+}
+
+const loadRunHistory = async () => {
+  const datasetId = selectedDataset.value?.id
+  if (!datasetId) return
+  const requestId = runHistoryRequest.begin()
+  runHistoryLoading.value = true
+  runHistoryError.value = ''
+  try {
+    const res = await getRagEvalRunsApi(datasetId, { ...runHistoryPage })
+    if (viewDisposed || !runHistoryRequest.isLatest(requestId) || selectedDataset.value?.id !== datasetId) return
+    const data = res.data.data as RagEvalRunPagePayload
+    runHistory.value = data.records || []
+    runHistoryTotal.value = data.total || 0
+  } catch (error) {
+    if (!viewDisposed && runHistoryRequest.isLatest(requestId))
+      runHistoryError.value = getErrorMessage(error, '加载运行历史失败')
+  } finally {
+    if (runHistoryRequest.isLatest(requestId)) runHistoryLoading.value = false
+  }
+}
+
+const resetRunHistoryPage = () => {
+  runHistoryPage.current = 1
+  void loadRunHistory()
+}
+
+const toggleRunSelection = (runId: number, checked: boolean) => {
+  if (checked && selectedRunIds.value.length < 3 && !selectedRunIds.value.includes(runId))
+    selectedRunIds.value = [...selectedRunIds.value, runId]
+  if (!checked) selectedRunIds.value = selectedRunIds.value.filter((id) => id !== runId)
+  comparisonRequest.invalidate()
+  comparison.value = null
+  comparisonError.value = ''
+  comparisonLoading.value = false
+}
+
+const compareRuns = async () => {
+  const datasetId = selectedDataset.value?.id
+  if (!datasetId || selectedRunIds.value.length < 2 || selectedRunIds.value.length > 3) return
+  const requestId = comparisonRequest.begin()
+  comparisonLoading.value = true
+  comparisonError.value = ''
+  comparison.value = null
+  try {
+    const res = await compareRagEvalRunsApi(datasetId, [...selectedRunIds.value])
+    if (viewDisposed || !comparisonRequest.isLatest(requestId) || selectedDataset.value?.id !== datasetId) return
+    comparison.value = res.data.data as RagEvalComparison
+  } catch (error) {
+    if (!viewDisposed && comparisonRequest.isLatest(requestId))
+      comparisonError.value = getErrorMessage(error, '读取对比结果失败')
+  } finally {
+    if (comparisonRequest.isLatest(requestId)) comparisonLoading.value = false
+  }
+}
 
 const loadDatasets = async () => {
   const requestId = datasetRequest.begin()
@@ -835,16 +1082,15 @@ const importCmrcDataset = async () => {
     datasetPage.current = 1
     await loadMaterials()
     await loadDatasets()
-    selectedDataset.value = {
+    resetSelectedDataset({
       id: result.datasetId,
       materialId: result.materialId,
       materialTitle: result.materialTitle,
       name: result.datasetName,
       status: 'ACTIVE',
       sampleCount: result.sampleCount
-    }
-    lastRun.value = null
-    await loadSamples()
+    })
+    await Promise.all([loadSamples(), loadRunHistory()])
   } catch (error) {
     ElMessage.error(getErrorMessage(error, '导入 CMRC2018 失败'))
   } finally {
@@ -872,12 +1118,12 @@ const createDataset = async () => {
     const dataset = res.data.data as RagEvalDataset
     ElMessage.success('评测集已创建')
     datasetDialogVisible.value = false
-    selectedDataset.value = {
+    resetSelectedDataset({
       ...dataset,
       materialTitle: dataset.materialTitle || selectedMaterial.value?.title
-    }
+    })
     await loadDatasets()
-    await loadSamples()
+    await Promise.all([loadSamples(), loadRunHistory()])
   } catch (error) {
     ElMessage.error(getErrorMessage(error, '创建评测集失败'))
   } finally {
@@ -886,9 +1132,8 @@ const createDataset = async () => {
 }
 
 const selectDataset = async (dataset: RagEvalDataset) => {
-  selectedDataset.value = dataset
-  lastRun.value = null
-  await loadSamples()
+  if (selectedDataset.value?.id !== dataset.id) resetSelectedDataset(dataset)
+  await Promise.all([loadSamples(), loadRunHistory()])
 }
 
 const removeDataset = async (dataset: RagEvalDataset) => {
@@ -906,9 +1151,7 @@ const removeDataset = async (dataset: RagEvalDataset) => {
     await deleteRagEvalDatasetApi(dataset.id)
     ElMessage.success('评测集已删除')
     if (selectedDataset.value?.id === dataset.id) {
-      selectedDataset.value = null
-      samples.value = []
-      lastRun.value = null
+      resetSelectedDataset(null)
     }
     await loadDatasets()
   } catch (error) {
@@ -1058,26 +1301,38 @@ const importBatchSamples = async () => {
 }
 
 const runDataset = (dataset: RagEvalDataset) => {
+  if (runningEval.value) return
+  if (selectedDataset.value?.id !== dataset.id) void selectDataset(dataset)
   pendingRunDataset.value = dataset
   runForm.limit = 5
+  runForm.strategy = 'VECTOR_RERANK'
+  runForm.name = ''
   runDialogVisible.value = true
 }
 
 const confirmRunDataset = async () => {
-  if (!pendingRunDataset.value) {
+  if (!pendingRunDataset.value || runningEval.value) {
     return
   }
   runningEval.value = true
+  const dataset = pendingRunDataset.value
+  const data = { limit: runForm.limit, strategy: runForm.strategy, name: runForm.name.trim() || undefined }
   try {
-    const res = await runRagEvalDatasetApi(pendingRunDataset.value.id, {
-      limit: runForm.limit
-    })
-    lastRun.value = res.data.data as RagEvalRun
+    const res = await runRagEvalDatasetApi(dataset.id, data)
+    if (viewDisposed) return
+    const result = res.data.data as RagEvalRun
     runDialogVisible.value = false
-    selectedDataset.value = pendingRunDataset.value
-    ElMessage.success('评测运行完成')
+    ElMessage.success(`评测运行已结束：${formatRunStatus(result.status)}`)
     await loadDatasets()
-    await loadSamples()
+    if (selectedDataset.value?.id === dataset.id) {
+      runRequest.invalidate()
+      lastRun.value = result
+      runLoading.value = false
+      runError.value = ''
+      pendingRunId.value = result.id
+      runHistoryPage.current = 1
+      await loadRunHistory()
+    }
   } catch (error) {
     ElMessage.error(getErrorMessage(error, '运行评测失败'))
   } finally {
@@ -1086,12 +1341,23 @@ const confirmRunDataset = async () => {
 }
 
 const loadRun = async (runId: number) => {
+  const datasetId = selectedDataset.value?.id
+  if (!datasetId) return
+  const requestId = runRequest.begin()
+  pendingRunId.value = runId
+  runLoading.value = true
+  runError.value = ''
+  lastRun.value = null
   try {
     const res = await getRagEvalRunApi(runId)
-    lastRun.value = res.data.data as RagEvalRun
-    ElMessage.success('评测结果已加载')
+    if (viewDisposed || !runRequest.isLatest(requestId) || selectedDataset.value?.id !== datasetId) return
+    const result = res.data.data as RagEvalRun
+    if (result.datasetId !== datasetId) throw new Error('这次运行不属于当前评测集')
+    lastRun.value = result
   } catch (error) {
-    ElMessage.error(getErrorMessage(error, '加载评测结果失败'))
+    if (!viewDisposed && runRequest.isLatest(requestId)) runError.value = getErrorMessage(error, '加载评测结果失败')
+  } finally {
+    if (runRequest.isLatest(requestId)) runLoading.value = false
   }
 }
 
@@ -1100,18 +1366,87 @@ const openSegmentDrawer = async () => {
     return
   }
   segmentDrawerVisible.value = true
+  const datasetId = selectedDataset.value.id
+  const materialId = selectedDataset.value.materialId
+  const requestId = segmentRequest.begin()
   segmentLoading.value = true
   try {
-    const res = await getMaterialDetailApi(selectedDataset.value.materialId)
+    const res = await getMaterialDetailApi(materialId)
+    if (viewDisposed || !segmentRequest.isLatest(requestId) || selectedDataset.value?.id !== datasetId) return
     materialDetail.value = res.data.data as MaterialDetail
   } catch (error) {
+    if (!segmentRequest.isLatest(requestId)) return
     materialDetail.value = null
     ElMessage.error(getErrorMessage(error, '加载资料分段失败'))
   } finally {
-    segmentLoading.value = false
+    if (segmentRequest.isLatest(requestId)) segmentLoading.value = false
   }
 }
 
 void loadMaterials()
 void loadDatasets()
+
+onUnmounted(() => {
+  viewDisposed = true
+  datasetRequest.invalidate()
+  sampleRequest.invalidate()
+  runHistoryRequest.invalidate()
+  runRequest.invalidate()
+  comparisonRequest.invalidate()
+  segmentRequest.invalidate()
+})
 </script>
+
+<style scoped>
+.rag-history-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.rag-history-actions > span {
+  font-size: 13px;
+  color: var(--muted);
+}
+.rag-history-row {
+  display: grid;
+  grid-template-columns: 22px minmax(180px, 1fr) minmax(220px, 1.4fr) auto;
+  gap: 16px;
+  align-items: center;
+  padding: 18px 8px;
+  border-bottom: 1px solid var(--line);
+}
+.rag-history-row--selected {
+  background: var(--brand-light);
+}
+.rag-history-row input {
+  width: 17px;
+  height: 17px;
+  accent-color: var(--brand);
+  cursor: pointer;
+}
+.rag-history-row__title,
+.rag-history-row__meta {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+.rag-history-row__title > span,
+.rag-history-row__meta small {
+  color: var(--muted);
+  font-size: 12px;
+}
+@media (max-width: 720px) {
+  .rag-history-row {
+    grid-template-columns: 22px minmax(0, 1fr) auto;
+    gap: 10px;
+  }
+  .rag-history-row__meta {
+    grid-column: 2 / -1;
+    grid-row: 2;
+  }
+}
+</style>

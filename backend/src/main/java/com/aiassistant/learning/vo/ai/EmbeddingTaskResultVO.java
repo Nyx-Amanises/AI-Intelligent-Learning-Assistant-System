@@ -26,6 +26,9 @@ public class EmbeddingTaskResultVO {
      */
     private String modelName;
 
+    /** 本次最终索引来源，包含复用的已保存分块：MOCK / LIVE / MIXED / UNKNOWN。 */
+    private String embeddingMode;
+
     /**
      * 资料总分段数。
      */

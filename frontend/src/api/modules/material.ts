@@ -8,6 +8,10 @@ export interface MaterialPageItem {
   parseStatus: string
   summaryStatus: string
   summaryGenerationMode?: GenerationMode
+  chunkStrategy?: string
+  chunkSize?: number
+  chunkOverlap?: number
+  contentHash?: string
   difficultyLevel: number
   tags?: string
   description?: string
@@ -44,7 +48,8 @@ export const getMaterialPageApi = (params: Record<string, unknown>) => http.get(
 
 export const getMaterialDetailApi = (id: number) => http.get(`/material/${id}`)
 
-export const parseMaterialApi = (id: number) => http.post(`/material/${id}/parse`)
+export const parseMaterialApi = (id: number, data?: { chunkSize: number; chunkOverlap: number }) =>
+  http.post(`/material/${id}/parse`, data)
 
 export const deleteMaterialApi = (id: number) => http.delete(`/material/${id}`)
 

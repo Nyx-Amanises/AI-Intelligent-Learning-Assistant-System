@@ -61,6 +61,9 @@ The production environment is deployed with **Vercel + Render + Aiven MySQL + Ai
 - Store material vectors in Qdrant and support semantic retrieval.
 - Preview RAG retrieval results with similarity score, page number, paragraph, and section metadata.
 - Manage RAG evaluation datasets and calculate Hit@K, Recall@K, MRR, and latency.
+- Choose text search, vector-only search, or vector recall with lexical reranking. Runs retain their parameters, corpus/sample versions and retrieved evidence, with paginated history and side-by-side comparison of 2–3 runs. Mock, fallback, failure or changed evaluation data is flagged; metrics beyond the requested Top K are not presented as fully evaluated.
+- Material parsing supports 200–4000-character chunks and 0–500-character overlap (smaller than the chunk size). Rechunking reads the original file or preserved full text; rebuild embeddings and update segment-ID annotations afterward. PDF page annotations can remain stable across chunk sizes. Old text without a preserved original must be recreated; CMRC imports keep their original contexts. Historical parameter values remain unknown.
+- Embedding indexes retain the actual model and Mock/live provenance. Incompatible, incomplete or older unclassified indexes fall back to text search with a reason; regenerate those indexes before evaluating real vector search.
 - Import the CMRC2018 dataset for batch retrieval quality evaluation.
 
 ### Agent Study Assistant

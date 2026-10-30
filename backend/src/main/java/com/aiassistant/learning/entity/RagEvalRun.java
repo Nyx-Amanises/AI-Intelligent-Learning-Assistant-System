@@ -41,6 +41,13 @@ public class RagEvalRun extends BaseEntity {
     /** 每个问题检索返回的候选数量。 */
     private Integer retrievalLimit;
 
+    private String name;
+    private String strategy;
+    private String parameterSnapshotJson;
+    private String actualStrategiesJson;
+    private Boolean mockEmbedding;
+    private Integer degradedSamples;
+
     /** 本次运行应评测的样本总数。 */
     private Integer totalSamples;
 

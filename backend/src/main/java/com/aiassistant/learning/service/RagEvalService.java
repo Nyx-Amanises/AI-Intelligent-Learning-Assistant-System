@@ -3,11 +3,13 @@ package com.aiassistant.learning.service;
 import com.aiassistant.learning.dto.rag.RagEvalDatasetCreateRequest;
 import com.aiassistant.learning.dto.rag.RagEvalDatasetPageQuery;
 import com.aiassistant.learning.dto.rag.RagEvalRunRequest;
+import com.aiassistant.learning.dto.rag.RagEvalRunPageQuery;
 import com.aiassistant.learning.dto.rag.RagEvalSampleBatchCreateRequest;
 import com.aiassistant.learning.dto.rag.RagEvalSampleUpdateRequest;
 import com.aiassistant.learning.vo.page.PageVO;
 import com.aiassistant.learning.vo.rag.RagEvalDatasetVO;
 import com.aiassistant.learning.vo.rag.RagEvalRunVO;
+import com.aiassistant.learning.vo.rag.RagEvalComparisonVO;
 import com.aiassistant.learning.vo.rag.RagEvalSampleVO;
 import com.aiassistant.learning.vo.rag.CmrcImportResultVO;
 import java.util.List;
@@ -19,6 +21,11 @@ import org.springframework.web.multipart.MultipartFile;
  * <p>这里定义评测集管理、样本管理、评测运行和 CMRC2018 数据导入等能力。</p>
  */
 public interface RagEvalService {
+
+    PageVO<RagEvalRunVO> pageRuns(Long userId, Long datasetId,
+            RagEvalRunPageQuery query);
+
+    RagEvalComparisonVO compareRuns(Long userId, Long datasetId, List<Long> runIds);
 
     /**
      * 创建一个新的评测集。

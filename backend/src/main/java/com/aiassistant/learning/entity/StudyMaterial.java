@@ -2,6 +2,7 @@ package com.aiassistant.learning.entity;
 
 import com.aiassistant.learning.common.entity.BaseLogicEntity;
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import java.io.Serial;
@@ -19,6 +20,16 @@ import lombok.EqualsAndHashCode;
 @EqualsAndHashCode(callSuper = true)
 @TableName("study_material")
 public class StudyMaterial extends BaseLogicEntity {
+
+    /** 最近成功分块时的实际策略及参数；历史资料无法推断时保持 UNKNOWN/null。 */
+    private String chunkStrategy;
+    private Integer chunkSize;
+    private Integer chunkOverlap;
+    private String contentHash;
+
+    /** 手工文本的完整原文；普通查询不加载，也不作为页面响应字段。 */
+    @TableField(select = false)
+    private String sourceText;
 
     /** 最近成功总结的持久生成来源：MOCK / LIVE / UNKNOWN。 */
     private String summaryGenerationMode;

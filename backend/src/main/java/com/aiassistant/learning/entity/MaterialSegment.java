@@ -78,6 +78,10 @@ public class MaterialSegment extends BaseEntity {
     @TableField(value = "embedding_model", select = false)
     private String embeddingModel;
 
+    /** 实际生成索引时的来源：MOCK / LIVE / UNKNOWN，不能由当前配置推断。 */
+    @TableField(select = false)
+    private String embeddingMode;
+
     /**
      * 关联的向量化任务 ID。
      */

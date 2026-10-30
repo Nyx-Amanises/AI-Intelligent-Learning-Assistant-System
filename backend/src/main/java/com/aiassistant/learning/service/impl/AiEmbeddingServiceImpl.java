@@ -87,7 +87,7 @@ public class AiEmbeddingServiceImpl implements AiEmbeddingService {
         StudyMaterial material = studyMaterialMapper.selectOne(new LambdaQueryWrapper<StudyMaterial>()
                 .eq(StudyMaterial::getId, materialId)
                 .eq(StudyMaterial::getUserId, userId)
-                .last("limit 1"));
+                .last("limit 1 for update"));
         if (material == null) {
             throw new BusinessException(404, "资料不存在");
         }
@@ -96,6 +96,10 @@ public class AiEmbeddingServiceImpl implements AiEmbeddingService {
         }
 
         List<MaterialSegment> segments = materialSegmentMapper.selectList(new LambdaQueryWrapper<MaterialSegment>()
+                .select(MaterialSegment::getId, MaterialSegment::getMaterialId, MaterialSegment::getSegmentNo,
+                        MaterialSegment::getPageNo, MaterialSegment::getSectionTitle, MaterialSegment::getContentText,
+                        MaterialSegment::getKeywords, MaterialSegment::getEmbeddingStatus, MaterialSegment::getEmbeddingModel,
+                        MaterialSegment::getEmbeddingMode, MaterialSegment::getVectorId)
                 .eq(MaterialSegment::getMaterialId, materialId)
                 .orderByAsc(MaterialSegment::getSegmentNo));
         if (segments.isEmpty()) {
@@ -104,13 +108,16 @@ public class AiEmbeddingServiceImpl implements AiEmbeddingService {
         ensureEmbeddingColumnsReady();
 
         String resolvedModel = resolveEmbeddingModel(modelName);
+        String targetMode = Boolean.TRUE.equals(aiConfigService.getResolvedConfig().mockMode()) ? "MOCK" : "LIVE";
         boolean force = Boolean.TRUE.equals(forceRegenerate);
         int skippedSegments = 0;
         List<MaterialSegment> pendingSegments = new ArrayList<>();
 
         for (MaterialSegment segment : segments) {
             boolean alreadyEmbedded = EMBEDDING_STATUS_SUCCESS.equalsIgnoreCase(segment.getEmbeddingStatus())
-                    && StringUtils.hasText(segment.getVectorId());
+                    && StringUtils.hasText(segment.getVectorId())
+                    && resolvedModel.equals(segment.getEmbeddingModel())
+                    && targetMode.equals(segment.getEmbeddingMode());
             if (alreadyEmbedded && !force) {
                 skippedSegments++;
                 continue;
@@ -168,6 +175,7 @@ public class AiEmbeddingServiceImpl implements AiEmbeddingService {
                 for (MaterialSegment segment : batch) {
                     segment.setEmbeddingStatus(EMBEDDING_STATUS_SUCCESS);
                     segment.setEmbeddingModel(embeddingBatch.modelName());
+                    segment.setEmbeddingMode(embeddingBatch.mock() ? "MOCK" : "LIVE");
                     segment.setEmbeddingTaskId(taskId);
                     segment.setVectorId(String.valueOf(segment.getId()));
                     segment.setEmbeddedAt(embeddedAt);
@@ -185,6 +193,7 @@ public class AiEmbeddingServiceImpl implements AiEmbeddingService {
                 .materialId(material.getId())
                 .materialTitle(material.getTitle())
                 .modelName(resolvedModel)
+                .embeddingMode(resolveResultMode(segments))
                 .totalSegments(segments.size())
                 .queuedSegments(pendingSegments.size())
                 .skippedSegments(skippedSegments)
@@ -193,6 +202,14 @@ public class AiEmbeddingServiceImpl implements AiEmbeddingService {
                 .vectorStoreReady(Boolean.TRUE)
                 .createdAt(LocalDateTime.now())
                 .build();
+    }
+
+    private String resolveResultMode(List<MaterialSegment> segments) {
+        List<String> modes = segments.stream().map(MaterialSegment::getEmbeddingMode).distinct().toList();
+        if (modes.size() == 1 && ("MOCK".equals(modes.get(0)) || "LIVE".equals(modes.get(0)))) {
+            return modes.get(0);
+        }
+        return modes.stream().anyMatch(mode -> mode == null || "UNKNOWN".equals(mode)) ? "UNKNOWN" : "MIXED";
     }
 
     /**
@@ -239,15 +256,17 @@ public class AiEmbeddingServiceImpl implements AiEmbeddingService {
         try (java.sql.Connection connection = dataSource.getConnection()) {
             java.sql.DatabaseMetaData metaData = connection.getMetaData();
             String catalog = connection.getCatalog();
-            if (columnExists(metaData, catalog, "material_segment", "embedding_model")
-                    || columnExists(metaData, catalog, "MATERIAL_SEGMENT", "EMBEDDING_MODEL")) {
+            if ((columnExists(metaData, catalog, "material_segment", "embedding_model")
+                    || columnExists(metaData, catalog, "MATERIAL_SEGMENT", "EMBEDDING_MODEL"))
+                    && (columnExists(metaData, catalog, "material_segment", "embedding_mode")
+                    || columnExists(metaData, catalog, "MATERIAL_SEGMENT", "EMBEDDING_MODE"))) {
                 return;
             }
         } catch (java.sql.SQLException exception) {
             throw new BusinessException(500, "检查 material_segment 表结构失败: " + exception.getMessage());
         }
         throw new BusinessException(
-                "Embedding 相关字段尚未就绪，请先执行 db/migrations/2026-04-17_add_material_segment_embedding_fields.sql"
+                "Embedding 相关字段尚未就绪，请先完成数据库迁移 V14"
         );
     }
 

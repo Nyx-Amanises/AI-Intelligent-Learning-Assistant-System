@@ -6,6 +6,7 @@ import com.aiassistant.learning.context.UserContext;
 import com.aiassistant.learning.dto.rag.RagEvalDatasetCreateRequest;
 import com.aiassistant.learning.dto.rag.RagEvalDatasetPageQuery;
 import com.aiassistant.learning.dto.rag.RagEvalRunRequest;
+import com.aiassistant.learning.dto.rag.RagEvalRunPageQuery;
 import com.aiassistant.learning.dto.rag.RagEvalSampleBatchCreateRequest;
 import com.aiassistant.learning.dto.rag.RagEvalSampleUpdateRequest;
 import com.aiassistant.learning.service.RagEvalService;
@@ -13,6 +14,7 @@ import com.aiassistant.learning.vo.page.PageVO;
 import com.aiassistant.learning.vo.rag.CmrcImportResultVO;
 import com.aiassistant.learning.vo.rag.RagEvalDatasetVO;
 import com.aiassistant.learning.vo.rag.RagEvalRunVO;
+import com.aiassistant.learning.vo.rag.RagEvalComparisonVO;
 import com.aiassistant.learning.vo.rag.RagEvalSampleVO;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -39,6 +41,18 @@ import org.springframework.web.multipart.MultipartFile;
 @RestController
 @RequestMapping("/api/rag/eval")
 public class RagEvalController {
+
+    @GetMapping("/datasets/{datasetId}/runs")
+    public ApiResponse<PageVO<RagEvalRunVO>> pageRuns(@PathVariable Long datasetId,
+            @Valid RagEvalRunPageQuery query) {
+        return ApiResponse.success(ragEvalService.pageRuns(UserContext.getCurrentUserId(), datasetId, query));
+    }
+
+    @GetMapping("/datasets/{datasetId}/compare")
+    public ApiResponse<RagEvalComparisonVO> compareRuns(
+            @PathVariable Long datasetId, @RequestParam List<Long> runIds) {
+        return ApiResponse.success(ragEvalService.compareRuns(UserContext.getCurrentUserId(), datasetId, runIds));
+    }
 
     /** RAG 检索评测业务服务。 */
     private final RagEvalService ragEvalService;

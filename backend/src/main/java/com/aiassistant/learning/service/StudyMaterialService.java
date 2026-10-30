@@ -2,6 +2,7 @@ package com.aiassistant.learning.service;
 
 import com.aiassistant.learning.dto.material.MaterialCreateRequest;
 import com.aiassistant.learning.dto.material.MaterialPageQuery;
+import com.aiassistant.learning.dto.material.MaterialParseRequest;
 import com.aiassistant.learning.dto.material.MaterialUpdateRequest;
 import com.aiassistant.learning.entity.StudyMaterial;
 import com.aiassistant.learning.vo.material.MaterialPageVO;
@@ -111,6 +112,9 @@ public interface StudyMaterialService extends IService<StudyMaterial> {
      * @param materialId 资料 ID
      */
     void parseMaterial(Long userId, Long materialId);
+
+    /** 使用明确的分块参数重新解析原始资料。 */
+    void parseMaterial(Long userId, Long materialId, MaterialParseRequest request);
 
     /**
      * 删除资料及其分段、向量数据；事务提交后再删除上传的原始文件。

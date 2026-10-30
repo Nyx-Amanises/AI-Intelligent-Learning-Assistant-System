@@ -2,6 +2,7 @@ package com.aiassistant.learning.vo.rag;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import lombok.Builder;
 import lombok.Data;
 
@@ -26,6 +27,13 @@ public class RagEvalRunVO {
 
     /** 每条样本检索时取回的候选数量。 */
     private Integer retrievalLimit;
+
+    private String name;
+    private String strategy;
+    private Map<String, Object> parameterSnapshot;
+    private List<String> actualStrategies;
+    private Boolean mockEmbedding;
+    private Integer degradedSamples;
 
     /** 本次应评测的样本总数。 */
     private Integer totalSamples;

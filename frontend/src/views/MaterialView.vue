@@ -398,6 +398,10 @@
               <dd>{{ formatParseStatus(detail.parseStatus) }}</dd>
             </div>
             <div>
+              <dt>分块方案</dt>
+              <dd>{{ formatChunking(detail) }}</dd>
+            </div>
+            <div>
               <dt>学习摘要</dt>
               <dd>
                 {{ formatSummaryStatus(detail.summaryStatus) }}
@@ -485,6 +489,39 @@
         </template>
       </div>
     </el-drawer>
+
+    <el-dialog
+      v-model="parseDialogVisible"
+      title="解析与分块"
+      width="min(540px, calc(100vw - 32px))"
+      :close-on-click-modal="!parsing"
+      :close-on-press-escape="!parsing"
+      :show-close="!parsing"
+    >
+      <p>{{ parseTarget?.title || '当前资料' }}</p>
+      <p class="page-desc">按原文重新切分。新的片段将使用这里的参数，随后可在 RAG 评测中比较检索效果。</p>
+      <el-form label-position="top">
+        <el-form-item label="每块最多字符数（200–4000）">
+          <el-input-number v-model="parseForm.chunkSize" :min="200" :max="4000" :step="100" :disabled="parsing" />
+        </el-form-item>
+        <el-form-item label="相邻块重叠字符数（小于分块大小，最多500）">
+          <el-input-number
+            v-model="parseForm.chunkOverlap"
+            :min="0"
+            :max="Math.min(500, parseForm.chunkSize - 1)"
+            :step="20"
+            :disabled="parsing"
+          />
+        </el-form-item>
+      </el-form>
+      <p v-if="parseTarget?.parseStatus === 'SUCCESS'" class="page-desc">
+        重新解析会替换片段并清除旧向量，需要重新生成向量。已有评测的片段 ID 标注需要更新；历史运行仍保留原参数和结果。
+      </p>
+      <template #footer>
+        <el-button :disabled="parsing" @click="parseDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="parsing" @click="confirmParseMaterial">应用并解析</el-button>
+      </template>
+    </el-dialog>
 
     <el-dialog
       v-model="retrievalDialogVisible"
@@ -606,6 +643,10 @@ const uploadDialogVisible = ref(false)
 const textDialogVisible = ref(false)
 const editDialogVisible = ref(false)
 const retrievalDialogVisible = ref(false)
+const parseDialogVisible = ref(false)
+const parsing = ref(false)
+const parseTarget = ref<MaterialPageItem | null>(null)
+const parseForm = reactive({ chunkSize: 900, chunkOverlap: 140 })
 const tableLoading = ref(false)
 const detailLoading = ref(false)
 const creating = ref(false)
@@ -864,16 +905,49 @@ const createMaterial = async () => {
   }
 }
 
-const parseMaterial = async (id: number) => {
+const formatChunking = (material: MaterialPageItem) =>
+  material.chunkStrategy === 'CHAR_WINDOW_V2'
+    ? `每块 ${material.chunkSize} 字符 · 重叠 ${material.chunkOverlap} 字符`
+    : material.chunkStrategy === 'ORIGINAL_CONTEXT'
+      ? '导入时按原始段落保留'
+      : '历史参数未记录'
+
+const parseMaterial = (id: number) => {
+  if (parsing.value) return
+  parseTarget.value = materials.value.find((item) => item.id === id) || (detail.value?.id === id ? detail.value : null)
+  if (!parseTarget.value) return
+  parseForm.chunkSize = parseTarget.value.chunkSize || 900
+  parseForm.chunkOverlap = parseTarget.value.chunkOverlap ?? 140
+  parseDialogVisible.value = true
+}
+
+const confirmParseMaterial = async () => {
+  if (!parseTarget.value || parsing.value) return
+  if (
+    !Number.isInteger(parseForm.chunkSize) ||
+    !Number.isInteger(parseForm.chunkOverlap) ||
+    parseForm.chunkSize < 200 ||
+    parseForm.chunkSize > 4000 ||
+    parseForm.chunkOverlap < 0 ||
+    parseForm.chunkOverlap > 500 ||
+    parseForm.chunkOverlap >= parseForm.chunkSize
+  ) {
+    ElMessage.warning('请填写有效分块参数，重叠字符数必须小于分块大小')
+    return
+  }
+  const id = parseTarget.value.id
+  parsing.value = true
   actionLoadingId.value = id
   try {
-    await parseMaterialApi(id)
+    await parseMaterialApi(id, { ...parseForm })
     ElMessage.success('资料解析成功')
+    parseDialogVisible.value = false
     await loadMaterials()
     if (drawerVisible.value && detailId.value === id) await viewDetail(id)
   } catch (error) {
     ElMessage.error(getErrorMessage(error, '资料解析失败，请稍后重试。'))
   } finally {
+    parsing.value = false
     actionLoadingId.value = null
   }
 }

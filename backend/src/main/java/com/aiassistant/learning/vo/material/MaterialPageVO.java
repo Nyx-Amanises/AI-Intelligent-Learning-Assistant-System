@@ -13,6 +13,11 @@ import lombok.Data;
 @Builder
 public class MaterialPageVO {
 
+    private String chunkStrategy;
+    private Integer chunkSize;
+    private Integer chunkOverlap;
+    private String contentHash;
+
     /** 最近成功总结的持久生成来源：MOCK / LIVE / UNKNOWN。 */
     private String summaryGenerationMode;
 

@@ -4,6 +4,7 @@ import com.aiassistant.learning.common.result.ApiResponse;
 import com.aiassistant.learning.context.UserContext;
 import com.aiassistant.learning.dto.material.MaterialCreateRequest;
 import com.aiassistant.learning.dto.material.MaterialPageQuery;
+import com.aiassistant.learning.dto.material.MaterialParseRequest;
 import com.aiassistant.learning.dto.material.MaterialRenameRequest;
 import com.aiassistant.learning.dto.material.MaterialUpdateRequest;
 import com.aiassistant.learning.service.StudyMaterialService;
@@ -135,9 +136,10 @@ public class StudyMaterialController {
      * @return 解析成功提示
      */
     @PostMapping("/{id}/parse")
-    public ApiResponse<Void> parse(@PathVariable Long id) {
+    public ApiResponse<Void> parse(@PathVariable Long id,
+            @Valid @RequestBody(required = false) MaterialParseRequest request) {
         Long userId = UserContext.getCurrentUserId();
-        studyMaterialService.parseMaterial(userId, id);
+        studyMaterialService.parseMaterial(userId, id, request == null ? new MaterialParseRequest() : request);
         return ApiResponse.success("资料解析成功", null);
     }
 

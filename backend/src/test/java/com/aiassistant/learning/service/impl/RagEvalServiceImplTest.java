@@ -1,23 +1,27 @@
 package com.aiassistant.learning.service.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.aiassistant.learning.common.exception.BusinessException;
 import com.aiassistant.learning.dto.rag.RagEvalDatasetCreateRequest;
 import com.aiassistant.learning.dto.rag.RagEvalRunRequest;
+import com.aiassistant.learning.dto.rag.RagEvalRunPageQuery;
 import com.aiassistant.learning.dto.rag.RagEvalSampleBatchCreateRequest;
 import com.aiassistant.learning.dto.rag.RagEvalSampleCreateRequest;
 import com.aiassistant.learning.entity.MaterialSegment;
@@ -42,16 +46,25 @@ import com.aiassistant.learning.vo.rag.RagEvalDatasetVO;
 import com.aiassistant.learning.vo.rag.RagEvalRunVO;
 import com.aiassistant.learning.vo.rag.RagEvalSampleVO;
 import com.baomidou.mybatisplus.core.MybatisConfiguration;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Arrays;
+import java.util.regex.Pattern;
 import java.util.concurrent.atomic.AtomicLong;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.mock.web.MockMultipartFile;
 
@@ -95,6 +108,7 @@ class RagEvalServiceImplTest {
     void setUp() {
         when(studyMaterialService.getOne(any())).thenReturn(material());
         when(datasets.selectOne(any())).thenReturn(dataset());
+        when(segments.selectList(any())).thenReturn(List.of(storedSegment(11L, 1), storedSegment(12L, 3), storedSegment(50L, 5)));
         when(datasets.insert(any(RagEvalDataset.class))).thenAnswer(invocation -> {
             RagEvalDataset dataset = invocation.getArgument(0);
             dataset.setId(DATASET_ID);
@@ -195,11 +209,11 @@ class RagEvalServiceImplTest {
         RagEvalSample pageHitAtFirst = storedSample(2L, "问题二", "[]", "[3]");
         RagEvalSample miss = storedSample(3L, "问题三", "[50]", null);
         when(samples.selectList(any())).thenReturn(List.of(hitAtSecond, pageHitAtFirst, miss));
-        when(retrievalService.retrieve(eq(USER_ID), eq(MATERIAL_ID), eq("问题一"), anyInt()))
+        when(retrievalService.retrieve(eq(USER_ID), eq(MATERIAL_ID), eq("问题一"), anyInt(), anyString()))
                 .thenReturn(vectorResult(List.of(segment(20L, 1), segment(11L, 2), segment(12L, 4))));
-        when(retrievalService.retrieve(eq(USER_ID), eq(MATERIAL_ID), eq("问题二"), anyInt()))
+        when(retrievalService.retrieve(eq(USER_ID), eq(MATERIAL_ID), eq("问题二"), anyInt(), anyString()))
                 .thenReturn(vectorResult(List.of(segment(21L, 3), segment(22L, 5))));
-        when(retrievalService.retrieve(eq(USER_ID), eq(MATERIAL_ID), eq("问题三"), anyInt()))
+        when(retrievalService.retrieve(eq(USER_ID), eq(MATERIAL_ID), eq("问题三"), anyInt(), anyString()))
                 .thenReturn(vectorResult(List.of(segment(30L, 1))));
         RagEvalRunRequest request = new RagEvalRunRequest();
         request.setLimit(5);
@@ -234,9 +248,9 @@ class RagEvalServiceImplTest {
                 storedSample(1L, "正常", "[11]", null),
                 storedSample(2L, "异常", "[12]", null)
         ));
-        when(retrievalService.retrieve(eq(USER_ID), eq(MATERIAL_ID), eq("正常"), anyInt()))
+        when(retrievalService.retrieve(eq(USER_ID), eq(MATERIAL_ID), eq("正常"), anyInt(), anyString()))
                 .thenReturn(vectorResult(List.of(segment(11L, 1))));
-        when(retrievalService.retrieve(eq(USER_ID), eq(MATERIAL_ID), eq("异常"), anyInt()))
+        when(retrievalService.retrieve(eq(USER_ID), eq(MATERIAL_ID), eq("异常"), anyInt(), anyString()))
                 .thenThrow(new BusinessException(500, "向量库不可用"));
 
         RagEvalRunVO run = service.runDataset(USER_ID, DATASET_ID, new RagEvalRunRequest());
@@ -256,11 +270,11 @@ class RagEvalServiceImplTest {
                 storedSample(1L, "降级", "[11]", null),
                 storedSample(2L, "演示", "[12]", null)
         ));
-        when(retrievalService.retrieve(eq(USER_ID), eq(MATERIAL_ID), eq("降级"), anyInt()))
+        when(retrievalService.retrieve(eq(USER_ID), eq(MATERIAL_ID), eq("降级"), anyInt(), anyString()))
                 .thenReturn(new RetrievalResult(MATERIAL_ID, "资料", RetrievalService.MODE_TEXT, true,
                         "向量模型调用失败，已改用数据库文本检索", false,
                         List.of(new RetrievalHit(segment(11L, 1), null, 0.5, 0.45))));
-        when(retrievalService.retrieve(eq(USER_ID), eq(MATERIAL_ID), eq("演示"), anyInt()))
+        when(retrievalService.retrieve(eq(USER_ID), eq(MATERIAL_ID), eq("演示"), anyInt(), anyString()))
                 .thenReturn(new RetrievalResult(MATERIAL_ID, "资料", RetrievalService.MODE_VECTOR, false, null, true,
                         List.of(new RetrievalHit(segment(12L, 1), 0.3, 0.5, 0.67))));
 
@@ -278,6 +292,264 @@ class RagEvalServiceImplTest {
 
         assertThrows(BusinessException.class, () -> service.runDataset(USER_ID, DATASET_ID, new RagEvalRunRequest()));
         verify(runs, never()).insert(any(RagEvalRun.class));
+    }
+
+    @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void textStrategyAndActualEvidenceArePersistedWithoutProviderSecrets() throws Exception {
+        StudyMaterial material = material();
+        material.setChunkStrategy("SLIDING_WINDOW");
+        material.setChunkSize(700);
+        material.setChunkOverlap(90);
+        material.setContentHash("source-content-hash");
+        when(studyMaterialService.getOne(any())).thenReturn(material);
+        when(samples.selectList(any())).thenReturn(List.of(storedSample(1L, "问题一", "[11]", null)));
+        var actual = new RetrievalResult(MATERIAL_ID, "资料", "TEXT", false, null, false,
+                List.of(new RetrievalHit(segment(11L, 1), null, 0.8, 0.72)), "TEXT");
+        when(retrievalService.retrieve(USER_ID, MATERIAL_ID, "问题一", 3, "TEXT")).thenReturn(actual);
+        RagEvalRunRequest request = new RagEvalRunRequest();
+        request.setName("  文本基线 ");
+        request.setStrategy("TEXT");
+        request.setLimit(3);
+
+        RagEvalRunVO result = service.runDataset(USER_ID, DATASET_ID, request);
+
+        verify(retrievalService).retrieve(USER_ID, MATERIAL_ID, "问题一", 3, "TEXT");
+        assertEquals("SUCCESS", result.getStatus());
+        assertEquals("文本基线", result.getName());
+        assertEquals("TEXT", result.getStrategy());
+        assertEquals(List.of("TEXT"), result.getActualStrategies());
+        assertEquals(false, result.getMockEmbedding());
+        assertEquals(0, result.getDegradedSamples());
+        assertEquals("TEXT", result.getItems().get(0).getActualStrategy());
+        assertNotNull(result.getItems().get(0).getRetrievedSnapshot());
+
+        ArgumentCaptor<RagEvalRun> persisted = ArgumentCaptor.forClass(RagEvalRun.class);
+        verify(runs).insert(persisted.capture());
+        var snapshot = new ObjectMapper().readTree(persisted.getValue().getParameterSnapshotJson());
+        assertEquals("retrieval-v2", snapshot.path("version").asText());
+        assertEquals("TEXT", snapshot.path("strategy").asText());
+        assertEquals(3, snapshot.path("limit").asInt());
+        assertEquals(700, snapshot.path("materials").get(0).path("chunkSize").asInt());
+        assertEquals(90, snapshot.path("materials").get(0).path("chunkOverlap").asInt());
+        assertEquals("source-content-hash", snapshot.path("materials").get(0).path("contentHash").asText());
+        assertEquals(64, snapshot.path("sampleFingerprint").asText().length());
+        assertEquals(64, snapshot.path("corpusFingerprint").asText().length());
+        String savedJson = persisted.getValue().getParameterSnapshotJson();
+        assertFalse(savedJson.contains("apiKey") || savedJson.contains("api-key") || savedJson.contains("Authorization"));
+        assertEquals("TEXT", insertedRunItems.get(0).getActualStrategy());
+        assertTrue(insertedRunItems.get(0).getRetrievedSnapshotJson().contains("正文"));
+        // 后续改配置或改资料对象，已经保存的字符串快照不应随之变化。
+        material.setChunkSize(1500);
+        assertEquals(savedJson, persisted.getValue().getParameterSnapshotJson());
+        assertEquals(700, ((Map<?, ?>) ((List<?>) result.getParameterSnapshot().get("materials")).get(0)).get("chunkSize"));
+        ArgumentCaptor<LambdaQueryWrapper<StudyMaterial>> materialQuery = ArgumentCaptor.forClass(LambdaQueryWrapper.class);
+        verify(studyMaterialService).getOne(materialQuery.capture());
+        assertEquals(USER_ID, equality(materialQuery.getValue(), "user_id"));
+        assertEquals(MATERIAL_ID, equality(materialQuery.getValue(), "id"));
+        assertTrue(materialQuery.getValue().getSqlSegment().contains("for share"));
+        ArgumentCaptor<LambdaQueryWrapper<MaterialSegment>> segmentQuery = ArgumentCaptor.forClass(LambdaQueryWrapper.class);
+        verify(segments).selectList(segmentQuery.capture());
+        assertEquals(MATERIAL_ID, equality(segmentQuery.getValue(), "material_id"));
+        assertTrue(segmentQuery.getValue().getSqlSegment().contains("for share"));
+    }
+
+    @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void historyPagesAreScopedToOwnerAndDatasetAndDoNotLoadAllRunItems() {
+        RagEvalRunPageQuery query = new RagEvalRunPageQuery();
+        query.setCurrent(2L);
+        query.setSize(5L);
+        Page<RagEvalRun> page = new Page<>(2L, 5L, 8L);
+        page.setRecords(List.of(comparableRun(71L), comparableRun(70L)));
+        when(runs.selectPage(any(), any())).thenReturn(page);
+
+        var result = service.pageRuns(USER_ID, DATASET_ID, query);
+
+        assertEquals(2L, result.getCurrent());
+        assertEquals(5L, result.getSize());
+        assertEquals(8L, result.getTotal());
+        assertEquals(List.of(71L, 70L), result.getRecords().stream().map(RagEvalRunVO::getId).toList());
+        assertTrue(result.getRecords().stream().allMatch(item -> item.getItems().isEmpty()));
+        ArgumentCaptor<LambdaQueryWrapper<RagEvalRun>> filters = ArgumentCaptor.forClass(LambdaQueryWrapper.class);
+        verify(runs).selectPage(any(), filters.capture());
+        assertEquals(USER_ID, equality(filters.getValue(), "user_id"));
+        assertEquals(DATASET_ID, equality(filters.getValue(), "dataset_id"));
+        assertTrue(filters.getValue().getSqlSegment().contains("id DESC"));
+        verifyNoInteractions(runItems);
+    }
+
+    @Test
+    void historyOfAnotherUsersDatasetIsRejectedBeforeLoadingRuns() {
+        when(datasets.selectOne(any())).thenReturn(null);
+
+        assertEquals(404, assertThrows(BusinessException.class,
+                () -> service.pageRuns(USER_ID, DATASET_ID, new RagEvalRunPageQuery())).getCode());
+        verifyNoInteractions(runs, runItems);
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {2, 3})
+    void comparesTwoOrThreeOwnedRunsInRequestedOrderWhenConditionsMatch(int count) {
+        List<RagEvalRun> history = List.of(comparableRun(71L), comparableRun(72L), comparableRun(73L));
+        history.get(0).setStrategy("TEXT");
+        history.get(1).setStrategy("VECTOR_ONLY");
+        history.get(2).setStrategy("VECTOR_RERANK");
+        installOwnedRuns(history);
+        List<Long> ids = List.of(73L, 71L, 72L).subList(0, count);
+
+        var comparison = service.compareRuns(USER_ID, DATASET_ID, ids);
+
+        assertTrue(comparison.isComparable());
+        assertTrue(comparison.getReasons().isEmpty());
+        assertEquals(ids, comparison.getRuns().stream().map(RagEvalRunVO::getId).toList());
+    }
+
+    @Test
+    void comparisonRequiresTwoOrThreeDistinctNonNullIds() {
+        for (List<Long> ids : Arrays.asList(null, List.<Long>of(), List.of(71L), List.of(71L, 71L),
+                List.of(71L, 72L, 73L, 74L), Arrays.asList(71L, null))) {
+            assertThrows(BusinessException.class, () -> service.compareRuns(USER_ID, DATASET_ID, ids));
+        }
+        verifyNoInteractions(runs, runItems);
+    }
+
+    @Test
+    void comparisonRejectsAnotherUsersRunWithoutReadingItsItems() {
+        RagEvalRun foreign = comparableRun(72L);
+        foreign.setUserId(8L);
+        installOwnedRuns(List.of(comparableRun(71L), foreign));
+
+        assertEquals(404, assertThrows(BusinessException.class,
+                () -> service.compareRuns(USER_ID, DATASET_ID, List.of(71L, 72L))).getCode());
+        // 仅本人的第一条运行可进入明细查询。
+        verify(runItems, times(1)).selectList(any());
+    }
+
+    @Test
+    void comparisonRejectsAnOwnedRunFromAnotherDataset() {
+        RagEvalRun anotherDataset = comparableRun(72L);
+        anotherDataset.setDatasetId(99L);
+        installOwnedRuns(List.of(comparableRun(71L), anotherDataset));
+
+        assertEquals(404, assertThrows(BusinessException.class,
+                () -> service.compareRuns(USER_ID, DATASET_ID, List.of(71L, 72L))).getCode());
+    }
+
+    @ParameterizedTest
+    @CsvSource({"SAMPLES,样本范围", "CORPUS,资料原文", "MOCK,模拟向量", "DEGRADED,检索降级",
+            "FAILED,失败样本", "PARTIAL_FAILED,失败样本", "RUNNING,未完成", "TOP_K,Top K", "VERSION,版本"})
+    void differingOrUnreliableConditionsAreViewableButNotComparable(String changed, String reason) {
+        RagEvalRun baseline = comparableRun(71L);
+        RagEvalRun candidate = comparableRun(72L);
+        switch (changed) {
+            case "SAMPLES" -> candidate.setParameterSnapshotJson("{\"sampleFingerprint\":\"other\",\"corpusFingerprint\":\"corpus\"}");
+            case "CORPUS" -> candidate.setParameterSnapshotJson("{\"sampleFingerprint\":\"samples\",\"corpusFingerprint\":\"other\"}");
+            case "MOCK" -> candidate.setMockEmbedding(true);
+            case "DEGRADED" -> candidate.setDegradedSamples(1);
+            case "TOP_K" -> candidate.setRetrievalLimit(3);
+            case "VERSION" -> candidate.setParameterSnapshotJson("{\"version\":\"retrieval-v1\",\"sampleFingerprint\":\"samples\",\"corpusFingerprint\":\"corpus\"}");
+            default -> candidate.setStatus(changed);
+        }
+        installOwnedRuns(List.of(baseline, candidate));
+
+        var comparison = service.compareRuns(USER_ID, DATASET_ID, List.of(71L, 72L));
+
+        assertFalse(comparison.isComparable());
+        assertEquals(2, comparison.getRuns().size());
+        assertTrue(comparison.getReasons().stream().anyMatch(item -> item.contains(reason)), comparison.getReasons().toString());
+    }
+
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {"not-json", "{}", "null"})
+    void historicalRunsWithoutReliableSnapshotsRemainExplicitlyNonComparable(String snapshot) {
+        RagEvalRun old = comparableRun(72L);
+        old.setParameterSnapshotJson(snapshot);
+        old.setMockEmbedding(null);
+        old.setDegradedSamples(null);
+        installOwnedRuns(List.of(comparableRun(71L), old));
+
+        var result = service.compareRuns(USER_ID, DATASET_ID, List.of(71L, 72L));
+
+        assertFalse(result.isComparable());
+        assertTrue(result.getReasons().stream().anyMatch(reason -> reason.contains("历史运行未记录")));
+        assertTrue(result.getReasons().stream().anyMatch(reason -> reason.contains("未记录向量来源")));
+        assertTrue(result.getReasons().stream().anyMatch(reason -> reason.contains("未记录降级")));
+    }
+
+    @Test
+    void nonexistentOrForeignSampleIdsCannotSilentlyRunASubset() {
+        when(samples.selectList(any())).thenReturn(List.of(storedSample(1L, "问题一", "[11]", null)));
+        for (List<Long> ids : List.of(List.of(1L, 99L), List.of(-1L), Arrays.asList(1L, null))) {
+            RagEvalRunRequest request = new RagEvalRunRequest();
+            request.setSampleIds(ids);
+            assertThrows(BusinessException.class, () -> service.runDataset(USER_ID, DATASET_ID, request));
+        }
+        verify(runs, never()).insert(any(RagEvalRun.class));
+        verifyNoInteractions(runItems, retrievalService);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"[99],[]", "[],[99]", "[],[]"})
+    void staleOrMissingAnnotationsAreRejectedBeforeCreatingARun(String expectedSegments, String expectedPages) {
+        when(samples.selectList(any())).thenReturn(List.of(storedSample(1L, "重新分块前的问题", expectedSegments, expectedPages)));
+
+        assertEquals(409, assertThrows(BusinessException.class,
+                () -> service.runDataset(USER_ID, DATASET_ID, new RagEvalRunRequest())).getCode());
+        verify(runs, never()).insert(any(RagEvalRun.class));
+        verifyNoInteractions(runItems, retrievalService);
+    }
+
+    private void installOwnedRuns(List<RagEvalRun> history) {
+        when(runs.selectOne(any())).thenAnswer(invocation -> {
+            LambdaQueryWrapper<RagEvalRun> query = invocation.getArgument(0);
+            Long id = (Long) equality(query, "id");
+            Long userId = (Long) equality(query, "user_id");
+            assertEquals(USER_ID, userId);
+            return history.stream().filter(run -> run.getId().equals(id) && run.getUserId().equals(userId)).findFirst().orElse(null);
+        });
+        when(runItems.selectList(any())).thenAnswer(invocation -> {
+            LambdaQueryWrapper<RagEvalRunItem> query = invocation.getArgument(0);
+            assertEquals(USER_ID, equality(query, "user_id"));
+            assertNotNull(equality(query, "run_id"));
+            return List.of();
+        });
+    }
+
+    private RagEvalRun comparableRun(long id) {
+        RagEvalRun run = new RagEvalRun();
+        run.setId(id);
+        run.setUserId(USER_ID);
+        run.setDatasetId(DATASET_ID);
+        run.setMaterialId(MATERIAL_ID);
+        run.setStatus("SUCCESS");
+        run.setStrategy("VECTOR_RERANK");
+        run.setRetrievalLimit(5);
+        run.setMockEmbedding(false);
+        run.setDegradedSamples(0);
+        run.setParameterSnapshotJson("{\"version\":\"retrieval-v2\",\"sampleFingerprint\":\"samples\",\"corpusFingerprint\":\"corpus\"}");
+        run.setActualStrategiesJson("[\"VECTOR_RERANK\"]");
+        return run;
+    }
+
+    private Object equality(LambdaQueryWrapper<?> query, String column) {
+        var matcher = Pattern.compile("\\b" + column + "\\s*=\\s*#\\{ew\\.paramNameValuePairs\\.(MPGENVAL\\d+)\\}")
+                .matcher(query.getSqlSegment());
+        assertTrue(matcher.find(), "Missing owner/identity condition: " + column);
+        return query.getParamNameValuePairs().get(matcher.group(1));
+    }
+
+    private MaterialSegment storedSegment(long id, int pageNo) {
+        MaterialSegment segment = new MaterialSegment();
+        segment.setId(id);
+        segment.setMaterialId(MATERIAL_ID);
+        segment.setSegmentNo((int) id);
+        segment.setPageNo(pageNo);
+        segment.setContentText("正文 " + id);
+        segment.setEmbeddingStatus("SUCCESS");
+        segment.setEmbeddingModel("embedding-test-model");
+        return segment;
     }
 
     @Test

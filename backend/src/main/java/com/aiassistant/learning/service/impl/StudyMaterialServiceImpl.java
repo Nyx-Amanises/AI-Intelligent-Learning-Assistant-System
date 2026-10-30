@@ -2,9 +2,12 @@ package com.aiassistant.learning.service.impl;
 
 import com.aiassistant.learning.common.exception.BusinessException;
 import com.aiassistant.learning.common.util.GenerationModes;
+import com.aiassistant.learning.common.util.MaterialTextChunker;
+import com.aiassistant.learning.common.util.MaterialTextChunker.Options;
 import com.aiassistant.learning.config.FileStorageProperties;
 import com.aiassistant.learning.dto.material.MaterialCreateRequest;
 import com.aiassistant.learning.dto.material.MaterialPageQuery;
+import com.aiassistant.learning.dto.material.MaterialParseRequest;
 import com.aiassistant.learning.dto.material.MaterialUpdateRequest;
 import com.aiassistant.learning.entity.MaterialSegment;
 import com.aiassistant.learning.entity.StudyMaterial;
@@ -65,23 +68,6 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
 
     private static final Logger log = LoggerFactory.getLogger(StudyMaterialServiceImpl.class);
 
-    /**
-     * 单个资料分段的目标字符上限。
-     */
-    private static final int SEGMENT_CHAR_LIMIT = 900;
-
-    /**
-     * 分段之间保留的重叠字符上限。
-     *
-     * <p>保留少量重叠内容可以让后续向量检索不容易丢失上下文。</p>
-     */
-    private static final int SEGMENT_OVERLAP_CHAR_LIMIT = 140;
-
-    /**
-     * 遇到标题时，当前分段至少达到这个长度才会切开。
-     */
-    private static final int HEADING_SPLIT_MIN_CHARS = 180;
-
     private final MaterialSegmentMapper materialSegmentMapper;
     private final FileStorageProperties fileStorageProperties;
     private final VectorStoreService vectorStoreService;
@@ -106,7 +92,7 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
      * 手动创建文本资料。
      *
      * <p>用户直接输入文本时，不需要等待文件解析，资料状态会直接设为 SUCCESS，
-     * 并创建一个完整内容分段。</p>
+     * 并使用默认窗口切分正文，同时保存完整原文以支持之后调整分块。</p>
      *
      * @param userId 当前登录用户 ID
      * @param request 创建资料请求
@@ -115,6 +101,8 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createTextMaterial(Long userId, MaterialCreateRequest request) {
+        Options options = MaterialTextChunker.options(null, null);
+        ParsedContent parsedContent = buildParsedContent(request.getContentText(), null, options);
         StudyMaterial material = new StudyMaterial();
         material.setUserId(userId);
         material.setTitle(request.getTitle());
@@ -125,18 +113,13 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
         material.setDifficultyLevel(request.getDifficultyLevel() == null ? 3 : request.getDifficultyLevel());
         material.setTags(normalizeTags(request.getTags()));
         material.setDescription(trimToNull(request.getDescription()));
-        material.setTotalCharacters(request.getContentText().length());
+        material.setTotalCharacters(parsedContent.text().length());
+        material.setSourceText(parsedContent.text());
+        applyChunkMetadata(material, parsedContent, options);
         material.setDeleted(0);
         this.save(material);
 
-        MaterialSegment segment = new MaterialSegment();
-        segment.setMaterialId(material.getId());
-        segment.setSegmentNo(1);
-        segment.setSectionTitle(material.getTitle());
-        segment.setContentText(request.getContentText());
-        segment.setTokenEstimate(Math.max(1, request.getContentText().length() / 4));
-        segment.setEmbeddingStatus("PENDING");
-        materialSegmentMapper.insert(segment);
+        saveSegments(material.getId(), parsedContent.segments());
         dispatchAutoTasksAfterReady(userId, material.getId());
         return material.getId();
     }
@@ -186,21 +169,25 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
         material.setDeleted(0);
         this.save(material);
 
+        Options options = MaterialTextChunker.options(null, null);
+        ParsedContent parsedContent;
         try {
-            ParsedContent parsedContent = parseFile(material);
-            cleanupMaterialVectors(userId, material.getId());
-            saveSegments(material.getId(), parsedContent.segments());
-            material.setParseStatus("SUCCESS");
-            material.setTotalPages(parsedContent.totalPages());
-            material.setTotalCharacters(parsedContent.text().length());
-            this.updateById(material);
-
-            dispatchAutoTasksAfterReady(userId, material.getId());
+            parsedContent = parseFile(material, options);
+            applyChunkMetadata(material, parsedContent, options);
         } catch (Exception exception) {
             log.error("资料上传后自动解析失败: {}", exception.getMessage(), exception);
             material.setParseStatus("FAILED");
             this.updateById(material);
+            return material.getId();
         }
+        // 数据库存储错误必须冒泡并回滚，不能把半套分块当作可继续使用的资料。
+        saveSegments(material.getId(), parsedContent.segments());
+        material.setParseStatus("SUCCESS");
+        material.setTotalPages(parsedContent.totalPages());
+        material.setTotalCharacters(parsedContent.text().length());
+        this.updateById(material);
+        cleanupMaterialVectorsAfterCommit(userId, material.getId());
+        dispatchAutoTasksAfterReady(userId, material.getId());
 
         return material.getId();
     }
@@ -370,6 +357,10 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
                 .parseStatus(material.getParseStatus())
                 .summaryStatus(material.getSummaryStatus())
                 .summaryGenerationMode(GenerationModes.normalize(material.getSummaryGenerationMode()))
+                .chunkStrategy(normalizeChunkStrategy(material.getChunkStrategy()))
+                .chunkSize(material.getChunkSize())
+                .chunkOverlap(material.getChunkOverlap())
+                .contentHash(material.getContentHash())
                 .difficultyLevel(material.getDifficultyLevel())
                 .tags(material.getTags())
                 .description(material.getDescription())
@@ -459,22 +450,45 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void parseMaterial(Long userId, Long materialId) {
+        parseMaterial(userId, materialId, new MaterialParseRequest());
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void parseMaterial(Long userId, Long materialId, MaterialParseRequest request) {
+        MaterialParseRequest resolved = request == null ? new MaterialParseRequest() : request;
+        Options options = MaterialTextChunker.options(resolved.getChunkSize(), resolved.getChunkOverlap());
         StudyMaterial material = getUserOwnedMaterial(userId, materialId);
+        String sourceText = null;
         if (!StringUtils.hasText(material.getFileUrl())) {
-            throw new BusinessException("当前资料没有可解析的文件");
+            if (!"MANUAL".equals(material.getSourceType())) {
+                throw new BusinessException("当前资料没有可重新解析的原始文件；导入资料请保留原始 context 分块");
+            }
+            // 不能拼接已有分段：重叠会被重复计算，且旧分段不一定保留完整原文。
+            StudyMaterial original = getOne(new LambdaQueryWrapper<StudyMaterial>()
+                    .select(StudyMaterial::getId, StudyMaterial::getSourceText)
+                    .eq(StudyMaterial::getId, materialId)
+                    .eq(StudyMaterial::getUserId, userId)
+                    .last("limit 1"));
+            sourceText = original == null ? null : original.getSourceText();
+            if (!StringUtils.hasText(sourceText)) {
+                throw new BusinessException("这份历史文本资料未保存完整原文，请用原文新建资料后再调整分块");
+            }
         }
 
         material.setParseStatus("PROCESSING");
         this.updateById(material);
 
         try {
-            ParsedContent parsedContent = parseFile(material);
-            cleanupMaterialVectors(userId, materialId);
+            ParsedContent parsedContent = sourceText == null ? parseFile(material, options)
+                    : buildParsedContent(sourceText, null, options);
+            applyChunkMetadata(material, parsedContent, options);
             saveSegments(materialId, parsedContent.segments());
             material.setParseStatus("SUCCESS");
             material.setTotalPages(parsedContent.totalPages());
             material.setTotalCharacters(parsedContent.text().length());
             this.updateById(material);
+            cleanupMaterialVectorsAfterCommit(userId, materialId);
             dispatchAutoTasksAfterReady(userId, materialId);
         } catch (Exception exception) {
             log.error("资料解析失败 materialId={} userId={}: {}", materialId, userId, exception.getMessage(), exception);
@@ -579,6 +593,10 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
                             .parseStatus(item.getParseStatus())
                             .summaryStatus(item.getSummaryStatus())
                             .summaryGenerationMode(GenerationModes.normalize(item.getSummaryGenerationMode()))
+                            .chunkStrategy(normalizeChunkStrategy(item.getChunkStrategy()))
+                            .chunkSize(item.getChunkSize())
+                            .chunkOverlap(item.getChunkOverlap())
+                            .contentHash(item.getContentHash())
                             .difficultyLevel(item.getDifficultyLevel())
                             .tags(item.getTags())
                             .description(item.getDescription())
@@ -786,16 +804,16 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
      * @return 解析出的全文、页数和分段
      * @throws IOException 文件读取失败时抛出
      */
-    private ParsedContent parseFile(StudyMaterial material) throws IOException {
+    private ParsedContent parseFile(StudyMaterial material, Options options) throws IOException {
         Path filePath = Path.of(material.getFileUrl());
         if (!Files.exists(filePath)) {
             throw new BusinessException(404, "原始文件不存在");
         }
 
         return switch (material.getMaterialType()) {
-            case "TXT", "TEXT" -> buildParsedContent(Files.readString(filePath, StandardCharsets.UTF_8), null);
-            case "PDF" -> parsePdf(filePath);
-            case "DOCX" -> parseDocx(filePath);
+            case "TXT", "TEXT" -> buildParsedContent(Files.readString(filePath, StandardCharsets.UTF_8), null, options);
+            case "PDF" -> parsePdf(filePath, options);
+            case "DOCX" -> parseDocx(filePath, options);
             default -> throw new BusinessException("暂不支持解析该文件类型");
         };
     }
@@ -809,7 +827,7 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
      * @return 解析结果
      * @throws IOException PDF 读取失败时抛出
      */
-    private ParsedContent parsePdf(Path filePath) throws IOException {
+    private ParsedContent parsePdf(Path filePath, Options options) throws IOException {
         try (PDDocument document = Loader.loadPDF(filePath.toFile())) {
             PDFTextStripper stripper = new PDFTextStripper();
             StringBuilder fullText = new StringBuilder();
@@ -817,15 +835,15 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
             for (int pageNo = 1; pageNo <= document.getNumberOfPages(); pageNo++) {
                 stripper.setStartPage(pageNo);
                 stripper.setEndPage(pageNo);
-                String pageText = normalizeParsedText(stripper.getText(document));
+                String pageText = MaterialTextChunker.normalize(stripper.getText(document));
                 if (!StringUtils.hasText(pageText)) {
                     continue;
                 }
                 if (fullText.length() > 0) {
-                    fullText.append(System.lineSeparator());
+                    fullText.append('\n');
                 }
                 fullText.append(pageText);
-                segments.addAll(splitText(pageText, pageNo));
+                segments.addAll(splitText(pageText, pageNo, options));
             }
             return new ParsedContent(fullText.toString().trim(), document.getNumberOfPages(), segments);
         }
@@ -840,15 +858,15 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
      * @return 解析结果
      * @throws IOException DOCX 读取失败时抛出
      */
-    private ParsedContent parseDocx(Path filePath) throws IOException {
+    private ParsedContent parseDocx(Path filePath, Options options) throws IOException {
         try (InputStream inputStream = Files.newInputStream(filePath);
              XWPFDocument document = new XWPFDocument(inputStream)) {
             String text = document.getParagraphs().stream()
                     .map(paragraph -> paragraph.getText() == null ? "" : paragraph.getText().trim())
                     .filter(StringUtils::hasText)
-                    .reduce((left, right) -> left + System.lineSeparator() + right)
+                    .reduce((left, right) -> left + "\n" + right)
                     .orElse("");
-            return buildParsedContent(text, null);
+            return buildParsedContent(text, null, options);
         }
     }
 
@@ -859,9 +877,23 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
      * @param totalPages 总页数；没有页码概念时传 null
      * @return 解析结果
      */
-    private ParsedContent buildParsedContent(String text, Integer totalPages) {
-        String normalized = normalizeParsedText(text);
-        return new ParsedContent(normalized, totalPages, splitText(normalized, null));
+    private ParsedContent buildParsedContent(String text, Integer totalPages, Options options) {
+        String normalized = MaterialTextChunker.normalize(text);
+        return new ParsedContent(normalized, totalPages, splitText(normalized, null, options));
+    }
+
+    private void applyChunkMetadata(StudyMaterial material, ParsedContent parsed, Options options) {
+        if (parsed.segments().isEmpty()) {
+            throw new BusinessException("解析结果为空，无法生成分段");
+        }
+        material.setChunkStrategy(MaterialTextChunker.STRATEGY);
+        material.setChunkSize(options.chunkSize());
+        material.setChunkOverlap(options.chunkOverlap());
+        material.setContentHash(MaterialTextChunker.contentHash(parsed.text()));
+    }
+
+    private String normalizeChunkStrategy(String strategy) {
+        return StringUtils.hasText(strategy) ? strategy : "UNKNOWN";
     }
 
     /**
@@ -900,243 +932,10 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
      * @param pageNo 页码；非 PDF 或无页码时为 null
      * @return 分段列表
      */
-    private List<ParsedSegment> splitText(String text, Integer pageNo) {
-        String normalized = normalizeParsedText(text);
-        if (!StringUtils.hasText(normalized)) {
-            throw new BusinessException("解析结果为空，无法生成分段");
-        }
-
-        List<TextBlock> blocks = normalized.lines()
-                .map(String::trim)
-                .filter(StringUtils::hasText)
-                .map(line -> new TextBlock(line, detectHeading(line)))
+    private List<ParsedSegment> splitText(String text, Integer pageNo, Options options) {
+        return MaterialTextChunker.split(text, pageNo, options).stream()
+                .map(chunk -> new ParsedSegment(chunk.contentText(), chunk.pageNo(), chunk.sectionTitle()))
                 .toList();
-
-        List<ParsedSegment> segments = new ArrayList<>();
-        List<TextBlock> currentBlocks = new ArrayList<>();
-        String currentSectionTitle = null;
-        int segmentIndex = 1;
-        for (TextBlock block : blocks) {
-            HeadingInfo heading = block.heading();
-            if (heading.isHeading()) {
-                if (shouldSplitBeforeHeading(currentBlocks)) {
-                    segments.add(buildParsedSegment(joinBlocks(currentBlocks), pageNo, segmentIndex++, currentSectionTitle));
-                    currentBlocks = new ArrayList<>();
-                }
-                currentSectionTitle = heading.title();
-                currentBlocks.add(block);
-                continue;
-            }
-
-            if (!currentBlocks.isEmpty()
-                    && estimateBlocksLength(currentBlocks) + block.text().length() > SEGMENT_CHAR_LIMIT) {
-                segments.add(buildParsedSegment(joinBlocks(currentBlocks), pageNo, segmentIndex++, currentSectionTitle));
-                currentBlocks = buildOverlapBlocks(currentBlocks);
-            }
-            currentBlocks.add(block);
-        }
-        if (!currentBlocks.isEmpty()) {
-            segments.add(buildParsedSegment(joinBlocks(currentBlocks), pageNo, segmentIndex, currentSectionTitle));
-        }
-        return segments;
-    }
-
-    /**
-     * 判断遇到新标题前是否应该先切出当前分段。
-     *
-     * @param currentBlocks 当前已积累的文本块
-     * @return true 表示应该在标题前切分
-     */
-    private boolean shouldSplitBeforeHeading(List<TextBlock> currentBlocks) {
-        if (currentBlocks.isEmpty()) {
-            return false;
-        }
-        return estimateBlocksLength(currentBlocks) >= HEADING_SPLIT_MIN_CHARS || hasNonHeadingContent(currentBlocks);
-    }
-
-    /**
-     * 判断文本块列表中是否存在普通正文。
-     *
-     * @param blocks 文本块列表
-     * @return true 表示包含非标题内容
-     */
-    private boolean hasNonHeadingContent(List<TextBlock> blocks) {
-        return blocks.stream().anyMatch(block -> !block.heading().isHeading());
-    }
-
-    /**
-     * 粗略估算一组文本块的总长度。
-     *
-     * @param blocks 文本块列表
-     * @return 字符长度估算值
-     */
-    private int estimateBlocksLength(List<TextBlock> blocks) {
-        return blocks.stream().map(TextBlock::text).mapToInt(String::length).sum() + blocks.size();
-    }
-
-    /**
-     * 构建分段重叠区域。
-     *
-     * <p>从上一段末尾取一小部分正文带到下一段开头，
-     * 避免重要句子刚好被切断后丢失上下文。</p>
-     *
-     * @param blocks 当前分段的文本块
-     * @return 需要带入下一段的文本块
-     */
-    private List<TextBlock> buildOverlapBlocks(List<TextBlock> blocks) {
-        List<TextBlock> overlapBlocks = new ArrayList<>();
-        int length = 0;
-        for (int index = blocks.size() - 1; index >= 0; index--) {
-            TextBlock block = blocks.get(index);
-            if (block.heading().isHeading()) {
-                break;
-            }
-            if (length > 0 && length + block.text().length() > SEGMENT_OVERLAP_CHAR_LIMIT) {
-                break;
-            }
-            overlapBlocks.add(0, block);
-            length += block.text().length();
-        }
-        return overlapBlocks;
-    }
-
-    /**
-     * 把多个文本块拼接成一段完整文本。
-     *
-     * @param blocks 文本块列表
-     * @return 拼接后的文本
-     */
-    private String joinBlocks(List<TextBlock> blocks) {
-        return blocks.stream()
-                .map(TextBlock::text)
-                .reduce((left, right) -> left + System.lineSeparator() + right)
-                .orElse("")
-                .trim();
-    }
-
-    /**
-     * 根据正文和位置信息创建解析分段。
-     *
-     * @param contentText 分段正文
-     * @param pageNo 页码
-     * @param pageSegmentIndex 当前页或当前文本中的分段序号
-     * @param explicitSectionTitle 显式识别出的章节标题
-     * @return 解析分段
-     */
-    private ParsedSegment buildParsedSegment(String contentText, Integer pageNo, int pageSegmentIndex, String explicitSectionTitle) {
-        String sectionTitle = buildSectionTitle(contentText, pageNo, pageSegmentIndex, explicitSectionTitle);
-        return new ParsedSegment(contentText, pageNo, sectionTitle);
-    }
-
-    /**
-     * 构建分段标题。
-     *
-     * <p>标题会包含位置信息，例如“第2页 · 第1段”，如果识别到章节标题也会拼接进去。</p>
-     *
-     * @param contentText 分段正文
-     * @param pageNo 页码
-     * @param pageSegmentIndex 分段序号
-     * @param explicitSectionTitle 已识别章节标题
-     * @return 分段标题
-     */
-    private String buildSectionTitle(String contentText, Integer pageNo, int pageSegmentIndex, String explicitSectionTitle) {
-        String locationPrefix = pageNo == null
-                ? "第" + pageSegmentIndex + "段"
-                : "第" + pageNo + "页 · 第" + pageSegmentIndex + "段";
-        String heading = StringUtils.hasText(explicitSectionTitle) ? explicitSectionTitle : extractHeading(contentText);
-        if (!StringUtils.hasText(heading)) {
-            return locationPrefix;
-        }
-        return locationPrefix + " · " + heading;
-    }
-
-    /**
-     * 从分段正文前几行中提取标题。
-     *
-     * @param contentText 分段正文
-     * @return 提取出的标题；无法识别时返回第一行简短文本
-     */
-    private String extractHeading(String contentText) {
-        if (!StringUtils.hasText(contentText)) {
-            return null;
-        }
-        List<String> lines = contentText.lines()
-                .map(String::trim)
-                .filter(StringUtils::hasText)
-                .limit(4)
-                .toList();
-        for (String line : lines) {
-            if (looksLikeHeading(line)) {
-                return trimTitle(line);
-            }
-        }
-        return trimTitle(lines.isEmpty() ? null : lines.get(0));
-    }
-
-    /**
-     * 判断一行文本是否像章节标题。
-     *
-     * @param line 待判断文本
-     * @return true 表示看起来像标题
-     */
-    private boolean looksLikeHeading(String line) {
-        return detectHeading(line).isHeading();
-    }
-
-    /**
-     * 识别标题信息。
-     *
-     * <p>这里用一些常见规则识别标题，例如“第一章”“一、”“1.2 标题”
-     * 或较短的单独一行文本。</p>
-     *
-     * @param line 待识别文本行
-     * @return 标题识别结果
-     */
-    private HeadingInfo detectHeading(String line) {
-        if (!StringUtils.hasText(line)) {
-            return HeadingInfo.none();
-        }
-        String trimmed = line.trim();
-        if (trimmed.length() < 2 || trimmed.length() > 48) {
-            return HeadingInfo.none();
-        }
-        if (trimmed.matches("^(第[一二三四五六七八九十0-9]+[章节部分篇]|[一二三四五六七八九十]+、|\\d+(\\.\\d+)+\\s*.*|\\d+\\.\\s*.+).*$")) {
-            return new HeadingInfo(true, trimTitle(trimmed));
-        }
-        if (trimmed.matches("^[（(]?[一二三四五六七八九十0-9]+[）)]\\s*.+$")) {
-            return new HeadingInfo(true, trimTitle(trimmed));
-        }
-        if (trimmed.matches("^[A-Z][A-Za-z0-9\\s,-]{2,40}$")) {
-            return new HeadingInfo(true, trimTitle(trimmed));
-        }
-        if (trimmed.length() >= 4 && !trimmed.contains("：") && !trimmed.contains(":") && trimmed.length() <= 18) {
-            return new HeadingInfo(true, trimTitle(trimmed));
-        }
-        return HeadingInfo.none();
-    }
-
-    /**
-     * 裁剪并规范化标题。
-     *
-     * @param title 原始标题
-     * @return 最多 32 个字符的标题
-     */
-    private String trimTitle(String title) {
-        if (!StringUtils.hasText(title)) {
-            return null;
-        }
-        String normalized = title.trim().replaceAll("\\s+", " ");
-        return normalized.length() > 32 ? normalized.substring(0, 32) : normalized;
-    }
-
-    /**
-     * 清理解析得到的文本。
-     *
-     * @param text 原始文本
-     * @return 去掉首尾空白后的文本；空值返回空字符串
-     */
-    private String normalizeParsedText(String text) {
-        return text == null ? "" : text.trim();
     }
 
     /**
@@ -1153,6 +952,20 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
             vectorStoreService.deleteMaterialSegments(userId, materialId);
         } catch (Exception exception) {
             log.warn("failed to cleanup vectors for material {}: {}", materialId, exception.getMessage());
+        }
+    }
+
+    /** 外部索引不能随数据库事务回滚，只在新分块成功提交后清除旧向量。 */
+    private void cleanupMaterialVectorsAfterCommit(Long userId, Long materialId) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    cleanupMaterialVectors(userId, materialId);
+                }
+            });
+        } else {
+            cleanupMaterialVectors(userId, materialId);
         }
     }
 
@@ -1465,29 +1278,4 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
     private record ParsedSegment(String contentText, Integer pageNo, String sectionTitle) {
     }
 
-    /**
-     * 分段算法内部使用的文本块。
-     *
-     * @param text 文本内容
-     * @param heading 标题识别结果
-     */
-    private record TextBlock(String text, HeadingInfo heading) {
-    }
-
-    /**
-     * 标题识别结果。
-     *
-     * @param isHeading 是否识别为标题
-     * @param title 规范化后的标题
-     */
-    private record HeadingInfo(boolean isHeading, String title) {
-        /**
-         * 创建一个“不是标题”的结果对象。
-         *
-         * @return 非标题结果
-         */
-        private static HeadingInfo none() {
-            return new HeadingInfo(false, null);
-        }
-    }
 }

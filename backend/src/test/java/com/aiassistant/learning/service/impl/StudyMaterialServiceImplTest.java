@@ -17,10 +17,12 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.aiassistant.learning.common.exception.BusinessException;
+import com.aiassistant.learning.common.util.MaterialTextChunker;
 import com.aiassistant.learning.config.FileStorageProperties;
 import com.aiassistant.learning.dto.ai.SummaryGenerateRequest;
 import com.aiassistant.learning.dto.material.MaterialCreateRequest;
 import com.aiassistant.learning.dto.material.MaterialPageQuery;
+import com.aiassistant.learning.dto.material.MaterialParseRequest;
 import com.aiassistant.learning.dto.material.MaterialUpdateRequest;
 import com.aiassistant.learning.entity.MaterialSegment;
 import com.aiassistant.learning.entity.StudyMaterial;
@@ -121,9 +123,14 @@ class StudyMaterialServiceImplTest {
         assertEquals("SUCCESS", saved.getValue().getParseStatus());
         assertEquals(3, saved.getValue().getDifficultyLevel());
         assertEquals(request.getContentText().length(), saved.getValue().getTotalCharacters());
+        assertEquals(request.getContentText(), saved.getValue().getSourceText());
+        assertEquals("CHAR_WINDOW_V2", saved.getValue().getChunkStrategy());
+        assertEquals(900, saved.getValue().getChunkSize());
+        assertEquals(140, saved.getValue().getChunkOverlap());
+        assertEquals(MaterialTextChunker.contentHash(request.getContentText()), saved.getValue().getContentHash());
         assertEquals(1, insertedSegments.size());
         assertEquals(MATERIAL_ID, insertedSegments.get(0).getMaterialId());
-        assertEquals("光合作用", insertedSegments.get(0).getSectionTitle());
+        assertTrue(insertedSegments.get(0).getSectionTitle().startsWith("第1段 · 光合作用"));
         assertEquals("PENDING", insertedSegments.get(0).getEmbeddingStatus());
         verify(aiTaskService).submitSummaryTask(eq(USER_ID), eq(MATERIAL_ID), any(SummaryGenerateRequest.class));
         verify(aiTaskService, never()).submitEmbeddingTask(any(), any(), any());
@@ -160,10 +167,143 @@ class StudyMaterialServiceImplTest {
         for (int index = 0; index < insertedSegments.size(); index++) {
             MaterialSegment segment = insertedSegments.get(index);
             assertEquals(index + 1, segment.getSegmentNo());
-            assertTrue(segment.getContentText().length() <= 1300, "单段长度应受上限约束（900 字 + 重叠 140 字 + 一行）");
+            assertTrue(segment.getContentText().length() <= 900, "每段包含重叠后的总长度也不能超过900字符");
             assertEquals("PENDING", segment.getEmbeddingStatus());
         }
         verify(aiTaskService).submitSummaryTask(eq(USER_ID), eq(MATERIAL_ID), any(SummaryGenerateRequest.class));
+    }
+
+    @Test
+    void customChunkSettingsActuallyChangeLongSingleLineFileSegments() throws Exception {
+        Path file = temporaryDirectory.resolve("long-line.txt");
+        String text = "长行正文内容".repeat(200);
+        Files.writeString(file, text, StandardCharsets.UTF_8);
+        StudyMaterial material = material(MATERIAL_ID, "长行", "SUCCESS");
+        material.setMaterialType("TXT");
+        material.setFileUrl(file.toString());
+        doReturn(material).when(service).getOne(any());
+        MaterialParseRequest request = new MaterialParseRequest();
+        request.setChunkSize(200);
+        request.setChunkOverlap(0);
+
+        service.parseMaterial(USER_ID, MATERIAL_ID, request);
+
+        assertTrue(insertedSegments.size() >= 6);
+        assertTrue(insertedSegments.stream().allMatch(segment -> segment.getContentText().length() <= 200));
+        assertEquals(text, String.join("", insertedSegments.stream().map(MaterialSegment::getContentText).toList()));
+        assertEquals(200, material.getChunkSize());
+        assertEquals(0, material.getChunkOverlap());
+        assertEquals("CHAR_WINDOW_V2", material.getChunkStrategy());
+        assertEquals(MaterialTextChunker.contentHash(text), material.getContentHash());
+    }
+
+    @Test
+    void manualTextRechunkUsesCompleteSavedSourceRatherThanOverlappingOldSegments() {
+        String text = "原始正文".repeat(220);
+        StudyMaterial material = material(MATERIAL_ID, "手工文本", "SUCCESS");
+        material.setMaterialType("TEXT");
+        material.setSourceType("MANUAL");
+        material.setSourceText(text);
+        doReturn(material).when(service).getOne(any());
+        MaterialParseRequest request = new MaterialParseRequest();
+        request.setChunkSize(200);
+        request.setChunkOverlap(0);
+
+        service.parseMaterial(USER_ID, MATERIAL_ID, request);
+
+        assertEquals(text, String.join("", insertedSegments.stream().map(MaterialSegment::getContentText).toList()));
+        assertEquals(MaterialTextChunker.contentHash(text), material.getContentHash());
+        verify(segments, never()).selectList(any());
+        verify(vectorStore).deleteMaterialSegments(USER_ID, MATERIAL_ID);
+    }
+
+    @Test
+    void historicalManualTextWithoutSourceIsNotReconstructedFromSegments() {
+        StudyMaterial material = material(MATERIAL_ID, "旧资料", "SUCCESS");
+        material.setMaterialType("TEXT");
+        material.setSourceType("MANUAL");
+        doReturn(material).when(service).getOne(any());
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.parseMaterial(USER_ID, MATERIAL_ID, new MaterialParseRequest()));
+
+        assertTrue(exception.getMessage().contains("未保存完整原文"));
+        assertEquals("SUCCESS", material.getParseStatus());
+        verify(segments, never()).delete(any());
+        verify(vectorStore, never()).deleteMaterialSegments(any(), any());
+    }
+
+    @Test
+    void invalidChunkSettingsFailBeforeChangingMaterialOrIndex() {
+        MaterialParseRequest request = new MaterialParseRequest();
+        request.setChunkSize(200);
+        request.setChunkOverlap(200);
+
+        assertThrows(BusinessException.class, () -> service.parseMaterial(USER_ID, MATERIAL_ID, request));
+        verify(service, never()).getOne(any());
+        verify(service, never()).updateById(any(StudyMaterial.class));
+        verify(vectorStore, never()).deleteMaterialSegments(any(), any());
+    }
+
+    @Test
+    void importedContextCannotBeSilentlyRechunkedAsManualText() {
+        StudyMaterial material = material(MATERIAL_ID, "CMRC2018", "SUCCESS");
+        material.setSourceType("IMPORT");
+        material.setChunkStrategy("ORIGINAL_CONTEXT");
+        doReturn(material).when(service).getOne(any());
+
+        assertThrows(BusinessException.class, () -> service.parseMaterial(USER_ID, MATERIAL_ID));
+
+        assertEquals("ORIGINAL_CONTEXT", material.getChunkStrategy());
+        verify(segments, never()).delete(any());
+        verify(vectorStore, never()).deleteMaterialSegments(any(), any());
+    }
+
+    @Test
+    void failedSegmentWriteDoesNotClearThePreviousExternalIndex() throws Exception {
+        Path file = temporaryDirectory.resolve("valid.txt");
+        Files.writeString(file, "有效正文".repeat(100), StandardCharsets.UTF_8);
+        StudyMaterial material = material(MATERIAL_ID, "旧资料", "SUCCESS");
+        material.setMaterialType("TXT");
+        material.setFileUrl(file.toString());
+        doReturn(material).when(service).getOne(any());
+        when(segments.insert(any(MaterialSegment.class))).thenThrow(new IllegalStateException("database unavailable"));
+
+        assertThrows(BusinessException.class, () -> service.parseMaterial(USER_ID, MATERIAL_ID));
+
+        verify(vectorStore, never()).deleteMaterialSegments(any(), any());
+        verify(aiTaskService, never()).submitSummaryTask(any(), any(), any());
+    }
+
+    @Test
+    void indexCleanupRunsOnlyAfterSuccessfulRechunkTransactionCommit() throws Exception {
+        Path file = temporaryDirectory.resolve("valid.txt");
+        Files.writeString(file, "有效正文".repeat(100), StandardCharsets.UTF_8);
+        StudyMaterial material = material(MATERIAL_ID, "旧资料", "SUCCESS");
+        material.setMaterialType("TXT");
+        material.setFileUrl(file.toString());
+        doReturn(material).when(service).getOne(any());
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            service.parseMaterial(USER_ID, MATERIAL_ID);
+            verify(vectorStore, never()).deleteMaterialSegments(any(), any());
+            TransactionSynchronizationManager.getSynchronizations().forEach(TransactionSynchronization::afterCommit);
+            verify(vectorStore).deleteMaterialSegments(USER_ID, MATERIAL_ID);
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+    }
+
+    @Test
+    void uploadDatabaseFailureIsNotSwallowedAsACompletedUpload() {
+        when(segments.insert(any(MaterialSegment.class))).thenThrow(new IllegalStateException("database unavailable"));
+        MockMultipartFile file = new MockMultipartFile("file", "valid.txt", "text/plain",
+                "有效正文".repeat(100).getBytes(StandardCharsets.UTF_8));
+
+        assertThrows(IllegalStateException.class, () -> service.uploadMaterial(USER_ID, file));
+
+        verify(vectorStore, never()).deleteMaterialSegments(any(), any());
+        verify(aiTaskService, never()).submitSummaryTask(any(), any(), any());
     }
 
     @Test
@@ -176,6 +316,8 @@ class StudyMaterialServiceImplTest {
         assertThrows(BusinessException.class, () -> service.parseMaterial(USER_ID, MATERIAL_ID));
 
         assertEquals("FAILED", material.getParseStatus());
+        verify(segments, never()).delete(any());
+        verify(vectorStore, never()).deleteMaterialSegments(any(), any());
         verify(segments, never()).insert(any(MaterialSegment.class));
         verify(aiTaskService, never()).submitSummaryTask(any(), any(), any());
     }

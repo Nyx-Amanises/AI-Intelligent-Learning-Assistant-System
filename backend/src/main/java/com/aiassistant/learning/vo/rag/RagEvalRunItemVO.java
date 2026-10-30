@@ -1,5 +1,7 @@
 package com.aiassistant.learning.vo.rag;
 
+import com.fasterxml.jackson.databind.JsonNode;
+
 import java.util.List;
 import lombok.Builder;
 import lombok.Data;
@@ -10,6 +12,12 @@ import lombok.Data;
 @Data
 @Builder
 public class RagEvalRunItemVO {
+
+    private String actualStrategy;
+    private Boolean mockEmbedding;
+    private String queryEmbeddingModel;
+    private String degradeReason;
+    private JsonNode retrievedSnapshot;
 
     /** 明细记录 ID。 */
     private Long id;

@@ -16,6 +16,7 @@ import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -70,9 +71,15 @@ public class RetrievalServiceImpl implements RetrievalService {
      */
     @Override
     public RetrievalResult retrieve(Long userId, Long materialId, String queryText, Integer limit) {
+        return retrieve(userId, materialId, queryText, limit, STRATEGY_VECTOR_RERANK);
+    }
+
+    @Override
+    public RetrievalResult retrieve(Long userId, Long materialId, String queryText, Integer limit, String strategy) {
         if (!StringUtils.hasText(queryText)) {
             throw new BusinessException("检索语句不能为空");
         }
+        String resolvedStrategy = resolveStrategy(strategy);
 
         StudyMaterial material = studyMaterialService.getOne(new LambdaQueryWrapper<StudyMaterial>()
                 .eq(StudyMaterial::getId, materialId)
@@ -83,6 +90,9 @@ public class RetrievalServiceImpl implements RetrievalService {
         }
 
         int resolvedLimit = resolveLimit(limit);
+        if (STRATEGY_TEXT.equals(resolvedStrategy)) {
+            return retrieveText(material, queryText, resolvedLimit, false, null);
+        }
         if (!isQdrantReady()) {
             return degradeToText(material, queryText, resolvedLimit, "向量检索服务未启用", null);
         }
@@ -99,16 +109,32 @@ public class RetrievalServiceImpl implements RetrievalService {
             return degradeToText(material, queryText, resolvedLimit, "向量模型调用失败", exception);
         }
 
+        List<MaterialSegment> indexedSegments = materialSegmentMapper.selectList(new LambdaQueryWrapper<MaterialSegment>()
+                .select(MaterialSegment::getId, MaterialSegment::getEmbeddingStatus, MaterialSegment::getEmbeddingModel,
+                        MaterialSegment::getEmbeddingMode, MaterialSegment::getVectorId)
+                .eq(MaterialSegment::getMaterialId, materialId));
+        String invalidIndexReason = validateIndex(indexedSegments, embedding);
+        if (invalidIndexReason != null) {
+            return degradeAfterEmbedding(material, queryText, resolvedLimit, invalidIndexReason, embedding);
+        }
+
         // 先多召回一些候选，再用本地规则重排，能提升关键词型问题的命中率。
-        int candidateLimit = Math.max(resolvedLimit * OVERSAMPLE_FACTOR, MIN_OVERSAMPLE_LIMIT);
+        int candidateLimit = STRATEGY_VECTOR_ONLY.equals(resolvedStrategy)
+                ? resolvedLimit : Math.max(resolvedLimit * OVERSAMPLE_FACTOR, MIN_OVERSAMPLE_LIMIT);
         List<RetrievedSegment> candidates;
         try {
             candidates = vectorStoreService.searchMaterialSegments(userId, materialId, queryVector, candidateLimit);
         } catch (RuntimeException exception) {
-            return degradeToText(material, queryText, resolvedLimit, "向量数据库查询失败", exception);
+            return degradeAfterEmbedding(material, queryText, resolvedLimit, "向量数据库查询失败", embedding);
         }
         if (candidates.isEmpty()) {
-            return degradeToText(material, queryText, resolvedLimit, "该资料尚未建立向量索引", null);
+            return degradeAfterEmbedding(material, queryText, resolvedLimit, "该资料尚未建立向量索引", embedding);
+        }
+        Set<Long> currentSegmentIds = indexedSegments.stream().map(MaterialSegment::getId)
+                .collect(java.util.stream.Collectors.toSet());
+        if (candidates.stream().anyMatch(candidate -> !currentSegmentIds.contains(candidate.segmentId()))) {
+            return degradeAfterEmbedding(material, queryText, resolvedLimit,
+                    "向量索引仍包含旧分块，请重新生成向量索引", embedding);
         }
         return new RetrievalResult(
                 material.getId(),
@@ -117,8 +143,59 @@ public class RetrievalServiceImpl implements RetrievalService {
                 false,
                 null,
                 embedding.mock(),
-                rerankSegments(queryText, candidates, resolvedLimit, true)
+                STRATEGY_VECTOR_ONLY.equals(resolvedStrategy)
+                        ? vectorOnlyHits(candidates, resolvedLimit)
+                        : rerankSegments(queryText, candidates, resolvedLimit, true),
+                resolvedStrategy,
+                embedding.modelName()
         );
+    }
+
+    private String validateIndex(List<MaterialSegment> segments, TextEmbeddingService.EmbeddingBatchResult query) {
+        if (segments.isEmpty() || segments.stream().anyMatch(segment -> !"SUCCESS".equals(segment.getEmbeddingStatus())
+                || !StringUtils.hasText(segment.getVectorId()))) {
+            return "资料向量索引未完整建立，请先完成所有分块的向量化";
+        }
+        if (segments.stream().anyMatch(segment -> !Set.of("MOCK", "LIVE").contains(
+                Objects.toString(segment.getEmbeddingMode(), "UNKNOWN")))) {
+            return "历史索引未记录向量来源，请重新生成向量索引";
+        }
+        String queryMode = query.mock() ? "MOCK" : "LIVE";
+        if (segments.stream().anyMatch(segment -> !queryMode.equals(segment.getEmbeddingMode()))) {
+            return "查询向量与资料索引的模拟/真实模式不一致，请重新生成向量索引";
+        }
+        if (!StringUtils.hasText(query.modelName()) || segments.stream().anyMatch(
+                segment -> !query.modelName().equals(segment.getEmbeddingModel()))) {
+            return "查询向量模型与资料索引模型不一致，请使用相同模型重新生成索引";
+        }
+        return null;
+    }
+
+    private RetrievalResult degradeAfterEmbedding(StudyMaterial material, String queryText, int limit,
+            String reason, TextEmbeddingService.EmbeddingBatchResult embedding) {
+        RetrievalResult result = degradeToText(material, queryText, limit, reason, null);
+        return new RetrievalResult(result.materialId(), result.materialTitle(), result.mode(), result.degraded(),
+                result.degradeReason(), embedding.mock(), result.hits(), result.strategy(), embedding.modelName());
+    }
+
+    private String resolveStrategy(String strategy) {
+        String resolved = StringUtils.hasText(strategy) ? strategy.trim().toUpperCase(Locale.ROOT) : STRATEGY_VECTOR_RERANK;
+        if (!Set.of(STRATEGY_TEXT, STRATEGY_VECTOR_ONLY, STRATEGY_VECTOR_RERANK).contains(resolved)) {
+            throw new BusinessException("不支持的检索方案，请选择文本检索、纯向量检索或向量加重排");
+        }
+        return resolved;
+    }
+
+    /** 纯向量方案的排序仅取向量分数，不计算或混入词面分。 */
+    private List<RetrievalHit> vectorOnlyHits(List<RetrievedSegment> candidates, int limit) {
+        return candidates.stream()
+                .map(segment -> {
+                    double score = segment.score() == null ? 0D : segment.score();
+                    return new RetrievalHit(segment, score, 0D, score);
+                })
+                .sorted(Comparator.comparingDouble(RetrievalHit::relevanceScore).reversed())
+                .limit(limit)
+                .toList();
     }
 
     /**
@@ -148,6 +225,11 @@ public class RetrievalServiceImpl implements RetrievalService {
             log.warn("RAG 检索降级为数据库文本检索 materialId={} reason={} cause={}",
                     material.getId(), reason, cause.getMessage());
         }
+        return retrieveText(material, queryText, limit, true, reason + "，已改用数据库文本检索");
+    }
+
+    private RetrievalResult retrieveText(StudyMaterial material, String queryText, int limit,
+            boolean degraded, String reason) {
         List<MaterialSegment> segments = materialSegmentMapper.selectList(new LambdaQueryWrapper<MaterialSegment>()
                 .eq(MaterialSegment::getMaterialId, material.getId())
                 .orderByAsc(MaterialSegment::getSegmentNo));
@@ -166,10 +248,11 @@ public class RetrievalServiceImpl implements RetrievalService {
                 material.getId(),
                 material.getTitle(),
                 MODE_TEXT,
-                true,
-                reason + "，已改用数据库文本检索",
+                degraded,
+                reason,
                 false,
-                rerankSegments(queryText, candidates, limit, false)
+                rerankSegments(queryText, candidates, limit, false),
+                STRATEGY_TEXT
         );
     }
 
