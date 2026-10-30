@@ -95,6 +95,7 @@
                   :tone="statusTone(getSummaryStatus(item))"
                   :label="formatSummaryStatus(getSummaryStatus(item))"
                 />
+                <GenerationModeBadge v-if="isSummaryReady(item)" :mode="item.generationMode" />
                 <span class="summary-note-card__date">{{ formatDate(item.createdAt) }}</span>
               </div>
               <button
@@ -215,12 +216,16 @@
     >
       <template #header="{ titleId, titleClass }">
         <span class="summary-type">{{ formatSummaryType(activeSummary?.summaryType) }}</span>
+        <GenerationModeBadge :mode="activeSummary?.generationMode" />
         <h2 :id="titleId" :class="[titleClass, 'dialog-title', 'summary-reader__title']">
           {{ activeSummary?.materialTitle || '学习总结' }}
         </h2>
         <div class="dialog-subtitle">{{ formatDateTime(activeSummary?.createdAt) }}</div>
       </template>
       <article class="summary-reader__body">
+        <p v-if="activeSummary?.generationMode === 'MOCK'" class="summary-form-note">
+          这份总结为模拟数据，仅用于体验整理与阅读流程。
+        </p>
         <LearningNoteContent :text="activeSummary?.summaryText" />
       </article>
       <details class="summary-sources">
@@ -298,10 +303,12 @@ import { useParsedMaterials } from '@/composables/useParsedMaterials'
 import { usePolling } from '@/composables/usePolling'
 import AppIcon from '@/components/AppIcon.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import GenerationModeBadge from '@/components/GenerationModeBadge.vue'
 import LearningNoteContent from '@/components/LearningNoteContent.vue'
 import ListSectionHeading from '@/components/ListSectionHeading.vue'
 import SourceSegmentList from '@/components/SourceSegmentList.vue'
 import StatusPill from '@/components/StatusPill.vue'
+import type { GenerationMode } from '@/utils/generationMode'
 
 /** 总结历史列表项（/ai/summary-history）。 */
 interface SummaryHistoryItem {
@@ -309,6 +316,7 @@ interface SummaryHistoryItem {
   materialId: number
   materialTitle?: string
   summaryType?: string
+  generationMode?: GenerationMode
   summaryText?: string
   status?: string
   createdAt?: string
@@ -566,7 +574,7 @@ const generateSummary = async () => {
         materialTitle: created.materialTitle || materials.value.find((item) => item.id === generatingMaterialId)?.title
       })
     }
-    ElMessage.success('AI 总结生成完成')
+    ElMessage.success(created?.generationMode === 'MOCK' ? '模拟总结生成完成' : 'AI 总结生成完成')
   } catch (error) {
     if (!viewDisposed) {
       ElMessage.error(getErrorMessage(error, 'AI 总结任务失败'))

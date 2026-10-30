@@ -11,6 +11,9 @@ import lombok.Data;
 @Builder
 public class AiTaskDetailVO {
 
+    /** 生成时固定的内容来源：MOCK（模拟数据）、LIVE（真实模型）、UNKNOWN（历史来源未知）。 */
+    private String generationMode;
+
     /**
      * 任务 ID。
      */

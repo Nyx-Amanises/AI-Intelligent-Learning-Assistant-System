@@ -61,6 +61,10 @@
           <div v-for="item in tasks" :key="item.id" class="workspace-table__row workspace-table__row--task">
             <div class="workspace-table__title">
               <strong>{{ formatTaskType(item.taskType) }}</strong>
+              <GenerationModeBadge
+                v-if="['SUMMARY', 'QUESTION_GENERATE'].includes(item.taskType) && item.status === 'SUCCESS'"
+                :mode="item.generationMode"
+              />
               <span
                 >任务 #{{ item.id }}<template v-if="isAdmin"> · 优先级 {{ item.priority }}</template></span
               >
@@ -148,6 +152,13 @@
           <div class="detail-meta-item">
             <span>任务状态</span>
             <strong>{{ formatStatus(taskDetail.status) }}</strong>
+          </div>
+          <div
+            v-if="['SUMMARY', 'QUESTION_GENERATE'].includes(taskDetail.taskType) && taskDetail.status === 'SUCCESS'"
+            class="detail-meta-item"
+          >
+            <span>内容来源</span>
+            <GenerationModeBadge :mode="taskDetail.generationMode" />
           </div>
           <div class="detail-meta-item">
             <span>业务对象</span>
@@ -237,6 +248,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import GenerationModeBadge from '@/components/GenerationModeBadge.vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   deleteAiTaskApi,

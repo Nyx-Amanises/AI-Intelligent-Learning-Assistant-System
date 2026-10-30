@@ -115,6 +115,11 @@
             <StatusPill v-if="isProcessing(row)" tone="processing" :label="getProcessingText(row)" />
             <StatusPill v-else-if="row.parseStatus === 'FAILED'" tone="failed" label="解析失败" />
             <StatusPill v-else-if="row.parseStatus === 'PENDING'" tone="muted" label="待解析" />
+            <GenerationModeBadge
+              v-if="row.summaryStatus === 'SUCCESS'"
+              :mode="row.summaryGenerationMode"
+              aria-label="学习摘要的生成来源"
+            />
           </p>
           <div v-if="row.tagList.length" class="material-library-card__tags">
             <span v-for="tag in row.tagList.slice(0, 3)" :key="tag" class="material-library-card__tag" :title="tag">{{
@@ -394,7 +399,10 @@
             </div>
             <div>
               <dt>学习摘要</dt>
-              <dd>{{ formatSummaryStatus(detail.summaryStatus) }}</dd>
+              <dd>
+                {{ formatSummaryStatus(detail.summaryStatus) }}
+                <GenerationModeBadge v-if="detail.summaryStatus === 'SUCCESS'" :mode="detail.summaryGenerationMode" />
+              </dd>
             </div>
             <div>
               <dt>向量索引</dt>
@@ -563,6 +571,7 @@ import EmptyState from '@/components/EmptyState.vue'
 import IconMenuButton from '@/components/IconMenuButton.vue'
 import ListSectionHeading from '@/components/ListSectionHeading.vue'
 import StatusPill from '@/components/StatusPill.vue'
+import GenerationModeBadge from '@/components/GenerationModeBadge.vue'
 import { useAutoListQuery } from '@/composables/useAutoListQuery'
 import { usePolling } from '@/composables/usePolling'
 import { confirmDanger } from '@/utils/confirm'

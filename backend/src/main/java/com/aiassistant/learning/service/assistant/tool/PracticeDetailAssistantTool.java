@@ -1,5 +1,6 @@
 package com.aiassistant.learning.service.assistant.tool;
 
+import com.aiassistant.learning.common.util.GenerationModes;
 import com.aiassistant.learning.service.PracticeService;
 import com.aiassistant.learning.service.assistant.AbstractAssistantTool;
 import com.aiassistant.learning.service.assistant.AssistantToolSupport;
@@ -86,6 +87,7 @@ public class PracticeDetailAssistantTool extends AbstractAssistantTool {
         boolean submitted = "SUBMITTED".equalsIgnoreCase(detail.getSessionStatus());
         StringBuilder text = new StringBuilder("练习记录 #").append(detail.getSessionId()).append("：")
                 .append(bounded(detail.getSessionName(), 100)).append('\n');
+        text.append("题目来源：").append(GenerationModes.describe(detail.getGenerationMode())).append('\n');
         if (!submitted) {
             text.append("状态：尚未提交，没有最终得分或正确率；页面上的未提交答案可能尚未保存。\n");
         } else {

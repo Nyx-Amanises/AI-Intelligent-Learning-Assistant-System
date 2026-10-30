@@ -1,6 +1,7 @@
 package com.aiassistant.learning.service.impl;
 
 import com.aiassistant.learning.common.exception.BusinessException;
+import com.aiassistant.learning.common.util.GenerationModes;
 import com.aiassistant.learning.common.util.KnowledgePointLabels;
 import com.aiassistant.learning.dto.practice.PracticeStartRequest;
 import com.aiassistant.learning.dto.wrongquestion.WrongQuestionPageQuery;
@@ -305,6 +306,7 @@ public class WrongQuestionServiceImpl implements WrongQuestionService {
                 .materialTitle(material == null ? null : material.getTitle())
                 .questionSetTitle(questionSet == null ? null : questionSet.getTitle())
                 .sessionName(session.getSessionName())
+                .generationMode(GenerationModes.normalize(session.getGenerationMode()))
                 .questionType(question.getQuestionType())
                 .stemText(question.getStemText())
                 .optionA(question.getOptionA())

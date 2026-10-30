@@ -117,7 +117,9 @@ class PracticeServiceImplTest {
 
     @Test
     void startPracticeCreatesAnInProgressSessionWithScoreTotals() {
-        when(questionSets.selectOne(any())).thenReturn(questionSet("PUBLISHED"));
+        QuestionSet source = questionSet("PUBLISHED");
+        source.setGenerationMode("MOCK");
+        when(questionSets.selectOne(any())).thenReturn(source);
         when(questionItems.selectList(any())).thenReturn(List.of(single(1L, "A", 5), judge(2L, "TRUE", 3)));
         PracticeStartRequest request = new PracticeStartRequest();
         request.setQuestionSetId(QUESTION_SET_ID);
@@ -131,6 +133,8 @@ class PracticeServiceImplTest {
         assertEquals(8, saved.getValue().getTotalScore());
         assertEquals(MATERIAL_ID, saved.getValue().getMaterialId());
         assertEquals(501L, detail.getSessionId());
+        assertEquals("MOCK", detail.getGenerationMode());
+        assertEquals("MOCK", saved.getValue().getGenerationMode());
         assertEquals(MATERIAL_ID, detail.getMaterialId());
         assertNull(detail.getQuestionIds(), "整套练习不应被标识为专项重做");
         assertEquals(2, detail.getAnswers().size());
@@ -493,6 +497,7 @@ class PracticeServiceImplTest {
     void practiceHistoryIncludesScopeAndKeepsLegacyFullPracticeAsNull() {
         PracticeSession selected = inProgressSession();
         selected.setQuestionIdsJson("[2,3]");
+        selected.setGenerationMode("MOCK");
         PracticeSession legacy = inProgressSession();
         Page<PracticeSession> page = new Page<>(1, 10);
         page.setRecords(List.of(selected, legacy));
@@ -502,6 +507,8 @@ class PracticeServiceImplTest {
 
         assertEquals(List.of(2L, 3L), result.getRecords().get(0).getQuestionIds());
         assertNull(result.getRecords().get(1).getQuestionIds());
+        assertEquals("MOCK", result.getRecords().get(0).getGenerationMode());
+        assertEquals("UNKNOWN", result.getRecords().get(1).getGenerationMode());
     }
 
     private PracticeSession submittedSessionWithPendingShortAnswer(String referenceAnswer, String userAnswer) {

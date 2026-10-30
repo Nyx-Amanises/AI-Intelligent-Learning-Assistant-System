@@ -1,6 +1,7 @@
 package com.aiassistant.learning.service.impl;
 
 import com.aiassistant.learning.common.exception.BusinessException;
+import com.aiassistant.learning.common.util.GenerationModes;
 import com.aiassistant.learning.common.util.MultipleChoiceAnswers;
 import com.aiassistant.learning.dto.practice.PracticeAnswerRequest;
 import com.aiassistant.learning.dto.practice.PracticeStartRequest;
@@ -196,6 +197,7 @@ public class PracticeServiceImpl implements PracticeService {
         PracticeSession session = new PracticeSession();
         session.setUserId(userId);
         session.setQuestionSetId(questionSet.getId());
+        session.setGenerationMode(GenerationModes.normalize(questionSet.getGenerationMode()));
         session.setQuestionIdsJson(requestedIds == null ? null : writeQuestionIds(questions));
         session.setMaterialId(questionSet.getMaterialId());
         String suffix = requestedIds == null ? " - 练习" : " - 专项复习";
@@ -321,6 +323,7 @@ public class PracticeServiceImpl implements PracticeService {
                         .questionSetId(item.getQuestionSetId())
                         .questionIds(readQuestionIds(item))
                         .sessionName(item.getSessionName())
+                        .generationMode(GenerationModes.normalize(item.getGenerationMode()))
                         .totalQuestions(item.getTotalQuestions())
                         .correctCount(item.getCorrectCount())
                         .obtainedScore(item.getObtainedScore())
@@ -1518,6 +1521,7 @@ public class PracticeServiceImpl implements PracticeService {
                 .questionSetId(session.getQuestionSetId())
                 .questionIds(readQuestionIds(session))
                 .sessionName(session.getSessionName())
+                .generationMode(GenerationModes.normalize(session.getGenerationMode()))
                 .totalQuestions(session.getTotalQuestions())
                 .correctCount(session.getCorrectCount())
                 .totalScore(session.getTotalScore())

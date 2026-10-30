@@ -1,6 +1,7 @@
 package com.aiassistant.learning.service.impl;
 
 import com.aiassistant.learning.common.exception.BusinessException;
+import com.aiassistant.learning.common.util.GenerationModes;
 import com.aiassistant.learning.config.FileStorageProperties;
 import com.aiassistant.learning.dto.material.MaterialCreateRequest;
 import com.aiassistant.learning.dto.material.MaterialPageQuery;
@@ -368,6 +369,7 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
                 .fileSize(material.getFileSize())
                 .parseStatus(material.getParseStatus())
                 .summaryStatus(material.getSummaryStatus())
+                .summaryGenerationMode(GenerationModes.normalize(material.getSummaryGenerationMode()))
                 .difficultyLevel(material.getDifficultyLevel())
                 .tags(material.getTags())
                 .description(material.getDescription())
@@ -576,6 +578,7 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
                             .materialType(item.getMaterialType())
                             .parseStatus(item.getParseStatus())
                             .summaryStatus(item.getSummaryStatus())
+                            .summaryGenerationMode(GenerationModes.normalize(item.getSummaryGenerationMode()))
                             .difficultyLevel(item.getDifficultyLevel())
                             .tags(item.getTags())
                             .description(item.getDescription())

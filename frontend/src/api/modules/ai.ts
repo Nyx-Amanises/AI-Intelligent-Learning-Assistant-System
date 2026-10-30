@@ -1,4 +1,5 @@
 import http from '@/api/http'
+import type { GenerationMode } from '@/utils/generationMode'
 
 export interface SummaryPayload {
   modelName?: string
@@ -59,6 +60,7 @@ export interface AiTaskDetail {
   retryCount: number
   priority: number
   modelName?: string
+  generationMode?: GenerationMode
   payloadJson?: string
   resultJson?: string
   errorMessage?: string
@@ -79,6 +81,7 @@ export interface AiTaskPageItem {
   retryCount: number
   priority: number
   modelName?: string
+  generationMode?: GenerationMode
   errorMessage?: string
   startedAt?: string
   finishedAt?: string

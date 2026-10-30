@@ -33,6 +33,7 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.junit.jupiter.api.AfterEach;
@@ -46,6 +47,25 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 class AiTaskServiceImplTest {
+
+    @ParameterizedTest
+    @ValueSource(strings = {"SUMMARY", "QUESTION_GENERATE"})
+    void taskDetailsReadPersistedGenerationModeAndKeepLegacyResultsUnknown(String taskType) {
+        AiTask task = new AiTask();
+        task.setId(71L);
+        task.setUserId(USER_ID);
+        task.setTaskType(taskType);
+        task.setStatus("SUCCESS");
+        task.setResultJson("{\"generationMode\":\"MOCK\"}");
+        when(tasks.selectOne(any())).thenReturn(task);
+        when(cache.getTaskDetail(USER_ID, 71L)).thenReturn(Optional.empty());
+
+        assertEquals("MOCK", service.getTaskDetail(USER_ID, 71L).getGenerationMode());
+        task.setResultJson("{\"modelName\":\"mock-test-model\"}");
+        assertEquals("UNKNOWN", service.getTaskDetail(USER_ID, 71L).getGenerationMode());
+        task.setResultJson("invalid-json");
+        assertEquals("UNKNOWN", service.getTaskDetail(USER_ID, 71L).getGenerationMode());
+    }
 
     private static final long USER_ID = 7L;
     private static final long MATERIAL_ID = 42L;

@@ -110,10 +110,10 @@
           <article v-for="item in wrongQuestions" :key="item.answerId" class="wrong-question-card">
             <div class="wrong-question-card__top">
               <div>
-                <StatusPill tone="brand" hide-dot :label="formatQuestionType(item.questionType)" /><span
-                  class="wrong-difficulty"
-                  >{{ formatDifficulty(item.difficultyLevel) }}</span
-                >
+                <StatusPill tone="brand" hide-dot :label="formatQuestionType(item.questionType)" />
+                <GenerationModeBadge :mode="item.generationMode" /><span class="wrong-difficulty">{{
+                  formatDifficulty(item.difficultyLevel)
+                }}</span>
               </div>
               <span class="wrong-score"
                 >{{ item.obtainedScore ?? 0 }} <small>/ {{ item.fullScore || 0 }} 分</small></span
@@ -175,8 +175,8 @@
         </div>
         <div class="wrong-detail-question">
           <div class="wrong-detail-question__meta">
-            <StatusPill tone="brand" hide-dot :label="formatQuestionType(detail.questionType)" /><span
-              class="wrong-score"
+            <StatusPill tone="brand" hide-dot :label="formatQuestionType(detail.questionType)" />
+            <GenerationModeBadge :mode="detail.generationMode" /><span class="wrong-score"
               >{{ detail.obtainedScore ?? 0 }} <small>/ {{ detail.fullScore || 0 }} 分</small></span
             >
           </div>
@@ -255,6 +255,7 @@ import EmptyState from '@/components/EmptyState.vue'
 import IconMenuButton from '@/components/IconMenuButton.vue'
 import ListSectionHeading from '@/components/ListSectionHeading.vue'
 import StatusPill from '@/components/StatusPill.vue'
+import GenerationModeBadge from '@/components/GenerationModeBadge.vue'
 import { answerIncludesOption, buildOptions, formatAnswer } from '@/components/practice/practiceHelpers'
 import { useAutoListQuery } from '@/composables/useAutoListQuery'
 import { useLatestRequest } from '@/composables/useLatestRequest'
@@ -549,6 +550,7 @@ onUnmounted(() => {
 .wrong-question-card__top > div {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 12px;
 }
 .wrong-difficulty {

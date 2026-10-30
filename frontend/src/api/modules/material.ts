@@ -1,4 +1,5 @@
 import http from '@/api/http'
+import type { GenerationMode } from '@/utils/generationMode'
 
 export interface MaterialPageItem {
   id: number
@@ -6,6 +7,7 @@ export interface MaterialPageItem {
   materialType: string
   parseStatus: string
   summaryStatus: string
+  summaryGenerationMode?: GenerationMode
   difficultyLevel: number
   tags?: string
   description?: string

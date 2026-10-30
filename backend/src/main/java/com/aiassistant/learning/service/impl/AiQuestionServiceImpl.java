@@ -1,6 +1,7 @@
 package com.aiassistant.learning.service.impl;
 
 import com.aiassistant.learning.common.exception.BusinessException;
+import com.aiassistant.learning.common.util.GenerationModes;
 import com.aiassistant.learning.common.util.MultipleChoiceAnswers;
 import com.aiassistant.learning.common.util.QuestionKnowledgeScope;
 import com.aiassistant.learning.common.util.QuestionSetSources;
@@ -147,6 +148,7 @@ public class AiQuestionServiceImpl implements AiQuestionService {
         questionSet.setTotalScore(0);
         questionSet.setDifficultyLevel(request.getDifficultyLevel() == null ? 3 : request.getDifficultyLevel());
         questionSet.setStatus("GENERATING");
+        questionSet.setGenerationMode(GenerationModes.UNKNOWN);
         questionSet.setDeleted(0);
         questionSetMapper.insert(questionSet);
         return questionSet;
@@ -234,7 +236,7 @@ public class AiQuestionServiceImpl implements AiQuestionService {
 
         // 阶段二：调用模型。此时没有任何事务打开。
         LocalDateTime start = LocalDateTime.now();
-        List<GeneratedQuestion> generatedQuestions = callAiOrMock(
+        GeneratedQuestionBatch generated = callAiOrMock(
                 material,
                 contextSegments,
                 questionPlan,
@@ -242,6 +244,7 @@ public class AiQuestionServiceImpl implements AiQuestionService {
                 modelName,
                 knowledgePoints
         );
+        List<GeneratedQuestion> generatedQuestions = generated.questions();
         validateKnowledgeCoverage(generatedQuestions, knowledgePoints);
         int responseTimeMs = (int) Duration.between(start, LocalDateTime.now()).toMillis();
 
@@ -249,7 +252,7 @@ public class AiQuestionServiceImpl implements AiQuestionService {
         QuestionSet questionSetToSave = existingQuestionSet;
         return transactionTemplate.execute(status -> persistQuestionSet(
                 userId, material, request, questionSetId, questionSetToSave, generatedQuestions,
-                difficultyLevel, modelName, promptText, inputText, contextSegments, responseTimeMs));
+                difficultyLevel, modelName, promptText, inputText, generated.mode(), contextSegments, responseTimeMs));
     }
 
     /**
@@ -266,6 +269,7 @@ public class AiQuestionServiceImpl implements AiQuestionService {
             String modelName,
             String promptText,
             String inputText,
+            String generationMode,
             List<MaterialSegment> contextSegments,
             int responseTimeMs
     ) {
@@ -286,6 +290,7 @@ public class AiQuestionServiceImpl implements AiQuestionService {
         questionSet.setSourceSegmentsJson(QuestionSetSources.encode(objectMapper, sources));
         questionSet.setGenerationRequestJson(encodeGenerationRequest(request, resolveQuestionPlan(request), modelName));
         questionSet.setStatus("PUBLISHED");
+        questionSet.setGenerationMode(generationMode);
         if (questionSetId == null) {
             questionSetMapper.insert(questionSet);
         } else {
@@ -299,6 +304,7 @@ public class AiQuestionServiceImpl implements AiQuestionService {
                     .set(QuestionSet::getSourceSegmentsJson, questionSet.getSourceSegmentsJson())
                     .set(QuestionSet::getGenerationRequestJson, questionSet.getGenerationRequestJson())
                     .set(QuestionSet::getStatus, "PUBLISHED")
+                    .set(QuestionSet::getGenerationMode, generationMode)
                     .set(QuestionSet::getUpdatedAt, LocalDateTime.now()));
             if (updated == 0) {
                 throw new BusinessException("题集状态已变化，生成结果未保存");
@@ -350,6 +356,7 @@ public class AiQuestionServiceImpl implements AiQuestionService {
         record.setInputText(inputText);
         record.setOutputText("generated_question_set_id=" + questionSet.getId());
         record.setStatus("SUCCESS");
+        record.setGenerationMode(generationMode);
         record.setTokenUsed(Math.max(1, inputText.length() / 4));
         record.setResponseTimeMs(responseTimeMs);
         aiGenerationRecordMapper.insert(record);
@@ -362,6 +369,7 @@ public class AiQuestionServiceImpl implements AiQuestionService {
                 .totalScore(questionSet.getTotalScore())
                 .difficultyLevel(questionSet.getDifficultyLevel())
                 .status(questionSet.getStatus())
+                .generationMode(generationMode)
                 .createdAt(questionSet.getCreatedAt())
                 .sourceSegments(sources)
                 .sourceMode(QuestionSetSources.mode(sources))
@@ -389,7 +397,7 @@ public class AiQuestionServiceImpl implements AiQuestionService {
     }
 
     /** 根据 AI 配置决定使用真实模型还是 Mock 题目。 */
-    private List<GeneratedQuestion> callAiOrMock(
+    private GeneratedQuestionBatch callAiOrMock(
             StudyMaterial material,
             List<MaterialSegment> segments,
             QuestionPlan questionPlan,
@@ -402,14 +410,18 @@ public class AiQuestionServiceImpl implements AiQuestionService {
             throw new BusinessException("AI 功能未启用");
         }
         if (Boolean.TRUE.equals(config.mockMode())) {
-            return knowledgePoints.isEmpty()
+            List<GeneratedQuestion> questions = knowledgePoints.isEmpty()
                     ? buildMockQuestions(material, segments, questionPlan, difficultyLevel)
                     : buildScopedMockQuestions(segments, questionPlan, difficultyLevel, knowledgePoints);
+            return new GeneratedQuestionBatch(questions, GenerationModes.MOCK);
         }
 
         String userPrompt = buildQuestionUserPrompt(material, segments, questionPlan, difficultyLevel, knowledgePoints);
         String content = aiChatService.chat(buildQuestionSystemPrompt(), userPrompt, modelName, 0.4);
-        return parseGeneratedQuestions(content, questionPlan);
+        return new GeneratedQuestionBatch(parseGeneratedQuestions(content, questionPlan), GenerationModes.LIVE);
+    }
+
+    private record GeneratedQuestionBatch(List<GeneratedQuestion> questions, String mode) {
     }
 
     /**

@@ -20,6 +20,9 @@ import lombok.EqualsAndHashCode;
 @TableName("study_material")
 public class StudyMaterial extends BaseLogicEntity {
 
+    /** 最近成功总结的持久生成来源：MOCK / LIVE / UNKNOWN。 */
+    private String summaryGenerationMode;
+
     @Serial
     private static final long serialVersionUID = 1L;
 

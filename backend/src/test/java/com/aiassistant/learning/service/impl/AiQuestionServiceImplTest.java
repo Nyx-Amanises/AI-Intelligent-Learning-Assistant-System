@@ -148,6 +148,9 @@ class AiQuestionServiceImplTest {
         assertTrue(update.getValue().getParamNameValuePairs().containsValue("GENERATING"));
         assertTrue(update.getValue().getParamNameValuePairs().containsValue("PUBLISHED"));
         assertEquals("GENERATION_SNAPSHOT", result.getSourceMode());
+        assertEquals("MOCK", result.getGenerationMode());
+        assertTrue(update.getValue().getSqlSet().contains("generation_mode="));
+        assertTrue(update.getValue().getParamNameValuePairs().containsValue("MOCK"));
         String snapshot = update.getValue().getParamNameValuePairs().values().stream()
                 .filter(value -> value instanceof String text && text.startsWith("[{\"segmentId\""))
                 .map(Object::toString).findFirst().orElseThrow();
@@ -202,6 +205,10 @@ class AiQuestionServiceImplTest {
         ArgumentCaptor<QuestionSet> inserted = ArgumentCaptor.forClass(QuestionSet.class);
         verify(questionSets).insert(inserted.capture());
         assertEquals(result.getSourceSegments(), QuestionSetSources.decode(new ObjectMapper(), inserted.getValue().getSourceSegmentsJson()));
+        assertEquals("MOCK", inserted.getValue().getGenerationMode());
+        ArgumentCaptor<AiGenerationRecord> generationRecord = ArgumentCaptor.forClass(AiGenerationRecord.class);
+        verify(records).insert(generationRecord.capture());
+        assertEquals("MOCK", generationRecord.getValue().getGenerationMode());
         QuestionGenerateRequest savedSettings;
         try {
             savedSettings = new ObjectMapper().readValue(inserted.getValue().getGenerationRequestJson(), QuestionGenerateRequest.class);
@@ -242,6 +249,7 @@ class AiQuestionServiceImplTest {
         QuestionSetDetailVO detail = service.generateQuestionSet(7L, 42L, request);
 
         assertEquals("MULTIPLE", detail.getQuestions().get(0).getQuestionType());
+        assertEquals("LIVE", detail.getGenerationMode());
         assertEquals("A,C", detail.getQuestions().get(0).getCorrectAnswer());
         ArgumentCaptor<String> systemPrompt = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> userPrompt = ArgumentCaptor.forClass(String.class);

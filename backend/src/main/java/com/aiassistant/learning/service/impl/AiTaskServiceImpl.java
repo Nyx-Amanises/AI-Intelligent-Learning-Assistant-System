@@ -2,6 +2,7 @@ package com.aiassistant.learning.service.impl;
 
 import lombok.extern.slf4j.Slf4j;
 import com.aiassistant.learning.common.exception.BusinessException;
+import com.aiassistant.learning.common.util.GenerationModes;
 import com.aiassistant.learning.context.UserContext;
 import com.aiassistant.learning.dto.ai.AiTaskCreateRequest;
 import com.aiassistant.learning.dto.ai.EmbeddingTaskPayload;
@@ -841,6 +842,19 @@ public class AiTaskServiceImpl implements AiTaskService {
         }
     }
 
+    /** 任务结果已持久化，仅读取实际结果来源，不读取当前 AI 配置。 */
+    private String resolveGenerationMode(AiTask task) {
+        if (!STATUS_SUCCESS.equals(task.getStatus()) || !StringUtils.hasText(task.getResultJson())
+                || !("SUMMARY".equals(task.getTaskType()) || "QUESTION_GENERATE".equals(task.getTaskType()))) {
+            return GenerationModes.UNKNOWN;
+        }
+        try {
+            return GenerationModes.normalize(objectMapper.readTree(task.getResultJson()).path("generationMode").asText());
+        } catch (Exception exception) {
+            return GenerationModes.UNKNOWN;
+        }
+    }
+
     /**
      * 转换成列表页展示对象。
      */
@@ -851,6 +865,7 @@ public class AiTaskServiceImpl implements AiTaskService {
                 .bizType(task.getBizType())
                 .bizId(task.getBizId())
                 .bizTitle(resolveBizTitle(task))
+                .generationMode(resolveGenerationMode(task))
                 .status(task.getStatus())
                 .progressRate(task.getProgressRate())
                 .retryCount(task.getRetryCount())
@@ -874,6 +889,7 @@ public class AiTaskServiceImpl implements AiTaskService {
                 .bizType(task.getBizType())
                 .bizId(task.getBizId())
                 .bizTitle(resolveBizTitle(task))
+                .generationMode(resolveGenerationMode(task))
                 .status(task.getStatus())
                 .progressRate(task.getProgressRate())
                 .retryCount(task.getRetryCount())

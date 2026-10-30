@@ -5,6 +5,7 @@
         <div class="practice-paper-hero__intro">
           <h2 class="practice-paper-hero__title">{{ practiceDetail.sessionName }}</h2>
           <div class="practice-paper-hero__meta">
+            <GenerationModeBadge :mode="practiceDetail.generationMode" />
             <span>{{ practiceDetail.totalQuestions }} 道题</span>
             <span v-if="practiceDetail.questionIds?.length">专项复习</span>
             <span>满分 {{ practiceDetail.totalScore || 0 }} 分</span>
@@ -25,6 +26,9 @@
           }}</span>
         </div>
       </div>
+      <p v-if="practiceDetail.generationMode === 'MOCK'" class="practice-paper-note">
+        本次练习使用模拟题目，仅用于体验作答与复盘流程。
+      </p>
       <div v-if="!submitted" class="practice-paper-progress">
         <div>
           <span>作答进度</span><strong>{{ completionPercentage }}%</strong>
@@ -189,6 +193,7 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
 import SourceSegmentList from '@/components/SourceSegmentList.vue'
+import GenerationModeBadge from '@/components/GenerationModeBadge.vue'
 import { formatDateTime } from '@/utils/format'
 import { formatQuestionType } from '@/utils/labels'
 import {

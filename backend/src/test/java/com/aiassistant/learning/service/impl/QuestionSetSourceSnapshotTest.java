@@ -42,6 +42,7 @@ class QuestionSetSourceSnapshotTest {
         QuestionSet set = new QuestionSet();
         set.setId(91L);
         set.setMaterialId(42L);
+        set.setGenerationMode("MOCK");
         var source = RetrievedSegmentVO.builder().segmentId(8L).segmentNo(2).pageNo(3)
                 .sectionTitle("旧版章节").contentText("出题时原文，含完整标点与换行。\n不能替换成新资料。")
                 .keywords("核心考点").build();
@@ -52,10 +53,12 @@ class QuestionSetSourceSnapshotTest {
         QuestionSetDetailVO detail = service.getQuestionSetDetail(7L, 91L);
 
         assertEquals("GENERATION_SNAPSHOT", detail.getSourceMode());
+        assertEquals("MOCK", detail.getGenerationMode());
         assertEquals(List.of(source), detail.getSourceSegments());
         ArgumentCaptor<LambdaQueryWrapper<QuestionSet>> query = ArgumentCaptor.forClass(LambdaQueryWrapper.class);
         verify(service).getOne(query.capture());
         assertTrue(query.getValue().getSqlSelect().contains("source_segments_json"));
+        assertTrue(query.getValue().getSqlSelect().contains("generation_mode"));
         assertTrue(query.getValue().getSqlSegment().contains("user_id"));
         assertTrue(query.getValue().getParamNameValuePairs().containsValue(7L));
         // 资料重新解析或删除后仍只读取保存的内容；服务不依赖检索或资料 Mapper。
@@ -73,6 +76,7 @@ class QuestionSetSourceSnapshotTest {
         when(questions.selectList(any())).thenReturn(List.of());
         QuestionSetDetailVO detail = service.getQuestionSetDetail(7L, 91L);
         assertEquals("UNAVAILABLE", detail.getSourceMode());
+        assertEquals("UNKNOWN", detail.getGenerationMode());
         assertTrue(detail.getSourceSegments().isEmpty());
     }
 

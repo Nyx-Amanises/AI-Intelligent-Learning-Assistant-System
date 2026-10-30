@@ -15,6 +15,9 @@ import lombok.Data;
 @Builder
 public class MaterialDetailVO {
 
+    /** 最近成功总结的持久生成来源：MOCK / LIVE / UNKNOWN。 */
+    private String summaryGenerationMode;
+
     /**
      * 资料 ID。
      */

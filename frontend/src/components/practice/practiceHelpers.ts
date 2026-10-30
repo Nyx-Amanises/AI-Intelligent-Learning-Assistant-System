@@ -1,4 +1,5 @@
 import type { SourceSegmentLike } from '@/utils/format'
+import type { GenerationMode } from '@/utils/generationMode'
 import { formatQuestionType, isChoiceType, isShortAnswerType } from '@/utils/labels'
 
 /**
@@ -30,6 +31,7 @@ export interface PracticeDetail {
   sessionName: string
   sessionStatus?: string
   questionSetId?: number
+  generationMode?: GenerationMode
   materialId?: number
   questionIds?: number[] | null
   totalQuestions?: number
@@ -45,6 +47,7 @@ export interface PracticeHistoryItem {
   sessionName: string
   sessionStatus?: string
   questionSetId?: number
+  generationMode?: GenerationMode
   questionIds?: number[] | null
   totalQuestions?: number
   obtainedScore?: number

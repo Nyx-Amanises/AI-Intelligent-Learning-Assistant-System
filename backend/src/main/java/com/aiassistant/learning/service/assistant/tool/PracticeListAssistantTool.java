@@ -1,5 +1,6 @@
 package com.aiassistant.learning.service.assistant.tool;
 
+import com.aiassistant.learning.common.util.GenerationModes;
 import com.aiassistant.learning.service.PracticeService;
 import com.aiassistant.learning.service.assistant.AbstractAssistantTool;
 import com.aiassistant.learning.vo.page.PageVO;
@@ -48,6 +49,7 @@ public class PracticeListAssistantTool extends AbstractAssistantTool {
             for (PracticeSessionPageVO item : records) {
                 summary.append("- 练习 #").append(item.getId()).append("：")
                         .append(com.aiassistant.learning.service.assistant.AssistantToolSupport.abbreviate(item.getSessionName(), 100))
+                        .append("；题目来源：").append(GenerationModes.describe(item.getGenerationMode()))
                         .append("；题数 ").append(item.getTotalQuestions()).append("；当前得分 ").append(item.getObtainedScore())
                         .append("；当前正确率 ").append(item.getAccuracyRate()).append("%；提交时间 ").append(item.getSubmitTime()).append('\n');
             }

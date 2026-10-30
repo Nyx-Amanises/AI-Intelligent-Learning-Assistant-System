@@ -76,6 +76,7 @@ The production environment is deployed with **Vercel + Render + Aiven MySQL + Ai
 - Configure chat models and embedding models separately.
 - Support OpenAI-compatible APIs, DeepSeek, Doubao Ark, and similar compatible providers.
 - Support mock mode for demonstrating the workflow without a real model API key.
+- Summaries, question sets and their practice/wrong-answer records retain generation provenance and display a simulated-data badge for Mock output. Changing the current AI setting does not relabel existing content; older records without provenance are shown as unknown.
 - Route long-running operations such as AI summaries, AI question generation, short-answer grading, and embedding into the task center.
 - Track task status, view details, retry failures, redispatch tasks, and delete task records.
 

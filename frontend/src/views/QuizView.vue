@@ -80,6 +80,7 @@
               <div class="quiz-set-card__top">
                 <span class="quiz-set-card__category">学习自测</span>
                 <StatusPill :tone="statusTone(item.status)" :label="formatQuestionSetStatus(item.status)" />
+                <GenerationModeBadge v-if="canPreviewQuestionSet(item.status)" :mode="item.generationMode" />
               </div>
               <button
                 type="button"
@@ -399,8 +400,12 @@
             <span>{{ questionSetDetail.questionCount }} 道题</span
             ><span>满分 {{ questionSetDetail.totalScore }} 分</span
             ><span>{{ formatQuestionSetStatus(questionSetDetail.status) }}</span>
+            <GenerationModeBadge :mode="questionSetDetail.generationMode" />
           </p>
         </div>
+        <p v-if="questionSetDetail.generationMode === 'MOCK'" class="quiz-inline-note">
+          这套题目为模拟数据，仅用于体验作答与复盘流程。
+        </p>
         <div class="quiz-preview-questions">
           <article
             v-for="(question, index) in questionSetDetail.questions"
@@ -510,16 +515,19 @@ import { useParsedMaterials } from '@/composables/useParsedMaterials'
 import { usePolling } from '@/composables/usePolling'
 import AppIcon from '@/components/AppIcon.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import GenerationModeBadge from '@/components/GenerationModeBadge.vue'
 import IconMenuButton from '@/components/IconMenuButton.vue'
 import ListSectionHeading from '@/components/ListSectionHeading.vue'
 import SourceSegmentList from '@/components/SourceSegmentList.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import { formatAnswer, isMultiQuestion } from '@/components/practice/practiceHelpers'
+import type { GenerationMode } from '@/utils/generationMode'
 
 /** 题集分页列表项（/question-set/page）。 */
 interface QuestionSetItem {
   id: number
   materialId?: number
+  generationMode?: GenerationMode
   title: string
   status?: string
   questionCount?: number
@@ -1020,7 +1028,7 @@ const generateQuestionSet = async () => {
       }
       drawerVisible.value = true
     }
-    ElMessage.success(aiConfig.value.mockMode ? '演示题集已生成' : '题集已生成')
+    ElMessage.success(taskResult?.generationMode === 'MOCK' ? '模拟题集已生成' : '题集已生成')
   } catch (error) {
     if (!viewDisposed) {
       ElMessage.error(getErrorMessage(error, '题集任务失败'))

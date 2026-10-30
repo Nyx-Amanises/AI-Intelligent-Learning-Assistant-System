@@ -135,7 +135,8 @@ class AiSummaryServiceImplTest {
         ArgumentCaptor<LambdaUpdateWrapper<StudyMaterial>> materialUpdate = ArgumentCaptor.forClass(LambdaUpdateWrapper.class);
         verify(materials).update(materialUpdate.capture());
         assertTrue(materialUpdate.getValue().getSqlSet().startsWith("summary_status="));
-        assertFalse(materialUpdate.getValue().getSqlSet().contains(","));
+        assertTrue(materialUpdate.getValue().getSqlSet().contains("summary_generation_mode="));
+        assertTrue(materialUpdate.getValue().getParamNameValuePairs().containsValue("LIVE"));
         assertTrue(materialUpdate.getValue().getSqlSegment().contains("user_id ="));
         verify(materials, never()).updateById(any(StudyMaterial.class));
         assertEquals("PENDING", material.getSummaryStatus());
@@ -147,6 +148,72 @@ class AiSummaryServiceImplTest {
         assertTrue(publication.getParamNameValuePairs().containsValue("GENERATING"));
         assertTrue(publication.getParamNameValuePairs().containsValue("SUCCESS"));
         assertTrue(publication.getParamNameValuePairs().containsValue(201L));
+        assertTrue(publication.getSqlSet().contains("generation_mode="));
+        assertEquals("LIVE", result.getGenerationMode());
+    }
+
+    @Test
+    void mockSummaryStoresItsModeInRecordNoteAndResultAndKeepsItAfterConfigChanges() {
+        configureGeneration();
+        when(config.getResolvedConfig()).thenReturn(new AiConfigService.ResolvedAiConfig(
+                true, true, null, null, null, null, null, null, null, null, "test-model", null));
+
+        SummaryResultVO generated = service.generateMaterialSummary(7L, 42L, new SummaryGenerateRequest());
+
+        ArgumentCaptor<AiGenerationRecord> saved = ArgumentCaptor.forClass(AiGenerationRecord.class);
+        verify(records).insert(saved.capture());
+        ArgumentCaptor<StudyNote> savedNote = ArgumentCaptor.forClass(StudyNote.class);
+        verify(notes).insert(savedNote.capture());
+        assertEquals("MOCK", generated.getGenerationMode());
+        assertEquals("MOCK", saved.getValue().getGenerationMode());
+        assertEquals("MOCK", savedNote.getValue().getGenerationMode());
+        verifyNoInteractions(chat);
+
+        when(config.getResolvedConfig()).thenReturn(aiConfig());
+        when(records.selectOne(any())).thenReturn(saved.getValue());
+        assertEquals("MOCK", service.getLatestMaterialSummary(7L, 42L).getGenerationMode());
+    }
+
+    @Test
+    void historicalSummaryWithoutRecordedModeIsUnknownEvenIfTextLooksLikeMock() {
+        AiGenerationRecord completed = record("SUCCESS");
+        completed.setOutputText("模拟总结：旧数据不能靠文字猜测来源");
+        when(records.selectOne(any())).thenReturn(completed);
+
+        assertEquals("UNKNOWN", service.getLatestMaterialSummary(7L, 42L).getGenerationMode());
+        verifyNoInteractions(config, chat);
+    }
+
+    @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void olderMockRequestCompletingLaterCannotRelabelTheNewerLiveSummary() {
+        configureGeneration();
+        when(config.getResolvedConfig()).thenReturn(new AiConfigService.ResolvedAiConfig(
+                true, true, null, null, null, null, null, null, null, null, "test-model", null));
+        AiGenerationRecord older = record("GENERATING");
+        AiGenerationRecord newer = record("SUCCESS");
+        newer.setId(202L);
+        newer.setGenerationMode("LIVE");
+        when(records.selectOne(any())).thenReturn(older, newer);
+        when(records.update(any(), any())).thenReturn(1);
+        SummaryGenerateRequest request = new SummaryGenerateRequest();
+        request.setSaveAsNote(false);
+
+        SummaryResultVO result = service.generateMaterialSummary(7L, 42L, request, 201L);
+
+        assertEquals("MOCK", result.getGenerationMode());
+        ArgumentCaptor<LambdaUpdateWrapper<StudyMaterial>> materialUpdate = ArgumentCaptor.forClass(LambdaUpdateWrapper.class);
+        verify(materials).update(materialUpdate.capture());
+        assertTrue(materialUpdate.getValue().getParamNameValuePairs().containsValue("LIVE"));
+        assertFalse(materialUpdate.getValue().getParamNameValuePairs().containsValue("MOCK"));
+        ArgumentCaptor<LambdaQueryWrapper<StudyMaterial>> materialQueries = ArgumentCaptor.forClass(LambdaQueryWrapper.class);
+        verify(materials, times(2)).getOne(materialQueries.capture());
+        assertTrue(materialQueries.getAllValues().get(1).getSqlSegment().contains("for update"));
+        ArgumentCaptor<LambdaQueryWrapper<AiGenerationRecord>> recordQueries = ArgumentCaptor.forClass(LambdaQueryWrapper.class);
+        verify(records, times(2)).selectOne(recordQueries.capture());
+        String latestSql = recordQueries.getAllValues().get(1).getSqlSegment();
+        assertTrue(latestSql.contains("created_at DESC") && latestSql.contains("id DESC"));
+        assertTrue(latestSql.contains("for update"));
     }
 
     @Test
@@ -154,6 +221,7 @@ class AiSummaryServiceImplTest {
         AiGenerationRecord completed = record("SUCCESS");
         completed.setOutputText("已经保存的总结");
         completed.setNoteId(501L);
+        completed.setGenerationMode("MOCK");
         when(records.selectOne(any())).thenReturn(completed);
         StudyNote note = note();
         when(notes.selectById(501L)).thenReturn(note);
@@ -164,6 +232,7 @@ class AiSummaryServiceImplTest {
         assertEquals(201L, result.getRecordId());
         assertEquals(501L, result.getNoteId());
         assertEquals("已经保存的总结", result.getSummaryText());
+        assertEquals("MOCK", result.getGenerationMode());
         verifyNoInteractions(chat, config, retrieval);
         verify(records, never()).insert(any(AiGenerationRecord.class));
         verify(records, never()).update(any(), any());
@@ -248,6 +317,7 @@ class AiSummaryServiceImplTest {
         assertEquals(statuses, result.stream().map(SummaryHistoryVO::getStatus).toList());
         assertEquals("模型暂不可用", result.get(1).getErrorMessage());
         assertTrue(result.stream().allMatch(summary -> summary.getSourceSegments().isEmpty()));
+        assertTrue(result.stream().allMatch(summary -> "UNKNOWN".equals(summary.getGenerationMode())));
         verifyNoInteractions(chat, config, retrieval, segments, notes);
         ArgumentCaptor<LambdaQueryWrapper<AiGenerationRecord>> query = ArgumentCaptor.forClass(LambdaQueryWrapper.class);
         verify(records).selectList(query.capture());

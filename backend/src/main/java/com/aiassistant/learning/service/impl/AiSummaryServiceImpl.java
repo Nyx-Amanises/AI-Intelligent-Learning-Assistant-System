@@ -1,6 +1,7 @@
 package com.aiassistant.learning.service.impl;
 
 import com.aiassistant.learning.common.exception.BusinessException;
+import com.aiassistant.learning.common.util.GenerationModes;
 import com.aiassistant.learning.service.AiChatService;
 import com.aiassistant.learning.service.AiConfigService;
 import com.aiassistant.learning.dto.ai.SummaryGenerateRequest;
@@ -98,6 +99,7 @@ public class AiSummaryServiceImpl implements AiSummaryService {
         record.setSummaryType(resolveSummaryType(request));
         record.setModelName(resolveModelName(userId, request));
         record.setStatus("GENERATING");
+        record.setGenerationMode(GenerationModes.UNKNOWN);
         record.setTokenUsed(0);
         record.setResponseTimeMs(0);
         aiGenerationRecordMapper.insert(record);
@@ -181,12 +183,13 @@ public class AiSummaryServiceImpl implements AiSummaryService {
 
         // 阶段二：调用模型。此时没有任何事务打开。
         LocalDateTime start = LocalDateTime.now();
-        String summaryText;
+        GeneratedSummary generated;
         try {
-            summaryText = callAiOrMock(promptText, inputText, modelName, request.getTemperature());
+            generated = callAiOrMock(promptText, inputText, modelName, request.getTemperature());
         } catch (Exception exception) {
             throw new BusinessException(500, "AI 总结生成失败: " + truncateErrorMessage(exception.getMessage()));
         }
+        String summaryText = generated.text();
         if (!StringUtils.hasText(summaryText)) {
             throw new BusinessException(500, "AI 总结生成失败: 模型未返回总结内容");
         }
@@ -196,7 +199,7 @@ public class AiSummaryServiceImpl implements AiSummaryService {
         AiGenerationRecord recordToSave = existingRecord;
         return transactionTemplate.execute(status -> persistSummaryResult(
                 userId, material, request, recordId, recordToSave,
-                summaryType, modelName, promptText, inputText, summaryText, contextSegments, responseTimeMs));
+                summaryType, modelName, promptText, inputText, summaryText, generated.mode(), contextSegments, responseTimeMs));
     }
 
     /**
@@ -213,10 +216,20 @@ public class AiSummaryServiceImpl implements AiSummaryService {
             String promptText,
             String inputText,
             String summaryText,
+            String generationMode,
             List<MaterialSegment> contextSegments,
             int responseTimeMs
     ) {
         Long materialId = material.getId();
+        // 同一资料的并发总结按资料行串行发布，且先锁资料、再锁生成记录，避免交叉等待。
+        // 不把模型调用放进事务；这个锁只覆盖下方短事务。
+        StudyMaterial lockedMaterial = studyMaterialService.getOne(new LambdaQueryWrapper<StudyMaterial>()
+                .eq(StudyMaterial::getId, materialId)
+                .eq(StudyMaterial::getUserId, userId)
+                .last("limit 1 for update"));
+        if (lockedMaterial == null) {
+            throw new BusinessException(404, "资料已删除，生成结果未保存");
+        }
         AiGenerationRecord record = existingRecord;
         if (record == null) {
             record = new AiGenerationRecord();
@@ -229,6 +242,7 @@ public class AiSummaryServiceImpl implements AiSummaryService {
         record.setPromptText(promptText);
         record.setInputText(inputText);
         record.setOutputText(summaryText);
+        record.setGenerationMode(generationMode);
         record.setStatus("SUCCESS");
         record.setErrorMessage(null);
         record.setTokenUsed(estimateTokens(inputText, summaryText));
@@ -247,6 +261,7 @@ public class AiSummaryServiceImpl implements AiSummaryService {
                     .set(AiGenerationRecord::getPromptText, promptText)
                     .set(AiGenerationRecord::getInputText, inputText)
                     .set(AiGenerationRecord::getOutputText, summaryText)
+                    .set(AiGenerationRecord::getGenerationMode, generationMode)
                     .set(AiGenerationRecord::getStatus, "SUCCESS")
                     .set(AiGenerationRecord::getErrorMessage, null)
                     .set(AiGenerationRecord::getTokenUsed, record.getTokenUsed())
@@ -265,6 +280,7 @@ public class AiSummaryServiceImpl implements AiSummaryService {
             note.setTitle(material.getTitle() + " - AI总结");
             note.setNoteType("AI_SUMMARY");
             note.setContentText(summaryText);
+            note.setGenerationMode(generationMode);
             note.setSourceSegmentIds(joinSegmentIds(contextSegments));
             note.setIsFavorite(0);
             note.setDeleted(0);
@@ -277,10 +293,21 @@ public class AiSummaryServiceImpl implements AiSummaryService {
                     .set(AiGenerationRecord::getNoteId, noteId));
         }
 
+        // “查看最新总结”按创建时间及 ID 排序，不能让较早请求的晚完成覆盖较新总结的来源。
+        // FOR UPDATE 是当前读，确保等待资料锁后能看见其他事务刚发布的总结。
+        AiGenerationRecord latest = aiGenerationRecordMapper.selectOne(new LambdaQueryWrapper<AiGenerationRecord>()
+                .eq(AiGenerationRecord::getUserId, userId)
+                .eq(AiGenerationRecord::getMaterialId, materialId)
+                .eq(AiGenerationRecord::getTaskType, "SUMMARY")
+                .eq(AiGenerationRecord::getStatus, "SUCCESS")
+                .orderByDesc(AiGenerationRecord::getCreatedAt, AiGenerationRecord::getId)
+                .last("limit 1 for update"));
+        String latestMode = latest == null ? generationMode : GenerationModes.normalize(latest.getGenerationMode());
         studyMaterialService.update(new LambdaUpdateWrapper<StudyMaterial>()
                 .eq(StudyMaterial::getId, materialId)
                 .eq(StudyMaterial::getUserId, userId)
-                .set(StudyMaterial::getSummaryStatus, "SUCCESS"));
+                .set(StudyMaterial::getSummaryStatus, "SUCCESS")
+                .set(StudyMaterial::getSummaryGenerationMode, latestMode));
 
         return SummaryResultVO.builder()
                 .materialId(materialId)
@@ -289,6 +316,7 @@ public class AiSummaryServiceImpl implements AiSummaryService {
                 .modelName(modelName)
                 .summaryType(summaryType)
                 .summaryText(summaryText)
+                .generationMode(generationMode)
                 .sourceSegments(toRetrievedSegmentVOList(contextSegments))
                 .createdAt(record.getCreatedAt())
                 .build();
@@ -329,6 +357,7 @@ public class AiSummaryServiceImpl implements AiSummaryService {
                 .modelName(record.getModelName())
                 .summaryType(record.getSummaryType())
                 .summaryText(record.getOutputText())
+                .generationMode(GenerationModes.normalize(record.getGenerationMode()))
                 .sourceSegments(resolveSummarySourceSegments(userId, material, record, loadSummaryNote(userId, record.getNoteId())))
                 .createdAt(record.getCreatedAt())
                 .build();
@@ -366,6 +395,7 @@ public class AiSummaryServiceImpl implements AiSummaryService {
                         .status(record.getStatus())
                         .errorMessage(record.getErrorMessage())
                         .summaryText(record.getOutputText())
+                        .generationMode(GenerationModes.normalize(record.getGenerationMode()))
                         .sourceSegments(resolveSummarySourceSegments(
                                 userId,
                                 material,
@@ -411,6 +441,7 @@ public class AiSummaryServiceImpl implements AiSummaryService {
                             .status(record.getStatus())
                             .errorMessage(record.getErrorMessage())
                             .summaryText(record.getOutputText())
+                            .generationMode(GenerationModes.normalize(record.getGenerationMode()))
                             .sourceSegments(loadSummaryHistorySourceSegments(
                                     record,
                                     record.getNoteId() == null ? null : noteMap.get(record.getNoteId())
@@ -432,15 +463,18 @@ public class AiSummaryServiceImpl implements AiSummaryService {
     /**
      * 根据 AI 配置决定调用真实模型还是返回模拟总结。
      */
-    private String callAiOrMock(String promptText, String inputText, String modelName, Double temperature) {
+    private GeneratedSummary callAiOrMock(String promptText, String inputText, String modelName, Double temperature) {
         AiConfigService.ResolvedAiConfig config = aiConfigService.getResolvedConfig();
         if (!Boolean.TRUE.equals(config.enabled())) {
             throw new BusinessException("AI 功能未启用");
         }
         if (Boolean.TRUE.equals(config.mockMode())) {
-            return buildMockSummary(inputText);
+            return new GeneratedSummary(buildMockSummary(inputText), GenerationModes.MOCK);
         }
-        return aiChatService.chat(promptText, inputText, modelName, temperature);
+        return new GeneratedSummary(aiChatService.chat(promptText, inputText, modelName, temperature), GenerationModes.LIVE);
+    }
+
+    private record GeneratedSummary(String text, String mode) {
     }
 
     /**

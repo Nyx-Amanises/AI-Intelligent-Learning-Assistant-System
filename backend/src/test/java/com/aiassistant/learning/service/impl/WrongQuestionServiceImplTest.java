@@ -46,6 +46,18 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 
 class WrongQuestionServiceImplTest {
+
+    @Test
+    void wrongBookCarriesThePersistedPracticeSource() {
+        PracticeSession session = submittedSession();
+        session.setGenerationMode("MOCK");
+        installBook(List.of(session), List.of(bookAnswer(1L, 31L, 21L, 1)),
+                List.of(bookQuestion(21L, "SINGLE", "算法", "搜索方法")));
+
+        var result = service.pageWrongQuestions(USER_ID, new WrongQuestionPageQuery());
+
+        assertEquals("MOCK", result.getRecords().get(0).getGenerationMode());
+    }
     private static final long USER_ID = 7L;
     private final PracticeAnswerMapper answers = mock(PracticeAnswerMapper.class);
     private final PracticeSessionMapper sessions = mock(PracticeSessionMapper.class);

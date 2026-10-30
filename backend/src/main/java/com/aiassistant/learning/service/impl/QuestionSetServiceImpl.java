@@ -1,6 +1,7 @@
 package com.aiassistant.learning.service.impl;
 
 import com.aiassistant.learning.common.exception.BusinessException;
+import com.aiassistant.learning.common.util.GenerationModes;
 import com.aiassistant.learning.entity.QuestionItem;
 import com.aiassistant.learning.entity.QuestionSet;
 import com.aiassistant.learning.entity.PracticeAnswer;
@@ -99,6 +100,7 @@ public class QuestionSetServiceImpl extends ServiceImpl<com.aiassistant.learning
                         .totalScore(item.getTotalScore())
                         .difficultyLevel(item.getDifficultyLevel())
                         .status(item.getStatus())
+                        .generationMode(GenerationModes.normalize(item.getGenerationMode()))
                         .createdAt(item.getCreatedAt())
                         .build())
                 .toList();
@@ -157,6 +159,7 @@ public class QuestionSetServiceImpl extends ServiceImpl<com.aiassistant.learning
                         .totalScore(item.getTotalScore())
                         .difficultyLevel(item.getDifficultyLevel())
                         .status(item.getStatus())
+                        .generationMode(GenerationModes.normalize(item.getGenerationMode()))
                         .createdAt(item.getCreatedAt())
                         .build())
                 .toList();
@@ -185,7 +188,7 @@ public class QuestionSetServiceImpl extends ServiceImpl<com.aiassistant.learning
                 .select(QuestionSet::getId, QuestionSet::getUserId, QuestionSet::getMaterialId,
                         QuestionSet::getTitle, QuestionSet::getQuestionCount, QuestionSet::getTotalScore,
                         QuestionSet::getDifficultyLevel, QuestionSet::getStatus, QuestionSet::getCreatedAt,
-                        QuestionSet::getSourceSegmentsJson)
+                        QuestionSet::getSourceSegmentsJson, QuestionSet::getGenerationMode)
                 .eq(QuestionSet::getId, questionSetId)
                 .eq(QuestionSet::getUserId, userId)
                 .last("limit 1"));
@@ -223,6 +226,7 @@ public class QuestionSetServiceImpl extends ServiceImpl<com.aiassistant.learning
                 .totalScore(questionSet.getTotalScore())
                 .difficultyLevel(questionSet.getDifficultyLevel())
                 .status(questionSet.getStatus())
+                .generationMode(GenerationModes.normalize(questionSet.getGenerationMode()))
                 .createdAt(questionSet.getCreatedAt())
                 .sourceSegments(sourceSegments)
                 .sourceMode(QuestionSetSources.mode(sourceSegments))

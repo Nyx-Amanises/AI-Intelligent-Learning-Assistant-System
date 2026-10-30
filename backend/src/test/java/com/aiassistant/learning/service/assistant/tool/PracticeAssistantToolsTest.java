@@ -18,12 +18,30 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 class PracticeAssistantToolsTest {
     private final PracticeService service = mock(PracticeService.class);
     private final ObjectMapper json = new ObjectMapper().findAndRegisterModules();
     private final PracticeDetailAssistantTool detailTool = new PracticeDetailAssistantTool(service, json);
     private final PracticeListAssistantTool listTool = new PracticeListAssistantTool(service, json);
+
+    @ParameterizedTest
+    @CsvSource({"MOCK,模拟数据", "LIVE,真实模型生成", "UNKNOWN,历史来源未记录"})
+    void practiceSourcesReachBothListAndDetailModelSummaries(String mode, String expectedLabel) {
+        PracticeDetailVO detail = detail(25L, "SUBMITTED", List.of(answer(1, "RULE", 0)));
+        detail.setGenerationMode(mode);
+        when(service.getPracticeDetail(7L, 25L)).thenReturn(detail);
+        var record = PracticeSessionPageVO.builder().id(25L).sessionName("测试练习").generationMode(mode).build();
+        when(service.pagePracticeSessions(7L, 1L, 10L)).thenReturn(PageVO.<PracticeSessionPageVO>builder()
+                .current(1L).total(1L).records(List.of(record)).build());
+
+        assertTrue(detailTool.execute(context(boundSession(), "练习 #25", AssistantStructuredIntent.empty()))
+                .summaryText().contains(expectedLabel));
+        assertTrue(listTool.execute(context(null, "练习列表", AssistantStructuredIntent.empty()))
+                .summaryText().contains(expectedLabel));
+    }
 
     @Test
     void explicitIdOverridesOldContextAndSwitchesOnlyAfterOwnedLookup() throws Exception {

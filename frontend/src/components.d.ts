@@ -52,6 +52,7 @@ declare module 'vue' {
     ElSwitch: typeof import('element-plus/es')['ElSwitch']
     ElUpload: typeof import('element-plus/es')['ElUpload']
     EmptyState: typeof import('./components/EmptyState.vue')['default']
+    GenerationModeBadge: typeof import('./components/GenerationModeBadge.vue')['default']
     IconMenuButton: typeof import('./components/IconMenuButton.vue')['default']
     LearningNoteContent: typeof import('./components/LearningNoteContent.vue')['default']
     ListSectionHeading: typeof import('./components/ListSectionHeading.vue')['default']

@@ -10,6 +10,7 @@
             <div class="practice-record__heading">
               <h2>{{ item.sessionName }}</h2>
               <StatusPill :tone="statusTone(item.sessionStatus)" :label="formatPracticeStatus(item.sessionStatus)" />
+              <GenerationModeBadge :mode="item.generationMode" />
             </div>
             <p>{{ item.totalQuestions || 0 }} 道题<span>·</span>{{ describeSubmitTime(item) }}</p>
             <p v-if="item.questionIds?.length">专项复习 · 再练一次将保留本次题目范围</p>
@@ -79,6 +80,7 @@ import { useRouter } from 'vue-router'
 import EmptyState from '@/components/EmptyState.vue'
 import IconMenuButton from '@/components/IconMenuButton.vue'
 import StatusPill from '@/components/StatusPill.vue'
+import GenerationModeBadge from '@/components/GenerationModeBadge.vue'
 import { formatDateTime } from '@/utils/format'
 import { formatPracticeStatus, statusTone } from '@/utils/labels'
 import { isSubmittedStatus, type PracticeHistoryItem } from './practiceHelpers'

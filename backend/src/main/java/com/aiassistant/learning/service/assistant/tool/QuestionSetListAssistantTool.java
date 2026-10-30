@@ -1,5 +1,6 @@
 package com.aiassistant.learning.service.assistant.tool;
 
+import com.aiassistant.learning.common.util.GenerationModes;
 import com.aiassistant.learning.entity.AssistantSession;
 import com.aiassistant.learning.service.QuestionSetService;
 import com.aiassistant.learning.service.StudyMaterialService;
@@ -217,7 +218,8 @@ public class QuestionSetListAssistantTool extends AbstractAssistantTool {
                     .append(" 题 · 难度 ")
                     .append(item.getDifficultyLevel() == null ? 3 : item.getDifficultyLevel())
                     .append(" · ")
-                    .append(formatStatus(item.getStatus()));
+                    .append(formatStatus(item.getStatus()))
+                    .append(" · ").append(GenerationModes.describe(item.getGenerationMode()));
         }
         if (total > records.size()) {
             builder.append(System.lineSeparator())

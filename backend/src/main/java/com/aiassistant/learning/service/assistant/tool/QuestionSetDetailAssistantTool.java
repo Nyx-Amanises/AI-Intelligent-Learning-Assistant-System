@@ -1,5 +1,6 @@
 package com.aiassistant.learning.service.assistant.tool;
 
+import com.aiassistant.learning.common.util.GenerationModes;
 import com.aiassistant.learning.service.QuestionSetService;
 import com.aiassistant.learning.service.assistant.AbstractAssistantTool;
 import com.aiassistant.learning.service.assistant.AssistantToolSupport;
@@ -63,10 +64,12 @@ public class QuestionSetDetailAssistantTool extends AbstractAssistantTool {
             }
             String summary = """
                     当前题集：%s
+                    内容来源：%s
                     题目数：%s，总分：%s，难度：%s。
                     示例题目：%s
                     """.formatted(
                     detail.getTitle(),
+                    GenerationModes.describe(detail.getGenerationMode()),
                     detail.getQuestionCount(),
                     detail.getTotalScore(),
                     detail.getDifficultyLevel(),

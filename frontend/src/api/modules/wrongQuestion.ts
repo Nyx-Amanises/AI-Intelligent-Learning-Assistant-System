@@ -1,10 +1,12 @@
 import http from '@/api/http'
+import type { GenerationMode } from '@/utils/generationMode'
 
 export interface WrongQuestionItem {
   answerId: number
   sessionId: number
   questionId: number
   questionSetId?: number
+  generationMode?: GenerationMode
   materialId?: number
   materialTitle?: string
   questionSetTitle?: string
