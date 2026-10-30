@@ -176,7 +176,7 @@
                 v-model="passwordForm[field.name]"
                 type="password"
                 :autocomplete="field.autocomplete"
-                maxlength="64"
+                :maxlength="field.name === 'oldPassword' ? undefined : 64"
                 required
                 :aria-invalid="Boolean(passwordErrors[field.name])"
                 :aria-describedby="

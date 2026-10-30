@@ -1,6 +1,7 @@
 package com.aiassistant.learning.interceptor;
 
 import com.aiassistant.learning.common.exception.BusinessException;
+import com.aiassistant.learning.common.security.DefaultAdminCredentialGuard;
 import com.aiassistant.learning.common.security.RequireAdmin;
 import com.aiassistant.learning.common.security.UserRoles;
 import com.aiassistant.learning.context.UserContext;
@@ -91,6 +92,9 @@ public class AuthInterceptor implements HandlerInterceptor {
         }
         if (!Integer.valueOf(1).equals(user.getStatus())) {
             throw new BusinessException(401, "账号已被禁用，请联系管理员");
+        }
+        if (DefaultAdminCredentialGuard.isBlocked(user)) {
+            throw new BusinessException(401, "管理员默认密码已停用，请联系部署者设置私人管理员密码");
         }
         if (requiresAdmin(handler) && !UserRoles.isAdmin(user)) {
             throw new BusinessException(403, "仅管理员可以使用该功能");

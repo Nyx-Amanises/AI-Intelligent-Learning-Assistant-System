@@ -1,7 +1,9 @@
 package com.aiassistant.learning.entity;
 
 import com.aiassistant.learning.common.entity.BaseEntity;
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import java.io.Serial;
@@ -48,6 +50,8 @@ public class AiConfig extends BaseEntity {
 
     private String chatPath;
 
+    // 换服务地址时必须把旧密钥写成 SQL NULL，不能被默认的 NOT_NULL 更新策略跳过。
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String apiKey;
 
     private String defaultModel;
@@ -58,6 +62,7 @@ public class AiConfig extends BaseEntity {
 
     private String embeddingPath;
 
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String embeddingApiKey;
 
     private String defaultEmbeddingModel;

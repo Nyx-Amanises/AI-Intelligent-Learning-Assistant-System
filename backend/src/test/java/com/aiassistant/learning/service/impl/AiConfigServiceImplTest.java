@@ -26,11 +26,12 @@ import com.aiassistant.learning.service.AiConfigService.ResolvedAiConfig;
 import com.aiassistant.learning.vo.ai.AiConfigVO;
 import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.file.Path;
 import java.util.Map;
-import org.apache.ibatis.builder.MapperBuilderAssistant;
+import org.apache.ibatis.mapping.BoundSql;
+import org.apache.ibatis.mapping.MappedStatement;
+import org.apache.ibatis.reflection.SystemMetaObject;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -38,6 +39,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.beans.BeanUtils;
 
 class AiConfigServiceImplTest {
 
@@ -58,10 +60,13 @@ class AiConfigServiceImplTest {
 
     private AiConfig global;
     private AiConfig personal;
+    private static MappedStatement updateStatement;
 
     @BeforeAll
     static void initializeTableMetadata() {
-        TableInfoHelper.initTableInfo(new MapperBuilderAssistant(new MybatisConfiguration(), "test"), AiConfig.class);
+        MybatisConfiguration configuration = new MybatisConfiguration();
+        configuration.addMapper(AiConfigMapper.class);
+        updateStatement = configuration.getMappedStatement(AiConfigMapper.class.getName() + ".updateById");
     }
 
     @BeforeEach
@@ -86,18 +91,110 @@ class AiConfigServiceImplTest {
             LambdaQueryWrapper<AiConfig> query = invocation.getArgument(0);
             query.getSqlSegment();
             Map<String, Object> parameters = query.getParamNameValuePairs();
-            return parameters.containsValue("GLOBAL") ? global : personal;
+            return copy(parameters.containsValue("GLOBAL") ? global : personal);
         });
         when(configs.insert(any(AiConfig.class))).thenAnswer(invocation -> {
             AiConfig saved = invocation.getArgument(0);
             saved.setId(1L);
             if ("GLOBAL".equals(saved.getScope())) {
-                global = saved;
+                global = copy(saved);
             } else {
-                personal = saved;
+                personal = copy(saved);
             }
             return 1;
         });
+        when(configs.updateById(any(AiConfig.class))).thenAnswer(invocation -> {
+            AiConfig saved = invocation.getArgument(0);
+            AiConfig stored = "GLOBAL".equals(saved.getScope()) ? global : personal;
+            // 按真实 updateById 生成的 SQL 写入，模拟独立的数据库行；
+            // 默认忽略 NULL 的回归不能再靠 mock 共享同一对象而假通过。
+            BoundSql sql = updateStatement.getBoundSql(Map.of("et", saved));
+            sql.getParameterMappings().forEach(parameter -> {
+                String property = parameter.getProperty();
+                if (property.startsWith("et.")) {
+                    String field = property.substring(3);
+                    SystemMetaObject.forObject(stored).setValue(field,
+                            SystemMetaObject.forObject(saved).getValue(field));
+                }
+            });
+            return 1;
+        });
+    }
+
+    @Test
+    void updateSqlWritesBothClearedKeysAsNull() {
+        AiConfig cleared = config("GLOBAL", 0L);
+        Map<String, Object> parameters = Map.of("et", cleared);
+        BoundSql sql = updateStatement.getBoundSql(parameters);
+
+        assertTrue(sql.getSql().matches("(?s).*\\bapi_key\\s*=\\s*\\?.*"));
+        assertTrue(sql.getSql().matches("(?s).*\\bembedding_api_key\\s*=\\s*\\?.*"));
+        for (String key : new String[] {"et.apiKey", "et.embeddingApiKey"}) {
+            assertTrue(sql.getParameterMappings().stream().anyMatch(mapping -> key.equals(mapping.getProperty())));
+            assertNull(SystemMetaObject.forObject(parameters).getValue(key));
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({"true,true,CHAT", "false,false,CHAT", "false,true,CHAT",
+            "true,true,EMBEDDING", "false,false,EMBEDDING", "false,true,EMBEDDING"})
+    void clearedKeyCannotReappearAfterReloadAndEnablingRealCalls(boolean enabled, boolean mockMode, String endpoint) {
+        actAsAdmin();
+        AiConfigUpdateRequest move = new AiConfigUpdateRequest();
+        move.setEnabled(enabled);
+        move.setMockMode(mockMode);
+        if ("CHAT".equals(endpoint)) {
+            move.setBaseUrl("https://attacker.example.test");
+        } else {
+            move.setEmbeddingBaseUrl("https://attacker.example.test");
+        }
+        service.updateGlobalConfig(USER_ID, move);
+
+        assertNull("CHAT".equals(endpoint) ? global.getApiKey() : global.getEmbeddingApiKey());
+        AiConfigServiceImpl reloaded = new AiConfigServiceImpl(
+                properties, new ObjectMapper(), configs, users, cipher, new OutboundUrlGuard(properties));
+        AiConfigUpdateRequest enable = new AiConfigUpdateRequest();
+        enable.setEnabled(true);
+        enable.setMockMode(false);
+        assertThrows(BusinessException.class, () -> reloaded.updateGlobalConfig(USER_ID, enable));
+        assertNull("CHAT".equals(endpoint) ? global.getApiKey() : global.getEmbeddingApiKey());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"http://shared-chat.example.test", "https://shared-chat.example.test:8443"})
+    void schemeOrPortChangesAlsoRequireANewKey(String url) {
+        actAsAdmin();
+        AiConfigUpdateRequest request = new AiConfigUpdateRequest();
+        request.setBaseUrl(url);
+        assertThrows(BusinessException.class, () -> service.updateGlobalConfig(USER_ID, request));
+        verify(configs, never()).updateById(any(AiConfig.class));
+    }
+
+    @Test
+    void newExplicitKeysAllowSwitchingBothSharedServices() {
+        actAsAdmin();
+        AiConfigUpdateRequest request = new AiConfigUpdateRequest();
+        request.setBaseUrl("https://new-chat.example.test");
+        request.setApiKey("replacement-chat-test-key");
+        request.setEmbeddingBaseUrl("https://new-embedding.example.test");
+        request.setEmbeddingApiKey("replacement-embedding-test-key");
+
+        service.updateGlobalConfig(USER_ID, request);
+
+        ResolvedAiConfig resolved = service.getResolvedConfig(USER_ID);
+        assertEquals("replacement-chat-test-key", resolved.apiKey());
+        assertEquals("replacement-embedding-test-key", resolved.embeddingApiKey());
+        assertTrue(cipher.isEncrypted(global.getApiKey()));
+        assertTrue(cipher.isEncrypted(global.getEmbeddingApiKey()));
+    }
+
+    private AiConfig copy(AiConfig source) {
+        if (source == null) {
+            return null;
+        }
+        AiConfig result = new AiConfig();
+        BeanUtils.copyProperties(source, result);
+        return result;
     }
 
     @ParameterizedTest

@@ -92,6 +92,7 @@ APP_AI_ENABLED=true
 APP_AI_MOCK_MODE=true
 APP_JWT_SECRET=<random-long-secret>
 APP_SECRET_ENCRYPTION_KEY=<random-secret-used-to-encrypt-stored-api-keys>
+APP_BOOTSTRAP_ADMIN_PASSWORD=<private-random-admin-password-with-letters-and-digits>
 
 SPRING_DATASOURCE_URL=<see section 1>
 SPRING_DATASOURCE_USERNAME=<see section 1>
@@ -109,6 +110,8 @@ APP_QDRANT_COLLECTION_NAME=material_segment_vectors
 ```
 
 AI keys do not need to be set in Render if the `admin` user configures the shared key in the app.
+
+Set `APP_BOOTSTRAP_ADMIN_PASSWORD` privately in Render before initial administrator access: at least 12 characters, at most 72 UTF-8 bytes, containing letters and digits. Without it, the historical default administrator is locked. Upgrades also invalidate tokens of administrators still using the public default password. Initialization only replaces that default password for `admin`; existing private passwords and deliberately disabled accounts are preserved. Remove the variable after initialization and use the profile page for later password changes. Keep public demo accounts as USER accounts, or let visitors register; never publish administrator credentials. If a previous deployment used public administrator credentials with real AI keys, rotate those keys and change the administrator password after upgrading.
 
 `SPRING_PROFILES_ACTIVE=prod` turns on strict startup checks: the backend refuses to start unless `SPRING_DATASOURCE_PASSWORD`, `APP_JWT_SECRET` (at least 32 characters) and `APP_SECRET_ENCRYPTION_KEY` (at least 16 characters) are set explicitly. `render.yaml` sets the profile and generates the two secrets, but only for services managed by the Blueprint; if the service was created by hand in the dashboard, add these variables there yourself. Keep `APP_SECRET_ENCRYPTION_KEY` stable: changing it makes API keys already saved in the database unreadable, and they have to be entered again.
 
@@ -132,7 +135,7 @@ https://<RENDER_BACKEND_DOMAIN>/api/ai/config
 
 Unauthenticated requests should return an auth error, which still proves the backend is reachable.
 
-2. Open the frontend, log in as `admin`.
+2. Open the frontend, log in as `admin` using your private initial password. Confirm the old public password no longer works.
 3. Go to AI config, switch to shared config, save the shared API key.
 4. Upload a small document and confirm parse -> embedding -> RAG retrieval.
 

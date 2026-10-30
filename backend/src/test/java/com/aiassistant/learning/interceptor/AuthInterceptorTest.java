@@ -23,6 +23,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.web.method.HandlerMethod;
 
 class AuthInterceptorTest {
@@ -141,6 +142,23 @@ class AuthInterceptorTest {
 
         assertTrue(interceptor.preHandle(request(jwt.createToken(7L, "admin", 0)), new MockHttpServletResponse(),
                 handler(new AdminOnlyController(), "anything")));
+    }
+
+    @Test
+    void oldDefaultAdminTokenIsRejectedEvenWhenItsVersionAndStatusStillMatch() {
+        SysUser admin = user(0);
+        admin.setRoleCode("ADMIN");
+        admin.setPasswordHash(new BCryptPasswordEncoder(4).encode("123456"));
+        when(userMapper.selectById(7L)).thenReturn(admin);
+
+        assertEquals(401, assertThrows(BusinessException.class,
+                () -> interceptor.preHandle(request(jwt.createToken(7L, "admin", 0)),
+                        new MockHttpServletResponse(), null)).getCode());
+
+        // 保护按当前哈希判断，改成私人密码后同一账号可以正常使用。
+        admin.setPasswordHash(new BCryptPasswordEncoder(4).encode("privatePassword2026"));
+        assertTrue(interceptor.preHandle(request(jwt.createToken(7L, "admin", 0)),
+                new MockHttpServletResponse(), null));
     }
 
     private HandlerMethod handler(Object controller, String methodName) throws NoSuchMethodException {

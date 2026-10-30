@@ -47,3 +47,6 @@ services:
         generateValue: true
       - key: APP_SECRET_ENCRYPTION_KEY
         generateValue: true
+      # 在 Render 中设置并妥善保存，切勿公开管理员凭据。
+      - key: APP_BOOTSTRAP_ADMIN_PASSWORD
+        sync: false

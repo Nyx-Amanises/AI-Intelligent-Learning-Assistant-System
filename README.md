@@ -23,7 +23,8 @@
 ## 在线体验
 
 > 中国大陆网络访问 Vercel / Render / Qdrant Cloud 可能不稳定，如打不开可尝试网络加速。Render 免费实例有冷启动，首次请求可能需要等待几十秒。
-示例账号：账号：admin  密码：123456
+请注册普通用户体验；公开演示账号只能使用 USER 角色，管理员凭据不对外共享。
+
 - 前端 Demo：[https://ai-intelligent-learning-assistant-s.vercel.app](https://ai-intelligent-learning-assistant-s.vercel.app)
 - 后端健康检查：[https://ai-learning-assistant-backend-zfth.onrender.com/api/health](https://ai-learning-assistant-backend-zfth.onrender.com/api/health)
 - GitHub 仓库：[https://github.com/Nyx-Amanises/AI-Intelligent-Learning-Assistant-System](https://github.com/Nyx-Amanises/AI-Intelligent-Learning-Assistant-System)
@@ -120,6 +121,10 @@ AI-Intelligent-Learning-Assistant-System
 
 ## 快速启动
 
+首次需要管理员权限时，设置环境变量 `APP_BOOTSTRAP_ADMIN_PASSWORD` 为自行生成的私人密码（至少 12 个字符、最多 72 字节，同时包含英文字母和数字），再启动后端。Docker Compose 在 `.env` 中设置；手动启动在当前终端或运行配置中设置（Spring Boot 不会自动读取根目录 `.env`）。管理员用户名为 `admin`，用自己设置的密码登录。未配置时，历史默认管理员保持锁定，普通用户仍可注册使用。
+
+升级时会自动锁定仍使用历史公开密码的管理员，并使旧登录令牌失效；同一环境变量可为初始 `admin` 设置私人密码。已改过密码的账号不会被重置，主动禁用的账号不会自动恢复。成功初始化后可移除此变量，日常改密使用个人中心。如果线上曾公开管理员凭据并配置真实 AI Key，请轮换服务商 Key，并更换管理员密码；仅删除 README 中的凭据无法保护已部署的旧版本。
+
 ### 方式一：Docker Compose
 
 1. 准备环境变量：
@@ -207,6 +212,7 @@ docker run -d --name qdrant -p 6333:6333 -p 6334:6334 -v qdrant_storage:/qdrant/
 | `APP_QDRANT_API_KEY` | Qdrant API Key |
 | `APP_QDRANT_COLLECTION_NAME` | Qdrant Collection 名称 |
 | `APP_JWT_SECRET` | JWT 密钥（生产必填，至少 32 字符；本地缺失时随机生成） |
+| `APP_BOOTSTRAP_ADMIN_PASSWORD` | 初始管理员私人密码（至少 12 字符、最多 72 字节、含字母和数字；留空则锁定默认管理员） |
 | `APP_SECRET_ENCRYPTION_KEY` | 数据库中 AI API Key 的加密口令（生产必填，至少 16 字符；本地缺失时落盘复用） |
 | `APP_FILE_UPLOAD_DIR` | 上传文件保存目录，默认 `./uploads` |
 | `VITE_API_BASE_URL` | 前端生产环境后端 API 地址 |

@@ -1,6 +1,8 @@
 package com.aiassistant.learning.service.impl;
 
 import com.aiassistant.learning.common.exception.BusinessException;
+import com.aiassistant.learning.common.security.DefaultAdminCredentialGuard;
+import com.aiassistant.learning.common.security.UserRoles;
 import com.aiassistant.learning.dto.auth.ChangePasswordRequest;
 import com.aiassistant.learning.dto.auth.LoginRequest;
 import com.aiassistant.learning.dto.auth.RegisterRequest;
@@ -92,6 +94,9 @@ public class AuthServiceImpl implements AuthService {
         if (user == null || !passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
             throw new BusinessException(401, "用户名或密码错误");
         }
+        if (DefaultAdminCredentialGuard.isBlocked(user)) {
+            throw new BusinessException(403, "管理员默认密码已停用，请联系部署者设置私人管理员密码");
+        }
         if (!Integer.valueOf(1).equals(user.getStatus())) {
             throw new BusinessException(403, "账号已被禁用");
         }
@@ -133,6 +138,9 @@ public class AuthServiceImpl implements AuthService {
         if (!passwordEncoder.matches(request.getOldPassword(), user.getPasswordHash())) {
             // 这里不能返回 401：前端收到 401 会当作登录失效直接退出。
             throw new BusinessException("原密码不正确");
+        }
+        if (UserRoles.isAdmin(user) && DefaultAdminCredentialGuard.isRetiredPassword(request.getNewPassword())) {
+            throw new BusinessException("管理员不能使用已公开的默认密码");
         }
         if (passwordEncoder.matches(request.getNewPassword(), user.getPasswordHash())) {
             throw new BusinessException("新密码不能与原密码相同");

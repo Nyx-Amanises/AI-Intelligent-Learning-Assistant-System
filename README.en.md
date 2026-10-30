@@ -24,8 +24,8 @@ If you have questions or suggestions about this project, you can email: `3111471
 
 Note: access to Vercel, Render, and Qdrant Cloud may be unstable from mainland China. Render free services can cold-start, so the first request may take several seconds.
 
-Demo account
-Username: admin  Password: 123456
+Register a regular account to try the demo. Public demo accounts must use the USER role; never share administrator credentials.
+
 - Frontend Demo: [https://ai-intelligent-learning-assistant-s.vercel.app](https://ai-intelligent-learning-assistant-s.vercel.app)
 - Backend Health Check: [https://ai-learning-assistant-backend-zfth.onrender.com/api/health](https://ai-learning-assistant-backend-zfth.onrender.com/api/health)
 - GitHub Repository: [https://github.com/Nyx-Amanises/AI-Intelligent-Learning-Assistant-System](https://github.com/Nyx-Amanises/AI-Intelligent-Learning-Assistant-System)
@@ -118,6 +118,10 @@ AI-Intelligent-Learning-Assistant-System
 
 ## Quick Start
 
+For initial administrator access, set `APP_BOOTSTRAP_ADMIN_PASSWORD` to a privately generated password (at least 12 characters, at most 72 UTF-8 bytes, containing letters and digits), then start the backend. Docker Compose reads it from `.env`; for manual startup, set it in your shell or IDE environment (Spring Boot does not automatically read the root `.env`). Log in as `admin` with your chosen password. Without this setting, the historical default administrator stays locked; regular users can still register.
+
+Upgrades lock administrators still using the historical public password and revoke their existing tokens. The same environment variable initializes a private password for the original `admin`. Accounts with an already changed password are never reset, and deliberately disabled accounts are not reactivated. Remove the variable after successful initialization; use the profile page for later password changes. If a live deployment exposed administrator credentials while holding real AI keys, rotate those provider keys and change the administrator password. Removing credentials from this README alone does not secure an older running deployment.
+
 ### Option 1: Docker Compose
 
 1. Prepare environment variables:
@@ -205,6 +209,7 @@ The backend supports overriding configuration through environment variables, fol
 | `APP_QDRANT_API_KEY` | Qdrant API key |
 | `APP_QDRANT_COLLECTION_NAME` | Qdrant collection name |
 | `APP_JWT_SECRET` | JWT secret (required in prod, >= 32 chars; auto-generated locally) |
+| `APP_BOOTSTRAP_ADMIN_PASSWORD` | Private initial administrator password (>= 12 chars, <= 72 UTF-8 bytes, letters and digits; empty keeps the default administrator locked) |
 | `APP_SECRET_ENCRYPTION_KEY` | Encryption passphrase for stored AI API keys (required in prod, >= 16 chars; auto-generated to runtime/ locally) |
 | `APP_FILE_UPLOAD_DIR` | Upload directory, defaults to `./uploads` |
 | `VITE_API_BASE_URL` | Frontend production API base URL |

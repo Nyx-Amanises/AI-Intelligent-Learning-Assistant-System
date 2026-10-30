@@ -44,6 +44,53 @@ class AuthServiceImplTest {
     private final JwtTokenUtil jwt = mock(JwtTokenUtil.class);
     private final AuthServiceImpl service = new AuthServiceImpl(users, encoder, jwt);
 
+    @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void publicDefaultPasswordCannotLoginAsAdminEvenBeforeBootstrapRuns() {
+        PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(4);
+        AuthServiceImpl auth = new AuthServiceImpl(users, passwordEncoder, jwt);
+        SysUser admin = accountWithPassword(passwordEncoder, "123456", 0);
+        admin.setRoleCode("ADMIN");
+        when(users.getByUsername("learner")).thenReturn(admin);
+        LoginRequest login = new LoginRequest();
+        login.setUsername("learner");
+        login.setPassword("123456");
+
+        assertEquals(403, assertThrows(BusinessException.class, () -> auth.login(login)).getCode());
+        verify(users, never()).update(any(Wrapper.class));
+        verifyNoInteractions(jwt);
+    }
+
+    @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void adminCannotChangeBackToTheRetiredDefaultPassword() {
+        PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(4);
+        AuthServiceImpl auth = new AuthServiceImpl(users, passwordEncoder, jwt);
+        SysUser admin = accountWithPassword(passwordEncoder, "privatePassword2026", 1);
+        admin.setRoleCode("ADMIN");
+        when(users.getRequiredById(7L)).thenReturn(admin);
+
+        assertThrows(BusinessException.class, () -> auth.changePassword(7L,
+                passwordRequest("privatePassword2026", "123456", "123456")));
+        verify(users, never()).update(any(Wrapper.class));
+        verifyNoInteractions(jwt);
+    }
+
+    @Test
+    void privateAdminPasswordStillLogsIn() {
+        PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(4);
+        AuthServiceImpl auth = new AuthServiceImpl(users, passwordEncoder, jwt);
+        SysUser admin = accountWithPassword(passwordEncoder, "privatePassword2026", 1);
+        admin.setRoleCode("ADMIN");
+        when(users.getByUsername("learner")).thenReturn(admin);
+        LoginRequest login = new LoginRequest();
+        login.setUsername("learner");
+        login.setPassword("privatePassword2026");
+
+        auth.login(login);
+        verify(jwt).createToken(7L, "learner", 1);
+    }
+
     @BeforeAll
     static void initializeTableMetadata() {
         TableInfoHelper.initTableInfo(new MapperBuilderAssistant(new MybatisConfiguration(), "test"), SysUser.class);
