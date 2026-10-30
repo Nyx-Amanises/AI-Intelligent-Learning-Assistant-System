@@ -3,12 +3,10 @@
     <div class="page-header">
       <div>
         <h1 class="page-title">任务中心</h1>
-        <p class="page-desc">
-          统一查看 AI 总结、AI 出题、简答题评分和后续 Embedding 任务的执行状态，支持失败重试和业务跳转。
-        </p>
+        <p class="page-desc">查看自己的 AI 任务；等待较久可重新派发，失败后可重试，并前往对应页面查看结果。</p>
       </div>
       <div class="toolbar toolbar--flush">
-        <el-button :loading="loading" @click="loadTasks()">刷新列表</el-button>
+        <el-button :loading="loading" :disabled="taskActionBusy" @click="loadTasks()">刷新列表</el-button>
       </div>
     </div>
 
@@ -41,11 +39,7 @@
       <div class="workspace-body">
         <el-alert
           v-if="activeCount > 0"
-          :title="
-            isAdmin
-              ? '当前存在处理中任务。这里会自动同步最新状态；如果是旧的等待中任务长时间不动，可以直接重新派发。'
-              : '当前有任务正在处理，这里会自动同步最新状态，完成后可前往对应页面查看结果。'
-          "
+          title="任务状态会自动更新。等待较久仍未开始时，可重新派发原任务；失败任务可重试。"
           type="info"
           :closable="false"
           show-icon
@@ -94,10 +88,11 @@
               <el-button link type="primary" @click="openTaskDetail(item.id)">查看详情</el-button>
               <el-button v-if="canOpenBizPage(item)" link @click="openBizPage(item)">前往业务</el-button>
               <el-button
-                v-if="isAdmin && item.status === 'PENDING'"
+                v-if="item.status === 'PENDING'"
                 link
                 type="warning"
                 :loading="dispatchingTaskId === item.id"
+                :disabled="taskActionBusy"
                 @click="dispatchTask(item.id)"
               >
                 重新派发
@@ -107,6 +102,7 @@
                 link
                 type="danger"
                 :loading="retryingTaskId === item.id"
+                :disabled="taskActionBusy"
                 @click="retryTask(item.id)"
               >
                 重试
@@ -115,6 +111,7 @@
                 link
                 type="danger"
                 :loading="deletingTaskId === item.id"
+                :disabled="taskActionBusy"
                 @click="removeTask(item.id, false, item.status, item.taskType)"
               >
                 删除记录
@@ -178,14 +175,22 @@
           </div>
         </div>
 
+        <el-alert
+          :title="buildTaskStatusHint(taskDetail)"
+          :type="taskDetail.status === 'FAILED' ? 'error' : 'info'"
+          :closable="false"
+          show-icon
+          style="margin-bottom: 16px"
+        />
         <div class="task-detail-actions">
           <el-button v-if="canOpenBizPage(taskDetail)" @click="openBizPage(taskDetail)">前往业务页</el-button>
           <el-button
-            v-if="isAdmin && taskDetail.status === 'PENDING'"
+            v-if="taskDetail.status === 'PENDING'"
             type="warning"
             plain
             :loading="dispatchingTaskId === taskDetail.id"
-            @click="dispatchTask(taskDetail.id, true)"
+            :disabled="taskActionBusy"
+            @click="dispatchTask(taskDetail.id)"
           >
             重新派发
           </el-button>
@@ -194,7 +199,8 @@
             type="danger"
             plain
             :loading="retryingTaskId === taskDetail.id"
-            @click="retryTask(taskDetail.id, true)"
+            :disabled="taskActionBusy"
+            @click="retryTask(taskDetail.id)"
           >
             重试任务
           </el-button>
@@ -202,6 +208,7 @@
             type="danger"
             plain
             :loading="deletingTaskId === taskDetail.id"
+            :disabled="taskActionBusy"
             @click="removeTask(taskDetail.id, true, taskDetail.status, taskDetail.taskType)"
           >
             删除记录
@@ -258,9 +265,13 @@ const drawerVisible = ref(false)
 const retryingTaskId = ref<number | null>(null)
 const dispatchingTaskId = ref<number | null>(null)
 const deletingTaskId = ref<number | null>(null)
+const taskActionBusy = computed(
+  () => retryingTaskId.value !== null || dispatchingTaskId.value !== null || deletingTaskId.value !== null
+)
 const tasks = ref<AiTaskPageItem[]>([])
 const total = ref(0)
 const taskDetail = ref<AiTaskDetail | null>(null)
+const detailTaskId = ref<number | null>(null)
 
 const filters = reactive({
   taskType: '',
@@ -308,7 +319,7 @@ const isAnimatedStatus = (value?: string) => ['PENDING', 'RUNNING'].includes(Str
 const buildTaskStatusHint = (task: AiTaskPageItem) => {
   const status = String(task.status || '').toUpperCase()
   if (status === 'PENDING') {
-    return isAdmin.value ? '任务排队中；旧任务如果长时间不动，可以点“重新派发”' : '任务排队中，轮到后会自动开始'
+    return '任务排队中；等待较久仍未开始，可重新派发原任务'
   }
   if (status === 'RUNNING') {
     return '任务执行中，列表会自动刷新'
@@ -317,8 +328,9 @@ const buildTaskStatusHint = (task: AiTaskPageItem) => {
     return task.finishedAt ? `已完成 · ${formatDateTime(task.finishedAt)}` : '已完成'
   }
   if (status === 'FAILED') {
-    return task.errorMessage || '任务执行失败'
+    return '任务执行失败，可查看错误信息后重试原任务'
   }
+  if (status === 'CANCELLED') return '任务已取消，可前往对应页面重新发起生成'
   return '状态未知'
 }
 
@@ -417,7 +429,7 @@ const loadTasks = async (silent = false) => {
     if (!taskListRequest.isLatest(requestId) || silent) return
     ElMessage.error(getErrorMessage(error, '加载任务列表失败'))
   } finally {
-    if (!silent && taskListRequest.isLatest(requestId)) {
+    if (taskListRequest.isLatest(requestId)) {
       loading.value = false
     }
   }
@@ -433,6 +445,7 @@ const resetFilters = () => {
 
 const openTaskDetail = async (taskId: number, silent = false) => {
   const requestId = taskDetailRequest.begin()
+  detailTaskId.value = taskId
   drawerVisible.value = true
   if (!silent) {
     detailLoading.value = true
@@ -447,49 +460,41 @@ const openTaskDetail = async (taskId: number, silent = false) => {
     taskDetail.value = null
     ElMessage.error(getErrorMessage(error, '加载任务详情失败'))
   } finally {
-    if (!silent && taskDetailRequest.isLatest(requestId)) {
+    if (taskDetailRequest.isLatest(requestId)) {
       detailLoading.value = false
     }
   }
 }
 
-const retryTask = async (taskId: number, reloadDetail = false) => {
-  retryingTaskId.value = taskId
+const recoverTask = async (taskId: number, action: 'dispatch' | 'retry') => {
+  if (taskActionBusy.value) return
+  const pendingId = action === 'dispatch' ? dispatchingTaskId : retryingTaskId
+  pendingId.value = taskId
+  if (detailTaskId.value === taskId) taskDetailRequest.invalidate()
   try {
-    const res = await retryAiTaskApi(taskId)
-    const retriedTask = res.data.data as AiTaskDetail
-    ElMessage.success('任务已重新提交')
-    await loadTasks()
-    if (reloadDetail || taskDetail.value?.id === taskId) {
-      taskDetail.value = retriedTask
-      drawerVisible.value = true
+    const res = await (action === 'dispatch' ? dispatchAiTaskApi(taskId) : retryAiTaskApi(taskId))
+    if (drawerVisible.value && detailTaskId.value === taskId) {
+      taskDetailRequest.invalidate()
+      taskDetail.value = res.data.data as AiTaskDetail
+      detailLoading.value = false
     }
+    ElMessage.success(action === 'dispatch' ? '已请求重新派发原任务' : '已重试原任务')
   } catch (error) {
-    ElMessage.error(getErrorMessage(error, '任务重试失败'))
+    ElMessage.error(getErrorMessage(error, action === 'dispatch' ? '任务重新派发失败' : '任务重试失败'))
   } finally {
-    retryingTaskId.value = null
+    // 成功和状态冲突都重读服务器，避免继续显示旧操作；晚回包不打开已关闭或其他任务的详情。
+    await Promise.all([
+      loadTasks(true),
+      drawerVisible.value && detailTaskId.value === taskId ? openTaskDetail(taskId, true) : Promise.resolve()
+    ])
+    pendingId.value = null
   }
 }
-
-const dispatchTask = async (taskId: number, reloadDetail = false) => {
-  dispatchingTaskId.value = taskId
-  try {
-    const res = await dispatchAiTaskApi(taskId)
-    const dispatchedTask = res.data.data as AiTaskDetail
-    ElMessage.success('任务已重新派发')
-    await loadTasks()
-    if (reloadDetail || taskDetail.value?.id === taskId) {
-      taskDetail.value = dispatchedTask
-      drawerVisible.value = true
-    }
-  } catch (error) {
-    ElMessage.error(getErrorMessage(error, '任务重新派发失败'))
-  } finally {
-    dispatchingTaskId.value = null
-  }
-}
+const retryTask = (taskId: number) => recoverTask(taskId, 'retry')
+const dispatchTask = (taskId: number) => recoverTask(taskId, 'dispatch')
 
 const removeTask = async (taskId: number, closeDetail = false, status?: string, taskType?: string) => {
+  if (taskActionBusy.value) return
   const normalizedStatus = String(status || '').toUpperCase()
   const generationLabel = taskType === 'QUESTION_GENERATE' ? '题集' : taskType === 'SUMMARY' ? '总结' : ''
   const cancelsGeneration = generationLabel && ['PENDING', 'RUNNING'].includes(normalizedStatus)
@@ -508,6 +513,7 @@ const removeTask = async (taskId: number, closeDetail = false, status?: string, 
     return
   }
 
+  if (taskActionBusy.value) return
   deletingTaskId.value = taskId
   try {
     await deleteAiTaskApi(taskId)
@@ -537,6 +543,7 @@ const stopAutoRefresh = () => {
 const startAutoRefresh = () => {
   stopAutoRefresh()
   autoRefreshTimer = window.setInterval(() => {
+    if (taskActionBusy.value) return
     void loadTasks(true)
     if (
       drawerVisible.value &&
@@ -565,6 +572,11 @@ watch(
   { immediate: true }
 )
 watch(drawerVisible, (visible) => {
+  if (!visible) {
+    taskDetailRequest.invalidate()
+    detailTaskId.value = null
+    detailLoading.value = false
+  }
   if (visible || route.path !== '/ai-tasks' || !route.query.taskId) return
   const query = { ...route.query }
   delete query.taskId

@@ -250,6 +250,7 @@ class QuestionGenerationLifecycleTest {
     }
 
     @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
     void onlyTheWorkerThatClaimsThePendingTaskCallsAi() {
         when(tasks.selectById(TASK_ID)).thenReturn(task("PENDING"));
         when(tasks.update(any(), any())).thenReturn(0);
@@ -257,6 +258,14 @@ class QuestionGenerationLifecycleTest {
         service.executeTask(TASK_ID);
 
         verifyNoInteractions(processor, questionSets, generator);
+        ArgumentCaptor<LambdaUpdateWrapper<AiTask>> claim = ArgumentCaptor.forClass(LambdaUpdateWrapper.class);
+        verify(tasks).update(any(), claim.capture());
+        String condition = claim.getValue().getSqlSegment();
+        assertTrue(condition.contains("id =") && condition.contains("status ="));
+        assertTrue(claim.getValue().getParamNameValuePairs().containsValue(TASK_ID));
+        assertTrue(claim.getValue().getParamNameValuePairs().containsValue("PENDING"));
+        assertTrue(claim.getValue().getParamNameValuePairs().containsValue("RUNNING"));
+        verifyNoInteractions(cache);
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
