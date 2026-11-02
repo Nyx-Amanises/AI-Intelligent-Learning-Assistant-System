@@ -22,7 +22,7 @@ public class RagEvalRunItemVO {
     /** 明细记录 ID。 */
     private Long id;
 
-    /** 对应的评测样本 ID。 */
+    /** 评测时的样本 ID，活跃样本删除后仍保留，不用于判断样本当前是否存在。 */
     private Long sampleId;
 
     /** 样本检索的资料 ID。 */

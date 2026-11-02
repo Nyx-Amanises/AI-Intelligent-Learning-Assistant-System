@@ -37,7 +37,7 @@ public class RagEvalRunItem extends BaseEntity {
     /** 所属评测集 ID。 */
     private Long datasetId;
 
-    /** 对应的评测样本 ID。 */
+    /** 评测时的样本 ID 快照；删除活跃样本后仍保留此 ID，不保证对应样本仍存在。 */
     private Long sampleId;
 
     /** 记录所属用户 ID。 */

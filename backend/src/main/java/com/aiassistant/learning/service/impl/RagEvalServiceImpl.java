@@ -247,14 +247,16 @@ public class RagEvalServiceImpl implements RagEvalService {
     }
 
     /**
-     * 删除单条样本，并重新统计评测集样本数量。
+     * 删除单条活跃样本并刷新数量；历史运行保留样本 ID、评测快照和指标。
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteSample(Long userId, Long datasetId, Long sampleId) {
         RagEvalDataset dataset = getUserOwnedDataset(userId, datasetId);
         RagEvalSample sample = getUserOwnedSample(userId, dataset.getId(), sampleId);
-        sampleMapper.deleteById(sample.getId());
+        if (sampleMapper.deleteById(sample.getId()) == 0) {
+            throw new BusinessException(404, "评测样本不存在，请刷新后重试");
+        }
         refreshSampleCount(dataset);
     }
 

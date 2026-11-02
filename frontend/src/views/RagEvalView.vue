@@ -1241,7 +1241,7 @@ const removeSample = async (sample: RagEvalSample) => {
     return
   }
   try {
-    await ElMessageBox.confirm('确定删除这条评测样本吗？', '删除确认', {
+    await ElMessageBox.confirm('删除后该样本不再参与新评测，已有运行结果和当时的标注会保留。确定删除吗？', '删除确认', {
       type: 'warning',
       confirmButtonText: '确认删除',
       cancelButtonText: '取消'

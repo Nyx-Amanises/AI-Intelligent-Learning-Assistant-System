@@ -11,6 +11,8 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -51,6 +53,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -66,6 +69,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.springframework.mock.web.MockMultipartFile;
 
 /**
@@ -201,6 +205,154 @@ class RagEvalServiceImplTest {
                 () -> service.addSamples(USER_ID, DATASET_ID, batch(sample("段落不属于资料", List.of(11L, 99L), null))));
 
         verify(samples, never()).insert(any(RagEvalSample.class));
+    }
+
+    @Test
+    void deletingAnEvaluatedSamplePreservesHistoricalIdsSnapshotsMetricsAndComparisons() {
+        RagEvalDataset dataset = dataset();
+        dataset.setSampleCount(2);
+        dataset.setLastRunId(72L);
+        dataset.setLastRunAt(LocalDateTime.of(2026, 11, 1, 10, 0));
+        List<RagEvalSample> activeSamples = new ArrayList<>(List.of(
+                storedSample(1L, "待删除的问题", "[11]", "[1]"),
+                storedSample(2L, "保留的问题", "[12]", "[3]")));
+        installOwnedSamples(dataset, activeSamples);
+        List<RagEvalRun> history = List.of(comparableRun(71L), comparableRun(72L));
+        for (RagEvalRun run : history) {
+            run.setTotalSamples(1);
+            run.setEvaluatedSamples(1);
+            run.setFailedSamples(0);
+            run.setHitAt1(0D);
+            run.setHitAt3(1D);
+            run.setHitAt5(1D);
+            run.setRecallAt1(0D);
+            run.setRecallAt3(1D);
+            run.setRecallAt5(1D);
+            run.setMrr(0.5D);
+            run.setAvgLatencyMs(18D);
+        }
+        installOwnedRuns(history);
+        List<RagEvalRunItem> historicalItems = history.stream().map(this::historicalItem).toList();
+        doAnswer(invocation -> {
+            LambdaQueryWrapper<RagEvalRunItem> query = invocation.getArgument(0);
+            assertEquals(USER_ID, equality(query, "user_id"));
+            Long runId = (Long) equality(query, "run_id");
+            return historicalItems.stream().filter(item -> runId.equals(item.getRunId())).toList();
+        }).when(runItems).selectList(any());
+        var before = service.compareRuns(USER_ID, DATASET_ID, List.of(71L, 72L));
+
+        service.deleteSample(USER_ID, DATASET_ID, 1L);
+
+        assertEquals(List.of(2L), service.listSamples(USER_ID, DATASET_ID).stream().map(RagEvalSampleVO::getId).toList());
+        assertEquals(1, dataset.getSampleCount());
+        assertEquals(72L, dataset.getLastRunId());
+        assertEquals(LocalDateTime.of(2026, 11, 1, 10, 0), dataset.getLastRunAt());
+        var after = service.compareRuns(USER_ID, DATASET_ID, List.of(71L, 72L));
+        assertTrue(after.isComparable());
+        assertEquals(before, after, "删除活跃样本不能改变过去的运行指标、快照或对比结果");
+        for (RagEvalRunVO run : after.getRuns()) {
+            assertEquals(1, run.getTotalSamples());
+            assertEquals(0.5D, run.getMrr());
+            assertEquals(1L, run.getItems().get(0).getSampleId());
+            assertEquals("评测时的问题", run.getItems().get(0).getQueryText());
+            assertEquals(List.of(11L), run.getItems().get(0).getExpectedSegmentIds());
+            assertEquals(List.of(12L, 11L), run.getItems().get(0).getRetrievedSegmentIds());
+            assertEquals("评测时的原文", run.getItems().get(0).getRetrievedSnapshot().get(0).path("contentText").asText());
+        }
+        verify(samples).deleteById(1L);
+        verify(datasets).updateById(dataset);
+        verify(runs, never()).updateById(any(RagEvalRun.class));
+        verify(runs, never()).delete(any());
+        verify(runs, never()).deleteBatchIds(any());
+        verify(runItems, never()).updateById(any(RagEvalRunItem.class));
+        verify(runItems, never()).delete(any());
+        verifyNoInteractions(retrievalService);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"foreign-user", "foreign-dataset", "missing"})
+    void deletingAnInaccessibleSampleIsRejectedWithoutChangingHistoryOrCount(String kind) {
+        RagEvalDataset dataset = dataset();
+        dataset.setSampleCount(1);
+        RagEvalSample sample = storedSample(1L, "受保护的问题", "[11]", "[1]");
+        if ("foreign-user".equals(kind)) sample.setUserId(USER_ID + 1);
+        if ("foreign-dataset".equals(kind)) sample.setDatasetId(DATASET_ID + 1);
+        List<RagEvalSample> activeSamples = new ArrayList<>("missing".equals(kind) ? List.of() : List.of(sample));
+        installOwnedSamples(dataset, activeSamples);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.deleteSample(USER_ID, DATASET_ID, 1L));
+
+        assertEquals(404, exception.getCode());
+        assertEquals("评测样本不存在", exception.getMessage());
+        assertEquals("missing".equals(kind) ? 0 : 1, activeSamples.size());
+        assertEquals(1, dataset.getSampleCount());
+        verify(samples, never()).deleteById(any(Long.class));
+        verify(samples, never()).selectCount(any());
+        verify(datasets, never()).updateById(any(RagEvalDataset.class));
+        verifyNoInteractions(runs, runItems);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"foreign-user", "missing"})
+    void deletingASampleRequiresAnOwnedExistingDatasetBeforeLookingUpTheSample(String kind) {
+        RagEvalDataset dataset = dataset();
+        if ("foreign-user".equals(kind)) dataset.setUserId(USER_ID + 1);
+        if ("missing".equals(kind)) dataset.setId(DATASET_ID + 1);
+        installOwnedSamples(dataset, new ArrayList<>(List.of(storedSample(1L, "问题", "[11]", "[1]"))));
+
+        assertEquals(404, assertThrows(BusinessException.class,
+                () -> service.deleteSample(USER_ID, DATASET_ID, 1L)).getCode());
+
+        verifyNoInteractions(samples, runs, runItems);
+        verify(datasets, never()).updateById(any(RagEvalDataset.class));
+    }
+
+    @Test
+    void aSampleDeletedConcurrentlyIsReportedMissingWithoutRewritingDatasetOrHistory() {
+        RagEvalDataset dataset = dataset();
+        installOwnedSamples(dataset, new ArrayList<>(List.of(storedSample(1L, "问题", "[11]", "[1]"))));
+        doReturn(0).when(samples).deleteById(1L);
+
+        assertEquals(404, assertThrows(BusinessException.class,
+                () -> service.deleteSample(USER_ID, DATASET_ID, 1L)).getCode());
+
+        verify(samples, never()).selectCount(any());
+        verify(datasets, never()).updateById(any(RagEvalDataset.class));
+        verifyNoInteractions(runs, runItems);
+    }
+
+    @Test
+    void deletingTheDatasetStillRemovesHistoricalItemsBeforeRunsAndRemainingSamples() {
+        installOwnedSamples(dataset(), new ArrayList<>());
+        List<RagEvalRun> history = List.of(comparableRun(71L), comparableRun(72L));
+        when(runs.selectList(any())).thenAnswer(invocation -> {
+            LambdaQueryWrapper<RagEvalRun> query = invocation.getArgument(0);
+            assertEquals(DATASET_ID, equality(query, "dataset_id"));
+            assertEquals(USER_ID, equality(query, "user_id"));
+            return history;
+        });
+        when(runItems.delete(any())).thenAnswer(invocation -> {
+            LambdaQueryWrapper<RagEvalRunItem> query = invocation.getArgument(0);
+            assertEquals(DATASET_ID, equality(query, "dataset_id"));
+            assertEquals(USER_ID, equality(query, "user_id"));
+            assertFalse(query.getSqlSegment().contains("sample_id"), "应清理已删除样本的历史明细");
+            return 2;
+        });
+        when(samples.delete(any())).thenAnswer(invocation -> {
+            LambdaQueryWrapper<RagEvalSample> query = invocation.getArgument(0);
+            assertEquals(DATASET_ID, equality(query, "dataset_id"));
+            assertEquals(USER_ID, equality(query, "user_id"));
+            return 0;
+        });
+
+        service.deleteDataset(USER_ID, DATASET_ID);
+
+        InOrder deletion = inOrder(runItems, runs, samples, datasets);
+        deletion.verify(runItems).delete(any());
+        deletion.verify(runs).deleteBatchIds(List.of(71L, 72L));
+        deletion.verify(samples).delete(any());
+        deletion.verify(datasets).deleteById(DATASET_ID);
     }
 
     @Test
@@ -515,6 +667,63 @@ class RagEvalServiceImplTest {
             assertNotNull(equality(query, "run_id"));
             return List.of();
         });
+    }
+
+    private void installOwnedSamples(RagEvalDataset dataset, List<RagEvalSample> activeSamples) {
+        when(datasets.selectOne(any())).thenAnswer(invocation -> {
+            LambdaQueryWrapper<RagEvalDataset> query = invocation.getArgument(0);
+            Long id = (Long) equality(query, "id");
+            Long userId = (Long) equality(query, "user_id");
+            return dataset.getId().equals(id) && dataset.getUserId().equals(userId) ? dataset : null;
+        });
+        when(samples.selectOne(any())).thenAnswer(invocation -> {
+            LambdaQueryWrapper<RagEvalSample> query = invocation.getArgument(0);
+            Long id = (Long) equality(query, "id");
+            Long datasetId = (Long) equality(query, "dataset_id");
+            Long userId = (Long) equality(query, "user_id");
+            return activeSamples.stream().filter(sample -> sample.getId().equals(id)
+                    && sample.getDatasetId().equals(datasetId) && sample.getUserId().equals(userId)).findFirst().orElse(null);
+        });
+        when(samples.selectList(any())).thenAnswer(invocation -> {
+            LambdaQueryWrapper<RagEvalSample> query = invocation.getArgument(0);
+            Long datasetId = (Long) equality(query, "dataset_id");
+            Long userId = (Long) equality(query, "user_id");
+            return activeSamples.stream().filter(sample -> sample.getDatasetId().equals(datasetId)
+                    && sample.getUserId().equals(userId)).toList();
+        });
+        when(samples.selectCount(any())).thenAnswer(invocation -> {
+            LambdaQueryWrapper<RagEvalSample> query = invocation.getArgument(0);
+            Long datasetId = (Long) equality(query, "dataset_id");
+            Long userId = (Long) equality(query, "user_id");
+            return activeSamples.stream().filter(sample -> sample.getDatasetId().equals(datasetId)
+                    && sample.getUserId().equals(userId)).count();
+        });
+        when(samples.deleteById(any(Long.class))).thenAnswer(invocation -> {
+            Long id = invocation.getArgument(0);
+            return activeSamples.removeIf(sample -> sample.getId().equals(id)) ? 1 : 0;
+        });
+    }
+
+    private RagEvalRunItem historicalItem(RagEvalRun run) {
+        RagEvalRunItem item = new RagEvalRunItem();
+        item.setId(run.getId() + 100);
+        item.setRunId(run.getId());
+        item.setDatasetId(DATASET_ID);
+        item.setUserId(USER_ID);
+        item.setMaterialId(MATERIAL_ID);
+        item.setSampleId(1L);
+        item.setQueryText("评测时的问题");
+        item.setExpectedSegmentIds("[11]");
+        item.setExpectedPageNos("[1]");
+        item.setRetrievedSegmentIds("[12,11]");
+        item.setRetrievedPageNos("[3,1]");
+        item.setRetrievedSnapshotJson("[{\"contentText\":\"评测时的原文\"}]");
+        item.setHitRank(2);
+        item.setReciprocalRank(0.5D);
+        item.setActualStrategy("VECTOR_RERANK");
+        item.setMockEmbedding(false);
+        item.setLatencyMs(18L);
+        return item;
     }
 
     private RagEvalRun comparableRun(long id) {
