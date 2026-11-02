@@ -537,8 +537,18 @@ const removePractice = async (sessionId: number) => {
   }
 }
 
+const canSubmitPractice = (sessionId: number) =>
+  isViewActive &&
+  !detailLoading.value &&
+  !submitting.value &&
+  !isSubmitted.value &&
+  practiceDetail.value?.sessionId === sessionId &&
+  detailSessionId.value === sessionId &&
+  positiveId(Number(route.query.sessionId)) === sessionId
+
 const submitPractice = async () => {
-  if (submitting.value || !practiceDetail.value?.sessionId) return
+  const submittingSessionId = practiceDetail.value?.sessionId
+  if (!submittingSessionId || !canSubmitPractice(submittingSessionId)) return
   const overlongAnswer = groupedSections.value
     .flatMap((section) => section.items)
     .find((item) => (answerForm.value[item.questionId] || '').length > MAX_PRACTICE_ANSWER_LENGTH)
@@ -559,10 +569,12 @@ const submitPractice = async () => {
     if (!confirmed) return
   }
 
+  if (!canSubmitPractice(submittingSessionId)) return
+
   submitting.value = true
   try {
-    const sessionId = practiceDetail.value.sessionId
-    const answers = (practiceDetail.value.answers || []).map((item) => ({
+    const sessionId = submittingSessionId
+    const answers = (practiceDetail.value?.answers || []).map((item) => ({
       questionId: item.questionId,
       userAnswer: answerForm.value[item.questionId] || ''
     }))

@@ -8,11 +8,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import com.aiassistant.learning.common.exception.BusinessException;
@@ -53,6 +55,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
+import org.springframework.beans.BeanUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -523,22 +526,102 @@ class PracticeServiceImplTest {
         verify(sessions, never()).updateById(any(PracticeSession.class));
     }
 
-    @Test
-    void aSecondSubmissionCannotReplaceTheOriginalAnswersAndSubmissionLocksTheSession() {
+    @ParameterizedTest
+    @ValueSource(strings = {"A", "B"})
+    void aSecondSubmissionCannotReplaceTheOriginalAnswersScoreOrSubmissionTime(String firstAnswer) {
         PracticeSession session = inProgressSession();
         when(sessions.selectOne(any())).thenReturn(session);
         when(questionItems.selectList(any())).thenReturn(List.of(single(1L, "A", 5)));
 
-        service.submitPractice(USER_ID, submitRequest(answer(1L, "A")));
-        assertThrows(BusinessException.class, () -> service.submitPractice(USER_ID, submitRequest(answer(1L, "B"))));
+        service.submitPractice(USER_ID, submitRequest(answer(1L, firstAnswer)));
 
-        assertEquals("A", storedAnswers.get(0).getUserAnswer());
-        assertEquals(5, session.getObtainedScore());
+        assertEquals("SUBMITTED", session.getSessionStatus());
+        assertEquals("A".equals(firstAnswer) ? 5 : 0, session.getObtainedScore());
         verify(answers).delete(any());
         verify(answers).insert(any(PracticeAnswer.class));
+        verify(sessions).updateById(any(PracticeSession.class));
+        assertOwnedSubmissionLock();
+        PracticeSession originalSession = copySession(session);
+        List<PracticeAnswer> originalAnswers = copyAnswers(storedAnswers);
+        // 仅清理调用记录，不替换数据；下面检查第二次请求不会发出任何答案或成绩写入。
+        clearInvocations(sessions, answers, questionItems, questionSets, aiConfigService, aiChatService, retrievalService);
+
+        BusinessException error = assertThrows(BusinessException.class, () -> service.submitPractice(USER_ID,
+                submitRequest(answer(1L, "A".equals(firstAnswer) ? "B" : "A"))));
+
+        assertEquals(400, error.getCode());
+        assertTrue(error.getMessage().contains("不能重复提交"));
+        assertEquals(originalAnswers, storedAnswers, "原答案、判分、作答时间均不得被替换");
+        assertEquals(originalSession, session, "得分、正确率、耗时、提交时间和状态均不得改变");
+        assertOwnedSubmissionLock();
+        verifyNoMoreInteractions(sessions);
+        verifyNoInteractions(answers, questionItems, questionSets, aiConfigService, aiChatService, retrievalService);
+    }
+
+    @Test
+    void submittedPracticeWaitingForAiReviewCannotBeSubmittedAgain() {
+        PracticeSession session = inProgressSession();
+        when(sessions.selectOne(any())).thenReturn(session);
+        when(questionItems.selectList(any())).thenReturn(List.of(
+                single(1L, "A", 5), shortAnswer(3L, "参考答案", 10)));
+        service.submitPractice(USER_ID, submitRequest(answer(1L, "A"), answer(3L, "首次提交的简答题答案")));
+        assertEquals("SUBMITTED", session.getSessionStatus());
+        assertEquals("AI_PENDING", storedAnswers.get(1).getReviewMode());
+        assertEquals(5, session.getObtainedScore());
+        PracticeSession originalSession = copySession(session);
+        List<PracticeAnswer> originalAnswers = copyAnswers(storedAnswers);
+        clearInvocations(sessions, answers, questionItems, questionSets, aiConfigService, aiChatService, retrievalService);
+
+        BusinessException error = assertThrows(BusinessException.class, () -> service.submitPractice(USER_ID,
+                submitRequest(answer(1L, "B"), answer(3L, "交卷后企图替换的答案"))));
+
+        assertEquals(400, error.getCode());
+        assertTrue(error.getMessage().contains("不能重复提交"));
+        assertEquals(originalAnswers, storedAnswers, "等待 AI 判分不应重新开放答卷写入");
+        assertEquals(originalSession, session);
+        assertOwnedSubmissionLock();
+        verifyNoMoreInteractions(sessions);
+        verifyNoInteractions(answers, questionItems, questionSets, aiConfigService, aiChatService, retrievalService);
+    }
+
+    @Test
+    void submittingAnotherUsersSessionIsRejectedBeforeAnyAnswerOrGradeIsTouched() {
+        when(sessions.selectOne(any())).thenReturn(null);
+
+        assertEquals(404, assertThrows(BusinessException.class,
+                () -> service.submitPractice(USER_ID, submitRequest(answer(1L, "A")))).getCode());
+
+        assertOwnedSubmissionLock();
+        verifyNoMoreInteractions(sessions);
+        verifyNoInteractions(answers, questionItems, questionSets, aiConfigService, aiChatService, retrievalService);
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private void assertOwnedSubmissionLock() {
         ArgumentCaptor<LambdaQueryWrapper<PracticeSession>> query = ArgumentCaptor.forClass(LambdaQueryWrapper.class);
-        verify(sessions, times(2)).selectOne(query.capture());
-        assertTrue(query.getAllValues().stream().allMatch(wrapper -> wrapper.getSqlSegment().contains("for update")));
+        verify(sessions).selectOne(query.capture());
+        LambdaQueryWrapper<PracticeSession> statement = query.getValue();
+        String sql = statement.getSqlSegment();
+        assertTrue(sql.matches("(?s).*\\bid\\s*=.*"));
+        assertTrue(sql.matches("(?s).*\\buser_id\\s*=.*"));
+        assertTrue(sql.endsWith("limit 1 for update"));
+        assertEquals(2, statement.getParamNameValuePairs().size());
+        assertTrue(statement.getParamNameValuePairs().containsValue(501L));
+        assertTrue(statement.getParamNameValuePairs().containsValue(USER_ID));
+    }
+
+    private PracticeSession copySession(PracticeSession session) {
+        PracticeSession snapshot = new PracticeSession();
+        BeanUtils.copyProperties(session, snapshot);
+        return snapshot;
+    }
+
+    private List<PracticeAnswer> copyAnswers(List<PracticeAnswer> answers) {
+        return answers.stream().map(answer -> {
+            PracticeAnswer snapshot = new PracticeAnswer();
+            BeanUtils.copyProperties(answer, snapshot);
+            return snapshot;
+        }).toList();
     }
 
     @Test
