@@ -27,6 +27,7 @@ import com.aiassistant.learning.vo.question.QuestionSetDetailVO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.text.Normalizer;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -1077,6 +1078,19 @@ public class AiQuestionServiceImpl implements AiQuestionService {
                         || !StringUtils.hasText(item.optionC) || !StringUtils.hasText(item.optionD))) {
                     throw new BusinessException("AI 返回的多选题缺少选项，请重试");
                 }
+                String correctAnswer = normalizeCorrectAnswer(questionType, item.correctAnswer);
+                if ("SINGLE".equals(questionType)) {
+                    String selectedOption = switch (correctAnswer) {
+                        case "A" -> item.optionA;
+                        case "B" -> item.optionB;
+                        case "C" -> item.optionC;
+                        case "D" -> item.optionD;
+                        default -> null;
+                    };
+                    if (!StringUtils.hasText(selectedOption)) {
+                        throw new BusinessException("AI 返回的单选题答案对应选项不存在，请重试");
+                    }
+                }
                 questions.add(new GeneratedQuestion(
                         questionType,
                         sanitizeQuestionStem(item.stemText, questionType),
@@ -1084,7 +1098,7 @@ public class AiQuestionServiceImpl implements AiQuestionService {
                         trimToNull(item.optionB),
                         trimToNull(item.optionC),
                         trimToNull(item.optionD),
-                        normalizeCorrectAnswer(questionType, item.correctAnswer),
+                        correctAnswer,
                         trimToNull(item.answerAnalysis),
                         trimToNull(item.knowledgePoint),
                         item.score == null || item.score <= 0 ? 5 : item.score
@@ -1140,7 +1154,7 @@ public class AiQuestionServiceImpl implements AiQuestionService {
     }
 
     /**
-     * 归一化正确答案格式。
+     * 精确解析整段正确答案；未知或互相矛盾的内容不能默认为正确答案。
      */
     private String normalizeCorrectAnswer(String questionType, String value) {
         if ("MULTIPLE".equals(questionType)) {
@@ -1152,38 +1166,42 @@ public class AiQuestionServiceImpl implements AiQuestionService {
         }
         String normalized = trimToNull(value);
         if (!StringUtils.hasText(normalized)) {
-            return switch (questionType) {
-                case "JUDGE" -> "正确";
-                case "SINGLE" -> "A";
-                default -> "待补充答案";
-            };
+            throw new BusinessException("AI 返回的题目缺少正确答案，请重试");
         }
 
         if ("SINGLE".equals(questionType)) {
-            String upper = normalized.toUpperCase();
-            if (upper.contains("A")) {
-                return "A";
+            String answer = unwrapAnswerMarker(normalized).toUpperCase(Locale.ROOT);
+            if (answer.matches("[A-D]")) {
+                return answer;
             }
-            if (upper.contains("B")) {
-                return "B";
-            }
-            if (upper.contains("C")) {
-                return "C";
-            }
-            if (upper.contains("D")) {
-                return "D";
-            }
-            return "A";
+            throw new BusinessException("AI 返回的单选题答案无效，必须明确指定一个 A-D 选项，请重试");
         }
 
         if ("JUDGE".equals(questionType)) {
-            if (normalized.contains("错")) {
-                return "错误";
-            }
-            return "正确";
+            return switch (unwrapAnswerMarker(normalized).toLowerCase(Locale.ROOT)) {
+                case "正确", "对", "是", "真", "true", "t", "yes", "correct", "1", "√", "✓", "✔" -> "正确";
+                case "错误", "错", "不正确", "不对", "否", "假", "false", "f", "no", "incorrect", "wrong", "0", "×", "✗", "✘" -> "错误";
+                default -> throw new BusinessException("AI 返回的判断题答案无效，必须明确表示正确或错误，请重试");
+            };
         }
 
         return normalized.length() > 1000 ? normalized.substring(0, 1000) : normalized;
+    }
+
+    /** 只移除明确的答案前缀和成对括号，不从解释句、多个标记或否定句中猜答案。 */
+    private String unwrapAnswerMarker(String value) {
+        String marker = Normalizer.normalize(value, Normalizer.Form.NFKC).trim();
+        marker = marker.replaceFirst(
+                "(?i)^(?:(?:correct\\s+answer|answer)\\s*[:=]\\s*|(?:正确答案|参考答案|答案)\\s*(?:[:=]|为|是)\\s*)", "").trim();
+        if (marker.endsWith("。") || marker.endsWith(".")) {
+            marker = marker.substring(0, marker.length() - 1).trim();
+        }
+        if ((marker.startsWith("(") && marker.endsWith(")"))
+                || (marker.startsWith("[") && marker.endsWith("]"))
+                || (marker.startsWith("【") && marker.endsWith("】"))) {
+            marker = marker.substring(1, marker.length() - 1).trim();
+        }
+        return marker;
     }
 
     /**

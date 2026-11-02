@@ -41,6 +41,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -283,6 +285,113 @@ class AiQuestionServiceImplTest {
         assertThrows(BusinessException.class, () -> service.generateQuestionSet(7L, 42L, request));
 
         verifyNoInteractions(questionSets, questionItems, records);
+    }
+
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', value = {
+            "B|B", "b|B", "Answer: B|B", "Correct answer: D|D", "答案为 C|C",
+            "正确答案：B|B", "参考答案是 D|D", "(A)|A", "【Ｂ】|B", "B.|B"
+    })
+    void singleAnswerUsesTheWholeMarkerInsteadOfLettersInThePrefix(String answer, String expected) {
+        configureGeneration(false);
+        when(chat.chat(anyString(), anyString(), anyString(), anyDouble()))
+                .thenReturn(modelQuestionJson("SINGLE", answer, null));
+
+        QuestionSetDetailVO detail = service.generateQuestionSet(7L, 42L, requestForType("SINGLE"));
+
+        assertEquals(expected, detail.getQuestions().get(0).getCorrectAnswer());
+        ArgumentCaptor<QuestionItem> saved = ArgumentCaptor.forClass(QuestionItem.class);
+        verify(questionItems).insert(saved.capture());
+        assertEquals(expected, saved.getValue().getCorrectAnswer());
+    }
+
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', value = {
+            "不正确|错误", "False|错误", "FALSE|错误", "Answer: False|错误", "正确答案：不正确|错误",
+            "错误|错误", "否|错误", "不对|错误", "Incorrect|错误", "0|错误", "×|错误",
+            "正确|正确", "True|正确", "答案是正确|正确", "是|正确", "1|正确", "√|正确"
+    })
+    void judgeAnswerRecognizesExplicitPositiveAndNegativeAliases(String answer, String expected) {
+        configureGeneration(false);
+        when(chat.chat(anyString(), anyString(), anyString(), anyDouble()))
+                .thenReturn(modelQuestionJson("JUDGE", answer, null));
+
+        QuestionSetDetailVO detail = service.generateQuestionSet(7L, 42L, requestForType("JUDGE"));
+
+        assertEquals(expected, detail.getQuestions().get(0).getCorrectAnswer());
+        ArgumentCaptor<QuestionItem> saved = ArgumentCaptor.forClass(QuestionItem.class);
+        verify(questionItems).insert(saved.capture());
+        assertEquals(expected, saved.getValue().getCorrectAnswer());
+    }
+
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {" ", "Answer", "E", "AB", "A,C", "A 或 B", "不是A", "Answer: B, not A", "B（或C）", "B<script>"})
+    void missingAmbiguousOrUnknownSingleAnswerIsRejectedWithoutPublishing(String answer) {
+        assertModelAnswerRejected("SINGLE", answer);
+    }
+
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {" ", "unknown", "无法确定", "不一定正确", "正确或错误", "True/False", "false true", "False（正确）", "错误，但答案是正确", "A"})
+    void missingAmbiguousOrUnknownJudgeAnswerIsRejectedWithoutPublishing(String answer) {
+        assertModelAnswerRejected("JUDGE", answer);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"A", "B", "C", "D"})
+    void singleAnswerCannotReferToAMissingOption(String answer) {
+        configureGeneration(false);
+        when(chat.chat(anyString(), anyString(), anyString(), anyDouble()))
+                .thenReturn(modelQuestionJson("SINGLE", "Answer: " + answer, "option" + answer));
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.generateQuestionSet(7L, 42L, requestForType("SINGLE")));
+
+        assertTrue(exception.getMessage().contains("对应选项不存在"));
+        verifyNoInteractions(questionSets, questionItems, records);
+    }
+
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {" "})
+    void missingShortAnswerIsRejectedInsteadOfInventingAPlaceholder(String answer) {
+        assertModelAnswerRejected("SHORT_ANSWER", answer);
+    }
+
+    private void assertModelAnswerRejected(String type, String answer) {
+        configureGeneration(false);
+        when(chat.chat(anyString(), anyString(), anyString(), anyDouble()))
+                .thenReturn(modelQuestionJson(type, answer, null));
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.generateQuestionSet(7L, 42L, requestForType(type)));
+
+        assertTrue(exception.getMessage().contains("答案"));
+        verifyNoInteractions(questionSets, questionItems, records);
+    }
+
+    private QuestionGenerateRequest requestForType(String type) {
+        QuestionGenerateRequest request = new QuestionGenerateRequest();
+        request.setQuestionCount(1);
+        request.setSingleCount("SINGLE".equals(type) ? 1 : 0);
+        request.setMultipleCount(0);
+        request.setJudgeCount("JUDGE".equals(type) ? 1 : 0);
+        request.setShortAnswerCount("SHORT_ANSWER".equals(type) ? 1 : 0);
+        return request;
+    }
+
+    private String modelQuestionJson(String type, String answer, String missingOption) {
+        var mapper = new ObjectMapper();
+        var item = mapper.createObjectNode();
+        item.put("questionType", type).put("stemText", "测试题干").put("correctAnswer", answer);
+        item.put("optionA", "JUDGE".equals(type) ? "正确" : "选项A");
+        item.put("optionB", "JUDGE".equals(type) ? "错误" : "选项B");
+        if ("SINGLE".equals(type)) item.put("optionC", "选项C").put("optionD", "选项D");
+        if (missingOption != null) item.putNull(missingOption);
+        var root = mapper.createObjectNode();
+        root.putArray("questions").add(item);
+        return root.toString();
     }
 
     @ParameterizedTest
