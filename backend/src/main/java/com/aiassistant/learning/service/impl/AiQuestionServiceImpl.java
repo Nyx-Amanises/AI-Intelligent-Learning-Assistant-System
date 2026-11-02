@@ -1068,11 +1068,21 @@ public class AiQuestionServiceImpl implements AiQuestionService {
             }
 
             List<GeneratedQuestion> questions = new ArrayList<>();
+            Map<String, Integer> remainingByType = new LinkedHashMap<>();
+            remainingByType.put("SINGLE", questionPlan.singleCount());
+            remainingByType.put("MULTIPLE", questionPlan.multipleCount());
+            remainingByType.put("JUDGE", questionPlan.judgeCount());
+            remainingByType.put("SHORT_ANSWER", questionPlan.shortAnswerCount());
             for (GeneratedQuestionPayload item : payload.questions) {
-                if (!StringUtils.hasText(item.questionType) || !StringUtils.hasText(item.stemText)) {
+                if (item == null) {
                     continue;
                 }
                 String questionType = normalizeQuestionType(item.questionType);
+                // 先按题型额度筛选，再校验答案；额外题目不能占掉其他题型，也不能让已满足的计划失败。
+                int remaining = remainingByType.getOrDefault(questionType, 0);
+                if (remaining <= 0 || !StringUtils.hasText(item.stemText)) {
+                    continue;
+                }
                 if ("MULTIPLE".equals(questionType)
                         && (!StringUtils.hasText(item.optionA) || !StringUtils.hasText(item.optionB)
                         || !StringUtils.hasText(item.optionC) || !StringUtils.hasText(item.optionD))) {
@@ -1103,7 +1113,8 @@ public class AiQuestionServiceImpl implements AiQuestionService {
                         trimToNull(item.knowledgePoint),
                         item.score == null || item.score <= 0 ? 5 : item.score
                 ));
-                if (questions.size() >= questionPlan.totalCount()) {
+                remainingByType.put(questionType, remaining - 1);
+                if (remainingByType.values().stream().allMatch(count -> count == 0)) {
                     break;
                 }
             }

@@ -35,6 +35,8 @@ import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import java.util.ArrayList;
 import java.util.List;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.junit.jupiter.api.BeforeAll;
@@ -357,6 +359,137 @@ class AiQuestionServiceImplTest {
     @ValueSource(strings = {" "})
     void missingShortAnswerIsRejectedInsteadOfInventingAPlaceholder(String answer) {
         assertModelAnswerRejected("SHORT_ANSWER", answer);
+    }
+
+    @Test
+    void eachRequestedTypeKeepsItsQuotaDespiteSurplusQuestionsBeforeAndBetweenOtherTypes() {
+        configureGeneration(false);
+        QuestionGenerateRequest request = new QuestionGenerateRequest();
+        request.setSingleCount(2); request.setMultipleCount(1); request.setJudgeCount(1); request.setShortAnswerCount(2);
+        when(chat.chat(anyString(), anyString(), anyString(), anyDouble())).thenReturn(questionBatch(
+                typedQuestion("SINGLE", "单选一"), typedQuestion("SINGLE", "单选二"),
+                typedQuestion("SINGLE", "超额单选"), typedQuestion("MULTI", "多选一"),
+                typedQuestion("SINGLE", "超额错误答案单选").put("correctAnswer", "A或B"),
+                typedQuestion("MULTI", "超额缺项多选").putNull("optionD"),
+                typedQuestion("SHORT", "简答一"), typedQuestion("SHORT_ANSWER", "简答二"),
+                typedQuestion("SHORT", "超额无答案简答").putNull("correctAnswer"),
+                typedQuestion("JUDGE", "最后返回的判断")));
+
+        QuestionSetDetailVO detail = service.generateQuestionSet(7L, 42L, request);
+
+        assertEquals(6, detail.getQuestionCount());
+        assertEquals(List.of("SINGLE", "SINGLE", "MULTIPLE", "JUDGE", "SHORT_ANSWER", "SHORT_ANSWER"),
+                detail.getQuestions().stream().map(question -> question.getQuestionType()).toList());
+        assertEquals(List.of("单选一", "单选二", "多选一", "最后返回的判断", "简答一", "简答二"),
+                detail.getQuestions().stream().map(question -> question.getStemText()).toList());
+        assertEquals(List.of("B", "B", "A,C", "错误", "参考答案", "参考答案"),
+                detail.getQuestions().stream().map(question -> question.getCorrectAnswer()).toList());
+        ArgumentCaptor<QuestionItem> saved = ArgumentCaptor.forClass(QuestionItem.class);
+        verify(questionItems, times(6)).insert(saved.capture());
+        assertEquals(List.of(1, 2, 3, 4, 5, 6), saved.getAllValues().stream().map(QuestionItem::getSortNo).toList());
+        assertEquals(detail.getQuestions().stream().map(question -> question.getStemText()).toList(),
+                saved.getAllValues().stream().map(QuestionItem::getStemText).toList());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"SINGLE", "MULTIPLE", "JUDGE", "SHORT_ANSWER"})
+    void invalidSurplusOfAFullTypeIsIgnoredWhileOtherTypesAreStillNeeded(String fullType) {
+        configureGeneration(false);
+        List<ObjectNode> returned = new ArrayList<>();
+        returned.add(typedQuestion(fullType, "保留题目"));
+        returned.add(typedQuestion(fullType, "无效超额题目").putNull("correctAnswer"));
+        for (String type : List.of("SHORT_ANSWER", "JUDGE", "MULTIPLE", "SINGLE")) {
+            if (!type.equals(fullType)) returned.add(typedQuestion(type, type));
+        }
+        when(chat.chat(anyString(), anyString(), anyString(), anyDouble()))
+                .thenReturn(questionBatch(returned.toArray(ObjectNode[]::new)));
+
+        QuestionSetDetailVO detail = service.generateQuestionSet(7L, 42L, oneOfEveryType());
+
+        assertEquals(List.of("SINGLE", "MULTIPLE", "JUDGE", "SHORT_ANSWER"),
+                detail.getQuestions().stream().map(question -> question.getQuestionType()).toList());
+        assertTrue(detail.getQuestions().stream().noneMatch(question -> question.getStemText().equals("无效超额题目")));
+        verify(questionItems, times(4)).insert(any(QuestionItem.class));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"MULTI", "JUDGE", "SHORT", "UNREQUESTED"})
+    void invalidUnrequestedTypesDoNotConsumeSlotsOrTriggerAnswerValidation(String extraType) {
+        configureGeneration(false);
+        QuestionGenerateRequest request = requestForType("SINGLE");
+        request.setSingleCount(2);
+        ObjectNode invalidExtra = typedQuestion(extraType, "未请求的题目").putNull("correctAnswer").putNull("optionD");
+        when(chat.chat(anyString(), anyString(), anyString(), anyDouble())).thenReturn(questionBatch(
+                invalidExtra, typedQuestion("SINGLE", "单选一"), invalidExtra, typedQuestion("SINGLE", "单选二")));
+
+        QuestionSetDetailVO detail = service.generateQuestionSet(7L, 42L, request);
+
+        assertEquals(List.of("单选一", "单选二"), detail.getQuestions().stream().map(question -> question.getStemText()).toList());
+        verify(questionItems, times(2)).insert(any(QuestionItem.class));
+    }
+
+    @ParameterizedTest
+    @CsvSource({"SINGLE,单选题", "MULTIPLE,多选题", "JUDGE,判断题", "SHORT_ANSWER,简答题"})
+    void surplusOfOtherTypesCannotHideAGenuinelyMissingRequestedType(String missingType, String label) {
+        configureGeneration(false);
+        List<ObjectNode> returned = new ArrayList<>();
+        for (String type : List.of("SINGLE", "MULTIPLE", "JUDGE", "SHORT_ANSWER")) {
+            if (!type.equals(missingType)) {
+                returned.add(typedQuestion(type, "保留" + type));
+                returned.add(typedQuestion(type, "超额" + type));
+            }
+        }
+        when(chat.chat(anyString(), anyString(), anyString(), anyDouble()))
+                .thenReturn(questionBatch(returned.toArray(ObjectNode[]::new)));
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.generateQuestionSet(7L, 42L, oneOfEveryType()));
+
+        assertTrue(exception.getMessage().contains("足够的" + label));
+        verifyNoInteractions(questionSets, questionItems, records);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"SINGLE", "MULTIPLE", "JUDGE", "SHORT_ANSWER"})
+    void invalidAnswerInAnUnfilledRequestedTypeIsNotSkippedForALaterReplacement(String invalidType) {
+        configureGeneration(false);
+        List<ObjectNode> returned = new ArrayList<>();
+        for (String type : List.of("SINGLE", "MULTIPLE", "JUDGE", "SHORT_ANSWER")) {
+            if (!type.equals(invalidType)) returned.add(typedQuestion(type, type));
+        }
+        returned.add(typedQuestion(invalidType, "所需题目但答案无效").putNull("correctAnswer"));
+        returned.add(typedQuestion(invalidType, "不能用于掩盖前题错误的替代题"));
+        when(chat.chat(anyString(), anyString(), anyString(), anyDouble()))
+                .thenReturn(questionBatch(returned.toArray(ObjectNode[]::new)));
+
+        assertThrows(BusinessException.class, () -> service.generateQuestionSet(7L, 42L, oneOfEveryType()));
+
+        verifyNoInteractions(questionSets, questionItems, records);
+    }
+
+    private QuestionGenerateRequest oneOfEveryType() {
+        QuestionGenerateRequest request = new QuestionGenerateRequest();
+        request.setSingleCount(1); request.setMultipleCount(1); request.setJudgeCount(1); request.setShortAnswerCount(1);
+        return request;
+    }
+
+    private ObjectNode typedQuestion(String type, String stem) {
+        String answer = switch (type) {
+            case "SINGLE" -> "Answer: B";
+            case "MULTIPLE", "MULTI" -> "C,A";
+            case "JUDGE" -> "False";
+            default -> "参考答案";
+        };
+        return new ObjectMapper().createObjectNode().put("questionType", type).put("stemText", stem)
+                .put("optionA", "选项A").put("optionB", "选项B").put("optionC", "选项C").put("optionD", "选项D")
+                .put("correctAnswer", answer).put("score", 5);
+    }
+
+    private String questionBatch(ObjectNode... questions) {
+        ObjectNode root = new ObjectMapper().createObjectNode();
+        var items = root.putArray("questions");
+        for (ObjectNode question : questions) items.add(question);
+        return root.toString();
     }
 
     private void assertModelAnswerRejected(String type, String answer) {
