@@ -1,11 +1,13 @@
 package com.aiassistant.learning.common.exception;
 
 import com.aiassistant.learning.common.result.ApiResponse;
+import com.aiassistant.learning.dto.practice.PracticeSubmitRequest;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.BindException;
+import org.springframework.validation.FieldError;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
@@ -59,9 +61,18 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ApiResponse<Void> handleMethodArgumentNotValidException(MethodArgumentNotValidException exception) {
-        String message = exception.getBindingResult().getFieldError() == null
+        FieldError fieldError = exception.getBindingResult().getFieldError();
+        String message = fieldError == null
                 ? "请求参数校验失败"
-                : exception.getBindingResult().getFieldError().getDefaultMessage();
+                : fieldError.getDefaultMessage();
+        if (fieldError != null
+                && exception.getBindingResult().getTarget() instanceof PracticeSubmitRequest
+                && "Size".equals(fieldError.getCode())
+                && fieldError.getField().matches("answers\\[\\d+\\]\\.userAnswer")) {
+            String questionIdField = fieldError.getField().replace(".userAnswer", ".questionId");
+            Object questionId = exception.getBindingResult().getFieldValue(questionIdField);
+            message = "题目 ID " + questionId + "：" + message;
+        }
         log.warn("请求体参数校验失败: {}", message);
         return ApiResponse.fail(400, message);
     }

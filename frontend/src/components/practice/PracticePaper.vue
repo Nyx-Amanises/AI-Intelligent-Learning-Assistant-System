@@ -116,16 +116,30 @@
             >{{ option.label }}</el-radio
           >
         </el-radio-group>
-        <el-input
-          v-else
-          :model-value="answerForm[answer.questionId] || ''"
-          :disabled="submitted"
-          type="textarea"
-          :rows="5"
-          :aria-labelledby="'stem-' + answer.questionId"
-          placeholder="用自己的话写下理解，也可以列出关键步骤…"
-          @update:model-value="setAnswer(answer.questionId, $event)"
-        />
+        <div v-else class="practice-short-answer">
+          <el-input
+            :model-value="answerForm[answer.questionId] || ''"
+            :disabled="submitted"
+            type="textarea"
+            :rows="5"
+            :aria-labelledby="'stem-' + answer.questionId"
+            :aria-describedby="submitted ? undefined : 'answer-length-' + answer.questionId"
+            :aria-invalid="!submitted && isAnswerTooLong(answer.questionId)"
+            placeholder="用自己的话写下理解，也可以列出关键步骤…"
+            @update:model-value="setAnswer(answer.questionId, $event)"
+          />
+          <p
+            v-if="!submitted"
+            :id="'answer-length-' + answer.questionId"
+            class="practice-short-answer__length"
+            :class="{ 'practice-short-answer__length--error': isAnswerTooLong(answer.questionId) }"
+          >
+            {{ (answerForm[answer.questionId] || '').length }} / {{ MAX_PRACTICE_ANSWER_LENGTH }} 字符
+            <span v-if="isAnswerTooLong(answer.questionId)" role="alert">
+              请精简至 {{ MAX_PRACTICE_ANSWER_LENGTH }} 字符以内后提交。
+            </span>
+          </p>
+        </div>
 
         <div
           v-if="submitted"
@@ -205,6 +219,7 @@ import {
   isPendingReview,
   isShortQuestion,
   joinMultiAnswer,
+  MAX_PRACTICE_ANSWER_LENGTH,
   questionResultLabel,
   splitMultiAnswer,
   toSectionLabel,
@@ -252,11 +267,26 @@ const router = useRouter()
 const setAnswer = (questionId: number, value: string) => {
   answerForm.value = { ...answerForm.value, [questionId]: value }
 }
+
+const isAnswerTooLong = (questionId: number) => (answerForm.value[questionId] || '').length > MAX_PRACTICE_ANSWER_LENGTH
 </script>
 
 <style scoped>
 .practice-paper-main {
   min-width: 0;
+}
+.practice-short-answer__length {
+  margin: 8px 0 0;
+  text-align: right;
+  font-size: 12px;
+  color: var(--muted);
+}
+.practice-short-answer__length--error {
+  color: var(--el-color-danger);
+}
+.practice-short-answer__length span {
+  display: block;
+  margin-top: 4px;
 }
 .practice-paper-hero {
   padding: 0;

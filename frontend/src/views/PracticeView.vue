@@ -171,6 +171,7 @@ import {
   hasAnswerValue,
   isPendingReview,
   isSubmittedStatus,
+  MAX_PRACTICE_ANSWER_LENGTH,
   type AnswerForm,
   type PracticeDetail,
   type PracticeHistoryItem
@@ -538,6 +539,18 @@ const removePractice = async (sessionId: number) => {
 
 const submitPractice = async () => {
   if (submitting.value || !practiceDetail.value?.sessionId) return
+  const overlongAnswer = groupedSections.value
+    .flatMap((section) => section.items)
+    .find((item) => (answerForm.value[item.questionId] || '').length > MAX_PRACTICE_ANSWER_LENGTH)
+  if (overlongAnswer) {
+    savePracticeDraft()
+    scrollToQuestion(overlongAnswer.questionId)
+    document.querySelector<HTMLTextAreaElement>(`#question-${overlongAnswer.questionId} textarea`)?.focus({
+      preventScroll: true
+    })
+    ElMessage.warning(`第 ${overlongAnswer.globalIndex} 题答案超过 ${MAX_PRACTICE_ANSWER_LENGTH} 字符，请精简后提交`)
+    return
+  }
   if (unansweredCount.value > 0) {
     const confirmed = await confirmDanger(
       `还有 ${unansweredCount.value} 道题未作答。提交后将不能修改答案，确定提交吗？`,

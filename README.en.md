@@ -53,6 +53,7 @@ The production environment is deployed with **Vercel + Render + Aiven MySQL + Ai
 - Upload or create learning materials, with support for TXT, PDF, DOCX, and other parsed content.
 - Generate AI summaries, review outlines, and practice questions from materials.
 - Support online practice, automatic scoring, mistake collection, and knowledge mastery statistics.
+- Written answers support up to 5,000 characters per question, with matching page and API validation. Oversized answers identify the question and preserve the draft. Migration V15 expands answer storage to TEXT so answers above the former 500-character limit are saved in full.
 - Summarize accuracy, mistake count, weak knowledge points, and practice trends in the learning analytics dashboard.
 
 ### RAG and Vector Retrieval

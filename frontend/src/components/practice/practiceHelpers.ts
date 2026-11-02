@@ -66,6 +66,9 @@ export interface PracticeSection {
 
 export type AnswerForm = Record<number, string>
 
+/** 与提交接口一致；按 JavaScript 字符串长度计数，保留原始答案。 */
+export const MAX_PRACTICE_ANSWER_LENGTH = 5000
+
 export interface AnswerOption {
   value: string
   label: string

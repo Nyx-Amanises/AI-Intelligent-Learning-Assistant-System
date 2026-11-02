@@ -249,6 +249,14 @@ public class PracticeServiceImpl implements PracticeService {
         if (!allowedIds.containsAll(answerMap.keySet())) {
             throw new BusinessException("提交的答案包含本次练习范围之外的题目");
         }
+        // 校验原始列表，避免同一题后面的短答案掩盖前面超限的答案；整卷通过后才允许写入。
+        for (PracticeAnswerRequest answerRequest : request.getAnswers()) {
+            String userAnswer = answerRequest.getUserAnswer();
+            if (userAnswer != null && userAnswer.length() > PracticeAnswerRequest.MAX_USER_ANSWER_LENGTH) {
+                throw new BusinessException("题目 ID " + answerRequest.getQuestionId() + " 的答案不能超过"
+                        + PracticeAnswerRequest.MAX_USER_ANSWER_LENGTH + "个字符，当前为" + userAnswer.length() + "个字符");
+            }
+        }
 
         practiceAnswerMapper.delete(new LambdaQueryWrapper<PracticeAnswer>()
                 .eq(PracticeAnswer::getSessionId, session.getId()));

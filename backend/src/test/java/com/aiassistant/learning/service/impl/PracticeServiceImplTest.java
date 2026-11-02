@@ -188,6 +188,77 @@ class PracticeServiceImplTest {
         verifyNoInteractions(aiChatService);
     }
 
+    @ParameterizedTest
+    @ValueSource(ints = {501, 5000})
+    void submitPracticePreservesLongShortAnswersWithoutTrimming(int length) {
+        PracticeSession session = inProgressSession();
+        when(sessions.selectOne(any())).thenReturn(session);
+        when(questionItems.selectList(any())).thenReturn(List.of(shortAnswer(3L, "参考答案", 10)));
+        String userAnswer = " " + "答".repeat(length - 2) + "\n";
+
+        PracticeDetailVO detail = service.submitPractice(USER_ID, submitRequest(answer(3L, userAnswer)));
+
+        assertEquals(length, userAnswer.length());
+        assertEquals(userAnswer, storedAnswers.get(0).getUserAnswer());
+        assertEquals(userAnswer, detail.getAnswers().get(0).getUserAnswer());
+        assertEquals("AI_PENDING", storedAnswers.get(0).getReviewMode());
+        assertEquals("SUBMITTED", session.getSessionStatus());
+        verify(answers).insert(any(PracticeAnswer.class));
+    }
+
+    @Test
+    void submitPracticePreservesSupplementaryUnicodeAtTheUtf16Limit() {
+        when(sessions.selectOne(any())).thenReturn(inProgressSession());
+        when(questionItems.selectList(any())).thenReturn(List.of(shortAnswer(3L, "参考答案", 10)));
+        String userAnswer = "😀".repeat(2500);
+
+        PracticeDetailVO detail = service.submitPractice(USER_ID, submitRequest(answer(3L, userAnswer)));
+
+        assertEquals(5000, userAnswer.length());
+        assertEquals(2500, userAnswer.codePointCount(0, userAnswer.length()));
+        assertEquals(userAnswer, storedAnswers.get(0).getUserAnswer());
+        assertEquals(userAnswer, detail.getAnswers().get(0).getUserAnswer());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"ascii", "unicode"})
+    void submitPracticeRejectsOverlongAnswerBeforeChangingAnyAnswerOrSession(String kind) {
+        PracticeSession session = inProgressSession();
+        when(sessions.selectOne(any())).thenReturn(session);
+        when(questionItems.selectList(any())).thenReturn(List.of(single(1L, "A", 5), shortAnswer(3L, "参考答案", 10)));
+        PracticeAnswer previous = new PracticeAnswer();
+        previous.setQuestionId(1L);
+        previous.setUserAnswer("previous answer");
+        storedAnswers.add(previous);
+        String userAnswer = "unicode".equals(kind) ? "😀".repeat(2500) + "a" : "a".repeat(5001);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.submitPractice(USER_ID, submitRequest(answer(1L, "A"), answer(3L, userAnswer))));
+
+        assertEquals(400, exception.getCode());
+        assertTrue(exception.getMessage().contains("题目 ID 3"));
+        assertTrue(exception.getMessage().contains("5000"));
+        assertTrue(exception.getMessage().contains("5001"));
+        assertEquals(List.of(previous), storedAnswers);
+        assertEquals("previous answer", previous.getUserAnswer());
+        assertEquals("IN_PROGRESS", session.getSessionStatus());
+        assertNull(session.getSubmitTime());
+        verifyNoInteractions(answers, aiChatService);
+        verify(sessions, never()).updateById(any(PracticeSession.class));
+    }
+
+    @Test
+    void aLaterDuplicateCannotHideAnOverlongAnswerFromValidation() {
+        when(sessions.selectOne(any())).thenReturn(inProgressSession());
+        when(questionItems.selectList(any())).thenReturn(List.of(shortAnswer(3L, "参考答案", 10)));
+
+        assertThrows(BusinessException.class, () -> service.submitPractice(USER_ID,
+                submitRequest(answer(3L, "a".repeat(5001)), answer(3L, "替代答案"))));
+
+        verifyNoInteractions(answers, aiChatService);
+        verify(sessions, never()).updateById(any(PracticeSession.class));
+    }
+
     @Test
     void reviewPendingShortAnswersFallsBackToRulesWhenAiIsInMockMode() {
         PracticeSession session = submittedSessionWithPendingShortAnswer("光合作用把光能转化为化学能", "光合作用把光能转化为化学能");
