@@ -14,7 +14,9 @@ import com.aiassistant.learning.vo.assistant.AssistantSessionDetailVO;
 import com.aiassistant.learning.vo.assistant.AssistantSessionPageVO;
 import com.aiassistant.learning.vo.page.PageVO;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -123,12 +125,17 @@ public class AssistantController {
      * 发送流式消息，后端通过 SSE 持续推送助手回复片段。
      */
     @PostMapping(path = "/{sessionId}/messages/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter streamMessage(
+    public ResponseEntity<SseEmitter> streamMessage(
             @PathVariable Long sessionId,
             @Valid @RequestBody AssistantMessageSendRequest request
     ) {
         Long userId = UserContext.getCurrentUserId();
-        return assistantService.streamMessage(userId, sessionId, request);
+        SseEmitter emitter = assistantService.streamMessage(userId, sessionId, request);
+        // 直连后端或经其他反向代理时，也明确要求逐事件转发，避免缓存或压缩合并消息。
+        return ResponseEntity.ok()
+                .header("X-Accel-Buffering", "no")
+                .header(HttpHeaders.CACHE_CONTROL, "no-cache, no-transform")
+                .body(emitter);
     }
 
     /**
