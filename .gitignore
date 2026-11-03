@@ -17,3 +17,8 @@ Thumbs.db
 .playwright-mcp/
 tmp/
 .eslintcache
+
+# 任务书及相关敏感/临时文件
+docs/*任务书*.docx
+docs/题目+背景+模块.txt
+output/doc/.taskbook-20261015/
