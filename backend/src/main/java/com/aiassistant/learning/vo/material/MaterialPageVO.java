@@ -41,6 +41,8 @@ public class MaterialPageVO {
      */
     private String parseStatus;
 
+    private String parseErrorMessage;
+
     /**
      * 摘要生成状态。
      */

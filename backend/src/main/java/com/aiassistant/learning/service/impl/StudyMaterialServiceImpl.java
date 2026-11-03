@@ -51,6 +51,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
@@ -73,19 +77,23 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
     private final VectorStoreService vectorStoreService;
     private final AiTaskService aiTaskService;
     private final AiConfigService aiConfigService;
+    private final TransactionTemplate parseTransaction;
 
     public StudyMaterialServiceImpl(
             MaterialSegmentMapper materialSegmentMapper,
             FileStorageProperties fileStorageProperties,
             VectorStoreService vectorStoreService,
             @Lazy AiTaskService aiTaskService,
-            AiConfigService aiConfigService
+            AiConfigService aiConfigService,
+            PlatformTransactionManager transactionManager
     ) {
         this.materialSegmentMapper = materialSegmentMapper;
         this.fileStorageProperties = fileStorageProperties;
         this.vectorStoreService = vectorStoreService;
         this.aiTaskService = aiTaskService;
         this.aiConfigService = aiConfigService;
+        this.parseTransaction = new TransactionTemplate(transactionManager);
+        this.parseTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     /**
@@ -167,7 +175,7 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
         material.setSummaryStatus("PENDING");
         material.setDifficultyLevel(3);
         material.setDeleted(0);
-        this.save(material);
+        if (!this.save(material)) throw new BusinessException(500, "资料保存失败，请稍后重试");
 
         Options options = MaterialTextChunker.options(null, null);
         ParsedContent parsedContent;
@@ -177,7 +185,8 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
         } catch (Exception exception) {
             log.error("资料上传后自动解析失败: {}", exception.getMessage(), exception);
             material.setParseStatus("FAILED");
-            this.updateById(material);
+            material.setParseErrorMessage(parseFailureMessage(exception));
+            if (!this.updateById(material)) throw new BusinessException(500, "解析失败状态未能保存，请稍后重试");
             return material.getId();
         }
         // 数据库存储错误必须冒泡并回滚，不能把半套分块当作可继续使用的资料。
@@ -185,8 +194,7 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
         material.setParseStatus("SUCCESS");
         material.setTotalPages(parsedContent.totalPages());
         material.setTotalCharacters(parsedContent.text().length());
-        this.updateById(material);
-        cleanupMaterialVectorsAfterCommit(userId, material.getId());
+        if (!this.updateById(material)) throw new BusinessException(500, "解析结果保存失败，请稍后重试");
         dispatchAutoTasksAfterReady(userId, material.getId());
 
         return material.getId();
@@ -355,6 +363,7 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
                 .fileName(material.getFileName())
                 .fileSize(material.getFileSize())
                 .parseStatus(material.getParseStatus())
+                .parseErrorMessage(material.getParseErrorMessage())
                 .summaryStatus(material.getSummaryStatus())
                 .summaryGenerationMode(GenerationModes.normalize(material.getSummaryGenerationMode()))
                 .chunkStrategy(normalizeChunkStrategy(material.getChunkStrategy()))
@@ -448,17 +457,42 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
      * @param materialId 资料 ID
      */
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public void parseMaterial(Long userId, Long materialId) {
         parseMaterial(userId, materialId, new MaterialParseRequest());
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public void parseMaterial(Long userId, Long materialId, MaterialParseRequest request) {
         MaterialParseRequest resolved = request == null ? new MaterialParseRequest() : request;
         Options options = MaterialTextChunker.options(resolved.getChunkSize(), resolved.getChunkOverlap());
-        StudyMaterial material = getUserOwnedMaterial(userId, materialId);
+        ParseAttempt attempt = new ParseAttempt(UUID.randomUUID().toString());
+        BusinessException failure;
+        try {
+            failure = parseTransaction.execute(status -> parseWithinTransaction(userId, materialId, options, attempt, status));
+        } catch (RuntimeException exception) {
+            if (attempt.started) {
+                try {
+                    parseTransaction.executeWithoutResult(status -> {
+                        StudyMaterial current = lockParseMaterial(userId, materialId);
+                        if (attempt.id.equals(current.getParseAttemptId())
+                                || java.util.Objects.equals(attempt.previousId, current.getParseAttemptId())) {
+                            persistParseFailure(userId, current, attempt.id, exception);
+                        }
+                    });
+                } catch (Exception recoveryFailure) {
+                    log.error("解析失败状态保存未完成 materialId={}", materialId, recoveryFailure);
+                    throw new BusinessException(500, "资料解析失败，失败状态保存未完成，请稍后重试");
+                }
+            }
+            throw exception;
+        }
+        // 失败状态已经提交；抛错只影响接口响应，不再回滚状态。
+        if (failure != null) throw failure;
+    }
+
+    private BusinessException parseWithinTransaction(Long userId, Long materialId, Options options,
+            ParseAttempt attempt, TransactionStatus status) {
+        StudyMaterial material = lockParseMaterial(userId, materialId);
         String sourceText = null;
         if (!StringUtils.hasText(material.getFileUrl())) {
             if (!"MANUAL".equals(material.getSourceType())) {
@@ -476,26 +510,80 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
             }
         }
 
-        material.setParseStatus("PROCESSING");
-        this.updateById(material);
-
+        attempt.previousId = material.getParseAttemptId();
+        Object savepoint = status.createSavepoint();
+        attempt.started = true;
+        List<Long> previousSegmentIds;
         try {
+            material.setParseStatus("PROCESSING");
+            material.setParseAttemptId(attempt.id);
+            if (!this.updateById(material)) throw new BusinessException(409, "资料状态已变化，请刷新后重试");
             ParsedContent parsedContent = sourceText == null ? parseFile(material, options)
                     : buildParsedContent(sourceText, null, options);
             applyChunkMetadata(material, parsedContent, options);
+            previousSegmentIds = materialSegmentMapper.selectList(new LambdaQueryWrapper<MaterialSegment>()
+                    .select(MaterialSegment::getId).eq(MaterialSegment::getMaterialId, materialId))
+                    .stream().map(MaterialSegment::getId).toList();
             saveSegments(materialId, parsedContent.segments());
             material.setParseStatus("SUCCESS");
             material.setTotalPages(parsedContent.totalPages());
             material.setTotalCharacters(parsedContent.text().length());
-            this.updateById(material);
-            cleanupMaterialVectorsAfterCommit(userId, materialId);
-            dispatchAutoTasksAfterReady(userId, materialId);
+            if (!this.updateById(material)) throw new BusinessException(409, "资料状态已变化，请刷新后重试");
+            boolean cleared = this.update(new LambdaUpdateWrapper<StudyMaterial>()
+                    .eq(StudyMaterial::getId, materialId).eq(StudyMaterial::getUserId, userId)
+                    .set(StudyMaterial::getParseErrorMessage, null));
+            if (!cleared) throw new BusinessException(409, "资料状态已变化，请刷新后重试");
+            material.setParseErrorMessage(null);
         } catch (Exception exception) {
             log.error("资料解析失败 materialId={} userId={}: {}", materialId, userId, exception.getMessage(), exception);
-            material.setParseStatus("FAILED");
-            this.updateById(material);
-            throw new BusinessException(500, "资料解析失败: " + exception.getMessage());
+            // 回滚分段替换和临时元数据；资料行锁保留到失败标记提交，避免新任务被旧失败覆盖。
+            status.rollbackToSavepoint(savepoint);
+            status.releaseSavepoint(savepoint);
+            persistParseFailure(userId, material, attempt.id, exception);
+            return new BusinessException(exception instanceof BusinessException business ? business.getCode() : 500,
+                    "资料解析失败: " + parseFailureMessage(exception));
         }
+        status.releaseSavepoint(savepoint);
+        cleanupSegmentVectorsAfterCommit(userId, materialId, previousSegmentIds);
+        dispatchAutoTasksAfterReady(userId, materialId);
+        return null;
+    }
+
+    private StudyMaterial lockParseMaterial(Long userId, Long materialId) {
+        StudyMaterial material = this.getOne(new LambdaQueryWrapper<StudyMaterial>()
+                .select(StudyMaterial.class, info -> !info.getProperty().equals("sourceText"))
+                .eq(StudyMaterial::getId, materialId).eq(StudyMaterial::getUserId, userId)
+                .last("limit 1 for update"));
+        if (material == null) throw new BusinessException(404, "资料不存在");
+        return material;
+    }
+
+    private void persistParseFailure(Long userId, StudyMaterial material, String attemptId, Exception exception) {
+        String reason = parseFailureMessage(exception);
+        boolean saved = this.update(new LambdaUpdateWrapper<StudyMaterial>()
+                .eq(StudyMaterial::getId, material.getId()).eq(StudyMaterial::getUserId, userId)
+                .set(StudyMaterial::getParseStatus, "FAILED")
+                .set(StudyMaterial::getParseAttemptId, attemptId)
+                .set(StudyMaterial::getParseErrorMessage, reason));
+        if (!saved) throw new BusinessException(409, "解析失败状态未能保存，请刷新后重试");
+        material.setParseStatus("FAILED");
+        material.setParseAttemptId(attemptId);
+        material.setParseErrorMessage(reason);
+    }
+
+    private String parseFailureMessage(Exception exception) {
+        String reason = exception instanceof BusinessException ? exception.getMessage()
+                : "文件读取或分段保存失败，请检查文件后重试";
+        if (!StringUtils.hasText(reason)) reason = "文件解析失败，请检查文件后重试";
+        return reason.length() > 1000 ? reason.substring(0, 1000) : reason;
+    }
+
+    private static final class ParseAttempt {
+        private final String id;
+        private String previousId;
+        private boolean started;
+
+        private ParseAttempt(String id) { this.id = id; }
     }
 
     /**
@@ -510,7 +598,7 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteMaterial(Long userId, Long materialId) {
-        StudyMaterial material = getUserOwnedMaterial(userId, materialId);
+        StudyMaterial material = lockParseMaterial(userId, materialId);
         cleanupMaterialVectors(userId, materialId);
         materialSegmentMapper.delete(Wrappers.<MaterialSegment>lambdaQuery()
                 .eq(MaterialSegment::getMaterialId, material.getId()));
@@ -591,6 +679,7 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
                             .title(item.getTitle())
                             .materialType(item.getMaterialType())
                             .parseStatus(item.getParseStatus())
+                            .parseErrorMessage(item.getParseErrorMessage())
                             .summaryStatus(item.getSummaryStatus())
                             .summaryGenerationMode(GenerationModes.normalize(item.getSummaryGenerationMode()))
                             .chunkStrategy(normalizeChunkStrategy(item.getChunkStrategy()))
@@ -955,17 +1044,26 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
         }
     }
 
-    /** 外部索引不能随数据库事务回滚，只在新分块成功提交后清除旧向量。 */
-    private void cleanupMaterialVectorsAfterCommit(Long userId, Long materialId) {
+    /** 只清除被替换的分段，避免提交释放行锁后误删另一任务刚生成的新向量。 */
+    private void cleanupSegmentVectorsAfterCommit(Long userId, Long materialId, List<Long> previousSegmentIds) {
+        if (previousSegmentIds.isEmpty()) return;
+        List<Long> ids = List.copyOf(previousSegmentIds);
+        Runnable cleanup = () -> {
+            try {
+                vectorStoreService.deleteSegmentVectors(userId, materialId, ids, null);
+            } catch (Exception exception) {
+                log.warn("failed to cleanup replaced segment vectors for material {}: {}", materialId, exception.getMessage());
+            }
+        };
         if (TransactionSynchronizationManager.isSynchronizationActive()) {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
                 public void afterCommit() {
-                    cleanupMaterialVectors(userId, materialId);
+                    cleanup.run();
                 }
             });
         } else {
-            cleanupMaterialVectors(userId, materialId);
+            cleanup.run();
         }
     }
 

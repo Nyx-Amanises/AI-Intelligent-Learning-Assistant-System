@@ -19,6 +19,9 @@ public interface VectorStoreService {
      */
     void deleteMaterialSegments(Long userId, Long materialId);
 
+    /** 只删除指定片段；attemptId 非空时还需匹配本次执行，不能清除后来重试写入的向量。 */
+    void deleteSegmentVectors(Long userId, Long materialId, List<Long> segmentIds, String attemptId);
+
     /**
      * 根据查询向量召回相似资料切片。
      */
@@ -46,6 +49,8 @@ public interface VectorStoreService {
             String keywords,
             /** 生成向量所用模型。 */
             String modelName,
+            /** 本次写入的唯一执行标识，用于跨数据库失败补偿。 */
+            String attemptId,
             /** 文本向量。 */
             List<Double> vector
     ) {

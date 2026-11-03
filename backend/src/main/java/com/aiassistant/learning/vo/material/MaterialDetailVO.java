@@ -60,6 +60,8 @@ public class MaterialDetailVO {
      */
     private String parseStatus;
 
+    private String parseErrorMessage;
+
     /**
      * 摘要生成状态。
      */

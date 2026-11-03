@@ -68,6 +68,9 @@ public class QdrantVectorStoreServiceImpl implements VectorStoreService {
             if (StringUtils.hasText(item.modelName())) {
                 payload.put("modelName", item.modelName().trim());
             }
+            if (StringUtils.hasText(item.attemptId())) {
+                payload.put("embeddingAttemptId", item.attemptId());
+            }
 
             Map<String, Object> point = new HashMap<>();
             point.put("id", item.segmentId());
@@ -122,6 +125,37 @@ public class QdrantVectorStoreServiceImpl implements VectorStoreService {
             throw buildQdrantHttpException("清理资料向量失败", exception);
         } catch (ResourceAccessException exception) {
             throw buildQdrantAccessException("清理资料向量失败", exception);
+        }
+    }
+
+    @Override
+    public void deleteSegmentVectors(Long userId, Long materialId, List<Long> segmentIds, String attemptId) {
+        if (segmentIds == null || segmentIds.isEmpty()) return;
+        validateQdrantEnabled();
+        if (userId == null || materialId == null || segmentIds.stream().anyMatch(id -> id == null || id <= 0)) {
+            throw new BusinessException("清理向量缺少有效的用户、资料或片段 ID");
+        }
+        List<Map<String, Object>> conditions = new ArrayList<>();
+        conditions.add(Map.of("key", "userId", "match", Map.of("value", userId)));
+        conditions.add(Map.of("key", "materialId", "match", Map.of("value", materialId)));
+        conditions.add(Map.of("has_id", segmentIds.stream().distinct().toList()));
+        if (StringUtils.hasText(attemptId)) {
+            conditions.add(Map.of("key", "embeddingAttemptId", "match", Map.of("value", attemptId)));
+        }
+        try {
+            buildRestClient().post()
+                    .uri("/collections/{collectionName}/points/delete?wait=true", resolveCollectionName())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .headers(headers -> applyApiKey(headers))
+                    .body(Map.of("filter", Map.of("must", conditions)))
+                    .retrieve()
+                    .toBodilessEntity();
+        } catch (RestClientResponseException exception) {
+            // 集合不存在时没有可残留的向量，清理已经满足要求。
+            if (exception.getStatusCode().value() == 404) return;
+            throw buildQdrantHttpException("清理本次向量化数据失败", exception);
+        } catch (ResourceAccessException exception) {
+            throw buildQdrantAccessException("清理本次向量化数据失败", exception);
         }
     }
 

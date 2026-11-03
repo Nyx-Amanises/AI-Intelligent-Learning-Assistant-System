@@ -88,6 +88,10 @@ public class MaterialSegment extends BaseEntity {
     @TableField(value = "embedding_task_id", select = false)
     private Long embeddingTaskId;
 
+    /** 每次执行的唯一标识，失败补偿不能覆盖后来重试产生的索引。 */
+    @TableField(select = false)
+    private String embeddingAttemptId;
+
     /**
      * 向量数据库中的向量 ID。
      */

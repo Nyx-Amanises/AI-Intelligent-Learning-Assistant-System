@@ -121,6 +121,9 @@
               aria-label="学习摘要的生成来源"
             />
           </p>
+          <p v-if="row.parseStatus === 'FAILED'" class="material-library-card__parse-error">
+            {{ row.parseErrorMessage || '历史记录未保存失败原因，请重新解析以查看详情。' }}
+          </p>
           <div v-if="row.tagList.length" class="material-library-card__tags">
             <span v-for="tag in row.tagList.slice(0, 3)" :key="tag" class="material-library-card__tag" :title="tag">{{
               tag
@@ -427,6 +430,13 @@
               </dd>
             </div>
           </dl>
+          <el-alert
+            v-if="detail.parseStatus === 'FAILED'"
+            :title="detail.parseErrorMessage || '历史记录未保存失败原因，请重新解析以查看详情。'"
+            type="error"
+            :closable="false"
+            show-icon
+          />
           <div class="material-library-detail__actions">
             <el-button
               v-if="detail.parseStatus !== 'SUCCESS'"
@@ -946,6 +956,8 @@ const confirmParseMaterial = async () => {
     if (drawerVisible.value && detailId.value === id) await viewDetail(id)
   } catch (error) {
     ElMessage.error(getErrorMessage(error, '资料解析失败，请稍后重试。'))
+    await loadMaterials()
+    if (drawerVisible.value && detailId.value === id) await viewDetail(id)
   } finally {
     parsing.value = false
     actionLoadingId.value = null
@@ -1104,11 +1116,17 @@ const runRetrievalPreview = async () => {
 const uploadMaterial = async (options: UploadRequestOptions) => {
   uploading.value = true
   try {
-    await uploadMaterialApi(options.file as File)
-    ElMessage.success('资料上传成功，系统正在自动解析并生成摘要…')
+    const response = await uploadMaterialApi(options.file as File)
     uploadDialogVisible.value = false
     options.onSuccess?.({})
     await loadMaterials()
+    const uploadedId = Number(response.data.data)
+    const uploaded = materialRows.value.find((row) => row.id === uploadedId)
+    if (uploaded?.parseStatus === 'FAILED') {
+      ElMessage.warning(uploaded.parseErrorMessage || '资料已保存，但解析失败，请打开详情查看原因。')
+    } else {
+      ElMessage.success('资料已上传，解析结果可在资料卡片中查看。')
+    }
   } catch (error) {
     options.onError?.(error as Parameters<UploadRequestOptions['onError']>[0])
     ElMessage.error(getErrorMessage(error, '资料上传失败，请稍后重试。'))
@@ -1212,6 +1230,13 @@ void loadMaterials()
 </script>
 
 <style scoped>
+.material-library-card__parse-error {
+  margin: 8px 0;
+  color: var(--el-color-danger);
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
 .material-library :deep(.el-button) {
   min-height: 44px;
 }

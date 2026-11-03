@@ -6,6 +6,7 @@ export interface MaterialPageItem {
   title: string
   materialType: string
   parseStatus: string
+  parseErrorMessage?: string
   summaryStatus: string
   summaryGenerationMode?: GenerationMode
   chunkStrategy?: string

@@ -88,6 +88,13 @@ public class StudyMaterial extends BaseLogicEntity {
      */
     private String parseStatus;
 
+    /** 最近一次解析失败原因；成功后清空。 */
+    private String parseErrorMessage;
+
+    /** 本次解析的隔离标记，防止旧失败补偿覆盖之后的成功解析。 */
+    @TableField(select = false)
+    private String parseAttemptId;
+
     /**
      * 摘要生成状态，例如 PENDING、PROCESSING、SUCCESS、FAILED。
      */
