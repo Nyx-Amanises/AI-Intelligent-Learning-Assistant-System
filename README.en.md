@@ -51,6 +51,7 @@ The production environment is deployed with **Vercel + Render + Aiven MySQL + Ai
 ### Material-Driven Learning Loop
 
 - Upload or create learning materials, with support for TXT, PDF, DOCX, and other parsed content.
+- TXT files are decoded as UTF-8 first, with GBK / GB18030 compatibility. Invalid encoding or empty content is marked as a parsing failure, with the reason retained on material cards and details. Scanned PDFs require OCR conversion to searchable PDF or text before upload; PDFs without a text layer are not marked as successfully parsed.
 - Generate AI summaries, review outlines, and practice questions from materials.
 - Support online practice, automatic scoring, mistake collection, and knowledge mastery statistics.
 - Written answers support up to 5,000 characters per question, with matching page and API validation. Oversized answers identify the question and preserve the draft. Migration V15 expands answer storage to TEXT so answers above the former 500-character limit are saved in full.

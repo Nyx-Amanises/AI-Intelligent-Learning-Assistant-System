@@ -2,6 +2,7 @@ package com.aiassistant.learning.service.impl;
 
 import com.aiassistant.learning.common.exception.BusinessException;
 import com.aiassistant.learning.common.util.GenerationModes;
+import com.aiassistant.learning.common.util.MaterialFileParser;
 import com.aiassistant.learning.common.util.MaterialTextChunker;
 import com.aiassistant.learning.common.util.MaterialTextChunker.Options;
 import com.aiassistant.learning.config.FileStorageProperties;
@@ -43,10 +44,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
-import org.apache.pdfbox.Loader;
-import org.apache.pdfbox.pdmodel.PDDocument;
-import org.apache.pdfbox.text.PDFTextStripper;
-import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -891,72 +888,16 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
      *
      * @param material 资料实体
      * @return 解析出的全文、页数和分段
-     * @throws IOException 文件读取失败时抛出
      */
-    private ParsedContent parseFile(StudyMaterial material, Options options) throws IOException {
-        Path filePath = Path.of(material.getFileUrl());
-        if (!Files.exists(filePath)) {
-            throw new BusinessException(404, "原始文件不存在");
-        }
-
-        return switch (material.getMaterialType()) {
-            case "TXT", "TEXT" -> buildParsedContent(Files.readString(filePath, StandardCharsets.UTF_8), null, options);
-            case "PDF" -> parsePdf(filePath, options);
-            case "DOCX" -> parseDocx(filePath, options);
-            default -> throw new BusinessException("暂不支持解析该文件类型");
-        };
-    }
-
-    /**
-     * 解析 PDF 文件。
-     *
-     * <p>PDF 按页提取文本，每页再切分成若干片段，便于保留页码信息。</p>
-     *
-     * @param filePath PDF 文件路径
-     * @return 解析结果
-     * @throws IOException PDF 读取失败时抛出
-     */
-    private ParsedContent parsePdf(Path filePath, Options options) throws IOException {
-        try (PDDocument document = Loader.loadPDF(filePath.toFile())) {
-            PDFTextStripper stripper = new PDFTextStripper();
-            StringBuilder fullText = new StringBuilder();
-            List<ParsedSegment> segments = new ArrayList<>();
-            for (int pageNo = 1; pageNo <= document.getNumberOfPages(); pageNo++) {
-                stripper.setStartPage(pageNo);
-                stripper.setEndPage(pageNo);
-                String pageText = MaterialTextChunker.normalize(stripper.getText(document));
-                if (!StringUtils.hasText(pageText)) {
-                    continue;
-                }
-                if (fullText.length() > 0) {
-                    fullText.append('\n');
-                }
-                fullText.append(pageText);
-                segments.addAll(splitText(pageText, pageNo, options));
+    private ParsedContent parseFile(StudyMaterial material, Options options) {
+        MaterialFileParser.ParsedFile parsed = MaterialFileParser.parse(Path.of(material.getFileUrl()), material.getMaterialType());
+        List<ParsedSegment> segments = new ArrayList<>();
+        for (MaterialFileParser.ParsedPage page : parsed.pages()) {
+            if (StringUtils.hasText(page.text())) {
+                segments.addAll(splitText(page.text(), page.pageNo(), options));
             }
-            return new ParsedContent(fullText.toString().trim(), document.getNumberOfPages(), segments);
         }
-    }
-
-    /**
-     * 解析 DOCX 文件。
-     *
-     * <p>DOCX 按段落提取文本，然后整体切分成资料片段。</p>
-     *
-     * @param filePath DOCX 文件路径
-     * @return 解析结果
-     * @throws IOException DOCX 读取失败时抛出
-     */
-    private ParsedContent parseDocx(Path filePath, Options options) throws IOException {
-        try (InputStream inputStream = Files.newInputStream(filePath);
-             XWPFDocument document = new XWPFDocument(inputStream)) {
-            String text = document.getParagraphs().stream()
-                    .map(paragraph -> paragraph.getText() == null ? "" : paragraph.getText().trim())
-                    .filter(StringUtils::hasText)
-                    .reduce((left, right) -> left + "\n" + right)
-                    .orElse("");
-            return buildParsedContent(text, null, options);
-        }
+        return new ParsedContent(parsed.text(), parsed.totalPages(), segments);
     }
 
     /**
@@ -1112,7 +1053,7 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
             case "TXT" -> {
                 for (byte value : head) {
                     if (value == 0) {
-                        throw new BusinessException("TXT 资料需为 UTF-8 编码的纯文本文件");
+                        throw new BusinessException("TXT 资料需为 UTF-8、GBK 或 GB18030 编码的纯文本文件；UTF-16/UTF-32 请先另存为 UTF-8");
                     }
                 }
             }
