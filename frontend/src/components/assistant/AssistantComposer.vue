@@ -14,7 +14,7 @@
       :placeholder="
         variant === 'hero'
           ? '输入你的问题。回车发送，Shift + 回车换行。'
-          : '继续追问、要求重写、要提纲、要习题或要复盘建议都可以。'
+          : '继续提问… 回车发送，Shift + 回车换行。'
       "
       @keydown="handleKeydown"
     />

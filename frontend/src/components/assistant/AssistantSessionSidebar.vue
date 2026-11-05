@@ -12,7 +12,7 @@
           <AppIcon name="copilot" :size="25" />
         </span>
         <div>
-          <div class="assistant-sidebar__kicker">让知识，成为自己的</div>
+          <div class="assistant-sidebar__kicker">学习问答</div>
           <h2>{{ ASSISTANT_NAME }}</h2>
         </div>
         <button type="button" class="assistant-sidebar__close" aria-label="收起会话列表" @click="emit('close-mobile')">

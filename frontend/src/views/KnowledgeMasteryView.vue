@@ -3,7 +3,7 @@
     <header class="knowledge-heading">
       <div>
         <h1>知识掌握</h1>
-        <p>已掌握的知识，以及值得再练一次的内容。</p>
+        <p>根据练习评分查看各知识点的掌握情况。</p>
       </div>
       <div class="knowledge-heading__actions">
         <RouterLink to="/analytics" class="knowledge-text-link"
@@ -125,7 +125,7 @@
         还有 {{ overview.insufficientCount }} 个知识点需补充不同题目的评分记录或完善标注，暂不判断是否薄弱。
       </p>
 
-      <div v-if="loading && !hasLoaded" class="knowledge-state" role="status">正在整理知识掌握情况…</div>
+      <div v-if="loading && !hasLoaded" class="knowledge-state" role="status">正在加载知识掌握情况…</div>
       <div v-else-if="loadError" class="knowledge-notice" role="alert">
         <div>
           <strong>{{ loadError }}</strong>
@@ -135,12 +135,12 @@
       </div>
       <div v-else-if="hasLoaded && !records.length" class="knowledge-state knowledge-state--empty">
         <AppIcon name="mastery" :size="34" />
-        <h3>{{ hasFilters ? '没有找到匹配的知识点' : '从一次练习开始' }}</h3>
+        <h3>{{ hasFilters ? '没有找到匹配的知识点' : '暂无知识掌握记录' }}</h3>
         <p>
           {{
             hasFilters
               ? '试试其他关键词，或清除筛选条件查看全部知识点。'
-              : '提交练习后，这里会整理已掌握的知识与需要巩固的重点。'
+              : '提交包含知识点标注的练习并完成评分后，可查看各知识点的作答记录与评估结果。'
           }}
         </p>
         <el-button v-if="hasFilters" @click="resetFilters">清除筛选</el-button>

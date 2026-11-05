@@ -3,7 +3,7 @@
     <header class="page-header ai-settings__header">
       <div>
         <h1 id="ai-settings-title" class="page-title">AI 配置</h1>
-        <p class="page-desc">连接常用模型，让总结、出题和资料检索更顺手。</p>
+        <p class="page-desc">设置用于总结、出题、对话和资料检索的模型。</p>
       </div>
       <div v-if="canManageGlobal" class="config-scope" role="group" aria-label="配置范围">
         <button type="button" :aria-pressed="saveScope === 'USER'" :disabled="busy" @click="changeScope('USER')">

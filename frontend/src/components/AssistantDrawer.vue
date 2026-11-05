@@ -49,7 +49,7 @@
           <main class="assistant-main" :inert="isCompactLayout && mobileSidebarOpen">
             <AssistantTopbar
               ref="topbarRef"
-              :title="sessionDetail ? sessionDetail.title || '新对话' : '今天继续哪一块？'"
+              :title="sessionDetail ? sessionDetail.title || '新对话' : '学习问答'"
               :loading="sessionPageLoading"
               :mobile-sidebar-open="mobileSidebarOpen"
               @open-menu="openMobileSidebar"

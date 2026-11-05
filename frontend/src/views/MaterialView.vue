@@ -4,7 +4,7 @@
       <div>
         <div class="learning-eyebrow">我的内容</div>
         <h1 id="material-library-title" class="page-title">资料库</h1>
-        <p class="page-desc">讲义、笔记与文档，都收在这里。</p>
+        <p class="page-desc">管理学习资料，阅读原文、生成摘要或练习题。</p>
       </div>
       <div class="toolbar toolbar--flush">
         <el-button @click="textDialogVisible = true">
@@ -80,8 +80,8 @@
     <EmptyState
       v-else-if="!materialRows.length"
       icon="book-open"
-      title="开启你的学习之旅"
-      description="你可以上传课程资料、教材文档，或是直接记下复习笔记。AI 会自动为你梳理核心要点、出题自测，帮你掌握每一个知识点。"
+      title="还没有学习资料"
+      description="上传课程讲义、教材文档，或直接添加文本。解析完成后，可以阅读原文、生成摘要和练习题。"
     >
       <el-button type="primary" @click="uploadDialogVisible = true"
         ><AppIcon name="upload" :size="18" />上传第一份资料</el-button

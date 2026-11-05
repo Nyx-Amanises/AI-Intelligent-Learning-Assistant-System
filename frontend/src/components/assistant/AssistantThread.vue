@@ -9,8 +9,8 @@
       @scroll.passive="handleScroll"
     >
       <div v-if="!messages.length" class="assistant-thread__empty">
-        <strong>这段对话已经准备好了</strong>
-        <p>直接开始提问，或者点一条建议让我先帮你起个头。</p>
+        <strong>还没有对话内容</strong>
+        <p>输入问题，或选择下面的示例问题。</p>
         <div class="assistant-suggestion-row">
           <button
             v-for="prompt in quickPrompts"

@@ -63,6 +63,7 @@ declare module 'vue' {
     RagRunComparison: typeof import('./components/rag/RagRunComparison.vue')['default']
     RagRunEvidence: typeof import('./components/rag/RagRunEvidence.vue')['default']
     RagRunParameters: typeof import('./components/rag/RagRunParameters.vue')['default']
+    ReadingIllustration: typeof import('./components/ReadingIllustration.vue')['default']
     RenameDialog: typeof import('./components/RenameDialog.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']

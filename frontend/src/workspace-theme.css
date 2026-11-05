@@ -2,81 +2,81 @@
 :root,
 [data-theme='light'] {
   color-scheme: light;
-  --bg: #f8f9fa;
-  --bg-secondary: #f1f3f5;
+  --bg: #f7f8f5;
+  --bg-secondary: #eef1eb;
   --sidebar-bg: #ffffff;
   --panel: #ffffff;
-  --panel-hover: #f8fafc;
-  --line: #e9ecef;
-  --text: #1a1f2c;
-  --text-secondary: #4a5568;
-  --muted: #718096;
-  --brand: #1f7a5a;
-  --brand-hover: #166147;
-  --brand-soft: #e6f6ef;
-  --brand-light: #f0faf5;
-  --topbar-bg: rgba(255, 255, 255, 0.92);
-  --cinnabar: #c2410c;
-  --accent: #d97706;
-  --accent-soft: #fef3c7;
-  --blue: #2563eb;
-  --blue-soft: #eff6ff;
-  --green: #10b981;
-  --green-soft: #ecfdf5;
-  --purple: #7c3aed;
-  --purple-soft: #f5f3ff;
-  --orange: #ea580c;
-  --orange-soft: #fff7ed;
-  --red: #dc2626;
-  --red-soft: #fef2f2;
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
-  --shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
-  --shadow-md: 0 10px 24px -4px rgba(0, 0, 0, 0.08);
-  --shadow-lg: 0 16px 36px -6px rgba(0, 0, 0, 0.1);
-  --shadow-xl: 0 24px 60px -10px rgba(0, 0, 0, 0.14);
-  --radius-sm: 10px;
-  --radius: 14px;
-  --radius-lg: 20px;
-  --radius-xl: 24px;
+  --panel-hover: #f5f7f2;
+  --line: #e2e7de;
+  --text: #263a32;
+  --text-secondary: #58685e;
+  --muted: #667267;
+  --brand: #345c49;
+  --brand-hover: #264836;
+  --brand-soft: #e2eadf;
+  --brand-light: #eff3eb;
+  --topbar-bg: rgba(250, 251, 248, 0.96);
+  --cinnabar: #a75c46;
+  --accent: #a88248;
+  --accent-soft: #f4eddf;
+  --blue: #56748b;
+  --blue-soft: #edf2f5;
+  --green: #4c8060;
+  --green-soft: #eaf2e9;
+  --purple: #81738c;
+  --purple-soft: #f0edf3;
+  --orange: #af7848;
+  --orange-soft: #f8efe5;
+  --red: #b25349;
+  --red-soft: #faeeea;
+  --shadow-sm: 0 1px 2px rgba(30, 47, 35, 0.025);
+  --shadow: 0 3px 12px rgba(30, 47, 35, 0.04);
+  --shadow-md: 0 8px 24px -6px rgba(30, 47, 35, 0.08);
+  --shadow-lg: 0 14px 32px -8px rgba(30, 47, 35, 0.12);
+  --shadow-xl: 0 24px 64px -12px rgba(30, 47, 35, 0.18);
+  --radius-sm: 8px;
+  --radius: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
   --el-color-primary: var(--brand);
-  --el-color-primary-light-3: #5ea48a;
-  --el-color-primary-light-5: #8fcaa4;
-  --el-color-primary-light-7: #bfe5cf;
-  --el-color-primary-light-8: #dcf2e6;
-  --el-color-primary-light-9: #f0faf5;
+  --el-color-primary-light-3: #6f8d7a;
+  --el-color-primary-light-5: #9caf9e;
+  --el-color-primary-light-7: #c4d2c1;
+  --el-color-primary-light-8: #e2eadf;
+  --el-color-primary-light-9: #eff3eb;
   --el-color-primary-dark-2: var(--brand-hover);
-  --el-color-success: #10b981;
-  --el-color-success-light-9: #ecfdf5;
-  --el-color-warning: #d97706;
-  --el-color-warning-light-9: #fffbeb;
-  --el-color-danger: #dc2626;
-  --el-color-danger-light-9: #fef2f2;
-  --el-color-info: #718096;
-  --el-border-color: #e2e8f0;
+  --el-color-success: var(--green);
+  --el-color-success-light-9: var(--green-soft);
+  --el-color-warning: var(--accent);
+  --el-color-warning-light-9: var(--accent-soft);
+  --el-color-danger: var(--red);
+  --el-color-danger-light-9: var(--red-soft);
+  --el-color-info: var(--muted);
+  --el-border-color: var(--line);
   --el-border-color-light: var(--line);
-  --el-border-color-lighter: #f1f3f5;
+  --el-border-color-lighter: #eef1eb;
   --el-text-color-primary: var(--text);
   --el-text-color-regular: var(--text-secondary);
   --el-text-color-secondary: var(--muted);
   --el-text-color-placeholder: var(--muted);
-  --el-fill-color-light: #f8f9fa;
+  --el-fill-color-light: #f5f7f2;
   --el-fill-color-blank: #ffffff;
   --el-bg-color-page: var(--bg);
-  --el-border-radius-base: 12px;
+  --el-border-radius-base: 10px;
   --el-component-size: 44px;
   --el-font-size-base: 15px;
   --el-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  --el-box-shadow-light: 0 8px 24px rgba(0, 0, 0, 0.08);
+  --el-box-shadow-light: 0 8px 24px rgba(30, 47, 35, 0.08);
 }
 
 [data-theme='eye-care'] {
   color-scheme: light;
-  --bg: #f7f7f2;
-  --bg-secondary: #efefea;
-  --sidebar-bg: #f7f7f2;
-  --panel: #ffffff;
-  --panel-hover: #f3f4ee;
-  --line: #e3e5dc;
+  --bg: #f0f2e9;
+  --bg-secondary: #e7ebdf;
+  --sidebar-bg: #f0f2e9;
+  --panel: #f8f9f2;
+  --panel-hover: #f2f4eb;
+  --line: #dce2d4;
   --text: #252a25;
   --text-secondary: #555e54;
   --muted: #6b7368;
@@ -84,7 +84,7 @@
   --brand-hover: #284738;
   --brand-soft: #e5ece4;
   --brand-light: #eff3ec;
-  --topbar-bg: rgba(247, 247, 242, 0.88);
+  --topbar-bg: rgba(240, 242, 233, 0.96);
   --cinnabar: #a6503b;
   --accent: #ae7b35;
   --accent-soft: #f5ecd9;
@@ -98,10 +98,10 @@
   --orange-soft: #faf1e3;
   --red: #b65348;
   --red-soft: #faeeea;
-  --shadow-sm: 0 2px 6px rgba(35, 55, 38, 0.04);
-  --shadow: 0 6px 20px -3px rgba(35, 55, 38, 0.06), 0 2px 6px -1px rgba(35, 55, 38, 0.03);
-  --shadow-md: 0 10px 28px -4px rgba(35, 55, 38, 0.09), 0 4px 10px -2px rgba(35, 55, 38, 0.04);
-  --shadow-lg: 0 16px 36px -6px rgba(35, 55, 38, 0.11), 0 6px 14px -3px rgba(35, 55, 38, 0.05);
+  --shadow-sm: 0 1px 2px rgba(35, 55, 38, 0.025);
+  --shadow: 0 3px 12px rgba(35, 55, 38, 0.04);
+  --shadow-md: 0 8px 24px -6px rgba(35, 55, 38, 0.08);
+  --shadow-lg: 0 14px 32px -8px rgba(35, 55, 38, 0.12);
   --shadow-xl: 0 24px 70px -10px rgba(28, 45, 32, 0.18);
   --el-color-primary: var(--brand);
   --el-color-primary-light-3: #708c7a;
@@ -125,7 +125,7 @@
   --el-text-color-secondary: var(--muted);
   --el-text-color-placeholder: var(--muted);
   --el-fill-color-light: #f3f4ee;
-  --el-fill-color-blank: #fff;
+  --el-fill-color-blank: var(--panel);
   --el-bg-color-page: var(--bg);
   --el-box-shadow-light: 0 8px 28px rgba(35, 55, 38, 0.1);
 }
@@ -136,7 +136,7 @@ html {
 body {
   font-family: var(--el-font-family);
   line-height: 1.65;
-  font-size: 16px;
+  font-size: 15px;
   background: var(--bg);
   color: var(--text);
 }
@@ -177,29 +177,29 @@ a:focus-visible,
 }
 .page-title {
   color: var(--text);
-  font-size: clamp(28px, 2.6vw, 36px);
+  font-size: clamp(27px, 2.4vw, 32px);
   font-weight: 600;
-  letter-spacing: -0.035em;
+  letter-spacing: -0.025em;
   line-height: 1.4;
 }
 .page-desc {
   color: var(--muted);
   font-size: 15px;
-  margin-top: 12px;
+  margin-top: 10px;
   line-height: 1.8;
 }
 /* 页面标题上方的小字眉题，所有学习页面共用一种视觉。 */
 .learning-eyebrow {
   margin-bottom: 10px;
-  color: var(--brand);
+  color: var(--muted);
   font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.08em;
 }
 /* 学习页面统一的内容宽度。 */
 .learning-page {
   width: 100%;
-  max-width: 1180px;
+  max-width: 1240px;
   min-width: 0;
   margin: 0 auto;
 }
@@ -211,7 +211,7 @@ a:focus-visible,
 .page-card,
 .workspace-panel,
 .section-card {
-  border: 0;
+  border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   box-shadow: none;
 }
@@ -230,7 +230,7 @@ a:focus-visible,
 }
 .workspace-tab {
   border-color: transparent;
-  border-radius: 999px;
+  border-radius: 8px;
   font-weight: 500;
 }
 .workspace-tab:hover,
@@ -278,7 +278,7 @@ a:focus-visible,
 
 .el-button {
   font-weight: 500;
-  border-radius: 999px;
+  border-radius: 10px;
   transition:
     color 0.18s ease,
     background-color 0.18s ease,
@@ -294,10 +294,10 @@ a:focus-visible,
   transform: scale(0.98);
 }
 .el-button--primary:not(.is-plain) {
-  box-shadow: 0 4px 14px color-mix(in srgb, var(--brand) 22%, transparent);
+  box-shadow: none;
 }
 .el-button--primary:not(.is-plain):hover {
-  box-shadow: 0 6px 18px color-mix(in srgb, var(--brand) 32%, transparent);
+  box-shadow: none;
 }
 .el-button > span {
   gap: 7px;
@@ -305,7 +305,7 @@ a:focus-visible,
 .el-input__wrapper,
 .el-select__wrapper,
 .el-textarea__inner {
-  border-radius: 12px;
+  border-radius: 10px;
   transition:
     border-color 0.18s ease,
     box-shadow 0.18s ease,
@@ -322,7 +322,7 @@ a:focus-visible,
 }
 .el-dialog {
   max-width: calc(100vw - 32px);
-  border-radius: 24px;
+  border-radius: 16px;
   padding: 30px;
   box-shadow: var(--shadow-xl);
   background: var(--panel) !important;
@@ -401,7 +401,7 @@ a:focus-visible,
   background: var(--bg);
 }
 .profile-page .profile-card {
-  border: 0;
+  border: 1px solid var(--line);
   box-shadow: none;
 }
 .practice-paper-question__stem {
@@ -571,26 +571,4 @@ a:focus-visible,
     transform: scale(0.9);
     opacity: 0.7;
   }
-}
-
-/* ==========================================================================
-   Home Page / Dashboard Theme Overrides (Full Width & Themes)
-   ========================================================================== */
-.workspace-content--home,
-.workspace-content:has(.daily-home) {
-  max-width: 100% !important;
-  padding: 0 0 30px !important;
-}
-
-/* Eye-Care Theme Dashboard Overrides */
-[data-theme='eye-care'] .daily-scene__veil {
-  background:
-    linear-gradient(
-      90deg,
-      rgb(247 247 242 / 97%) 0%,
-      rgb(247 247 242 / 87%) 27%,
-      rgb(245 245 238 / 37%) 51%,
-      transparent 74%
-    ),
-    linear-gradient(0deg, rgb(18 51 40 / 20%), transparent 36%) !important;
 }

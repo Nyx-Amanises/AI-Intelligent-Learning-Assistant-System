@@ -2,9 +2,9 @@
   <section class="learning-page quiz-view">
     <div class="page-header">
       <div>
-        <div class="learning-eyebrow">专注练习</div>
+        <div class="learning-eyebrow">练习与复习</div>
         <h1 class="page-title">练习题集</h1>
-        <p class="page-desc">选一套题，把理解再加深一点。</p>
+        <p class="page-desc">选择已有题集开始练习，或根据学习资料生成新题集。</p>
       </div>
       <el-button type="primary" :disabled="generating" @click="openNewGeneration">
         <AppIcon name="plus" :size="17" />
@@ -52,17 +52,17 @@
         <div v-if="questionSetLoading" class="quiz-loading" aria-live="polite">
           <el-skeleton :rows="5" animated /><span>正在加载题集…</span>
         </div>
-        <EmptyState v-else-if="loadError" variant="error" icon="quiz" title="题集暂时没能加载" :description="loadError">
+        <EmptyState v-else-if="loadError" variant="error" icon="quiz" title="题集加载失败" :description="loadError">
           <el-button type="primary" @click="loadQuestionSets()">重新加载</el-button>
         </EmptyState>
         <EmptyState
           v-else-if="!questionSets.length"
           icon="quiz"
-          :title="hasFilters ? '没有找到匹配的题集' : '用一套练习，巩固刚学过的知识'"
+          :title="hasFilters ? '没有找到匹配的题集' : '还没有练习题集'"
           :description="
             hasFilters
-              ? '换个关键词或难度，看看其他题集。'
-              : '选择资料，自由组合单选、多选、判断和简答题，找到适合自己的练习节奏。'
+              ? '更换关键词、状态或难度，或清除筛选条件。'
+              : '选择一份资料，设置题型、题量和难度，即可生成题集。'
           "
         >
           <el-button v-if="hasFilters" @click="resetFilters">清除筛选</el-button>
@@ -175,7 +175,7 @@
 
     <el-dialog
       v-model="generateDialogVisible"
-      :title="regenerationSourceId ? '重新生成题集' : '生成一套专属练习'"
+      :title="regenerationSourceId ? '重新生成题集' : '生成题集'"
       width="min(680px, calc(100vw - 32px))"
       destroy-on-close
       class="quiz-generate-dialog"
@@ -185,9 +185,9 @@
     >
       <template #header="{ titleId, titleClass }">
         <h2 :id="titleId" :class="[titleClass, 'dialog-title']">
-          {{ regenerationSourceId ? '重新生成题集' : '生成一套专属练习' }}
+          {{ regenerationSourceId ? '重新生成题集' : '生成题集' }}
         </h2>
-        <div class="dialog-subtitle">根据学习资料，定制出题范围、题型、题量与难度。</div>
+        <div class="dialog-subtitle">选择资料，设置出题范围、题型、题量和难度。</div>
       </template>
       <p v-if="practiceEntryNotice" class="quiz-inline-note quiz-inline-note--error" role="alert">
         {{ practiceEntryNotice }}

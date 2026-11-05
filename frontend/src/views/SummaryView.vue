@@ -4,7 +4,7 @@
       <div>
         <div class="learning-eyebrow">我的内容</div>
         <h1 class="page-title">学习总结</h1>
-        <p class="page-desc">读过的内容，整理成自己的理解。</p>
+        <p class="page-desc">根据学习资料生成总结、考试重点或结构提纲。</p>
       </div>
       <el-button type="primary" @click="openGenerateDialog">
         <AppIcon name="plus" :size="17" />
@@ -58,13 +58,13 @@
         />
         <div v-if="historyLoading" class="summary-loading" aria-live="polite">
           <el-skeleton :rows="5" animated />
-          <span>正在整理你的总结…</span>
+          <span>正在加载总结…</span>
         </div>
         <EmptyState
           v-else-if="loadError"
           variant="error"
           icon="summary"
-          title="总结暂时没能加载"
+          title="总结加载失败"
           :description="loadError"
         >
           <el-button type="primary" @click="loadSummaryHistory()">重新加载</el-button>
@@ -72,11 +72,11 @@
         <EmptyState
           v-else-if="!pagedSummaryHistory.length"
           icon="summary"
-          :title="summaryHistory.length ? '没有找到匹配的总结' : '让第一份资料，变成一份清晰的总结'"
+          :title="summaryHistory.length ? '没有找到匹配的总结' : '还没有学习总结'"
           :description="
             summaryHistory.length
               ? '试试其他关键词，或清除筛选条件。'
-              : '选择一份已解析的资料，AI 会为你提炼重点，并保留原文出处。'
+              : '选择一份已解析的资料，生成总结、考试重点或提纲。阅读时可以对照原文。'
           "
         >
           <el-button v-if="summaryHistory.length" @click="resetFilters">清除筛选</el-button>
@@ -151,7 +151,7 @@
     >
       <template #header="{ titleId, titleClass }">
         <h2 :id="titleId" :class="[titleClass, 'dialog-title']">生成 AI 总结</h2>
-        <div class="dialog-subtitle">选好资料与整理方式，把复杂内容变得易于理解。</div>
+        <div class="dialog-subtitle">选择学习资料和总结类型。</div>
       </template>
       <EmptyState
         v-if="!materialsLoading && !materialsError && !materials.length"
@@ -183,7 +183,7 @@
             />
           </el-select>
         </el-form-item>
-        <el-form-item label="你想怎样整理？">
+        <el-form-item label="总结类型">
           <el-radio-group v-model="summaryType" class="summary-mode-options">
             <el-radio v-for="mode in summaryModes" :key="mode.value" :value="mode.value" border>
               <strong>{{ mode.title }}</strong
@@ -346,8 +346,8 @@ const { materials, loading: materialsLoading, error: materialsError, load: loadM
 
 const summaryModes = [
   { value: 'STANDARD', title: '标准总结', description: '提炼核心概念与主要结论' },
-  { value: 'EXAM', title: '考试重点', description: '聚焦高频考点与易错内容' },
-  { value: 'OUTLINE', title: '结构提纲', description: '按层级梳理知识脉络' }
+  { value: 'EXAM', title: '考试重点', description: '整理复习重点与易错内容' },
+  { value: 'OUTLINE', title: '结构提纲', description: '按层级列出内容要点' }
 ]
 
 const materialId = ref<number>()

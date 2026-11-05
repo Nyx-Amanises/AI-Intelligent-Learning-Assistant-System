@@ -2,8 +2,8 @@
   <section class="assistant-home">
     <div class="assistant-home__hero">
       <div class="assistant-home__greeting">你好，{{ greetingName }}</div>
-      <h2>今天想学点什么？</h2>
-      <p>一起读懂资料、梳理知识，把不明白的地方再学透一点。</p>
+      <h2>有什么学习问题？</h2>
+      <p>可以提问、查找资料，或讨论练习中不理解的地方。</p>
     </div>
 
     <AssistantComposer

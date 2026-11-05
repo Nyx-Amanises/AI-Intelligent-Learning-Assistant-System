@@ -1,166 +1,160 @@
 <template>
-  <div class="daily-home">
-    <section
-      class="daily-scene"
-      :class="{ 'daily-scene--long-quote': isLongQuote }"
-      aria-labelledby="daily-quote-title"
-    >
-      <picture class="daily-scene__picture" aria-hidden="true">
-        <source media="(max-width: 760px)" :srcset="lakeMobile" />
-        <img :src="lakeImage" alt="" width="2200" height="1250" fetchpriority="high" decoding="async" />
-      </picture>
-      <div class="daily-scene__veil" aria-hidden="true" />
-      <div class="daily-scene__inner">
-        <div class="daily-scene__opening">
-          <span class="daily-scene__eyebrow"><i aria-hidden="true" />每日一句</span>
-          <span class="daily-scene__welcome">{{ displayName }}，欢迎回来</span>
-        </div>
-        <div class="daily-scene__quote">
-          <h1 id="daily-quote-title" :class="{ 'daily-scene__quote--long': isLongQuote }">
-            <span v-for="(line, index) in quoteLines" :key="index">{{ line }}</span>
+  <div class="study-home">
+    <section class="study-hero" aria-labelledby="study-home-title">
+      <div class="study-hero__main">
+        <div class="study-hero__copy">
+          <div class="study-hero__eyebrow"><span>我的学习</span><i aria-hidden="true" />{{ todayLabel }}</div>
+          <h1 id="study-home-title">
+            欢迎回来，<span :title="displayName">{{ displayName }}</span>
           </h1>
-          <p class="daily-scene__source">
-            {{ dailyQuote.author }}<span aria-hidden="true"> / </span><cite>《{{ dailyQuote.source }}》</cite>
-          </p>
-        </div>
-        <div class="daily-scene__bottom">
-          <div class="daily-actions" aria-label="开始今天的学习">
-            <RouterLink :to="learningDestination" class="daily-action daily-action--learn">
-              <span
-                ><strong>{{ materials.length ? '继续学习' : '开始学习' }}</strong
-                ><small>{{ learningHint }}</small></span
-              >
-              <span class="daily-action__arrow"><AppIcon name="arrow-up-right" :size="22" /></span>
+          <p class="study-hero__description">阅读资料、整理重点，或开始一组练习。</p>
+          <div class="study-hero__actions">
+            <RouterLink :to="learningDestination" class="study-button study-button--primary">
+              <AppIcon :name="hasNoMaterials ? 'plus' : 'book-open'" :size="18" />
+              {{ hasNoMaterials ? '添加学习资料' : '阅读资料' }}
+              <AppIcon name="arrow-right" :size="17" />
             </RouterLink>
-            <RouterLink to="/wrong-questions" class="daily-action daily-action--review">
-              <span><strong>温习一下</strong><small>让理解，再深一点</small></span>
-              <span class="daily-action__arrow"><AppIcon name="arrow-up-right" :size="22" /></span>
-            </RouterLink>
+            <RouterLink to="/quiz" class="study-button study-button--secondary">开始练习</RouterLink>
           </div>
-          <a class="daily-scene__scroll" href="#my-reading"
-            ><span>我的学习内容</span><AppIcon name="chevron-down" :size="18"
-          /></a>
+        </div>
+        <div class="study-hero__art">
+          <ReadingIllustration :paused="animationPaused" />
+          <button
+            type="button"
+            class="study-hero__motion"
+            :aria-label="animationPaused ? '播放插画动画' : '暂停插画动画'"
+            :aria-pressed="animationPaused"
+            :title="animationPaused ? '播放动画' : '暂停动画'"
+            @click="animationPaused = !animationPaused"
+          >
+            <svg viewBox="0 0 16 16" width="14" height="14" fill="none" aria-hidden="true">
+              <path v-if="animationPaused" d="m6 4 6 4-6 4Z" fill="currentColor" />
+              <path v-else d="M6 4v8m4-8v8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+            </svg>
+          </button>
         </div>
       </div>
+      <div class="study-quote">
+        <span class="study-quote__label">每日一句</span>
+        <blockquote>{{ dailyQuote.text }}</blockquote>
+        <cite
+          >{{ dailyQuote.author }}<span>《{{ dailyQuote.source }}》</span></cite
+        >
+      </div>
     </section>
-
-    <div id="my-reading" class="daily-content">
-      <div class="daily-reading-layout">
-        <section class="daily-reading" aria-labelledby="daily-reading-title" :aria-busy="loading">
-          <header class="daily-section-heading">
-            <div>
-              <span class="daily-section-index">01 / 阅读</span>
-              <h2 id="daily-reading-title">从这里，继续。</h2>
-            </div>
-            <RouterLink to="/materials" class="daily-text-link"
-              >全部资料<AppIcon name="arrow-up-right" :size="17"
-            /></RouterLink>
-          </header>
-          <div v-if="loading && !materials.length" class="daily-loading" role="status">
-            <div v-for="n in 3" :key="n" class="daily-loading__row" aria-hidden="true">
+    <div class="study-home__body">
+      <section class="study-library" aria-labelledby="recent-materials-title" :aria-busy="loading">
+        <header class="study-section-heading">
+          <div class="study-section-heading__title">
+            <h2 id="recent-materials-title">最近资料</h2>
+            <span v-if="materials.length">最近添加的 {{ materials.length }} 份</span>
+          </div>
+          <RouterLink to="/materials" class="study-text-link"
+            >全部资料<AppIcon name="arrow-right" :size="16"
+          /></RouterLink>
+        </header>
+        <div class="study-library__panel">
+          <div v-if="loading && !materials.length" class="study-loading" role="status">
+            <div v-for="n in 3" :key="n" class="study-loading__row" aria-hidden="true">
               <span />
               <div><i /><i /></div>
             </div>
             <span class="visually-hidden">正在加载学习资料</span>
           </div>
-          <div v-else-if="loadError && !materials.length" class="daily-reading-state" role="alert">
-            <AppIcon name="folder" :size="30" />
-            <h3>暂时没能找到你的资料</h3>
-            <p>检查网络后，再试一次。</p>
-            <button class="daily-text-link" type="button" @click="loadMaterials">
-              重新加载<AppIcon name="refresh" :size="17" />
+          <div v-else-if="loadError && !materials.length" class="study-empty" role="alert">
+            <span class="study-empty__icon"><AppIcon name="folder" :size="25" /></span>
+            <h3>资料加载失败</h3>
+            <p>请检查网络连接后重试。</p>
+            <button class="study-button study-button--secondary" type="button" @click="loadMaterials">
+              重新加载<AppIcon name="refresh" :size="16" />
             </button>
           </div>
-          <div v-else-if="!materials.length" class="daily-first-reading">
-            <div class="daily-first-reading__book" aria-hidden="true">
-              <span>知序</span><i /><small>我的第一份资料</small>
-            </div>
-            <div class="daily-first-reading__copy">
-              <h3>一本讲义，一篇文章，<br />都可以是起点。</h3>
-              <p>放入你正在读的内容，开始这一程学习。</p>
-              <RouterLink :to="uploadDestination" class="daily-text-link"
-                >添加第一份资料<AppIcon name="plus" :size="18"
-              /></RouterLink>
-            </div>
+          <div v-else-if="!materials.length" class="study-empty">
+            <span class="study-empty__icon"><AppIcon name="book-open" :size="26" /></span>
+            <h3>还没有学习资料</h3>
+            <p>上传讲义、文档，或直接添加文本。</p>
+            <RouterLink :to="uploadDestination" class="study-button study-button--secondary"
+              ><AppIcon name="plus" :size="16" />添加资料</RouterLink
+            >
           </div>
-          <ol v-else class="daily-reading-list">
+          <ul v-else class="study-materials">
             <li v-for="(material, index) in materials" :key="material.id">
-              <RouterLink :to="materialDestination(material.id)" class="daily-reading-row">
-                <span class="daily-book" :class="'daily-book--' + (index % 4)" aria-hidden="true"
-                  ><i /><small>{{ formatMaterialType(material.materialType, '文档') }}</small
-                  ><b>{{ String(index + 1).padStart(2, '0') }}</b></span
-                >
-                <span class="daily-reading-row__copy"
-                  ><strong>{{ material.title }}</strong
-                  ><small
+              <RouterLink :to="materialDestination(material.id)" class="study-material">
+                <span class="study-document" :class="'study-document--' + (index % 3)" aria-hidden="true">
+                  <svg viewBox="0 0 28 34" width="28" height="34" fill="none">
+                    <path
+                      d="M4 1.5h13l7 7V32H4Z"
+                      fill="var(--panel)"
+                      stroke="currentColor"
+                      stroke-width="1.2"
+                      stroke-linejoin="round"
+                    />
+                    <path
+                      d="M17 1.5v7h7M9 16h10M9 21h10M9 26h6"
+                      stroke="currentColor"
+                      stroke-width="1.2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    />
+                  </svg>
+                </span>
+                <span class="study-material__copy">
+                  <strong :title="material.title">{{ material.title }}</strong>
+                  <span class="study-material__meta"
                     >{{ formatMaterialType(material.materialType, '文档') }}<i aria-hidden="true">·</i
                     >{{ material.totalCharacters ? formatCharacters(material.totalCharacters) : '学习资料'
-                    }}<i aria-hidden="true">·</i>{{ formatMaterialDate(material.createdAt) }}</small
-                  ></span
-                >
-                <span class="daily-reading-row__state" :class="{ 'is-error': material.parseStatus === 'FAILED' }">{{
+                    }}<i aria-hidden="true">·</i>{{ formatShortDate(material.createdAt, '最近添加') }}</span
+                  >
+                </span>
+                <span class="study-material__state" :class="{ 'is-error': material.parseStatus === 'FAILED' }">{{
                   formatParseStatus(material.parseStatus)
                 }}</span>
-                <AppIcon class="daily-reading-row__arrow" name="arrow-up-right" :size="20" />
+                <AppIcon class="study-material__arrow" name="arrow-up-right" :size="18" />
               </RouterLink>
             </li>
-          </ol>
-          <div v-if="loadError && materials.length" class="daily-inline-error" role="alert">
-            刷新暂未成功，正在显示上次加载的资料。<button type="button" @click="loadMaterials">重试</button>
+          </ul>
+          <div v-if="loadError && materials.length" class="study-inline-error" role="alert">
+            刷新失败，当前显示上次加载的资料。<button type="button" @click="loadMaterials">重试</button>
           </div>
-        </section>
-
-        <section class="daily-notes" aria-labelledby="daily-notes-title">
-          <RouterLink to="/summary" class="daily-notes__link">
-            <div class="daily-notes__photo">
-              <img
-                :src="forestImage"
-                alt="阳光落在山间的树林里"
-                width="800"
-                height="980"
-                loading="lazy"
-                decoding="async"
-              /><span class="daily-notes__badge"><AppIcon name="arrow-up-right" :size="23" /></span>
-            </div>
-            <div class="daily-notes__copy">
-              <span class="daily-section-index">02 / 思考</span>
-              <h2 id="daily-notes-title"><span>读过之后，</span><span>留点思考。</span></h2>
-              <p>把零散的知识，整理成自己的学习笔记。</p>
-              <span class="daily-text-link">我的笔记<AppIcon name="arrow-right" :size="17" /></span>
-            </div>
+          <RouterLink v-if="materials.length" :to="uploadDestination" class="study-add-material"
+            ><AppIcon name="plus" :size="16" />添加资料</RouterLink
+          >
+        </div>
+      </section>
+      <section class="study-tools" aria-labelledby="study-tools-title">
+        <header class="study-section-heading"><h2 id="study-tools-title">常用工具</h2></header>
+        <nav class="study-tools__panel" aria-label="学习工具">
+          <RouterLink v-for="tool in studyTools" :key="tool.path" :to="tool.path" class="study-tool">
+            <span class="study-tool__icon"><AppIcon :name="tool.icon" :size="20" /></span>
+            <span class="study-tool__copy"
+              ><strong>{{ tool.title }}</strong
+              ><small>{{ tool.description }}</small></span
+            >
+            <AppIcon name="chevron-right" :size="16" />
           </RouterLink>
-        </section>
-      </div>
-
-      <nav class="daily-explore" aria-label="更多学习方式">
-        <RouterLink to="/quiz" class="daily-explore__item"
-          ><AppIcon name="practice" :size="26" /><span><strong>练一练</strong><small>用一次练习，检验理解</small></span
-          ><AppIcon name="arrow-up-right" :size="19"
-        /></RouterLink>
-        <button type="button" class="daily-explore__item" @click="emit('openAssistant')">
-          <AppIcon name="spark" :size="26" /><span><strong>问一问</strong><small>和学习助手一起理清思路</small></span
-          ><AppIcon name="arrow-up-right" :size="19" />
-        </button>
-        <RouterLink to="/analytics" class="daily-explore__item"
-          ><AppIcon name="analytics" :size="26" /><span
-            ><strong>看看进步</strong><small>学习统计与每一次积累</small></span
-          ><AppIcon name="arrow-up-right" :size="19"
-        /></RouterLink>
-      </nav>
+        </nav>
+      </section>
     </div>
+    <section class="study-assistant" aria-labelledby="study-assistant-title">
+      <span class="study-assistant__icon" aria-hidden="true"><AppIcon name="assistant" :size="23" /></span>
+      <div class="study-assistant__copy">
+        <h2 id="study-assistant-title">学习助手</h2>
+        <p>解释概念、查找资料，或帮你分析一道题。</p>
+      </div>
+      <button type="button" class="study-text-link" @click="emit('openAssistant')">
+        打开助手<AppIcon name="arrow-up-right" :size="18" />
+      </button>
+    </section>
   </div>
 </template>
-
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import AppIcon from '@/components/AppIcon.vue'
+import ReadingIllustration from '@/components/ReadingIllustration.vue'
 import { getMaterialPageApi, type MaterialPageItem } from '@/api/modules/material'
 import { useDailyQuote } from '@/composables/useDailyQuote'
 import { useUserStore } from '@/stores/user'
-import lakeImage from '@/assets/scenery/quiet-lake.webp'
-import lakeMobile from '@/assets/scenery/quiet-lake-mobile.webp'
-import forestImage from '@/assets/scenery/forest-light.webp'
 import { formatCharacters, formatShortDate } from '@/utils/format'
 import { formatMaterialType } from '@/utils/labels'
 
@@ -168,38 +162,45 @@ const emit = defineEmits<{ openAssistant: [] }>()
 const userStore = useUserStore()
 const dailyQuote = useDailyQuote()
 const materials = ref<MaterialPageItem[]>([])
-const loading = ref(false)
+const loading = ref(true)
 const loadError = ref(false)
+const hasLoaded = ref(false)
+const animationPaused = ref(false)
+const today = ref(new Date())
+let dateTimer: number | undefined
 let isActive = true
+let requestPending = false
 const displayName = computed(() => userStore.profile?.nickname || userStore.profile?.username || '同学')
-const quoteLines = computed(
-  () => dailyQuote.value.text.match(/[^，；。！？]+[，；。！？]?/g) || [dailyQuote.value.text]
+const todayLabel = computed(() =>
+  new Intl.DateTimeFormat('zh-CN', {
+    timeZone: 'Asia/Shanghai',
+    month: 'long',
+    day: 'numeric',
+    weekday: 'long'
+  }).format(today.value)
 )
-const isLongQuote = computed(() => dailyQuote.value.text.length > 25 || quoteLines.value.length > 2)
 const uploadDestination = { path: '/materials', query: { action: 'upload' } }
 const materialDestination = (id: number) => ({ path: '/materials', query: { materialId: String(id) } })
+const hasNoMaterials = computed(() => hasLoaded.value && !loadError.value && !materials.value.length)
 const learningDestination = computed(() => {
   const readable = materials.value.find((material) => material.parseStatus === 'SUCCESS')
-  return readable
-    ? materialDestination(readable.id)
-    : materials.value.length || loading.value || loadError.value
-      ? { path: '/materials' }
-      : uploadDestination
+  return readable ? materialDestination(readable.id) : hasNoMaterials.value ? uploadDestination : { path: '/materials' }
 })
-const learningHint = computed(() => (materials.value.length ? '打开资料，读懂新知' : '从一份感兴趣的资料开始'))
-const formatMaterialDate = (value?: string) => formatShortDate(value, '最近添加')
+const studyTools = [
+  { path: '/summary', icon: 'summary', title: '学习笔记', description: '查看资料摘要与重点' },
+  { path: '/wrong-questions', icon: 'wrong', title: '错题复习', description: '重做错题，查看解析' },
+  { path: '/analytics', icon: 'analytics', title: '学习统计', description: '查看练习与掌握情况' }
+]
 function formatParseStatus(status: string) {
   return (
-    (
-      { SUCCESS: '继续阅读', FAILED: '需重新解析', PENDING: '等待解析', PROCESSING: '正在解析' } as Record<
-        string,
-        string
-      >
-    )[status?.toUpperCase()] || '查看资料'
+    ({ SUCCESS: '可阅读', FAILED: '解析失败', PENDING: '待解析', PROCESSING: '解析中' } as Record<string, string>)[
+      status?.toUpperCase()
+    ] || '查看资料'
   )
 }
 async function loadMaterials() {
-  if (loading.value) return
+  if (requestPending) return
+  requestPending = true
   loading.value = true
   loadError.value = false
   const requestToken = userStore.token
@@ -208,986 +209,671 @@ async function loadMaterials() {
     if (!isActive || userStore.token !== requestToken) return
     if (!Array.isArray(response.data?.data?.records)) throw new Error('Missing material records')
     materials.value = response.data.data.records
+    hasLoaded.value = true
   } catch {
     if (isActive && userStore.token === requestToken) loadError.value = true
   } finally {
+    requestPending = false
     if (isActive) loading.value = false
   }
 }
-onMounted(loadMaterials)
+function refreshDate() {
+  window.clearTimeout(dateTimer)
+  today.value = new Date()
+  // Update at midnight in Beijing even when the page stays open.
+  const dayMs = 24 * 60 * 60 * 1000
+  const elapsedToday = (today.value.getTime() + 8 * 60 * 60 * 1000) % dayMs
+  dateTimer = window.setTimeout(refreshDate, dayMs - elapsedToday + 100)
+}
+onMounted(() => {
+  void loadMaterials()
+  refreshDate()
+  window.addEventListener('focus', refreshDate)
+  document.addEventListener('visibilitychange', refreshDate)
+})
 onUnmounted(() => {
   isActive = false
+  window.clearTimeout(dateTimer)
+  window.removeEventListener('focus', refreshDate)
+  document.removeEventListener('visibilitychange', refreshDate)
 })
 </script>
-
 <style scoped>
-.daily-home {
-  --home-ink: var(--text);
-  --home-muted: var(--text-secondary);
-  --home-scene-bg: #dce7e4;
-  --home-veil:
-    linear-gradient(
-      90deg,
-      rgb(239 244 236 / 97%) 0%,
-      rgb(239 244 236 / 87%) 27%,
-      rgb(237 242 234 / 37%) 51%,
-      transparent 74%
-    ),
-    linear-gradient(0deg, rgb(18 51 40 / 20%), transparent 36%);
-  --home-actions-bg: rgba(255, 255, 250, 0.88);
-  --home-actions-border: rgba(255, 255, 255, 0.65);
-  --home-actions-shadow: 0 16px 36px -8px rgba(35, 55, 38, 0.12), 0 4px 12px rgba(35, 55, 38, 0.04);
-  --home-action-hover: rgba(255, 255, 255, 0.95);
-  --home-action-divider: var(--line);
-  --home-welcome-bg: rgb(251 252 249 / 87%);
-  --home-welcome-color: #43544a;
-  --home-welcome-border: transparent;
-  --home-scroll-bg: rgba(255, 255, 250, 0.9);
-  --home-scroll-color: #355348;
-  --home-scroll-border: rgba(255, 255, 255, 0.5);
-  --home-scroll-hover: #ffffff;
-  --home-img-filter: none;
-  --home-arrow-learn-bg: var(--brand);
-  --home-arrow-learn-color: #ffffff;
-  --home-arrow-learn-border: var(--brand);
-  --home-arrow-review-border: #b5c2b6;
-  --home-arrow-review-color: inherit;
-  --home-notes-photo-bg: var(--bg-secondary);
-  --home-notes-badge-bg: #fafcf4;
-  --home-notes-badge-color: #364c3f;
-  --home-loading-color: var(--bg-secondary);
-}
-
-.daily-scene {
-  position: relative;
-  min-height: 650px;
-  overflow: hidden;
-  isolation: isolate;
-  background: var(--home-scene-bg);
-  transition: background-color 0.3s ease;
-}
-.daily-scene__picture,
-.daily-scene__picture img,
-.daily-scene__veil {
-  position: absolute;
-  inset: 0;
+.study-home {
   width: 100%;
-  height: 100%;
-}
-.daily-scene__picture {
-  z-index: -3;
-}
-.daily-scene__picture img {
-  object-fit: cover;
-  object-position: center 54%;
-  filter: var(--home-img-filter);
-  transition: filter 0.3s ease;
-}
-.daily-scene__veil {
-  z-index: -2;
-  background: var(--home-veil);
-  transition: background 0.3s ease;
-}
-.daily-scene__inner {
-  display: flex;
-  flex-direction: column;
-  width: min(1296px, 100%);
-  min-height: 650px;
+  max-width: 1240px;
   margin: 0 auto;
-  padding: 43px 48px 40px;
-  color: var(--home-ink);
 }
-.daily-scene__opening {
-  display: flex;
+.study-hero {
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--brand) 13%, var(--bg));
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--brand-soft) 44%, var(--panel));
+}
+.study-hero__main {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
   align-items: center;
-  justify-content: space-between;
+  min-height: 302px;
+  padding: 18px 48px;
   gap: 20px;
 }
-.daily-scene__eyebrow {
-  display: inline-flex;
+.study-hero__copy {
+  min-width: 0;
+  padding: 24px 0;
+}
+.study-hero__eyebrow {
+  display: flex;
   align-items: center;
-  gap: 11px;
+  flex-wrap: wrap;
+  gap: 12px;
+  color: var(--muted);
   font-size: 12px;
+}
+.study-hero__eyebrow > span {
+  color: var(--brand);
   font-weight: 500;
-  letter-spacing: 3px;
 }
-.daily-scene__eyebrow i {
-  width: 6px;
-  height: 6px;
+.study-hero__eyebrow > i {
+  width: 3px;
+  height: 3px;
   border-radius: 50%;
-  background: var(--cinnabar);
+  background: var(--muted);
+  opacity: 0.65;
 }
-.daily-scene__welcome {
-  max-width: 230px;
-  padding: 7px 13px;
-  border-radius: 24px;
-  background: var(--home-welcome-bg);
-  color: var(--home-welcome-color);
-  border: 1px solid var(--home-welcome-border);
-  font-size: 12px;
+.study-hero h1 {
+  display: flex;
+  align-items: baseline;
+  max-width: 100%;
+  margin: 19px 0 13px;
+  color: var(--text);
+  font-size: clamp(28px, 3vw, 39px);
+  font-weight: 550;
+  line-height: 1.45;
+  letter-spacing: -0.04em;
+  white-space: nowrap;
+}
+.study-hero h1 > span {
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  transition: all 0.2s ease;
 }
-.daily-scene__quote {
-  margin-top: 57px;
-  margin-bottom: 45px;
-}
-.daily-scene__quote h1 {
-  max-width: 660px;
+.study-hero__description {
   margin: 0;
-  font-family: 'Noto Serif SC', 'Songti SC', 'STSong', 'SimSun', serif;
-  font-size: clamp(36px, 4.1vw, 55px);
-  font-weight: 400;
-  letter-spacing: -0.04em;
-  line-height: 1.55;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.8;
 }
-.daily-scene__quote h1 span {
-  display: block;
-}
-.daily-scene__quote h1.daily-scene__quote--long {
-  font-size: clamp(30px, 3.2vw, 38px);
-  line-height: 1.5;
-}
-.daily-scene--long-quote .daily-scene__quote {
-  margin-top: 28px;
-  margin-bottom: 22px;
-}
-.daily-scene__source {
+.study-hero__actions {
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin: 21px 0 0;
-  color: var(--home-muted);
-  font-size: 12px;
-  letter-spacing: 0.5px;
-}
-.daily-scene__source > span {
-  color: var(--home-muted);
-  opacity: 0.6;
-  padding-inline: 3px;
-}
-.daily-scene__source cite {
-  font-style: normal;
-}
-.daily-scene__bottom {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 40px;
-  margin-top: auto;
-}
-.daily-actions {
-  display: grid;
-  grid-template-columns: 1.13fr 1fr;
-  width: 630px;
-  max-width: 100%;
-  border-radius: 18px;
-  background: var(--home-actions-bg);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid var(--home-actions-border);
-  box-shadow: var(--home-actions-shadow);
-  overflow: hidden;
-  transition: all 0.25s ease;
-}
-.daily-action {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  min-width: 0;
-  min-height: 116px;
-  padding: 25px 28px;
   gap: 12px;
-  color: var(--home-ink);
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  margin-top: 28px;
 }
-.daily-action--learn {
-  border-radius: 18px 0 0 18px;
-}
-.daily-action--review {
-  position: relative;
-  border-radius: 0 18px 18px 0;
-}
-.daily-action--review::before {
-  position: absolute;
-  top: 28px;
-  bottom: 28px;
-  left: 0;
-  width: 1px;
-  background: var(--home-action-divider);
-  content: '';
-}
-.daily-action:hover {
-  background: var(--home-action-hover);
-}
-.daily-action:hover .daily-action__arrow {
-  transform: translate(2px, -2px) scale(1.05);
-}
-.daily-action > span:first-child {
-  min-width: 0;
-}
-.daily-action strong {
-  display: block;
-  margin-bottom: 7px;
-  font-size: 24px;
-  line-height: 1.3;
-  font-weight: 600;
-  letter-spacing: -0.8px;
-  white-space: nowrap;
-}
-.daily-action small {
-  display: block;
-  color: var(--home-muted);
-  font-size: 12px;
+.study-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-height: 43px;
+  padding: 10px 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
   line-height: 1.5;
+  cursor: pointer;
+  transition:
+    background 0.18s,
+    border-color 0.18s;
 }
-.daily-action__arrow {
+.study-button--primary {
+  color: #fff;
+  background: var(--brand);
+  border-color: var(--brand);
+}
+.study-button--primary:hover {
+  background: var(--brand-hover);
+  border-color: var(--brand-hover);
+}
+.study-button--primary > :last-child {
+  margin-left: 12px;
+}
+.study-button--secondary {
+  color: var(--text-secondary);
+  background: var(--panel);
+  border-color: color-mix(in srgb, var(--brand) 17%, var(--panel));
+}
+.study-button--secondary:hover {
+  color: var(--brand);
+  border-color: var(--brand);
+}
+.study-hero__art {
+  position: relative;
+  width: 100%;
+  max-width: 410px;
+  justify-self: end;
+}
+.study-hero__motion {
+  position: absolute;
+  bottom: 5px;
+  right: -22px;
   display: grid;
   place-items: center;
-  width: 42px;
-  height: 42px;
-  flex: 0 0 42px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--brand) 15%, transparent);
   border-radius: 50%;
-  border: 1px solid var(--home-arrow-review-border);
-  color: var(--home-arrow-review-color);
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
 }
-.daily-action--learn .daily-action__arrow {
-  color: var(--home-arrow-learn-color);
-  border-color: var(--home-arrow-learn-border);
-  background: var(--home-arrow-learn-bg);
+.study-hero__motion:hover {
+  color: var(--brand);
+  background: var(--panel);
 }
-.daily-scene__scroll {
-  display: inline-flex;
-  align-items: center;
-  gap: 13px;
-  min-height: 44px;
-  padding: 0 18px;
-  border-radius: 24px;
-  background: var(--home-scroll-bg);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  color: var(--home-scroll-color);
-  font-size: 12px;
-  white-space: nowrap;
-  border: 1px solid var(--home-scroll-border);
-  transition: all 0.2s ease;
-}
-.daily-scene__scroll:hover {
-  background: var(--home-scroll-hover);
-  color: var(--home-ink);
-  box-shadow: var(--shadow);
-  transform: translateY(-1px);
-}
-.daily-content {
-  max-width: 1296px;
-  margin: 0 auto;
-  padding: 74px 48px 12px;
-  scroll-margin-top: 105px;
-}
-.daily-reading-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
-  align-items: start;
-  gap: 74px;
-}
-.daily-section-heading {
+.study-quote {
   display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 20px;
-  margin-bottom: 23px;
+  align-items: center;
+  flex-wrap: wrap;
+  column-gap: 20px;
+  row-gap: 6px;
+  min-height: 63px;
+  margin: 0 32px;
+  padding: 16px;
+  border-top: 1px solid color-mix(in srgb, var(--brand) 11%, transparent);
+  font-size: 12px;
 }
-.daily-section-index {
-  display: block;
-  margin-bottom: 13px;
+.study-quote__label {
+  flex: 0 0 auto;
+  color: var(--brand);
+}
+.study-quote blockquote {
+  margin: 0;
+  color: var(--text-secondary);
+  font-family: 'Noto Serif SC', 'Songti SC', 'SimSun', serif;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+}
+.study-quote cite {
+  margin-left: auto;
   color: var(--muted);
   font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 2px;
+  font-style: normal;
 }
-.daily-section-heading h2,
-.daily-notes h2 {
+.study-quote cite span {
+  margin-left: 6px;
+}
+.study-home__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 330px;
+  gap: 28px;
+  margin-top: 34px;
+}
+.study-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 32px;
+  margin-bottom: 17px;
+}
+.study-section-heading__title {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  column-gap: 14px;
+}
+.study-section-heading h2 {
   margin: 0;
   color: var(--text);
-  font-size: 29px;
-  font-weight: 550;
-  line-height: 1.5;
-  letter-spacing: -0.8px;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
 }
-.daily-text-link {
+.study-section-heading__title > span {
+  color: var(--muted);
+  font-size: 11px;
+}
+.study-text-link {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  min-height: 44px;
+  justify-content: center;
+  gap: 8px;
+  min-height: 32px;
   padding: 0;
-  border: 0;
   color: var(--brand);
   background: transparent;
-  font: inherit;
-  font-size: 13px;
+  border: 0;
+  font-size: 12px;
+  font-weight: 500;
   white-space: nowrap;
   cursor: pointer;
 }
-.daily-text-link:hover {
+.study-text-link:hover {
   color: var(--brand-hover);
   text-decoration: underline;
-  text-underline-offset: 5px;
+  text-underline-offset: 4px;
 }
-.daily-reading-list {
-  margin: 0;
-  padding: 0;
+.study-library,
+.study-tools {
+  min-width: 0;
+}
+.study-library__panel,
+.study-tools__panel {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+}
+.study-materials {
   list-style: none;
+  margin: 0;
+  padding: 0 22px;
 }
-.daily-reading-list li {
-  border-bottom: 1px solid var(--line);
-}
-.daily-reading-list li:first-child {
+.study-materials > li + li {
   border-top: 1px solid var(--line);
 }
-.daily-reading-row {
+.study-material {
   display: flex;
   align-items: center;
-  gap: 21px;
-  min-width: 0;
-  padding: 18px 12px;
-  border-radius: 12px;
-  color: var(--text);
-  transition: all 0.2s ease;
+  gap: 17px;
+  min-height: 88px;
+  padding: 17px 0;
 }
-.daily-reading-row:hover {
-  background: var(--panel-hover);
-}
-.daily-reading-row:hover .daily-reading-row__copy strong {
-  color: var(--brand);
-}
-.daily-reading-row:hover .daily-reading-row__arrow {
-  transform: translate(2px, -2px);
-}
-.daily-reading-row__arrow {
-  color: var(--brand);
-  transition: transform 0.2s ease;
-}
-.daily-book {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  width: 58px;
-  height: 76px;
-  flex: 0 0 58px;
-  padding: 11px 9px 9px 12px;
-  overflow: hidden;
-  background: #dde2d1;
-  color: #506346;
-  border-radius: 1px 3px 3px 1px;
-  box-shadow: inset 4px 0 0 rgb(36 57 44 / 10%);
-}
-.daily-book i {
-  position: absolute;
-  right: 6px;
-  top: 30px;
-  height: 40px;
-  width: 40px;
-  border: 1px solid currentColor;
-  opacity: 0.18;
-  border-radius: 50%;
-}
-.daily-book small {
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 0.4px;
-}
-.daily-book b {
-  font-family: Georgia, serif;
-  font-size: 25px;
-  line-height: 1;
-  font-weight: 400;
-}
-.daily-book--1 {
-  background: #e7d8c9;
-  color: #8b6447;
-}
-.daily-book--2 {
-  background: #dbe4e6;
-  color: #466875;
-}
-.daily-book--3 {
-  background: #e5dfe7;
-  color: #706079;
-}
-.daily-reading-row__copy {
-  flex: 1;
-  min-width: 0;
-}
-.daily-reading-row__copy strong {
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  color: var(--text);
-  font-size: 16px;
-  font-weight: 500;
-  line-height: 1.7;
-  overflow-wrap: anywhere;
-}
-.daily-reading-row__copy small {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 8px;
-  color: var(--muted);
-  font-size: 11px;
-}
-.daily-reading-row__copy i {
-  font-style: normal;
-  opacity: 0.6;
-}
-.daily-reading-row__state {
-  flex-shrink: 0;
-  font-size: 11px;
-  color: var(--muted);
-}
-.daily-reading-row__state.is-error {
-  color: var(--red);
-}
-.daily-reading-row__arrow {
-  color: var(--brand);
-}
-.daily-first-reading {
-  display: flex;
-  align-items: center;
-  gap: 32px;
-  min-height: 297px;
-  padding: 28px 0;
-  border-block: 1px solid var(--line);
-}
-.daily-first-reading__book {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  flex: 0 0 118px;
-  height: 165px;
-  padding: 19px 18px 16px 22px;
-  overflow: hidden;
-  color: #f5f4e9;
-  background: #537060;
-  border-radius: 1px 4px 4px 1px;
-  box-shadow: inset 6px 0 0 #395a49;
-}
-.daily-first-reading__book > span {
-  font-family: 'Noto Serif SC', 'Songti SC', serif;
-  font-size: 24px;
-  letter-spacing: 4px;
-}
-.daily-first-reading__book > i {
-  position: absolute;
-  top: 32px;
-  right: -29px;
-  width: 120px;
-  height: 120px;
-  border: 1px solid #f5f4e938;
-  border-radius: 50%;
-}
-.daily-first-reading__book > small {
-  position: relative;
-  font-size: 9px;
-  letter-spacing: 1px;
-}
-.daily-first-reading__copy h3 {
-  margin: 0 0 13px;
-  font-size: 21px;
-  font-weight: 450;
-  line-height: 1.7;
-  letter-spacing: -0.4px;
-}
-.daily-first-reading__copy p {
-  margin: 0 0 17px;
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.8;
-}
-.daily-reading-state {
-  padding: 54px 20px;
-  border-block: 1px solid var(--line);
-  color: var(--muted);
-  text-align: center;
-}
-.daily-reading-state > .app-icon {
-  margin: 0 auto 16px;
-}
-.daily-reading-state h3 {
-  margin: 0;
-  color: var(--text);
-  font-size: 18px;
-  font-weight: 500;
-}
-.daily-reading-state p {
-  margin: 10px 0;
-  font-size: 13px;
-}
-.daily-inline-error {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  color: var(--red);
-  font-size: 12px;
-}
-.daily-inline-error button {
-  min-height: 44px;
-  border: 0;
-  background: transparent;
-  color: var(--brand);
-  cursor: pointer;
-}
-.daily-loading__row {
-  display: flex;
-  align-items: center;
-  gap: 22px;
-  height: 117px;
-  border-bottom: 1px solid var(--line);
-}
-.daily-loading__row > span {
-  width: 58px;
-  height: 76px;
-  background: var(--home-loading-color);
-}
-.daily-loading__row > div {
-  flex: 1;
-}
-.daily-loading__row i {
-  display: block;
-  width: 70%;
-  height: 13px;
-  margin-block: 15px;
-  background: var(--home-loading-color);
-  border-radius: 3px;
-}
-.daily-loading__row i + i {
-  width: 42%;
-  height: 9px;
-}
-.daily-notes__link {
-  display: block;
-  color: var(--text);
-}
-.daily-notes__photo {
-  position: relative;
-  height: 250px;
-  overflow: hidden;
-  background: var(--home-notes-photo-bg);
-  border-radius: 3px;
-}
-.daily-notes__photo img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center 49%;
-  transition: transform 0.5s;
-}
-.daily-notes__link:hover img {
-  transform: scale(1.035);
-}
-.daily-notes__badge {
-  position: absolute;
+.study-document {
   display: grid;
   place-items: center;
-  right: 17px;
-  bottom: 17px;
-  width: 42px;
-  height: 42px;
-  color: var(--home-notes-badge-color);
-  background: var(--home-notes-badge-bg);
-  border-radius: 50%;
+  flex: 0 0 47px;
+  height: 52px;
+  border-radius: 7px;
+  color: #708d78;
+  background: #edf2ed;
 }
-.daily-notes__copy {
-  padding-top: 24px;
+.study-document--1 {
+  color: #a49171;
+  background: #f5f1e9;
 }
-.daily-notes .daily-section-index {
-  margin-bottom: 8px;
+.study-document--2 {
+  color: #7d8c9e;
+  background: #eef1f5;
 }
-.daily-notes h2 {
-  font-size: 22px;
+.study-material__copy {
+  flex: 1;
+  min-width: 0;
 }
-.daily-notes p {
-  margin: 10px 0 8px;
+.study-material__copy > strong {
+  display: block;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  transition: color 0.18s;
+}
+.study-material:hover .study-material__copy > strong {
+  color: var(--brand);
+}
+.study-material__meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  column-gap: 7px;
+  margin-top: 7px;
   color: var(--muted);
-  font-size: 13px;
-  line-height: 1.8;
+  font-size: 11px;
 }
-.daily-explore {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 20px;
-  margin-top: 67px;
-  padding-top: 28px;
+.study-material__meta i {
+  color: var(--line);
+  font-style: normal;
+}
+.study-material__state {
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.study-material__arrow {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+.study-material__state.is-error {
+  color: var(--red);
+}
+.study-add-material {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 42px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  background: color-mix(in srgb, var(--bg) 48%, var(--panel));
+  font-size: 12px;
+}
+.study-add-material:hover {
+  color: var(--brand);
+  background: var(--brand-light);
+}
+.study-tool {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  min-height: 103px;
+  margin: 0 22px;
+  padding: 20px 0;
+}
+.study-tool + .study-tool {
   border-top: 1px solid var(--line);
 }
-.daily-explore__item {
+.study-tool__icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--brand);
+  background: var(--bg);
+  transition: background 0.18s;
+}
+.study-tool__copy {
+  flex: 1;
+  min-width: 0;
+}
+.study-tool__copy strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+}
+.study-tool__copy small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.study-tool > .app-icon {
+  color: var(--muted);
+}
+.study-tool:hover .study-tool__icon {
+  background: var(--brand-soft);
+}
+.study-tool:hover strong {
+  color: var(--brand);
+}
+.study-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 306px;
+  padding: 28px 20px;
+  text-align: center;
+}
+.study-empty__icon {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  margin-bottom: 14px;
+  color: var(--brand);
+  background: var(--brand-light);
+  border-radius: 14px;
+}
+.study-empty h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 500;
+}
+.study-empty p {
+  margin: 7px 0 20px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.study-loading {
+  min-height: 306px;
+  padding: 0 22px;
+}
+.study-loading__row {
   display: flex;
   align-items: center;
   gap: 18px;
-  min-width: 0;
-  padding: 18px 22px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
+  height: 88px;
+  border-bottom: 1px solid var(--line);
+}
+.study-loading__row > span {
+  width: 47px;
+  height: 52px;
+  border-radius: 7px;
+  background: var(--bg-secondary);
+}
+.study-loading__row > div {
+  flex: 1;
+}
+.study-loading__row i {
+  display: block;
+  width: 60%;
+  height: 12px;
+  border-radius: 3px;
+  background: var(--bg-secondary);
+}
+.study-loading__row i + i {
+  width: 40%;
+  height: 8px;
+  margin-top: 12px;
+}
+.study-inline-error {
+  padding: 12px 22px;
+  color: var(--red);
+  font-size: 12px;
+}
+.study-inline-error button {
+  padding: 4px 8px;
+  color: inherit;
+  border: 0;
+  background: transparent;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.study-assistant {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  margin-top: 24px;
+  padding: 20px 25px;
+  background: color-mix(in srgb, var(--brand-soft) 35%, var(--bg));
+  border: 1px solid color-mix(in srgb, var(--brand) 11%, var(--bg));
+  border-radius: 12px;
+}
+.study-assistant__icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
   color: var(--brand);
   background: var(--panel);
-  text-align: left;
-  font: inherit;
-  cursor: pointer;
-  box-shadow: var(--shadow-sm);
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  border: 1px solid var(--line);
+  border-radius: 12px;
 }
-.daily-explore__item:first-child {
-  padding-left: 22px;
-}
-.daily-explore__item:last-child {
-  padding-right: 22px;
-}
-.daily-explore__item:hover {
-  background: var(--panel-hover);
-  border-color: var(--brand);
-  box-shadow: var(--shadow);
-  transform: translateY(-2px);
-}
-.daily-explore__item > span {
+.study-assistant__copy {
   flex: 1;
   min-width: 0;
 }
-.daily-explore__item strong {
-  display: block;
-  margin-bottom: 5px;
-  color: var(--text);
-  font-size: 16px;
-  font-weight: 600;
-  transition: color 0.18s ease;
+.study-assistant h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
 }
-.daily-explore__item small {
-  display: block;
+.study-assistant p {
+  margin: 4px 0 0;
   color: var(--muted);
   font-size: 12px;
-}
-.daily-explore__item:hover strong {
-  color: var(--brand);
+  line-height: 1.7;
 }
 @media (max-width: 1100px) {
-  .daily-scene,
-  .daily-scene__inner {
-    min-height: 600px;
+  .study-hero__main {
+    padding-inline: 32px;
   }
-  .daily-scene__inner {
-    padding-inline: 40px;
+  .study-hero h1 {
+    font-size: 32px;
   }
-  .daily-scene__quote {
-    margin-top: 52px;
+  .study-hero__art {
+    max-width: 340px;
   }
-  .daily-scene__scroll {
+  .study-quote {
+    margin-inline: 16px;
+  }
+  .study-home__body {
+    grid-template-columns: minmax(0, 1fr) 280px;
+    gap: 22px;
+  }
+  .study-section-heading__title > span {
     display: none;
   }
-  .daily-reading-layout {
-    gap: 40px;
-    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  .study-material {
+    display: grid;
+    grid-template-columns: 47px minmax(0, 1fr) 18px;
+    gap: 5px 14px;
   }
-  .daily-content {
-    padding-inline: 40px;
+  .study-document {
+    grid-row: 1 / 3;
   }
-  .daily-reading-row__state {
-    display: none;
+  .study-material__copy {
+    grid-column: 2;
   }
-  .daily-first-reading {
-    gap: 23px;
+  .study-material__state {
+    grid-column: 2;
+    grid-row: 2;
   }
-  .daily-first-reading__book {
-    flex-basis: 98px;
-    height: 140px;
-  }
-  .daily-first-reading__copy h3 {
-    font-size: 19px;
-  }
-  .daily-explore__item {
-    padding-inline: 17px;
-    gap: 13px;
-  }
-  .daily-explore__item > .app-icon:first-child {
-    display: none;
+  .study-material__arrow {
+    grid-column: 3;
+    grid-row: 1 / 3;
   }
 }
 @media (max-width: 760px) {
-  .daily-scene,
-  .daily-scene__inner {
-    min-height: max(600px, calc(100svh - 146px));
+  .study-hero {
+    border-radius: 14px;
   }
-  .daily-scene__picture img {
-    object-position: center 48%;
+  .study-hero__main {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+    padding: 26px 24px 0;
   }
-  .daily-scene__veil {
-    background: linear-gradient(
-      180deg,
-      rgb(235 242 238 / 95%) 0%,
-      rgb(235 242 238 / 75%) 27%,
-      rgb(235 242 238 / 12%) 54%,
-      rgb(22 55 44 / 8%) 76%,
-      rgb(21 44 36 / 13%) 100%
-    );
-  }
-  .daily-scene--long-quote .daily-scene__veil {
-    background: linear-gradient(
-      180deg,
-      rgb(235 242 238 / 98%) 0%,
-      rgb(235 242 238 / 92%) 32%,
-      rgb(235 242 238 / 75%) 47%,
-      rgb(235 242 238 / 12%) 65%,
-      rgb(21 44 36 / 13%) 100%
-    );
-  }
-  .daily-scene__inner {
-    padding: 29px 23px 28px;
-  }
-  .daily-scene__eyebrow {
-    font-size: 11px;
-    gap: 8px;
-    letter-spacing: 2px;
-  }
-  .daily-scene__welcome {
+  .study-hero__copy {
     padding: 0;
-    background: transparent;
-    border: none;
-    max-width: 170px;
-    color: var(--home-muted);
+  }
+  .study-hero__eyebrow {
     font-size: 11px;
-  }
-  .daily-scene__quote {
-    margin-top: 46px;
-    margin-bottom: 32px;
-  }
-  .daily-scene--long-quote .daily-scene__quote {
-    margin-top: 46px;
-    margin-bottom: 32px;
-  }
-  .daily-scene__quote h1 {
-    max-width: 540px;
-    font-size: clamp(30px, 7.7vw, 42px);
-    font-weight: 500;
-    line-height: 1.7;
-    letter-spacing: -0.055em;
-  }
-  .daily-scene__quote h1.daily-scene__quote--long {
-    font-size: clamp(25px, 6.7vw, 36px);
-    line-height: 1.65;
-  }
-  .daily-scene__source {
-    margin-top: 19px;
-    gap: 4px;
-    max-width: 300px;
-    font-size: 11px;
-  }
-  .daily-actions {
-    width: 100%;
-    grid-template-columns: 1.08fr 1fr;
-    border-radius: 12px;
-  }
-  .daily-action {
-    min-height: 100px;
-    padding: 20px 17px;
     gap: 9px;
   }
-  .daily-action strong {
-    margin-bottom: 8px;
-    font-size: 22px;
-    letter-spacing: -0.6px;
+  .study-hero h1 {
+    margin-top: 16px;
+    font-size: clamp(24px, 6vw, 32px);
   }
-  .daily-action small {
+  .study-hero__description {
+    font-size: 12px;
+  }
+  .study-hero__actions {
+    margin-top: 22px;
+    gap: 9px;
+  }
+  .study-button {
+    min-height: 44px;
+    padding-inline: 14px;
+    font-size: 12px;
+  }
+  .study-button--primary > :last-child {
+    margin-left: 2px;
+  }
+  .study-hero__art {
+    width: min(100%, 280px);
+    margin: 0 auto;
+    justify-self: center;
+  }
+  .study-hero__motion {
+    right: -6px;
+    bottom: 18px;
+    width: 32px;
+    height: 32px;
+  }
+  .study-quote {
+    gap: 7px 12px;
+    margin-inline: 20px;
+    padding: 15px 0 18px;
+  }
+  .study-quote blockquote {
+    flex: 1 1 calc(100% - 70px);
+    font-size: 12px;
+  }
+  .study-quote cite {
+    width: 100%;
+    text-align: right;
     font-size: 10px;
-    line-height: 1.6;
   }
-  .daily-action--learn {
-    border-radius: 12px 0 0 12px;
-  }
-  .daily-action--review {
-    border-radius: 0 12px 12px 0;
-  }
-  .daily-action__arrow {
-    flex-basis: 25px;
-    width: 25px;
-    height: 25px;
-    border: 0;
-    background: none;
-  }
-  .daily-action--learn .daily-action__arrow {
-    background: none;
-    color: var(--home-ink);
-  }
-  .daily-action__arrow .app-icon {
-    width: 20px;
-    height: 20px;
-  }
-  .daily-action--review::before {
-    top: 23px;
-    bottom: 23px;
-  }
-  .daily-content {
-    padding: 48px 23px 0;
-    scroll-margin-top: 95px;
-  }
-  .daily-reading-layout {
+  .study-home__body {
     grid-template-columns: minmax(0, 1fr);
-    gap: 43px;
+    gap: 26px;
+    margin-top: 26px;
   }
-  .daily-section-heading {
-    gap: 14px;
-    margin-bottom: 22px;
+  .study-section-heading {
+    margin-bottom: 12px;
   }
-  .daily-section-index {
-    font-size: 10px;
-    margin-bottom: 9px;
-  }
-  .daily-section-heading h2 {
-    font-size: 27px;
-  }
-  .daily-section-heading .daily-text-link {
-    font-size: 12px;
-    gap: 5px;
-  }
-  .daily-reading-row {
-    padding-block: 18px;
-    gap: 17px;
-  }
-  .daily-reading-row__copy strong {
-    font-size: 15px;
-  }
-  .daily-reading-row__copy small {
-    font-size: 10px;
-    gap: 6px;
-  }
-  .daily-first-reading {
-    min-height: 235px;
-    gap: 24px;
-  }
-  .daily-first-reading__copy h3 {
-    font-size: 18px;
-  }
-  .daily-first-reading__copy p {
-    font-size: 12px;
-    margin-bottom: 10px;
-  }
-  .daily-first-reading__book {
-    flex-basis: 91px;
-    height: 134px;
-    padding: 17px 12px 14px 17px;
-  }
-  .daily-first-reading__book > span {
-    font-size: 21px;
-  }
-  .daily-first-reading__book > small {
-    font-size: 8px;
-    letter-spacing: 0;
-  }
-  .daily-notes__link {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
-    align-items: center;
-    gap: 25px;
-  }
-  .daily-notes__photo {
-    height: 220px;
-  }
-  .daily-notes__copy {
-    padding: 0;
-  }
-  .daily-notes h2 {
-    font-size: 21px;
-    line-height: 1.65;
-  }
-  .daily-notes h2 > span {
-    display: block;
-  }
-  .daily-notes p {
-    margin-block: 11px 4px;
-    font-size: 12px;
-  }
-  .daily-notes__badge {
-    right: 12px;
-    bottom: 12px;
-    width: 34px;
-    height: 34px;
-  }
-  .daily-notes__badge > .app-icon {
-    width: 20px;
-    height: 20px;
-  }
-  .daily-explore {
-    grid-template-columns: minmax(0, 1fr);
-    margin-top: 40px;
-    padding-top: 7px;
-  }
-  .daily-explore__item,
-  .daily-explore__item:first-child,
-  .daily-explore__item:last-child {
-    padding: 23px 0;
-    gap: 21px;
-  }
-  .daily-explore__item + .daily-explore__item {
-    border-left: 0;
-    border-top: 1px solid var(--line);
-  }
-  .daily-explore__item > .app-icon:first-child {
-    display: block;
-  }
-  .daily-explore__item strong {
-    font-size: 17px;
-  }
-  .daily-explore__item small {
-    font-size: 12px;
-  }
-}
-@media (max-width: 360px) {
-  .daily-scene__inner,
-  .daily-content {
-    padding-inline: 19px;
-  }
-  .daily-action {
-    padding-inline: 13px;
-    gap: 7px;
-  }
-  .daily-action strong {
-    font-size: 20px;
-  }
-  .daily-action__arrow {
-    flex-basis: 20px;
-    width: 20px;
-    height: 20px;
-  }
-  .daily-action small {
-    font-size: 9px;
-  }
-  .daily-scene__welcome {
-    max-width: 142px;
-  }
-  .daily-first-reading {
-    gap: 16px;
-  }
-  .daily-first-reading__copy h3 {
+  .study-section-heading h2 {
     font-size: 16px;
   }
-  .daily-notes__link {
-    gap: 18px;
+  .study-materials {
+    padding-inline: 16px;
+  }
+  .study-material {
+    grid-template-columns: 41px minmax(0, 1fr) 18px;
+    gap: 5px 12px;
+    min-height: 86px;
+  }
+  .study-material__copy > strong {
+    font-size: 13px;
+  }
+  .study-material__meta {
+    gap: 5px;
+    font-size: 11px;
+  }
+  .study-document {
+    width: 41px;
+    height: 48px;
+    flex-basis: 41px;
+  }
+  .study-add-material {
+    min-height: 44px;
+  }
+  .study-tool {
+    min-height: 84px;
+    margin-inline: 18px;
+    padding-block: 16px;
+  }
+  .study-empty,
+  .study-loading {
+    min-height: 280px;
+  }
+  .study-assistant {
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 22px;
+    padding: 18px;
+  }
+  .study-assistant__icon {
+    display: none;
+  }
+  .study-assistant__copy {
+    flex-basis: 100%;
+  }
+  .study-assistant > button {
+    min-height: 36px;
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .daily-action,
-  .daily-notes__photo img {
-    transition: none;
-  }
-  .daily-notes__link:hover img {
-    transform: none;
+  .study-hero__motion {
+    display: none;
   }
 }
 </style>

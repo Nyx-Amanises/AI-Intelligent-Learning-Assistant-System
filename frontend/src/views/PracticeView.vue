@@ -17,13 +17,13 @@
     </nav>
     <div class="page-header">
       <div>
-        <div class="learning-eyebrow">练习与复盘</div>
+        <div class="learning-eyebrow">练习与复习</div>
         <h1 class="page-title">我的练习</h1>
-        <p class="page-desc">专注完成每一道题，也把每一次答错变成进步的起点。</p>
+        <p class="page-desc">继续作答，或查看历史练习的成绩与解析。</p>
       </div>
       <div class="toolbar toolbar--flush">
         <el-button v-if="assistantPracticeContext" type="primary" @click="analyzePractice"
-          >让助手分析这次练习</el-button
+          >用助手分析练习</el-button
         >
         <el-button :loading="historyLoading" @click="loadHistory">刷新记录</el-button>
       </div>
@@ -112,7 +112,7 @@
           v-else-if="detailError && detailSessionId"
           variant="error"
           icon="refresh"
-          title="练习暂时没能打开"
+          title="练习加载失败"
           :description="detailError"
         >
           <el-button @click="activeTab = 'history'">查看历史记录</el-button>
@@ -121,11 +121,11 @@
         <EmptyState
           v-else
           icon="practice"
-          title="给自己留一段专注学习的时间"
+          title="尚未选择练习"
           :description="
             total
               ? '在历史记录中继续未完成的练习，或选择一套新题集。'
-              : '从一套小练习开始，检验理解，再有针对性地复习。'
+              : '选择一套题集开始作答，提交后可查看成绩与解析。'
           "
         >
           <el-button v-if="total" @click="activeTab = 'history'">查看历史记录</el-button>

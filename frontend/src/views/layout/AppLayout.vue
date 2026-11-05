@@ -163,7 +163,7 @@
       </div>
       <footer class="workspace-footer">
         <span>{{ APP_NAME }}</span
-        ><span>让每一次学习，都有所收获。</span>
+        ><span>资料 · 笔记 · 练习</span>
       </footer>
     </main>
 
@@ -198,7 +198,7 @@
           clearable
           size="large"
         />
-        <p class="workspace-search-help">在你的资料中查找，继续上一次的学习。</p>
+        <p class="workspace-search-help">按资料名称、标签或说明查找。</p>
         <div class="workspace-search-actions">
           <el-button @click="searchVisible = false">取消</el-button
           ><el-button type="primary" native-type="submit">搜索资料</el-button>
@@ -415,7 +415,7 @@ onUnmounted(() => {
 
 <style scoped>
 .learning-shell {
-  --shell-header-height: 88px;
+  --shell-header-height: 76px;
   min-height: 100dvh;
   background: var(--bg);
 }
@@ -436,27 +436,27 @@ onUnmounted(() => {
 .workspace-topbar__inner {
   display: flex;
   align-items: center;
-  gap: 42px;
+  gap: 40px;
   width: 100%;
-  max-width: 1440px;
+  max-width: 1320px;
   height: 100%;
   margin-inline: auto;
-  padding-inline: 48px;
+  padding-inline: 40px;
 }
 .workspace-topbar__brand {
   display: flex;
   align-items: center;
-  flex: 0 0 138px;
+  flex: 0 0 112px;
   min-height: 48px;
   border-radius: 4px;
 }
 .workspace-topbar__brand :deep(.brand-logo) {
-  width: 138px;
+  width: 112px;
 }
 .workspace-primary-nav {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   margin-right: auto;
 }
 .workspace-primary-nav__item {
@@ -464,11 +464,12 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 8px 16px;
-  border-radius: 999px;
+  min-height: 40px;
+  padding: 7px 15px;
+  border-radius: 8px;
   color: var(--muted);
   text-decoration: none;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 500;
   letter-spacing: 0.02em;
   white-space: nowrap;
@@ -481,7 +482,7 @@ onUnmounted(() => {
 .workspace-primary-nav__item.is-active {
   color: var(--brand);
   font-weight: 600;
-  background: var(--brand-light);
+  background: var(--brand-soft);
 }
 .workspace-topbar__actions,
 .workspace-account {
@@ -490,7 +491,7 @@ onUnmounted(() => {
   min-width: 0;
 }
 .workspace-topbar__actions {
-  gap: 11px;
+  gap: 8px;
 }
 .workspace-account {
   gap: 0;
@@ -503,8 +504,8 @@ onUnmounted(() => {
   height: 38px;
   padding: 0 13px;
   border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--panel);
+  border-radius: 8px;
+  background: transparent;
   color: var(--text-secondary);
   font-size: 13px;
   white-space: nowrap;
@@ -514,8 +515,7 @@ onUnmounted(() => {
 .workspace-search-trigger:hover {
   color: var(--text);
   background: var(--panel-hover);
-  border-color: var(--brand);
-  box-shadow: var(--shadow-sm);
+  border-color: color-mix(in srgb, var(--brand) 35%, var(--line));
 }
 .workspace-search-trigger kbd {
   padding: 2px 6px;
@@ -531,18 +531,17 @@ onUnmounted(() => {
   place-items: center;
   width: 38px;
   height: 38px;
-  border: 1px solid var(--line);
-  border-radius: 50%;
-  background: var(--panel);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.2s ease;
 }
 .workspace-theme-trigger:hover {
   color: var(--brand);
-  border-color: var(--brand);
+  border-color: var(--line);
   background: var(--brand-light);
-  transform: translateY(-1px);
 }
 .workspace-theme-menu {
   min-width: 170px;
@@ -575,13 +574,9 @@ onUnmounted(() => {
   gap: 7px;
   height: 38px;
   padding: 0 15px;
-  border: 1px solid color-mix(in srgb, var(--brand) 25%, transparent);
-  border-radius: 999px;
-  background: linear-gradient(
-    135deg,
-    color-mix(in srgb, var(--brand) 9%, transparent) 0%,
-    color-mix(in srgb, var(--accent) 10%, transparent) 100%
-  );
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--brand-light);
   color: var(--brand);
   font-size: 13px;
   font-weight: 550;
@@ -590,15 +585,9 @@ onUnmounted(() => {
   transition: all 0.2s ease;
 }
 .workspace-assistant-trigger:hover {
-  background: linear-gradient(
-    135deg,
-    color-mix(in srgb, var(--brand) 15%, transparent) 0%,
-    color-mix(in srgb, var(--accent) 17%, transparent) 100%
-  );
-  border-color: color-mix(in srgb, var(--brand) 40%, transparent);
+  background: var(--brand-soft);
+  border-color: color-mix(in srgb, var(--brand) 35%, var(--line));
   color: var(--brand-hover);
-  box-shadow: var(--shadow-sm);
-  transform: translateY(-1px);
 }
 .workspace-user {
   display: grid;
@@ -614,7 +603,7 @@ onUnmounted(() => {
   place-items: center;
   width: 36px;
   height: 36px;
-  border: 1.5px solid color-mix(in srgb, var(--brand) 28%, transparent);
+  border: 1px solid var(--line);
   border-radius: 50%;
   object-fit: cover;
   background: var(--bg-secondary);
@@ -625,8 +614,6 @@ onUnmounted(() => {
 }
 .workspace-user:hover .workspace-user__avatar {
   border-color: var(--brand);
-  transform: scale(1.06);
-  box-shadow: var(--shadow-sm);
 }
 .workspace-account__menu,
 .workspace-more-trigger {
@@ -637,7 +624,7 @@ onUnmounted(() => {
   flex: 0 0 44px;
   padding: 0;
   border: 0;
-  border-radius: 50%;
+  border-radius: 8px;
   background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
@@ -646,7 +633,8 @@ onUnmounted(() => {
     background-color 0.18s ease;
 }
 .workspace-account__menu {
-  width: 44px;
+  width: 28px;
+  flex-basis: 28px;
   min-height: 44px;
 }
 .workspace-account__menu:hover,
@@ -660,35 +648,27 @@ onUnmounted(() => {
 }
 .workspace-content {
   width: 100%;
-  max-width: 1296px;
+  max-width: 1320px;
   min-height: calc(100dvh - var(--shell-header-height));
   margin-inline: auto;
-  padding: 42px 48px 30px;
+  padding: 36px 40px 28px;
   outline: none;
   scroll-margin-top: calc(var(--shell-header-height) + 20px);
   overflow-x: clip;
 }
-.workspace-content--home,
-.workspace-content:has(.daily-home) {
-  max-width: 100% !important;
-  padding: 0 0 30px !important;
+.workspace-content--home {
+  padding-top: 32px;
 }
 .workspace-footer {
   display: flex;
   justify-content: space-between;
   gap: 20px;
-  margin-top: 64px;
-  padding-top: 24px;
+  margin-top: 48px;
+  padding-top: 20px;
   border-top: 1px solid var(--line);
   color: var(--muted);
   font-size: 12px;
   letter-spacing: 0.06em;
-}
-.workspace-content--home .workspace-footer,
-.workspace-content:has(.daily-home) .workspace-footer {
-  max-width: 1296px;
-  margin: 64px auto 0;
-  padding-inline: 48px;
 }
 .workspace-bottom-nav {
   display: none;
@@ -751,11 +731,11 @@ onUnmounted(() => {
 
 @media (max-width: 1180px) {
   .workspace-topbar__inner {
-    gap: 30px;
+    gap: 28px;
     padding-inline: 32px;
   }
   .workspace-primary-nav {
-    gap: 23px;
+    gap: 8px;
   }
   .workspace-topbar__actions {
     gap: 9px;
@@ -767,26 +747,19 @@ onUnmounted(() => {
   .workspace-content {
     padding-inline: 32px;
   }
-  .workspace-content--home {
-    padding-inline: 0;
-  }
-  .workspace-content--home .workspace-footer {
-    padding-inline: 32px;
-    margin-inline: auto;
-  }
 }
 @media (max-width: 960px) {
   .workspace-topbar__inner {
-    gap: 24px;
+    gap: 18px;
   }
   .workspace-topbar__brand {
-    flex-basis: 124px;
+    flex-basis: 104px;
   }
   .workspace-topbar__brand :deep(.brand-logo) {
-    width: 124px;
+    width: 104px;
   }
   .workspace-primary-nav {
-    gap: 15px;
+    gap: 4px;
   }
   .workspace-assistant-trigger {
     margin-inline: 0;
@@ -797,7 +770,7 @@ onUnmounted(() => {
 }
 @media (max-width: 760px) {
   .learning-shell {
-    --shell-header-height: calc(72px + env(safe-area-inset-top));
+    --shell-header-height: calc(68px + env(safe-area-inset-top));
     padding-bottom: calc(74px + env(safe-area-inset-bottom));
   }
   .workspace-topbar {
@@ -809,10 +782,10 @@ onUnmounted(() => {
     padding-inline: 22px;
   }
   .workspace-topbar__brand {
-    flex-basis: 110px;
+    flex-basis: 100px;
   }
   .workspace-topbar__brand :deep(.brand-logo) {
-    width: 110px;
+    width: 100px;
   }
   .workspace-primary-nav,
   .workspace-assistant-trigger,
@@ -828,20 +801,13 @@ onUnmounted(() => {
   }
   .workspace-content {
     min-height: calc(100dvh - var(--shell-header-height) - 74px - env(safe-area-inset-bottom));
-    padding: 28px 22px 28px;
-  }
-  .workspace-content--home {
-    padding: 0 0 24px;
+    padding: 24px 22px;
   }
   .workspace-footer {
     gap: 12px;
     margin-top: 46px;
     padding-top: 22px;
     font-size: 12px;
-  }
-  .workspace-content--home .workspace-footer {
-    padding-inline: 22px;
-    margin-inline: auto;
   }
   .workspace-bottom-nav {
     position: fixed;
@@ -855,7 +821,7 @@ onUnmounted(() => {
     min-height: calc(74px + env(safe-area-inset-bottom));
     padding: 8px 18px calc(8px + env(safe-area-inset-bottom));
     border-top: 1px solid var(--line);
-    background: var(--bg);
+    background: var(--topbar-bg);
   }
   .workspace-bottom-nav__item {
     display: flex;
@@ -896,14 +862,13 @@ onUnmounted(() => {
     flex-wrap: wrap;
   }
 }
-/* 顶栏微光流光进度条 */
+/* 路由加载进度 */
 .workspace-progress-bar {
   position: fixed;
   top: 0;
   left: 0;
-  height: 2.5px;
-  background: linear-gradient(90deg, var(--brand) 0%, var(--brand) 60%, var(--accent) 100%);
-  box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 45%, transparent);
+  height: 2px;
+  background: var(--brand);
   z-index: 10000;
   pointer-events: none;
   transition:
@@ -923,14 +888,14 @@ onUnmounted(() => {
   width: 100%;
 }
 
-/* 动效核心：手机原生左右滑动手感（iOS UINavigationController 视差推进阻尼曲线） */
+/* 页面切换保持轻微位移，避免大幅横移打断阅读。 */
 .slide-left-enter-active,
 .slide-left-leave-active,
 .slide-right-enter-active,
 .slide-right-leave-active {
   transition:
-    transform 0.36s cubic-bezier(0.25, 1, 0.5, 1),
-    opacity 0.36s cubic-bezier(0.25, 1, 0.5, 1);
+    transform 0.22s ease,
+    opacity 0.22s ease;
   will-change: transform, opacity;
 }
 
@@ -952,24 +917,22 @@ onUnmounted(() => {
   z-index: 2;
 }
 
-/* 1. 向左滑动 (Next / 前进)：新页面从右侧 100% 滑入，旧页面向左偏移 28% 视差淡出 */
 .slide-left-enter-from {
-  transform: translateX(100%);
-  opacity: 0.85;
+  transform: translateX(12px);
+  opacity: 0;
 }
 .slide-left-leave-to {
-  transform: translateX(-28%);
+  transform: translateX(-12px);
   opacity: 0;
 }
 
-/* 2. 向右滑动 (Back / 返回)：旧页面向右侧 100% 滑出，新页面从左侧 -28% 视差滑入 */
 .slide-right-enter-from {
-  transform: translateX(-28%);
+  transform: translateX(-12px);
   opacity: 0;
 }
 .slide-right-leave-to {
-  transform: translateX(100%);
-  opacity: 0.85;
+  transform: translateX(12px);
+  opacity: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {

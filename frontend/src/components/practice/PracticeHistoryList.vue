@@ -61,16 +61,16 @@
         />
       </div>
     </template>
-    <EmptyState v-else-if="error" variant="error" icon="refresh" title="练习记录暂时没能加载" :description="error">
+    <EmptyState v-else-if="error" variant="error" icon="refresh" title="练习记录加载失败" :description="error">
       <el-button type="primary" @click="emit('reload')">重新加载</el-button>
     </EmptyState>
     <EmptyState
       v-else
       icon="practice"
-      title="你的练习记录，从这里开始"
+      title="还没有练习记录"
       description="选择一套题集完成练习，成绩与答案都会保存在这里。"
     >
-      <el-button type="primary" @click="router.push('/quiz')">去选择题集</el-button>
+      <el-button type="primary" @click="router.push('/quiz')">选择题集</el-button>
     </EmptyState>
   </div>
 </template>

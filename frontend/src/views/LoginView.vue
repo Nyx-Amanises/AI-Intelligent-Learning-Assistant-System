@@ -33,7 +33,7 @@
                   required
                   :disabled="submitting"
                   :maxlength="isRegister ? 20 : undefined"
-                  :placeholder="isRegister ? '4–20 位用户名' : '请输入你的用户名'"
+                  :placeholder="isRegister ? '4–20 位用户名' : '输入用户名'"
                   :aria-invalid="Boolean(errors.username)"
                   :aria-describedby="errors.username ? 'auth-username-error' : undefined"
                   @blur="validateField('username')"
@@ -52,7 +52,7 @@
                   maxlength="20"
                   required
                   :disabled="submitting"
-                  placeholder="怎么称呼你"
+                  placeholder="输入昵称"
                   :aria-invalid="Boolean(errors.nickname)"
                   :aria-describedby="errors.nickname ? 'auth-nickname-error' : undefined"
                   @blur="validateField('nickname')"
@@ -74,7 +74,7 @@
                   :minlength="isRegister ? 8 : undefined"
                   :maxlength="isRegister ? 20 : undefined"
                   :disabled="submitting"
-                  :placeholder="isRegister ? '设置密码' : '请输入你的密码'"
+                  :placeholder="isRegister ? '设置密码' : '输入密码'"
                   :aria-invalid="Boolean(errors.password)"
                   :aria-describedby="passwordDescription"
                   required

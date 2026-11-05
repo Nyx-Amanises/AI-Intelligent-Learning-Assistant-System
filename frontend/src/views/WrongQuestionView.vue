@@ -2,9 +2,9 @@
   <section class="learning-page wrong-view">
     <div class="page-header">
       <div>
-        <div class="learning-eyebrow">温故知新</div>
+        <div class="learning-eyebrow">练习与复习</div>
         <h1 class="page-title">错题本</h1>
-        <p class="page-desc">回看答错的原因，补上知识的缺口，让下一次更有把握。</p>
+        <p class="page-desc">查看错题解析，按资料或知识点筛选后重新练习。</p>
       </div>
       <div class="toolbar toolbar--flush">
         <el-button type="primary" @click="router.push('/quiz')">开始新练习</el-button>
@@ -14,7 +14,7 @@
     <div class="workspace-panel">
       <div class="wrong-view__heading">
         <ListSectionHeading
-          title="待巩固的题目"
+          title="待复习错题"
           :count="total"
           description="重做会开启独立练习并保留原成绩；巩固后可手动移出错题本。"
           :loading="loading"
@@ -88,7 +88,7 @@
           v-else-if="loadError"
           variant="error"
           icon="refresh"
-          title="错题本暂时没能加载"
+          title="错题本加载失败"
           :description="loadError"
         >
           <el-button type="primary" @click="loadWrongQuestions">重新加载</el-button>
@@ -96,15 +96,15 @@
         <EmptyState
           v-else-if="!wrongQuestions.length"
           icon="wrong"
-          :title="hasFilters ? '没有找到匹配的错题' : '这里暂时没有需要复习的错题'"
+          :title="hasFilters ? '没有找到匹配的错题' : '暂无待复习错题'"
           :description="
             hasFilters
               ? '试试其他关键词、资料、题型或知识点。'
-              : '完成练习后，需要巩固的题目会保存在这里，方便随时回顾。'
+              : '练习中答错的题目会保存在这里，可查看解析或重新作答。'
           "
         >
           <el-button v-if="hasFilters" @click="resetFilters">清除筛选</el-button>
-          <el-button v-else type="primary" @click="router.push('/quiz')">去做一次练习</el-button>
+          <el-button v-else type="primary" @click="router.push('/quiz')">选择题集</el-button>
         </EmptyState>
         <div v-else class="wrong-question-list">
           <article v-for="item in wrongQuestions" :key="item.answerId" class="wrong-question-card">
