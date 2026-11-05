@@ -1,0 +1,173 @@
+/*
+ * Element Plus 表单控件的统一外观。组件样式随路由懒加载、晚于本文件注入，
+ * 所以选择器统一加 :root 提高优先级，避免同优先级时被覆盖。
+ */
+
+/* ---------- 按钮 ---------- */
+:root .el-button {
+  font-weight: 500;
+  transition:
+    color var(--duration-fast) ease,
+    background-color var(--duration-fast) ease,
+    border-color var(--duration-fast) ease,
+    box-shadow var(--duration-fast) ease,
+    transform var(--duration-fast) ease;
+}
+/* 默认按钮：悬停只加深底色，不染品牌色，主次更分明。 */
+:root
+  .el-button:not(.el-button--primary, .el-button--success, .el-button--warning, .el-button--danger, .el-button--info) {
+  --el-button-text-color: var(--text);
+  --el-button-border-color: var(--line-strong);
+  --el-button-hover-text-color: var(--text);
+  --el-button-hover-bg-color: var(--bg-secondary);
+  --el-button-hover-border-color: var(--line-strong);
+  --el-button-active-bg-color: var(--line);
+  --el-button-active-border-color: var(--line-strong);
+  --el-button-hover-link-text-color: var(--brand);
+}
+:root
+  .el-button.is-link:not(
+    .el-button--primary,
+    .el-button--success,
+    .el-button--warning,
+    .el-button--danger,
+    .el-button--info
+  ) {
+  --el-button-text-color: var(--text-secondary);
+}
+:root .el-button:not(.is-link, .is-text) {
+  height: 40px;
+  padding: 0 18px;
+}
+:root .el-button.el-button--small:not(.is-link) {
+  height: 32px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+:root .el-button--primary:not(.is-plain, .is-text, .is-link) {
+  --el-button-hover-bg-color: var(--brand-hover);
+  --el-button-hover-border-color: var(--brand-hover);
+  --el-button-active-bg-color: var(--brand-ink);
+  --el-button-active-border-color: var(--brand-ink);
+  box-shadow:
+    0 1px 2px rgb(27 61 50 / 18%),
+    inset 0 1px 0 rgb(255 255 255 / 8%);
+}
+:root .el-button--primary.is-disabled:not(.is-plain, .is-text, .is-link) {
+  box-shadow: none;
+}
+:root .el-button--primary.is-plain {
+  --el-button-border-color: var(--el-color-primary-light-7);
+}
+:root .el-button--primary.is-link,
+:root .el-button--primary.is-text {
+  --el-button-hover-link-text-color: var(--brand-hover);
+}
+:root .el-button--danger.is-link,
+:root .el-button--danger.is-text {
+  --el-button-hover-link-text-color: var(--el-color-danger-dark-2);
+}
+:root .el-button--warning.is-link {
+  --el-button-hover-link-text-color: var(--el-color-warning-dark-2);
+}
+:root .el-button:active:not(.is-disabled, .is-link) {
+  transform: translateY(1px);
+}
+:root .el-button > span {
+  gap: 6px;
+}
+
+/* ---------- 输入框、下拉框 ---------- */
+:root .el-input__wrapper,
+:root .el-textarea__inner,
+:root .el-select__wrapper {
+  transition:
+    box-shadow var(--duration-fast) ease,
+    background-color var(--duration-fast) ease;
+}
+:root .el-input__wrapper.is-focus,
+:root .el-textarea__inner:focus,
+:root .el-select__wrapper.is-focused {
+  box-shadow:
+    0 0 0 1px var(--el-color-primary) inset,
+    0 0 0 3px color-mix(in srgb, var(--brand) 14%, transparent);
+}
+:root .el-select__wrapper {
+  min-height: 40px;
+}
+:root .el-select--small .el-select__wrapper {
+  min-height: 32px;
+}
+:root .el-textarea__inner {
+  padding: 10px 12px;
+  line-height: 1.7;
+}
+:root .el-form-item__label {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+/* ---------- 分页 ---------- */
+:root .el-pagination {
+  --el-pagination-button-width: 34px;
+  --el-pagination-button-height: 34px;
+  --el-pagination-border-radius: var(--radius-sm);
+  --el-pagination-bg-color: transparent;
+  --el-pagination-button-bg-color: transparent;
+  --el-pagination-button-disabled-bg-color: transparent;
+  --el-pagination-hover-color: var(--brand);
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+:root .el-pager li {
+  margin: 0 2px;
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+}
+:root .el-pager li:hover:not(.is-active) {
+  background: var(--bg-secondary);
+}
+:root .el-pager li.is-active {
+  color: var(--brand);
+  background: var(--brand-soft);
+  font-weight: 600;
+}
+:root .el-pagination .el-select__wrapper {
+  min-height: 34px;
+}
+
+/* ---------- 开关、骨架屏、提示条 ---------- */
+:root .el-switch {
+  --el-switch-off-color: color-mix(in srgb, var(--muted) 55%, var(--panel));
+}
+:root .el-skeleton {
+  --el-skeleton-color: var(--bg-secondary);
+  --el-skeleton-to-color: color-mix(in srgb, var(--line-strong) 70%, var(--bg-secondary));
+}
+:root .el-alert {
+  --el-alert-padding: 12px 16px;
+  --el-alert-border-radius-base: var(--radius-sm);
+  --el-alert-title-font-size: 13px;
+  --el-alert-title-with-description-font-size: 14px;
+  --el-alert-description-font-size: 13px;
+  align-items: flex-start;
+}
+:root .el-alert__title {
+  line-height: 1.7;
+}
+:root .el-alert__icon {
+  margin-top: 3px;
+}
+
+@media (max-width: 760px) {
+  :root .el-input__inner,
+  :root .el-textarea__inner,
+  :root .el-select__wrapper {
+    font-size: 16px;
+  }
+}
+@media (pointer: coarse) {
+  :root .el-button:not(.is-link, .is-text, .el-button--small) {
+    height: 44px;
+  }
+}

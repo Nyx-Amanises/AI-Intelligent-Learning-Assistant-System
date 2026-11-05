@@ -1,0 +1,106 @@
+/*
+ * 动效：只用于说明状态变化，时长 150–360ms，统一缓动曲线。
+ * 用户开启“减少动态效果”时，base.css 会把时长压到几乎为零。
+ */
+
+/* 内容进入：轻微上移淡入。需要错开时，在元素上设置 style="--i: 序号"，最多错开 6 级。 */
+.reveal {
+  animation: zx-rise var(--duration-slow) var(--ease-out) both;
+  animation-delay: calc(min(var(--i, 0), 6) * 50ms);
+}
+
+/* 骨架屏扫光 */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-xs);
+  background: var(--bg-secondary);
+}
+.skeleton::after {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--panel) 65%, transparent), transparent);
+  transform: translateX(-100%);
+  animation: zx-shimmer 1.4s ease-in-out infinite;
+  content: '';
+}
+
+/* 带箭头的文字链接：悬停时箭头向前移动一点。 */
+.text-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--brand);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.text-link:hover {
+  color: var(--brand-hover);
+}
+.text-link .app-icon {
+  transition: transform var(--duration) var(--ease-out);
+}
+.text-link:hover .app-icon {
+  transform: translateX(3px);
+}
+
+@keyframes zx-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+@keyframes zx-fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes zx-shimmer {
+  to {
+    transform: translateX(100%);
+  }
+}
+@keyframes zx-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes zx-dot {
+  0%,
+  80%,
+  100% {
+    opacity: 0.3;
+    transform: translateY(0);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(-1px);
+  }
+}
+@keyframes zx-pulse {
+  0%,
+  100% {
+    opacity: 0.7;
+    transform: scale(0.9);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.2);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    animation: none;
+  }
+  .skeleton::after {
+    display: none;
+  }
+}

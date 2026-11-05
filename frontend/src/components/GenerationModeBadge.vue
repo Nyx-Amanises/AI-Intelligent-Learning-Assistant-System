@@ -40,7 +40,7 @@ const description = computed(() =>
 .generation-mode-badge--mock {
   color: var(--accent);
   background: var(--accent-soft);
-  border-color: currentColor;
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
 }
 .generation-mode-badge--neutral {
   color: var(--muted);

@@ -1,0 +1,528 @@
+/*
+ * 多个页面共用、但不属于通用版式的样式：任务中心与检索评测的数据表、练习试卷、评测卡片。
+ * 只被一个页面使用的样式请写在该页面的 <style scoped> 中。
+ */
+
+/* ---------- 数据表（任务中心、检索评测） ---------- */
+.workspace-table {
+  display: grid;
+}
+.workspace-table__head,
+.workspace-table__row {
+  display: grid;
+  align-items: center;
+  gap: 14px;
+}
+.workspace-table__head {
+  padding: 0 16px 10px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+.workspace-table__row {
+  padding: 18px 16px;
+  border-bottom: 1px solid var(--line);
+  transition: background-color var(--duration-fast) ease;
+}
+.workspace-table__row:last-child {
+  border-bottom: 0;
+}
+.workspace-table__row:hover {
+  background: var(--panel-hover);
+}
+.workspace-table__row--active,
+.workspace-table__row--active:hover {
+  background: var(--brand-light);
+}
+.workspace-table__head--task,
+.workspace-table__row--task {
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.3fr) minmax(200px, 1.2fr) 130px 140px minmax(220px, 1fr);
+}
+.workspace-table__head--rag-eval,
+.workspace-table__row--rag-eval {
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1.05fr) 80px minmax(120px, 0.7fr) minmax(260px, 1fr);
+}
+.workspace-table__head--rag-run,
+.workspace-table__row--rag-run {
+  grid-template-columns: minmax(0, 1.35fr) minmax(170px, 0.75fr) minmax(190px, 0.9fr) 100px minmax(150px, 0.75fr);
+}
+.workspace-table__title strong {
+  display: block;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+}
+.workspace-table__title span {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.task-meta-stack {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.task-meta-stack strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.task-meta-stack span,
+.task-status-cell__meta {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
+}
+.task-status-cell {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.task-status-cell__meta {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.task-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.6;
+}
+.task-status-pill__text {
+  white-space: nowrap;
+}
+.task-status-pill__dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.task-status-pill__dots i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.35;
+  animation: zx-dot 1.2s ease-in-out infinite;
+}
+.task-status-pill__dots i:nth-child(2) {
+  animation-delay: 0.16s;
+}
+.task-status-pill__dots i:nth-child(3) {
+  animation-delay: 0.32s;
+}
+.task-status-pill--pending {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.task-status-pill--running {
+  background: var(--blue-soft);
+  color: var(--blue);
+}
+.task-status-pill--success {
+  background: var(--green-soft);
+  color: var(--green);
+}
+.task-status-pill--failed {
+  background: var(--red-soft);
+  color: var(--red);
+}
+.workspace-action-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+.workspace-action-row .el-button + .el-button {
+  margin-left: 0;
+}
+.workspace-form-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) 320px;
+  gap: 20px;
+  align-items: start;
+}
+.workspace-form-grid--compact {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.workspace-card__header {
+  margin-bottom: 18px;
+}
+.workspace-card__header--spaced {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+}
+.workspace-card__header h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: 17px;
+  font-weight: 600;
+}
+.workspace-card__header p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.75;
+}
+
+/* 表头在窄屏隐藏，单元格用 data-label 补上列名。 */
+@media (max-width: 1280px) {
+  .workspace-table__head--task,
+  .workspace-table__head--rag-eval,
+  .workspace-table__head--rag-run {
+    display: none;
+  }
+  .workspace-table__row--task,
+  .workspace-table__row--rag-eval,
+  .workspace-table__row--rag-run {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+  .workspace-table__row > :first-child {
+    grid-column: 1 / -1;
+  }
+  .workspace-table__row > [data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 4px;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 500;
+  }
+}
+@media (max-width: 760px) {
+  .workspace-table__row--task,
+  .workspace-table__row--rag-eval,
+  .workspace-table__row--rag-run,
+  .workspace-form-grid,
+  .workspace-form-grid--compact {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .workspace-table__row {
+    padding: 16px;
+  }
+}
+/* ---------- 练习试卷（PracticeView / PracticePaper / PracticeAnswerSheet 共用） ---------- */
+.practice-paper-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 20px;
+  align-items: start;
+}
+.practice-paper-main {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.practice-paper-hero__head,
+.practice-paper-question__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.practice-paper-hero__title {
+  margin: 0;
+}
+.practice-paper-hero__meta {
+  display: flex;
+  flex-wrap: wrap;
+}
+.practice-paper-hero__score {
+  text-align: right;
+}
+.practice-paper-hero__score strong,
+.practice-paper-hero__score span {
+  display: block;
+}
+.practice-paper-sidebar {
+  position: sticky;
+  overflow-y: auto;
+}
+.practice-paper-sidebar__grid {
+  display: grid;
+}
+.practice-paper-sidebar__group + .practice-paper-sidebar__group {
+  margin-top: 18px;
+}
+.practice-paper-sidebar__group-title {
+  margin-bottom: 10px;
+}
+.practice-paper-sidebar__item {
+  cursor: pointer;
+  transition:
+    color var(--duration-fast) ease,
+    background-color var(--duration-fast) ease,
+    border-color var(--duration-fast) ease,
+    box-shadow var(--duration-fast) ease;
+}
+.practice-history {
+  display: grid;
+  gap: 14px;
+}
+@media (max-width: 1150px) {
+  .practice-paper-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+/* ---------- 总结与题集预览 ---------- */
+.summary-preview-list {
+  display: grid;
+  gap: 0;
+}
+.summary-preview-card__label {
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+.summary-dialog .el-dialog__body {
+  max-height: 70vh;
+  overflow: auto;
+}
+.option-list {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+  color: var(--text-secondary);
+}
+.analysis-box {
+  margin-top: 12px;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  background: var(--brand-light);
+  line-height: 1.8;
+}
+
+/* ---------- 任务详情 ---------- */
+.task-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 16px 0;
+}
+.task-detail-actions .el-button + .el-button {
+  margin-left: 0;
+}
+.task-json-grid {
+  display: grid;
+  gap: 14px;
+}
+.task-json-card {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+.task-json-card--error {
+  border-color: color-mix(in srgb, var(--red) 25%, var(--line));
+  background: var(--red-soft);
+}
+.task-json-card__title {
+  margin-bottom: 10px;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+}
+.task-json-block {
+  margin: 0;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.75;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ---------- 检索评测 ---------- */
+.rag-eval-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.rag-eval-side {
+  width: 100%;
+}
+.rag-sample-list,
+.rag-segment-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(380px, 100%), 1fr));
+  gap: 14px;
+}
+.rag-sample-card,
+.rag-segment-card {
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  transition:
+    border-color var(--duration-fast) ease,
+    box-shadow var(--duration-fast) ease;
+}
+.rag-sample-card:hover,
+.rag-segment-card:hover {
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow);
+}
+.rag-sample-card__head,
+.rag-segment-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+.rag-sample-card__head strong,
+.rag-segment-card__head strong {
+  display: block;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.7;
+}
+.rag-sample-card__head span,
+.rag-segment-card__head span,
+.rag-sample-card__meta {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.8;
+}
+.rag-sample-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-top: 10px;
+}
+.rag-sample-card__note {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.8;
+}
+.rag-sample-more {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-hover);
+  color: var(--muted);
+  font-size: 13px;
+}
+.rag-sample-more__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.rag-sample-more__actions .el-button + .el-button {
+  margin-left: 0;
+}
+.rag-segment-card p {
+  max-height: 140px;
+  margin: 10px 0 0;
+  overflow: auto;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.8;
+  white-space: pre-wrap;
+}
+.rag-run-panel {
+  margin-top: 20px;
+}
+.rag-run-title {
+  margin: 0;
+  color: var(--text);
+  font-size: 17px;
+  font-weight: 600;
+}
+.rag-run-notice {
+  margin-bottom: 16px;
+}
+.rag-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  margin-bottom: 20px;
+}
+.summary-overview-card {
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-hover);
+}
+.summary-overview-card span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
+.summary-overview-card strong {
+  display: block;
+  margin-top: 8px;
+  color: var(--text);
+  font-size: 22px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.rag-run-table {
+  margin-top: 16px;
+}
+.rag-hit-rank--hit {
+  color: var(--green);
+  font-weight: 600;
+}
+.rag-hit-rank--miss {
+  color: var(--red);
+  font-weight: 600;
+}
+.rag-error-text {
+  color: var(--red);
+  font-size: 12px;
+}
+.cmrc-upload-box {
+  display: grid;
+  gap: 6px;
+  padding: 10px 0;
+}
+.cmrc-upload-box strong {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+}
+.cmrc-upload-box span {
+  color: var(--muted);
+  font-size: 12px;
+}
+@media (max-width: 760px) {
+  .rag-sample-card,
+  .rag-segment-card {
+    padding: 14px;
+  }
+  .rag-sample-card__head,
+  .rag-segment-card__head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

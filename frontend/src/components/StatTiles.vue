@@ -54,10 +54,10 @@ defineProps<{ items: StatTileItem[] }>()
   flex-wrap: wrap;
   gap: 6px;
   margin: 13px 0 0;
-  font-size: clamp(30px, 3.8vw, 46px);
-  font-weight: 550;
+  font-size: clamp(28px, 3.2vw, 40px);
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.045em;
+  letter-spacing: -0.03em;
   line-height: 1.15;
   overflow-wrap: anywhere;
 }
@@ -71,9 +71,9 @@ defineProps<{ items: StatTileItem[] }>()
   letter-spacing: 0;
 }
 .stat-tile p {
-  margin: 11px 0 0;
+  margin: 8px 0 0;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.7;
 }
 @media (max-width: 1000px) {

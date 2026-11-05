@@ -13,18 +13,14 @@ import zhCn from 'element-plus/es/locale/lang/zh-cn'
 </script>
 
 <style>
-.app-crossfade-enter-active,
+.app-crossfade-enter-active {
+  transition: opacity var(--duration-slow) var(--ease-out);
+}
 .app-crossfade-leave-active {
-  transition: opacity 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: opacity var(--duration-fast) ease-in;
 }
 .app-crossfade-enter-from,
 .app-crossfade-leave-to {
   opacity: 0;
-}
-@media (prefers-reduced-motion: reduce) {
-  .app-crossfade-enter-active,
-  .app-crossfade-leave-active {
-    transition: none;
-  }
 }
 </style>

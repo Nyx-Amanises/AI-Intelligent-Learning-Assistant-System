@@ -1,7 +1,7 @@
 <template>
   <div class="empty-state" :class="[`empty-state--${variant}`]" :role="variant === 'error' ? 'alert' : undefined">
     <div v-if="resolvedIcon" class="empty-state__icon">
-      <AppIcon :name="resolvedIcon" :size="variant === 'compact' ? 24 : 30" />
+      <AppIcon :name="resolvedIcon" :size="variant === 'compact' ? 22 : 26" />
     </div>
     <h3 v-if="title" class="empty-state__title">{{ title }}</h3>
     <p v-if="description" class="empty-state__description">{{ description }}</p>
@@ -43,33 +43,35 @@ const resolvedIcon = computed(() => (props.variant === 'error' ? 'alert' : props
   display: grid;
   justify-items: center;
   align-content: center;
-  min-height: 360px;
-  padding: 48px 20px;
+  min-height: 300px;
+  padding: 40px 20px;
   text-align: center;
+  animation: zx-rise var(--duration-slow) var(--ease-out) both;
 }
 .empty-state__icon {
   display: grid;
   place-items: center;
-  width: 72px;
-  height: 72px;
-  margin-bottom: 22px;
-  border-radius: 50%;
+  width: 52px;
+  height: 52px;
+  margin-bottom: 18px;
+  border-radius: 14px;
   color: var(--brand);
-  background: var(--brand-soft);
+  background: var(--brand-light);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--brand) 12%, transparent);
 }
 .empty-state__title {
-  margin: 0 0 12px;
+  margin: 0 0 8px;
   color: var(--text);
-  font-size: 21px;
-  font-weight: 500;
+  font-size: 17px;
+  font-weight: 600;
   line-height: 1.5;
 }
 .empty-state__description {
-  max-width: 440px;
-  margin: 0 0 24px;
+  max-width: 420px;
+  margin: 0 0 22px;
   color: var(--muted);
-  font-size: 15px;
-  line-height: 1.9;
+  font-size: 14px;
+  line-height: 1.8;
   overflow-wrap: anywhere;
 }
 .empty-state__actions {
@@ -83,34 +85,30 @@ const resolvedIcon = computed(() => (props.variant === 'error' ? 'alert' : props
 }
 .empty-state--compact {
   min-height: 200px;
-  padding: 28px 16px;
+  padding: 24px 16px;
 }
 .empty-state--compact .empty-state__icon {
-  width: 56px;
-  height: 56px;
-  margin-bottom: 16px;
+  width: 44px;
+  height: 44px;
+  margin-bottom: 14px;
+  border-radius: 12px;
 }
 .empty-state--compact .empty-state__title {
-  font-size: 18px;
+  font-size: 16px;
 }
 .empty-state--compact .empty-state__description {
-  font-size: 14px;
-  margin-bottom: 18px;
+  margin-bottom: 16px;
+  font-size: 13px;
 }
 .empty-state--error .empty-state__icon {
   color: var(--red);
   background: var(--red-soft);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--red) 14%, transparent);
 }
 @media (max-width: 640px) {
   .empty-state {
-    min-height: 320px;
+    min-height: 260px;
     padding-inline: 8px;
-  }
-  .empty-state__title {
-    font-size: 19px;
-  }
-  .empty-state__description {
-    font-size: 14px;
   }
 }
 </style>

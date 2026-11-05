@@ -1,0 +1,362 @@
+/* 页面骨架与通用版式：页头、面板、工具栏、筛选条、分页、空状态。各页面共用，避免各自重写一套。 */
+
+/* ---------- 页面与页头 ---------- */
+.learning-page {
+  width: 100%;
+  max-width: 1200px;
+  min-width: 0;
+  margin: 0 auto;
+}
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px 24px;
+  margin-bottom: 24px;
+}
+.page-header > :first-child {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+.page-title {
+  margin: 0;
+  color: var(--text);
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: 0.01em;
+}
+.page-desc {
+  max-width: 720px;
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.75;
+}
+/* 旧版页头的小字眉题；各页面逐步改用顶部分区导航后移除。 */
+.learning-eyebrow {
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+}
+.toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.toolbar .el-button + .el-button {
+  margin-left: 0;
+}
+.toolbar--flush {
+  flex: 0 0 auto;
+}
+
+/* ---------- 区块标题 ---------- */
+.section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.section-heading h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.section-heading p {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* ---------- 面板与卡片 ---------- */
+.surface,
+.page-card,
+.workspace-panel {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--panel);
+}
+.page-card {
+  padding: 24px;
+}
+.workspace-panel {
+  overflow: clip;
+}
+.workspace-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line);
+}
+.workspace-toolbar__meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.workspace-body {
+  padding: 20px;
+}
+
+/* 列表行：卡片内上下排列的记录，悬停时整行轻微加深。 */
+.list-row {
+  position: relative;
+  padding: 18px 20px;
+  border-top: 1px solid var(--line);
+  transition: background-color var(--duration-fast) ease;
+}
+.list-row:first-child {
+  border-top: 0;
+}
+.list-row:hover {
+  background: var(--panel-hover);
+}
+
+/* ---------- 筛选条 ---------- */
+.filter-bar,
+.workspace-filter-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.filter-bar > .el-input,
+.workspace-filter-bar > .el-input,
+.workspace-filter-bar__search {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+.filter-bar > .el-select,
+.workspace-filter-bar > .el-select {
+  flex: 0 1 168px;
+  min-width: 132px;
+}
+.filter-bar > .el-button,
+.workspace-filter-bar > .el-button {
+  flex: 0 0 auto;
+  margin: 0;
+}
+
+/* ---------- 分段切换 ---------- */
+.workspace-tabs,
+.segmented {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  max-width: 100%;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--bg-secondary);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.workspace-tabs::-webkit-scrollbar,
+.segmented::-webkit-scrollbar {
+  display: none;
+}
+.workspace-tab,
+.segmented > button {
+  flex: 0 0 auto;
+  min-height: 34px;
+  padding: 6px 14px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    color var(--duration-fast) ease,
+    background-color var(--duration-fast) ease,
+    box-shadow var(--duration-fast) ease;
+}
+.workspace-tab:hover,
+.segmented > button:hover {
+  color: var(--text);
+}
+.workspace-tab--active,
+.segmented > button.is-active,
+.segmented > button[aria-pressed='true'] {
+  color: var(--text);
+  background: var(--panel);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ---------- 小标签 ---------- */
+.workspace-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+.workspace-chip--brand {
+  background: var(--brand-light);
+  color: var(--brand);
+}
+
+/* ---------- 分页 ---------- */
+.workspace-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 0;
+  padding: 14px 20px;
+  border-top: 1px solid var(--line);
+}
+.workspace-pagination__meta {
+  color: var(--muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- 加载、空与错误提示 ---------- */
+.state-block {
+  padding: 32px 20px;
+  border-radius: var(--radius);
+  background: var(--panel-hover);
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.8;
+  text-align: center;
+}
+.state-block.empty {
+  border: 1px dashed var(--line-strong);
+  background: transparent;
+}
+
+/* ---------- 详情信息格 ---------- */
+.detail-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.detail-meta-item {
+  min-width: 0;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+}
+.detail-meta-item > span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
+.detail-meta-item > strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- 对话框标题区与正文块 ---------- */
+.dialog-title {
+  margin: 0;
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.dialog-subtitle {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.summary-block {
+  color: var(--text-secondary);
+  font-size: 15px;
+  line-height: 1.9;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.list-stack {
+  display: grid;
+  gap: 12px;
+}
+.section-card {
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+.section-card__title {
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+}
+.section-card__meta,
+.soft-text {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.summary-history-card__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 10px;
+}
+
+@media (max-width: 760px) {
+  .page-header {
+    margin-bottom: 20px;
+  }
+  .page-title {
+    font-size: 23px;
+  }
+  .page-desc {
+    font-size: 13px;
+  }
+  .page-card {
+    padding: 18px;
+  }
+  .workspace-toolbar,
+  .workspace-body {
+    padding: 14px 16px;
+  }
+  .workspace-pagination {
+    padding-inline: 16px;
+  }
+  .list-row {
+    padding: 16px;
+  }
+  .filter-bar > .el-select,
+  .workspace-filter-bar > .el-select {
+    flex: 1 1 calc(50% - 5px);
+    min-width: 0;
+  }
+  .detail-meta-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

@@ -48,21 +48,28 @@ const emit = defineEmits<{ refresh: [] }>()
 }
 .list-section-heading__title {
   display: flex;
-  align-items: baseline;
-  gap: 12px;
+  align-items: center;
+  gap: 8px;
   margin: 0;
   color: var(--text);
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
+  line-height: 1.5;
 }
 .list-section-heading__count {
+  min-width: 22px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--bg-secondary);
   color: var(--muted);
-  font-size: 14px;
-  font-weight: 400;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 20px;
+  text-align: center;
   font-variant-numeric: tabular-nums;
 }
 .list-section-heading__description {
-  margin: 6px 0 0;
+  margin: 4px 0 0;
   color: var(--muted);
   font-size: 13px;
   line-height: 1.7;

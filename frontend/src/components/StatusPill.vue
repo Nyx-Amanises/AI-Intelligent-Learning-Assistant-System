@@ -38,23 +38,24 @@ withDefaults(
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 2px 9px;
+  padding: 2px 10px;
   border-radius: 999px;
-  font-size: 12px;
-  line-height: 1.6;
-  white-space: nowrap;
   color: var(--brand);
   background: var(--brand-light);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.6;
+  white-space: nowrap;
 }
 .status-pill__dot {
-  width: 5px;
-  height: 5px;
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: currentColor;
-  flex: 0 0 auto;
 }
 .status-pill__dot--pulse {
-  animation: status-pill-pulse 1.8s infinite ease-in-out;
+  animation: zx-pulse 1.6s ease-in-out infinite;
 }
 .status-pill--success {
   color: var(--green);
@@ -75,21 +76,5 @@ withDefaults(
 .status-pill--plain {
   padding: 0;
   background: transparent;
-}
-@keyframes status-pill-pulse {
-  0%,
-  100% {
-    transform: scale(0.9);
-    opacity: 0.7;
-  }
-  50% {
-    transform: scale(1.25);
-    opacity: 1;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .status-pill__dot--pulse {
-    animation: none;
-  }
 }
 </style>

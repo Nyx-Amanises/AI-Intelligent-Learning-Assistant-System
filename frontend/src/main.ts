@@ -5,8 +5,7 @@ import { createPinia } from 'pinia'
 import 'element-plus/theme-chalk/base.css'
 import App from './App.vue'
 import router from './router'
-import './styles.css'
-import './workspace-theme.css'
+import './styles/index.css'
 import { initTheme } from './composables/useTheme'
 
 // Initialize theme immediately

@@ -1,0 +1,8 @@
+/* 全局样式入口。顺序：变量 → 基础 → Element Plus → 版式 → 页面共用 → 动效。 */
+@import './tokens.css';
+@import './base.css';
+@import './element-controls.css';
+@import './element-overlays.css';
+@import './layout.css';
+@import './pages.css';
+@import './motion.css';

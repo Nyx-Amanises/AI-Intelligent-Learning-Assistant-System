@@ -39,8 +39,9 @@ withDefaults(
 .source-segment {
   padding: 16px 18px;
   border: 1px solid var(--line);
+  border-left: 3px solid color-mix(in srgb, var(--brand) 40%, var(--line));
   border-radius: var(--radius-sm);
-  background: var(--bg-secondary);
+  background: var(--panel-hover);
 }
 .source-segment__title {
   color: var(--text);

@@ -38,7 +38,7 @@ withDefaults(
   height: 40px;
   padding: 0;
   border: 0;
-  border-radius: 50%;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--muted);
   cursor: pointer;
@@ -64,11 +64,6 @@ withDefaults(
   border: 2px solid var(--line);
   border-top-color: var(--brand);
   border-radius: 50%;
-  animation: icon-menu-spin 0.7s linear infinite;
-}
-@keyframes icon-menu-spin {
-  to {
-    transform: rotate(360deg);
-  }
+  animation: zx-spin 0.7s linear infinite;
 }
 </style>
