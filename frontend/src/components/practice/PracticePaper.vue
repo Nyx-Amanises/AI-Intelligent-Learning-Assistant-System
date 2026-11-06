@@ -113,6 +113,14 @@
             :value="option.value"
             border
             class="choice-option practice-paper-choice"
+            :class="{
+              'practice-paper-choice--correct':
+                submitted && answerIncludesOption(answer, answer.correctAnswer, option.value),
+              'practice-paper-choice--incorrect':
+                submitted &&
+                answerIncludesOption(answer, answer.userAnswer, option.value) &&
+                !answerIncludesOption(answer, answer.correctAnswer, option.value)
+            }"
             >{{ option.label }}</el-radio
           >
         </el-radio-group>
@@ -181,11 +189,11 @@
 
     <div class="page-card practice-paper-submit">
       <div>
-        <h3>{{ submitted ? '让复习形成闭环' : '准备好提交了吗？' }}</h3>
+        <h3>{{ submitted ? '接着复习' : '提交练习' }}</h3>
         <p>
           {{
             submitted
-              ? '回顾错题，或再练一次，看看自己进步了多少。'
+              ? '去错题本回顾薄弱点，也可以重新练习这套题。'
               : unansweredCount
                 ? '还有 ' + unansweredCount + ' 道题未作答，提交前再检查一下。'
                 : '所有题目已作答，提交后即可查看成绩与解析。'
@@ -193,7 +201,7 @@
         </p>
       </div>
       <div class="practice-paper-submit__actions">
-        <el-button @click="emit('back')">返回题集列表</el-button>
+        <el-button @click="emit('back')">返回题集</el-button>
         <el-button v-if="!submitted" type="primary" :loading="submitting" @click="emit('submit')">提交练习</el-button>
         <template v-else>
           <el-button @click="router.push('/wrong-questions')">查看错题本</el-button>
@@ -290,21 +298,21 @@ const isAnswerTooLong = (questionId: number) => (answerForm.value[questionId] ||
 }
 .practice-paper-hero {
   padding: 0;
-  border-radius: 12px;
+  border-radius: var(--radius);
   overflow: hidden;
   box-shadow: none;
 }
 .practice-paper-hero__head {
-  padding: 26px;
+  padding: 24px;
   gap: 20px;
 }
 .practice-paper-hero__intro {
   min-width: 0;
 }
 .practice-paper-hero__title {
-  font-size: 22px;
+  font-size: 20px;
   line-height: 1.5;
-  font-weight: 650;
+  font-weight: 600;
   color: var(--text);
   overflow-wrap: anywhere;
 }
@@ -362,6 +370,7 @@ const isAnswerTooLong = (questionId: number) => (answerForm.value[questionId] ||
   line-height: 1.7;
 }
 .practice-paper-note {
+  margin: 0;
   padding: 15px 26px;
   background: var(--brand-light);
   color: var(--brand);
@@ -369,8 +378,8 @@ const isAnswerTooLong = (questionId: number) => (answerForm.value[questionId] ||
   line-height: 1.8;
 }
 .practice-paper-section {
-  padding: 26px;
-  border-radius: 12px;
+  padding: 24px;
+  border-radius: var(--radius);
   box-shadow: none;
 }
 .practice-paper-section__title {
@@ -391,7 +400,7 @@ const isAnswerTooLong = (questionId: number) => (answerForm.value[questionId] ||
   white-space: nowrap;
 }
 .practice-paper-question {
-  scroll-margin-top: 30px;
+  scroll-margin-top: calc(var(--shell-header-height, 72px) + 20px);
 }
 .practice-paper-question + .practice-paper-question {
   margin-top: 30px;
@@ -465,10 +474,12 @@ const isAnswerTooLong = (questionId: number) => (answerForm.value[questionId] ||
 .practice-paper-choice-group :deep(.el-checkbox.is-disabled .el-checkbox__label) {
   color: var(--text);
 }
+.practice-paper-choice-group :deep(.el-radio.practice-paper-choice--correct),
 .practice-paper-choice-group :deep(.el-checkbox.practice-paper-choice--correct) {
   border-color: var(--el-color-success);
   background: var(--el-color-success-light-9);
 }
+.practice-paper-choice-group :deep(.el-radio.practice-paper-choice--incorrect),
 .practice-paper-choice-group :deep(.el-checkbox.practice-paper-choice--incorrect) {
   border-color: var(--el-color-danger);
   background: var(--el-color-danger-light-9);
@@ -610,6 +621,12 @@ const isAnswerTooLong = (questionId: number) => (answerForm.value[questionId] ||
   }
   .practice-paper-submit {
     padding: 20px 16px;
+  }
+  .practice-paper-submit__actions {
+    width: 100%;
+  }
+  .practice-paper-submit__actions :deep(.el-button) {
+    flex: 1 1 auto;
   }
 }
 </style>

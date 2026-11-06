@@ -1,11 +1,15 @@
 <template>
-  <section class="learning-page practice-view">
-    <nav class="practice-navigation" aria-label="练习导航">
+  <section class="learning-page practice-view" aria-labelledby="practice-view-title">
+    <nav
+      v-if="activeTab === 'current' && (practiceDetail || detailSessionId)"
+      class="practice-navigation"
+      aria-label="练习导航"
+    >
       <RouterLink to="/quiz" class="practice-back-link" @click="savePracticeDraft">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
           <path d="m10 5-7 7 7 7M3 12h18" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
-        <span>返回题集列表</span>
+        <span>返回题集</span>
       </RouterLink>
       <RouterLink
         v-if="practiceDetail?.questionIds?.length"
@@ -15,17 +19,20 @@
         >返回错题本</RouterLink
       >
     </nav>
-    <div class="page-header">
+    <header class="page-header">
       <div>
-        <div class="learning-eyebrow">练习与复习</div>
-        <h1 class="page-title">我的练习</h1>
-        <p class="page-desc">继续作答，或查看历史练习的成绩与解析。</p>
+        <h1 id="practice-view-title" class="page-title">练习记录</h1>
+        <p class="page-desc">继续未完成的练习，或回顾交卷后的成绩、答案和解析。</p>
       </div>
       <div class="toolbar toolbar--flush">
-        <el-button v-if="assistantPracticeContext" type="primary" @click="analyzePractice">用助手分析练习</el-button>
-        <el-button :loading="historyLoading" @click="loadHistory">刷新记录</el-button>
+        <el-button v-if="assistantPracticeContext" type="primary" @click="analyzePractice"
+          ><AppIcon name="assistant" :size="16" />分析这次练习</el-button
+        >
+        <el-button v-else type="primary" @click="router.push('/quiz')"
+          ><AppIcon name="plus" :size="16" />选择题集</el-button
+        >
       </div>
-    </div>
+    </header>
 
     <div class="workspace-panel">
       <div class="workspace-toolbar">
@@ -54,9 +61,20 @@
           :tone="statusTone(practiceDetail.sessionStatus)"
           :label="formatPracticeStatus(practiceDetail.sessionStatus)"
         />
+        <el-button
+          v-if="activeTab === 'history'"
+          text
+          :loading="historyLoading"
+          aria-label="刷新练习记录"
+          @click="loadHistory"
+        >
+          <AppIcon v-if="!historyLoading" name="refresh" :size="16" /><span class="workspace-toolbar__refresh-label"
+            >刷新</span
+          >
+        </el-button>
       </div>
 
-      <div v-if="activeTab === 'history'" class="workspace-body">
+      <div v-if="activeTab === 'history'">
         <PracticeHistoryList
           v-model:current="page.current"
           v-model:size="page.size"
@@ -110,7 +128,7 @@
           v-else-if="detailError && detailSessionId"
           variant="error"
           icon="refresh"
-          title="练习加载失败"
+          title="这次练习没有加载出来"
           :description="detailError"
         >
           <el-button @click="activeTab = 'history'">查看历史记录</el-button>
@@ -119,10 +137,10 @@
         <EmptyState
           v-else
           icon="practice"
-          title="尚未选择练习"
+          title="还没有打开练习"
           :description="
             total
-              ? '在历史记录中继续未完成的练习，或选择一套新题集。'
+              ? '从历史记录中查看成绩和解析，或选一套题集开始新的练习。'
               : '选择一套题集开始作答，提交后可查看成绩与解析。'
           "
         >
@@ -149,6 +167,7 @@ import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { submitPracticeReviewTaskApi, type AiTaskDetail } from '@/api/modules/ai'
+import AppIcon from '@/components/AppIcon.vue'
 import {
   deletePracticeApi,
   getPracticeDetailApi,
@@ -202,7 +221,9 @@ const detailSessionId = ref<number | null>(null)
 const submitting = ref(false)
 const restarting = ref(false)
 const renaming = ref(false)
-const activeTab = ref<'current' | 'history'>('current')
+const activeTab = ref<'current' | 'history'>(
+  initialSessionId || Number(readStorage(PRACTICE_ACTIVE_DRAFT_KEY)) ? 'current' : 'history'
+)
 const actionLoadingId = ref<number | null>(null)
 const activeQuestionId = ref<number | null>(null)
 const currentReviewTask = ref<AiTaskDetail | null>(null)
@@ -251,7 +272,7 @@ const hasPendingAiReview = computed(() =>
 const pendingReviewText = computed(() => {
   if (!hasPendingAiReview.value) return ''
   return reviewTaskWaiting.value && currentReviewTask.value?.id
-    ? '客观题已批改，AI 正在认真评阅你的简答题。'
+    ? '客观题已批改，简答题正在评分，完成后会自动更新。'
     : '客观题已批改，简答题正在等待评分。结果会自动更新。'
 })
 const groupedSections = computed(() => groupAnswers(practiceDetail.value?.answers))
@@ -309,6 +330,10 @@ const savePracticeDraft = () => {
 const scheduleDraftSave = () => {
   if (draftSaveTimer !== undefined) return
   draftSaveTimer = window.setTimeout(savePracticeDraft, DRAFT_SAVE_INTERVAL)
+}
+
+const saveDraftWhenHidden = () => {
+  if (document.visibilityState === 'hidden') savePracticeDraft()
 }
 
 watch(answerForm, scheduleDraftSave, { deep: true })
@@ -592,6 +617,10 @@ const submitPractice = async () => {
 }
 
 onMounted(async () => {
+  // 刷新和页面冻结不会触发组件卸载；同步补存尚未到节流时间的答案。
+  // pagehide 后保留监听，浏览器从 bfcache 恢复时可继续保存。
+  window.addEventListener('pagehide', savePracticeDraft)
+  document.addEventListener('visibilitychange', saveDraftWhenHidden)
   await loadHistory()
   if (!isViewActive) return
   const querySessionId = initialSessionId
@@ -606,6 +635,8 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  window.removeEventListener('pagehide', savePracticeDraft)
+  document.removeEventListener('visibilitychange', saveDraftWhenHidden)
   isViewActive = false
   savePracticeDraft()
   resetReviewTaskWaiting()

@@ -14,7 +14,7 @@
           class="practice-paper-sidebar__item"
           :class="{
             'practice-paper-sidebar__item--active': activeQuestionId === answer.questionId,
-            'practice-paper-sidebar__item--done': hasAnswerValue(answerForm[answer.questionId]),
+            'practice-paper-sidebar__item--done': !submitted && hasAnswerValue(answerForm[answer.questionId]),
             'practice-paper-sidebar__item--correct': submitted && answer.isCorrect,
             'practice-paper-sidebar__item--wrong': submitted && !answer.isCorrect && !isPendingReview(answer)
           }"
@@ -63,11 +63,11 @@ const emit = defineEmits<{ select: [questionId: number] }>()
 
 <style scoped>
 .practice-paper-sidebar {
-  top: 22px;
+  top: calc(var(--shell-header-height, 72px) + 20px);
   padding: 20px;
-  border-radius: 12px;
+  border-radius: var(--radius);
   box-shadow: none;
-  max-height: calc(100vh - 60px);
+  max-height: calc(100vh - var(--shell-header-height, 72px) - 40px);
 }
 .practice-paper-sidebar__title {
   display: flex;
@@ -99,7 +99,7 @@ const emit = defineEmits<{ select: [questionId: number] }>()
   gap: 8px;
 }
 .practice-paper-sidebar__item {
-  height: 40px;
+  min-height: 44px;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: var(--panel);
@@ -164,7 +164,7 @@ const emit = defineEmits<{ select: [questionId: number] }>()
     flex-wrap: wrap;
   }
   .practice-paper-sidebar__item {
-    width: 42px;
+    width: 44px;
   }
   .practice-paper-sidebar__group {
     display: inline-block;
