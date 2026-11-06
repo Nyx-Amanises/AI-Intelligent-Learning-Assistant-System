@@ -1551,4 +1551,105 @@ onUnmounted(() => {
     grid-row: 2;
   }
 }
+@media (max-width: 760px) {
+  .rag-eval-view > .workspace-panel > .workspace-toolbar {
+    padding: 0 0 20px;
+    border: 0;
+  }
+  .rag-eval-view > .workspace-panel > .workspace-toolbar > .el-button {
+    min-height: 44px;
+    padding-inline: 8px;
+    font-size: 13px;
+  }
+  .rag-eval-layout > .workspace-card {
+    padding: 24px 0;
+    background: transparent;
+  }
+  .rag-section-title,
+  .rag-run-title {
+    font-size: 20px;
+    line-height: 1.5;
+    letter-spacing: -0.02em;
+  }
+  .rag-eval-view .workspace-table__row {
+    padding: 24px 0;
+    gap: 14px;
+  }
+  .rag-eval-view .workspace-table__title strong {
+    font-size: 18px;
+    line-height: 1.6;
+  }
+  .rag-eval-view .workspace-action-row {
+    gap: 4px 20px;
+  }
+  .rag-eval-view .workspace-action-row[data-label]::before {
+    display: none;
+  }
+  .rag-eval-view .workspace-action-row .el-button {
+    min-height: 44px;
+    font-size: 14px;
+  }
+  .rag-eval-side .toolbar {
+    width: 100%;
+    gap: 8px;
+  }
+  .rag-eval-side .toolbar .el-button {
+    flex: 1 1 auto;
+    margin: 0;
+  }
+  .rag-eval-view .rag-sample-list {
+    gap: 0;
+  }
+  .rag-eval-view .rag-sample-card {
+    padding: 24px 0;
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    border-radius: 0;
+    background: transparent;
+  }
+  .rag-eval-view .rag-sample-card:last-child {
+    border-bottom: 0;
+  }
+  .rag-eval-view .rag-sample-card__head strong {
+    font-size: 17px;
+  }
+  .rag-eval-view .rag-run-panel {
+    margin-top: 24px;
+    padding-top: 24px;
+    border-top: 1px solid var(--line);
+  }
+  .rag-eval-view .rag-run-panel > .workspace-body {
+    padding: 0;
+  }
+  .rag-metric-grid {
+    gap: 0;
+    padding: 8px 0 24px;
+    border-bottom: 1px solid var(--line);
+  }
+  .summary-overview-card {
+    padding: 18px 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+  .summary-overview-card strong {
+    font-size: 36px;
+    font-weight: 500;
+  }
+  .rag-history-row {
+    grid-template-columns: 22px minmax(0, 1fr) auto;
+    gap: 10px;
+    padding: 22px 0;
+  }
+  .rag-history-row__title {
+    font-size: 15px;
+  }
+  .rag-history-row__meta {
+    grid-column: 2 / -1;
+    grid-row: 2;
+  }
+  .rag-history-row > .el-button {
+    min-height: 44px;
+  }
+}
 </style>

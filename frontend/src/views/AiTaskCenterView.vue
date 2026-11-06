@@ -655,12 +655,60 @@ onUnmounted(() => {
   margin: 0;
 }
 @media (max-width: 760px) {
+  .task-view .workspace-toolbar {
+    flex-wrap: nowrap;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 0 0 18px;
+    border: 0;
+  }
+  .task-view .workspace-toolbar > .el-button {
+    flex: 0 0 auto;
+    min-height: 48px;
+    padding-inline: 8px;
+    font-size: 13px;
+  }
+  .task-view .workspace-progress {
+    padding: 12px 14px;
+    border: 0;
+    border-radius: 12px;
+    background: var(--brand-light);
+    font-size: 12px;
+  }
   .workspace-table__row {
-    padding: 16px;
-    gap: 12px;
+    padding: 24px 0;
+    gap: 14px;
+  }
+  .workspace-table__title strong {
+    font-size: 19px;
+    line-height: 1.5;
+  }
+  .task-meta-stack strong {
+    overflow: visible;
+    white-space: normal;
+    line-height: 1.7;
+  }
+  .workspace-table__row > span[data-label]::before {
+    display: inline;
+    margin: 0 10px 0 0;
+    font-size: 12px;
+  }
+  .task-status-cell {
+    gap: 6px;
+  }
+  .task-status-pill {
+    padding: 4px 10px;
   }
   .workspace-action-row {
-    padding-top: 4px;
+    gap: 4px 20px;
+    padding-top: 0;
+  }
+  .workspace-action-row[data-label]::before {
+    display: none;
+  }
+  .workspace-action-row .el-button {
+    min-height: 44px;
+    font-size: 14px;
   }
 }
 </style>
