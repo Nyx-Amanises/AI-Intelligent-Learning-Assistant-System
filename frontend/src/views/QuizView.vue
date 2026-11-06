@@ -1,31 +1,30 @@
 <template>
-  <section class="learning-page quiz-view">
-    <div class="page-header">
+  <section class="learning-page quiz-view" aria-labelledby="quiz-view-title">
+    <header class="page-header">
       <div>
-        <div class="learning-eyebrow">练习与复习</div>
-        <h1 class="page-title">练习题集</h1>
-        <p class="page-desc">选择已有题集开始练习，或根据学习资料生成新题集。</p>
+        <h1 id="quiz-view-title" class="page-title">题集</h1>
+        <p class="page-desc">根据资料出题，可以按知识点、题型和难度来出。交卷后自动批改，答错的题会进错题本。</p>
       </div>
-      <el-button type="primary" :disabled="generating" @click="openNewGeneration">
-        <AppIcon name="plus" :size="17" />
-        生成题集
-      </el-button>
-    </div>
+      <div class="toolbar toolbar--flush">
+        <el-button type="primary" :disabled="generating" @click="openNewGeneration"
+          ><AppIcon name="plus" :size="16" />生成题集</el-button
+        >
+      </div>
+    </header>
 
     <div class="workspace-panel">
-      <ListSectionHeading title="全部题集" :count="total" :loading="questionSetLoading" @refresh="loadQuestionSets()" />
-      <div class="workspace-toolbar">
-        <div class="workspace-filter-bar quiz-filter-bar">
+      <div class="workspace-toolbar workspace-toolbar--filter">
+        <div class="filter-bar" role="search" aria-label="筛选题集">
           <el-input
             v-model="filters.keyword"
             clearable
             placeholder="搜索题集名称"
-            aria-label="搜索题集"
-            class="workspace-filter-bar__search"
+            aria-label="搜索题集名称"
+            @keyup.enter="autoQuery.runNow"
           >
-            <template #prefix><AppIcon name="search" :size="18" /></template>
+            <template #prefix><AppIcon name="search" :size="16" /></template>
           </el-input>
-          <el-select v-model="filters.status" clearable placeholder="全部状态" aria-label="筛选题集状态">
+          <el-select v-model="filters.status" clearable placeholder="全部状态" aria-label="按状态筛选">
             <el-option
               v-for="status in FILTERABLE_STATUSES"
               :key="status"
@@ -33,144 +32,147 @@
               :value="status"
             />
           </el-select>
-          <el-select v-model="filters.difficultyLevel" clearable placeholder="全部难度" aria-label="筛选难度">
+          <el-select v-model="filters.difficultyLevel" clearable placeholder="全部难度" aria-label="按难度筛选">
             <el-option v-for="level in 5" :key="level" :label="formatDifficulty(level)" :value="level" />
           </el-select>
-          <el-button text @click="resetFilters">重置</el-button>
+          <el-button v-if="hasFilters" text @click="resetFilters">清除筛选</el-button>
         </div>
+        <el-button text :loading="questionSetLoading" aria-label="刷新题集列表" @click="loadQuestionSets()">
+          <AppIcon v-if="!questionSetLoading" name="refresh" :size="16" /><span class="workspace-toolbar__refresh-label"
+            >刷新</span
+          >
+        </el-button>
       </div>
 
-      <div class="workspace-body">
-        <el-alert
-          v-if="taskStatusText"
-          :title="taskStatusText"
-          type="info"
-          :closable="false"
-          show-icon
-          class="quiz-notice"
-        />
-        <div v-if="questionSetLoading" class="quiz-loading" aria-live="polite">
-          <el-skeleton :rows="5" animated /><span>正在加载题集…</span>
+      <p v-if="taskStatusText" class="workspace-progress" role="status">
+        <span class="workspace-progress__spinner" aria-hidden="true" />{{ taskStatusText }}
+      </p>
+      <div v-if="questionSetLoading" class="record-list" role="status" aria-label="正在加载题集">
+        <div v-for="i in 4" :key="i" class="list-row record-row record-row--loading" aria-hidden="true">
+          <span class="skeleton record-row__sk-lead" />
+          <div class="record-row__main">
+            <span class="skeleton record-row__sk-title" />
+            <span class="skeleton record-row__sk-meta" />
+          </div>
+          <span class="skeleton record-row__sk-actions" />
         </div>
-        <EmptyState v-else-if="loadError" variant="error" icon="quiz" title="题集加载失败" :description="loadError">
-          <el-button type="primary" @click="loadQuestionSets()">重新加载</el-button>
-        </EmptyState>
-        <EmptyState
-          v-else-if="!questionSets.length"
-          icon="quiz"
-          :title="hasFilters ? '没有找到匹配的题集' : '还没有练习题集'"
-          :description="
-            hasFilters
-              ? '更换关键词、状态或难度，或清除筛选条件。'
-              : '选择一份资料，设置题型、题量和难度，即可生成题集。'
-          "
+      </div>
+      <EmptyState v-else-if="loadError" variant="error" title="题集列表没有加载出来" :description="loadError">
+        <el-button type="primary" @click="loadQuestionSets()">重新加载</el-button>
+      </EmptyState>
+      <EmptyState
+        v-else-if="!questionSets.length && hasFilters"
+        icon="search"
+        title="没有找到匹配的题集"
+        description="换个关键词，或者清除筛选条件再看看。"
+      >
+        <el-button @click="resetFilters">清除筛选</el-button>
+      </EmptyState>
+      <EmptyState
+        v-else-if="!questionSets.length"
+        icon="quiz"
+        title="还没有题集"
+        :description="
+          materials.length
+            ? '选一份资料，设置题型、题量和难度，就能生成一套题。'
+            : '先在资料库上传一份资料，解析完成后就能出题。'
+        "
+      >
+        <el-button v-if="materials.length" type="primary" :disabled="generating" @click="openNewGeneration"
+          >生成题集</el-button
         >
-          <el-button v-if="hasFilters" @click="resetFilters">清除筛选</el-button>
-          <el-button v-else-if="materials.length" type="primary" :disabled="generating" @click="openNewGeneration"
-            >生成第一套题</el-button
+        <el-button v-else type="primary" @click="router.push('/materials')">去资料库</el-button>
+      </EmptyState>
+      <ul v-else class="record-list">
+        <li v-for="item in questionSets" :key="item.id" class="list-row record-row quiz-row">
+          <span
+            class="quiz-row__count"
+            :class="{ 'is-muted': !canPreviewQuestionSet(item.status) }"
+            :title="
+              canPreviewQuestionSet(item.status) ? `${item.questionCount} 道题` : `计划 ${item.questionCount} 道题`
+            "
           >
-          <el-button v-else type="primary" @click="router.push('/materials')">先添加学习资料</el-button>
-        </EmptyState>
-        <div v-else class="quiz-card-grid">
-          <article v-for="(item, index) in questionSets" :key="item.id" class="quiz-set-card">
-            <span class="quiz-set-card__number" aria-hidden="true">{{
-              formatIndex((page.current - 1) * page.size + index + 1)
-            }}</span>
-            <div class="quiz-set-card__content">
-              <div class="quiz-set-card__top">
-                <span class="quiz-set-card__category">学习自测</span>
-                <StatusPill :tone="statusTone(item.status)" :label="formatQuestionSetStatus(item.status)" />
-                <GenerationModeBadge v-if="canPreviewQuestionSet(item.status)" :mode="item.generationMode" />
-              </div>
-              <button
-                type="button"
-                class="quiz-set-card__title"
-                :disabled="!canPreviewQuestionSet(item.status)"
-                @click="viewQuestionSet(item)"
-              >
+            <b>{{ item.questionCount ?? '–' }}</b
+            >题
+          </span>
+          <div class="record-row__main">
+            <h2 class="record-row__title">
+              <button v-if="canPreviewQuestionSet(item.status)" type="button" @click="viewQuestionSet(item)">
                 {{ item.title }}
               </button>
-              <div class="quiz-set-card__meta">
-                <span>{{ canPreviewQuestionSet(item.status) ? '' : '计划 ' }}{{ item.questionCount }} 道题目</span>
-                <span v-if="canPreviewQuestionSet(item.status)">满分 {{ item.totalScore }} 分</span>
-                <span>{{ formatDifficulty(item.difficultyLevel) }}</span>
-                <span class="quiz-set-card__date">{{ formatDate(item.createdAt) }}</span>
-              </div>
-              <p v-if="CARD_HINTS[item.status || '']" class="quiz-set-card__hint">
-                {{ CARD_HINTS[item.status || ''] }}
-              </p>
-            </div>
-            <div class="quiz-set-card__actions">
-              <div class="quiz-set-card__secondary">
-                <el-button
-                  v-if="['FAILED', 'CANCELLED'].includes(item.status || '')"
-                  link
-                  @click="router.push('/ai-tasks')"
-                  >查看任务</el-button
-                >
-                <el-button v-else link :disabled="!canPreviewQuestionSet(item.status)" @click="viewQuestionSet(item)"
-                  >预览题目</el-button
-                >
-                <el-button
-                  v-if="canPreviewQuestionSet(item.status)"
-                  link
-                  :disabled="generating"
-                  @click="openRegeneration(item)"
-                  >重新生成</el-button
-                >
-                <el-dropdown
-                  trigger="click"
-                  :disabled="item.status === 'GENERATING'"
-                  @command="removeQuestionSet(item.id)"
-                >
-                  <IconMenuButton
-                    label="题集更多操作"
-                    :loading="actionLoadingId === item.id"
-                    :disabled="item.status === 'GENERATING'"
-                  />
-                  <template #dropdown
-                    ><el-dropdown-menu
-                      ><el-dropdown-item command="delete">删除题集</el-dropdown-item></el-dropdown-menu
-                    ></template
-                  >
-                </el-dropdown>
-              </div>
-              <el-button
-                type="primary"
-                plain
-                :loading="item.status === 'GENERATING' || startingQuestionSetId === item.id"
-                :disabled="
-                  !canPracticeQuestionSet(item.status) ||
-                  (startingQuestionSetId !== null && startingQuestionSetId !== item.id)
-                "
-                @click="startPractice(item.id)"
-              >
-                {{
-                  item.status === 'GENERATING'
-                    ? '生成中'
-                    : canPracticeQuestionSet(item.status)
-                      ? '开始练习'
-                      : '暂不可练习'
-                }}
-                <AppIcon v-if="canPracticeQuestionSet(item.status)" name="arrow-right" :size="16" />
-              </el-button>
-            </div>
-          </article>
-        </div>
+              <span v-else>{{ item.title }}</span>
+              <StatusPill
+                v-if="item.status !== 'PUBLISHED'"
+                :tone="statusTone(item.status)"
+                :label="formatQuestionSetStatus(item.status)"
+              />
+              <GenerationModeBadge v-else-if="item.generationMode === 'MOCK'" :mode="item.generationMode" />
+            </h2>
+            <p v-if="CARD_HINTS[item.status || '']" class="record-row__desc">{{ CARD_HINTS[item.status || ''] }}</p>
+            <p class="record-row__meta">
+              <span v-if="canPreviewQuestionSet(item.status)">满分 {{ item.totalScore }} 分</span>
+              <span>{{ formatDifficulty(item.difficultyLevel) }}</span>
+              <time :datetime="item.createdAt" :title="formatDateTime(item.createdAt)">{{
+                formatRelativeDay(item.createdAt)
+              }}</time>
+            </p>
+          </div>
+          <div class="record-row__actions" role="group" :aria-label="`${item.title}的操作`">
+            <el-button
+              v-if="canPracticeQuestionSet(item.status)"
+              size="small"
+              type="primary"
+              plain
+              :loading="startingQuestionSetId === item.id"
+              :disabled="startingQuestionSetId !== null && startingQuestionSetId !== item.id"
+              @click="startPractice(item.id)"
+              >开始练习</el-button
+            >
+            <el-button v-else-if="item.status === 'GENERATING'" size="small" text @click="router.push('/ai-tasks')"
+              >查看进度</el-button
+            >
+            <el-button v-else-if="item.status === 'FAILED'" size="small" @click="router.push('/ai-tasks')"
+              >查看原因</el-button
+            >
+            <el-button v-if="canPreviewQuestionSet(item.status)" size="small" text @click="viewQuestionSet(item)"
+              >预览</el-button
+            >
+            <el-button
+              v-if="canPreviewQuestionSet(item.status)"
+              size="small"
+              text
+              :disabled="generating"
+              @click="openRegeneration(item)"
+              >重新生成</el-button
+            >
+            <el-dropdown trigger="click" :disabled="item.status === 'GENERATING'" @command="removeQuestionSet(item.id)">
+              <IconMenuButton
+                :label="`${item.title}的更多操作`"
+                :loading="actionLoadingId === item.id"
+                :disabled="item.status === 'GENERATING'"
+              />
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="delete" class="menu-item--danger">删除题集</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+          </div>
+        </li>
+      </ul>
 
-        <div v-if="total" class="workspace-pagination">
-          <div class="workspace-pagination__meta">共 {{ total }} 套题集</div>
-          <el-pagination
-            v-model:current-page="page.current"
-            v-model:page-size="page.size"
-            :page-sizes="[10, 20, 50]"
-            layout="sizes, prev, pager, next"
-            :total="total"
-            @current-change="loadQuestionSets()"
-            @size-change="loadQuestionSets()"
-          />
-        </div>
-      </div>
+      <footer v-if="!questionSetLoading && !loadError && total > 0" class="workspace-pagination">
+        <span class="workspace-pagination__meta">{{ hasFilters ? `找到 ${total} 套题集` : `共 ${total} 套题集` }}</span>
+        <el-pagination
+          v-model:current-page="page.current"
+          v-model:page-size="page.size"
+          :page-sizes="[10, 20, 50]"
+          layout="sizes, prev, pager, next"
+          :total="total"
+          @current-change="loadQuestionSets()"
+          @size-change="loadQuestionSets()"
+        />
+      </footer>
     </div>
 
     <el-dialog
@@ -179,24 +181,19 @@
       width="min(680px, calc(100vw - 32px))"
       destroy-on-close
       class="quiz-generate-dialog"
+      top="6vh"
       :close-on-click-modal="!generating"
       :close-on-press-escape="!generating"
       :show-close="!generating"
     >
-      <template #header="{ titleId, titleClass }">
-        <h2 :id="titleId" :class="[titleClass, 'dialog-title']">
-          {{ regenerationSourceId ? '重新生成题集' : '生成题集' }}
-        </h2>
-        <div class="dialog-subtitle">选择资料，设置出题范围、题型、题量和难度。</div>
-      </template>
       <p v-if="practiceEntryNotice" class="quiz-inline-note quiz-inline-note--error" role="alert">
         {{ practiceEntryNotice }}
       </p>
-      <div v-if="regenerationLoading" class="state-block" aria-live="polite">正在读取原题集的出题设置…</div>
+      <div v-if="regenerationLoading" class="state-block" aria-live="polite">正在读取上次的出题设置…</div>
       <EmptyState
         v-else-if="regenerationError"
         variant="error"
-        title="暂时无法读取出题设置"
+        title="没有读到上次的出题设置"
         :description="regenerationError"
       >
         <el-button @click="openNewGeneration">改为生成新题集</el-button>
@@ -205,14 +202,14 @@
         v-else-if="!regenerationSourceId && !materialsLoading && !materialsError && !materials.length"
         variant="compact"
         icon="folder"
-        title="先准备一份学习资料"
-        description="上传并解析资料后，就能围绕它生成练习。"
+        title="还没有可用的资料"
+        description="资料上传并解析完成后，才能出题。"
       >
-        <el-button type="primary" @click="router.push('/materials')">前往资料库</el-button>
+        <el-button type="primary" @click="router.push('/materials')">去资料库</el-button>
       </EmptyState>
       <el-form v-else label-position="top" :disabled="generating">
         <p v-if="regenerationSourceId" class="quiz-inline-note" role="note">
-          将使用原资料的当前内容生成一套新题，保留原题集及练习记录。
+          会根据资料现在的内容出一套新题，原来的题集和练习记录都会保留。
           {{ regenerationConfig?.notice }}
         </p>
         <p
@@ -220,20 +217,20 @@
           class="quiz-inline-note quiz-inline-note--error"
           role="alert"
         >
-          原资料已删除或尚未解析完成，无法重新生成。
-          <el-button link type="primary" @click="openNewGeneration">选择其他资料生成新题集</el-button>
+          原来的资料已经删除或还没解析完成，没法重新生成。
+          <el-button link type="primary" @click="openNewGeneration">换一份资料生成</el-button>
         </p>
         <p v-if="materialsError" class="quiz-inline-note quiz-inline-note--error" role="alert">
-          资料列表加载失败：{{ materialsError }}
+          资料列表没有加载出来：{{ materialsError }}
           <el-button link type="primary" :loading="materialsLoading" @click="loadMaterials">重试</el-button>
         </p>
-        <el-form-item label="学习资料">
+        <el-form-item label="资料">
           <el-select
             v-model="form.materialId"
             filterable
             style="width: 100%"
-            placeholder="选择练习的资料"
-            aria-label="选择练习的资料"
+            placeholder="选择一份已解析的资料"
+            aria-label="选择资料"
             :loading="materialsLoading"
             :disabled="Boolean(regenerationSourceId)"
           >
@@ -247,7 +244,7 @@
           </el-radio-group>
         </el-form-item>
         <div v-if="form.scope === 'KNOWLEDGE'" class="quiz-knowledge-scope">
-          <el-form-item label="练习知识点">
+          <el-form-item label="知识点">
             <el-select
               :model-value="form.knowledgePoints"
               multiple
@@ -258,8 +255,8 @@
               :multiple-limit="MAX_KNOWLEDGE_POINTS"
               :loading="knowledgePointsLoading"
               :disabled="!form.materialId"
-              placeholder="选择知识点，或输入名称后按 Enter 添加"
-              aria-label="练习知识点"
+              placeholder="选择知识点，也可以输入名称后按 Enter 添加"
+              aria-label="知识点"
               style="width: 100%"
               @update:model-value="updateKnowledgePoints"
             >
@@ -267,31 +264,30 @@
             </el-select>
           </el-form-item>
           <p class="quiz-scope-help">
-            使用资料中出现的知识点名称；每个知识点至少一道题。最多 {{ MAX_KNOWLEDGE_POINTS }} 个，每个不超过
+            用资料里出现过的名称，每个知识点至少出一道题。最多 {{ MAX_KNOWLEDGE_POINTS }} 个，每个不超过
             {{ MAX_KNOWLEDGE_POINT_LENGTH }} 字。
           </p>
           <p v-if="knowledgePointsError" class="quiz-scope-help quiz-inline-note--error" role="alert">
-            {{ knowledgePointsError }}，仍可手动输入。
+            {{ knowledgePointsError }}，也可以直接输入。
             <el-button link type="primary" :loading="knowledgePointsLoading" @click="loadKnowledgePoints"
-              >重试知识点</el-button
+              >重新加载</el-button
             >
           </p>
           <p
             v-else-if="form.materialId && !knowledgePointsLoading && !knowledgePointOptions.length"
             class="quiz-scope-help"
           >
-            暂无推荐知识点，可输入资料中的概念或章节名称，按 Enter 添加。
+            没有推荐的知识点，可以输入资料里的概念或章节名称，按 Enter 添加。
           </p>
           <p v-if="knowledgeScopeError" class="quiz-scope-help quiz-inline-note--error" role="alert">
             {{ knowledgeScopeError }}
           </p>
         </div>
-        <p class="quiz-inline-note quiz-scope-summary" aria-live="polite">本次范围：{{ scopeSummary }}</p>
         <el-form-item label="题集名称"
           ><el-input v-model="form.questionSetTitle" maxlength="200" show-word-limit placeholder="给这次练习起个名字"
         /></el-form-item>
         <div class="quiz-form-heading">
-          <strong>题型组合</strong><span>共 {{ totalQuestionCount }} 道 · 最多 {{ MAX_QUESTION_COUNT }} 道</span>
+          <strong>题型和题量</strong><span>共 {{ totalQuestionCount }} 道，最多 {{ MAX_QUESTION_COUNT }} 道</span>
         </div>
         <div class="quiz-count-grid">
           <el-form-item label="单选题"
@@ -311,56 +307,58 @@
               aria-label="简答题数量"
           /></el-form-item>
         </div>
-        <p v-if="form.multipleCount" class="quiz-inline-note">多选题：全部选对得分，少选、多选或错选不得分。</p>
+        <p v-if="form.multipleCount" class="quiz-scope-help">多选题全部选对才得分，少选、多选或选错都不得分。</p>
         <el-alert
           v-if="!isQuestionCountValid"
-          :title="`请选择 1 至 ${MAX_QUESTION_COUNT} 道题，再开始生成。`"
+          :title="`题目数量要在 1 到 ${MAX_QUESTION_COUNT} 道之间。`"
           type="warning"
           :closable="false"
           show-icon
           class="quiz-notice"
         />
-        <el-form-item label="练习难度" class="quiz-difficulty-field">
+        <el-form-item label="难度" class="quiz-difficulty-field">
           <el-slider
             v-model="form.difficultyLevel"
             :min="1"
             :max="5"
             :marks="DIFFICULTY_LABELS"
             :format-tooltip="formatDifficulty"
+            :format-value-text="formatDifficulty"
+            aria-label="难度"
             show-stops
           />
         </el-form-item>
         <details class="quiz-advanced">
           <summary>更多设置</summary>
-          <el-form-item label="生成模型（选填）"
+          <el-form-item label="模型（选填）"
             ><el-input
               v-model="form.modelName"
-              :placeholder="aiConfig.defaultModel ? '默认使用 ' + aiConfig.defaultModel : '使用已配置的默认模型'"
+              :placeholder="aiConfig.defaultModel ? '不填就用默认模型 ' + aiConfig.defaultModel : '不填就用默认模型'"
           /></el-form-item>
-          <el-button link type="primary" @click="router.push('/ai-config')">管理 AI 设置</el-button>
+          <el-button link type="primary" @click="router.push('/ai-config')">去 AI 配置</el-button>
         </details>
         <el-checkbox
           v-if="regenerationConfig?.parameterMode === 'LEGACY_REVIEW'"
           v-model="regenerationReviewed"
           class="quiz-regeneration-confirm"
         >
-          已确认出题范围与模型设置
+          我已核对出题范围和模型
         </el-checkbox>
         <p v-if="regenerationConfig?.parameterMode === 'LEGACY_REVIEW'" class="quiz-scope-help">
-          历史题集未保存原出题范围与模型，当前默认整份资料和默认模型，请核对或修改后勾选确认。
+          这套题集生成得比较早，没有保存出题范围和模型。现在默认用整份资料和默认模型，核对或修改后请勾选确认。
         </p>
         <p v-if="aiConfigError" class="quiz-inline-note quiz-inline-note--error">
-          AI 设置暂时无法读取：{{ aiConfigError }}
+          AI 配置没有读取到：{{ aiConfigError }}
           <el-button link type="primary" :loading="aiConfigLoading" @click="loadAiConfig">重试</el-button>
         </p>
         <p v-else-if="aiConfig.mockMode" class="quiz-inline-note">
-          当前为演示模式，生成的题目仅用于体验。<el-button link type="primary" @click="router.push('/ai-config')"
-            >配置 AI</el-button
+          现在是演示模式，题目只用来体验流程。<el-button link type="primary" @click="router.push('/ai-config')"
+            >去配置模型</el-button
           >
         </p>
         <el-alert
           v-else-if="!aiConfig.enabled"
-          title="AI 功能当前已关闭，请在 AI 设置中启用后生成。"
+          title="AI 功能已关闭，在 AI 配置里打开后才能出题。"
           type="warning"
           :closable="false"
           show-icon
@@ -392,7 +390,10 @@
       :close-on-click-modal="false"
       class="quiz-preview-drawer"
     >
-      <div v-if="detailLoading" class="state-block">正在加载题集…</div>
+      <div v-if="detailLoading" class="state-block" role="status">正在打开题集…</div>
+      <EmptyState v-else-if="detailError" variant="error" title="题集没有打开" :description="detailError">
+        <el-button @click="previewTarget && viewQuestionSet(previewTarget)">重试</el-button>
+      </EmptyState>
       <template v-else-if="questionSetDetail">
         <div class="quiz-preview-heading">
           <h2>{{ questionSetDetail.title }}</h2>
@@ -404,7 +405,7 @@
           </p>
         </div>
         <p v-if="questionSetDetail.generationMode === 'MOCK'" class="quiz-inline-note">
-          这套题目为模拟数据，仅用于体验作答与复盘流程。
+          这套题由演示模式生成，只用来体验作答和复盘，题目和答案不一定准确。
         </p>
         <div class="quiz-preview-questions">
           <article
@@ -417,9 +418,7 @@
               ><span>{{ question.score }} 分</span>
             </div>
             <h3>{{ question.sortNo || index + 1 }}. {{ question.stemText }}</h3>
-            <p v-if="isMultiQuestion(question)" class="quiz-inline-note">
-              多选题：全部选对得分，少选、多选或错选不得分。
-            </p>
+            <p v-if="isMultiQuestion(question)" class="quiz-preview-question__note">多选题，全部选对才得分。</p>
             <div v-if="question.optionA" class="option-list">
               <div>A. {{ question.optionA }}</div>
               <div v-if="question.optionB">B. {{ question.optionB }}</div>
@@ -427,13 +426,13 @@
               <div v-if="question.optionD">D. {{ question.optionD }}</div>
             </div>
             <details class="quiz-answer">
-              <summary>查看参考答案与解析</summary>
+              <summary>答案和解析</summary>
               <div class="analysis-box">
                 <p>
                   <strong>参考答案</strong
-                  >{{ question.correctAnswer ? formatAnswer(question, question.correctAnswer) : '暂无参考答案' }}
+                  >{{ question.correctAnswer ? formatAnswer(question, question.correctAnswer) : '没有记录参考答案' }}
                 </p>
-                <p><strong>解析</strong>{{ question.answerAnalysis || '暂无解析' }}</p>
+                <p><strong>解析</strong>{{ question.answerAnalysis || '没有解析' }}</p>
                 <p v-if="question.knowledgePoint"><strong>知识点</strong>{{ question.knowledgePoint }}</p>
               </div>
             </details>
@@ -443,20 +442,20 @@
           v-if="questionSetDetail.sourceMode === 'GENERATION_SNAPSHOT' && questionSetDetail.sourceSegments?.length"
           class="quiz-answer quiz-references"
         >
-          <summary>出题时的资料依据</summary>
-          <p>以下片段保存于本次出题时，反映生成题目所用的资料内容。</p>
+          <summary>出题依据</summary>
+          <p>这些是出题时保存下来的原文片段，题目就是根据它们出的。</p>
           <SourceSegmentList :segments="questionSetDetail.sourceSegments" compact />
         </details>
         <p v-else class="quiz-inline-note quiz-references" role="note">
           {{
             questionSetDetail.sourceMode === 'GENERATION_SNAPSHOT'
-              ? '该题集未记录可展示的出题依据。'
-              : '该历史题集未保存出题时的资料片段，无法还原原始依据。'
+              ? '这套题集没有记录出题依据。'
+              : '这套题集生成得比较早，没有保存出题时用到的原文。'
           }}
         </p>
       </template>
       <template #footer>
-        <el-button @click="drawerVisible = false">关闭预览</el-button>
+        <el-button @click="drawerVisible = false">关闭</el-button>
         <el-button
           v-if="questionSetDetail && canPreviewQuestionSet(questionSetDetail.status)"
           :disabled="generating"
@@ -499,7 +498,7 @@ import {
 import { isAiTaskSuccess, isAiTaskTerminal, parseAiTaskResult, waitForAiTaskUntilTerminal } from '@/utils/aiTask'
 import { confirmDanger } from '@/utils/confirm'
 import { getErrorMessage } from '@/utils/errorMessage'
-import { formatDate, formatIndex, type SourceSegmentLike } from '@/utils/format'
+import { formatDateTime, formatRelativeDay, type SourceSegmentLike } from '@/utils/format'
 import { knowledgePointPracticeReason, knowledgePracticeUnavailableReason } from '@/utils/knowledgePractice'
 import {
   DIFFICULTY_LABELS,
@@ -517,7 +516,6 @@ import AppIcon from '@/components/AppIcon.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import GenerationModeBadge from '@/components/GenerationModeBadge.vue'
 import IconMenuButton from '@/components/IconMenuButton.vue'
-import ListSectionHeading from '@/components/ListSectionHeading.vue'
 import SourceSegmentList from '@/components/SourceSegmentList.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import { formatAnswer, isMultiQuestion } from '@/components/practice/practiceHelpers'
@@ -568,9 +566,9 @@ const MAX_KNOWLEDGE_POINTS = 5
 const MAX_KNOWLEDGE_POINT_LENGTH = 80
 const FILTERABLE_STATUSES = ['GENERATING', 'PUBLISHED', 'FAILED', 'CANCELLED', 'DISABLED']
 const CARD_HINTS: Record<string, string> = {
-  GENERATING: '题目正在生成，完成后可预览和练习。',
-  FAILED: '生成未完成，可到任务中心查看原因并重试。',
-  CANCELLED: '本次生成已取消，可重新生成题集。'
+  GENERATING: '正在出题，完成后就可以预览和练习。',
+  FAILED: '这次没有生成成功，可以在任务中心查看原因。',
+  CANCELLED: '这次生成已取消。'
 }
 
 const route = useRoute()
@@ -598,6 +596,8 @@ const questionSetLoading = ref(false)
 const loadError = ref('')
 const generating = ref(false)
 const detailLoading = ref(false)
+const detailError = ref('')
+const previewTarget = ref<QuestionSetItem | null>(null)
 const drawerVisible = ref(false)
 const generateDialogVisible = ref(false)
 const regenerationSourceId = ref<number | null>(null)
@@ -683,31 +683,28 @@ const practiceEntryNotice = computed(() => {
           loading: materialsLoading.value,
           error: materialsError.value
         }
-      ) || '请选择可用的资料，再设置具体知识点。'
+      ) || '请先选一份可用的资料，再设置知识点。'
     )
   }
   if (form.scope === 'KNOWLEDGE' && !form.knowledgePoints.length && initialGenerateRequest.knowledgePoint) {
     const reason = knowledgePointPracticeReason(initialGenerateRequest.knowledgePoint)
-    if (reason) return `${reason} 请在下方手动设置具体知识点。`
+    if (reason) return `${reason} 请在下面手动设置知识点。`
   }
   return ''
 })
 const knowledgeScopeError = computed(() => {
   if (form.scope !== 'KNOWLEDGE') return ''
-  if (!form.knowledgePoints.length) return '请至少选择或输入 1 个知识点。'
-  if (form.knowledgePoints.length > MAX_KNOWLEDGE_POINTS) return `最多选择 ${MAX_KNOWLEDGE_POINTS} 个知识点。`
+  if (!form.knowledgePoints.length) return '至少选择或输入 1 个知识点。'
+  if (form.knowledgePoints.length > MAX_KNOWLEDGE_POINTS) return `最多选 ${MAX_KNOWLEDGE_POINTS} 个知识点。`
   if (form.knowledgePoints.some((point) => point.trim() === '未标注知识点'))
-    return '“未标注知识点”是记录占位名称，请选择或输入具体知识点。'
+    return '“未标注知识点”只是占位名称，请换成具体的知识点。'
   if (form.knowledgePoints.some((point) => !point.trim() || point.length > MAX_KNOWLEDGE_POINT_LENGTH)) {
-    return `知识点名称不能为空，且每个不超过 ${MAX_KNOWLEDGE_POINT_LENGTH} 字。`
+    return `知识点名称不能为空，每个最多 ${MAX_KNOWLEDGE_POINT_LENGTH} 字。`
   }
   if (form.knowledgePoints.length > totalQuestionCount.value)
-    return '题目数量不能少于知识点数量，请增加题量或减少知识点。'
+    return '题目数量不能少于知识点数量，多加几道题或减少知识点。'
   return ''
 })
-const scopeSummary = computed(() =>
-  form.scope === 'MATERIAL' ? '整份资料' : form.knowledgePoints.join('、') || '尚未选择知识点'
-)
 
 const updateKnowledgePoints = (points: string[]) => {
   form.knowledgePoints = [...new Set(points.map((point) => point.trim()).filter(Boolean))]
@@ -736,7 +733,7 @@ const loadKnowledgePoints = async () => {
       : []
   } catch (error) {
     if (!viewDisposed && requestId === knowledgePointsRequestId)
-      knowledgePointsError.value = getErrorMessage(error, '推荐知识点加载失败')
+      knowledgePointsError.value = getErrorMessage(error, '推荐的知识点没有加载出来')
   } finally {
     if (!viewDisposed && requestId === knowledgePointsRequestId) knowledgePointsLoading.value = false
   }
@@ -765,7 +762,7 @@ const preferredAssistantQuestionContext = computed<AssistantQuestionContext>(() 
 const taskStatusText = computed(() => {
   if (!generating.value || !currentTask.value || isAiTaskTerminal(currentTask.value.status)) return ''
   const materialLabel = materials.value.find((item) => item.id === currentTask.value?.bizId)?.title
-  return `正在生成题集${materialLabel ? `：${materialLabel}` : ''}，完成后将自动打开预览。`
+  return `正在根据${materialLabel ? `“${materialLabel}”` : '资料'}出题，完成后会自动打开预览。`
 })
 
 watch(drawerVisible, (visible) => {
@@ -806,7 +803,7 @@ watch(
 
 const buildDefaultQuestionSetTitle = (materialId?: number) => {
   const material = materialId ? materials.value.find((item) => item.id === materialId) : undefined
-  const suffix = form.scope === 'KNOWLEDGE' ? `${form.knowledgePoints.join('、') || '知识点'}专项练习` : 'AI练习题'
+  const suffix = form.scope === 'KNOWLEDGE' ? `${form.knowledgePoints.join('、') || '知识点'}专项练习` : '练习题'
   return (material?.title ? `${material.title} - ${suffix}` : suffix).slice(0, 200)
 }
 
@@ -868,7 +865,7 @@ const openRegeneration = async (item: QuestionSetItem) => {
       config.sourceQuestionSetId !== item.id ||
       !['SAVED', 'LEGACY_REVIEW'].includes(config.parameterMode)
     )
-      throw new Error('原题集的出题设置不完整，请稍后重试。')
+      throw new Error('上次的出题设置不完整，请稍后重试。')
     form.materialId = config.materialId
     await nextTick()
     if (viewDisposed || requestId !== regenerationRequestId || !generateDialogVisible.value) return
@@ -887,7 +884,7 @@ const openRegeneration = async (item: QuestionSetItem) => {
     regenerationConfig.value = config
   } catch (error) {
     if (!viewDisposed && requestId === regenerationRequestId)
-      regenerationError.value = getErrorMessage(error, '读取出题设置失败，请稍后重试。')
+      regenerationError.value = getErrorMessage(error, '请稍后重试，或者改为生成新题集。')
   } finally {
     if (!viewDisposed && requestId === regenerationRequestId) regenerationLoading.value = false
   }
@@ -940,7 +937,7 @@ const loadQuestionSets = async (silent = false) => {
     loadError.value = ''
   } catch (error) {
     if (!viewDisposed && questionSetRequest.isLatest(requestId) && !silent) {
-      loadError.value = getErrorMessage(error, '题集暂时无法加载，请稍后重试。')
+      loadError.value = getErrorMessage(error, '请稍后重试。')
     }
   } finally {
     if (!viewDisposed && questionSetRequest.isLatest(requestId)) questionSetLoading.value = false
@@ -964,11 +961,11 @@ const generateQuestionSet = async () => {
     return
   }
   if (totalQuestionCount.value <= 0) {
-    ElMessage.warning('请至少配置一种题型并设置数量')
+    ElMessage.warning('至少设置一种题型的数量')
     return
   }
   if (totalQuestionCount.value > MAX_QUESTION_COUNT) {
-    ElMessage.warning(`题目总数最多为 ${MAX_QUESTION_COUNT} 道`)
+    ElMessage.warning(`一次最多出 ${MAX_QUESTION_COUNT} 道题`)
     return
   }
 
@@ -1000,7 +997,7 @@ const generateQuestionSet = async () => {
     if (viewDisposed) return
     currentTask.value = submittedTask
     generateDialogVisible.value = false
-    ElMessage.success('AI 出题任务已提交')
+    ElMessage.success('已开始出题')
     // 后台刷新即可：保留用户当前的筛选与页码，不闪骨架屏。
     await loadQuestionSets(true)
 
@@ -1016,22 +1013,23 @@ const generateQuestionSet = async () => {
     await loadQuestionSets(true)
     if (viewDisposed) return
     if (!isAiTaskSuccess(finishedTask.status)) {
-      throw new Error(finishedTask.errorMessage || 'AI 出题任务执行失败')
+      throw new Error(finishedTask.errorMessage || '题集没有生成成功')
     }
 
     const taskResult = parseAiTaskResult<QuestionSetDetail>(finishedTask)
     if (taskResult) {
       questionSetDetail.value = taskResult
+      detailError.value = ''
       pendingQuestionContext.value = {
         questionSetId: taskResult.id,
         materialId: taskResult.materialId || generatingMaterialId
       }
       drawerVisible.value = true
     }
-    ElMessage.success(taskResult?.generationMode === 'MOCK' ? '模拟题集已生成' : '题集已生成')
+    ElMessage.success(taskResult?.generationMode === 'MOCK' ? '题集已生成（演示模式）' : '题集已生成')
   } catch (error) {
     if (!viewDisposed) {
-      ElMessage.error(getErrorMessage(error, '题集任务失败'))
+      ElMessage.error(getErrorMessage(error, '题集没有生成成功，可以在任务中心查看原因。'))
       if (currentTask.value && !isAiTaskTerminal(currentTask.value.status)) await loadQuestionSets(true)
     }
   } finally {
@@ -1044,6 +1042,8 @@ const questionSetDetailRequest = useLatestRequest()
 const viewQuestionSet = async (item: QuestionSetItem) => {
   if (!canPreviewQuestionSet(item.status)) return
   const requestId = questionSetDetailRequest.begin()
+  previewTarget.value = item
+  detailError.value = ''
   drawerVisible.value = true
   detailLoading.value = true
   questionSetDetail.value = null
@@ -1056,7 +1056,7 @@ const viewQuestionSet = async (item: QuestionSetItem) => {
     if (viewDisposed || !questionSetDetailRequest.isLatest(requestId)) return
     questionSetDetail.value = null
     pendingQuestionContext.value = null
-    ElMessage.error(getErrorMessage(error, '加载题集详情失败'))
+    detailError.value = getErrorMessage(error, '请稍后重试。')
   } finally {
     if (questionSetDetailRequest.isLatest(requestId)) detailLoading.value = false
   }
@@ -1067,23 +1067,22 @@ const startPractice = async (questionSetId: number) => {
   startingQuestionSetId.value = questionSetId
   try {
     const res = await startPracticeApi(questionSetId)
-    ElMessage.success('练习已开始')
     router.push({ path: '/practice', query: { sessionId: String(res.data.data.sessionId) } })
   } catch (error) {
-    ElMessage.error(getErrorMessage(error, '开始练习失败'))
+    ElMessage.error(getErrorMessage(error, '练习没有开始，请稍后重试。'))
   } finally {
     startingQuestionSetId.value = null
   }
 }
 
 const removeQuestionSet = async (id: number) => {
-  const confirmed = await confirmDanger('删除题集后，关联的练习记录也会一起删除，确定继续吗？')
+  const confirmed = await confirmDanger('删除后，这套题集和它的练习记录都无法恢复。确定删除吗？')
   if (!confirmed) return
 
   actionLoadingId.value = id
   try {
     await deleteQuestionSetApi(id)
-    ElMessage.success('题集删除成功')
+    ElMessage.success('题集已删除')
     if (questionSetDetail.value?.id === id) {
       drawerVisible.value = false
       questionSetDetail.value = null
@@ -1091,7 +1090,7 @@ const removeQuestionSet = async (id: number) => {
     }
     await loadQuestionSets()
   } catch (error) {
-    ElMessage.error(getErrorMessage(error, '删除题集失败'))
+    ElMessage.error(getErrorMessage(error, '没有删除成功，请稍后重试。'))
   } finally {
     actionLoadingId.value = null
   }
@@ -1124,410 +1123,215 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.quiz-regeneration-confirm {
-  height: auto;
-  white-space: normal;
-}
-.quiz-regeneration-confirm :deep(.el-checkbox__label) {
-  white-space: normal;
-  line-height: 1.8;
-}
-.quiz-knowledge-scope {
-  margin-bottom: 16px;
-}
-.quiz-knowledge-scope :deep(.el-form-item) {
-  margin-bottom: 8px;
-}
-.quiz-scope-help {
-  margin: 6px 0;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.8;
-  overflow-wrap: anywhere;
-}
-.quiz-scope-summary {
-  overflow-wrap: anywhere;
-}
-.quiz-view .workspace-panel {
-  background: transparent;
-  border: 0;
-  border-radius: 0;
-  overflow: visible;
-}
-.quiz-view .quiz-filter-bar {
+.quiz-row__count {
   display: grid;
-  grid-template-columns: minmax(200px, 1.6fr) minmax(130px, 0.65fr) minmax(130px, 0.65fr) auto;
-  gap: 12px;
-  width: 100%;
-  margin-bottom: 0;
-}
-.quiz-view .workspace-toolbar {
-  margin: 0;
-  padding: 0 0 26px;
-  border-bottom: 1px solid var(--line);
-  background: transparent;
-}
-.quiz-view .workspace-filter-bar :deep(.el-input__wrapper),
-.quiz-view .workspace-filter-bar :deep(.el-select__wrapper) {
-  min-height: 46px;
-  padding-inline: 16px;
-  border-radius: 999px;
-  background: transparent;
-  box-shadow: none;
-}
-.quiz-view .workspace-filter-bar :deep(.el-input__wrapper) {
-  background: var(--bg-secondary);
-}
-.quiz-view .workspace-filter-bar :deep(.el-select__wrapper:hover) {
-  background: var(--bg-secondary);
-}
-.quiz-view .workspace-filter-bar :deep(.el-input__wrapper.is-focus),
-.quiz-view .workspace-filter-bar :deep(.el-select__wrapper.is-focused) {
-  box-shadow: 0 0 0 2px var(--brand);
-}
-.quiz-view .workspace-body {
-  padding: 0;
-}
-.quiz-notice {
-  margin-block: 20px;
-}
-.quiz-loading {
-  display: grid;
-  gap: 24px;
-  padding: 40px 0;
-  color: var(--muted);
-  font-size: 14px;
-}
-.quiz-card-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-}
-.quiz-set-card {
-  display: grid;
-  grid-template-columns: 46px minmax(0, 1fr) 272px;
-  gap: 26px;
-  align-items: center;
-  min-width: 0;
-  padding: 24px 20px;
-  border-radius: var(--radius);
-  border: 1px solid transparent;
-  border-bottom: 1px solid var(--line);
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-}
-.quiz-set-card:hover {
-  background: var(--panel-hover);
-  border-color: color-mix(in srgb, var(--brand) 20%, transparent);
-  box-shadow: var(--shadow);
-  transform: translateY(-2px);
-}
-.quiz-set-card__number {
-  align-self: start;
-  padding-top: 4px;
-  color: var(--muted);
-  font-size: 25px;
-  font-weight: 400;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.04em;
-}
-.quiz-set-card__content {
-  min-width: 0;
-}
-.quiz-set-card__top {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 14px;
-}
-.quiz-set-card__category {
-  font-size: 12px;
-  color: var(--muted);
-  letter-spacing: 0.04em;
-}
-.quiz-set-card__title {
-  width: fit-content;
-  max-width: 100%;
-  min-height: 44px;
-  margin: 9px 0 0;
-  padding: 4px 0;
-  border: 0;
-  background: none;
-  color: var(--text);
-  font: inherit;
-  font-size: 20px;
-  font-weight: 600;
-  line-height: 1.6;
-  text-align: left;
-  overflow-wrap: anywhere;
-  cursor: pointer;
-  transition: color 0.18s ease;
-}
-.quiz-set-card__title:hover:not(:disabled) {
+  flex: 0 0 40px;
+  place-content: center;
+  height: 40px;
+  border-radius: 11px;
+  background: var(--brand-light);
   color: var(--brand);
+  font-size: 10px;
+  line-height: 1.1;
+  text-align: center;
 }
-.quiz-set-card__title:disabled {
-  cursor: default;
+.quiz-row__count b {
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
-.quiz-set-card__title:focus-visible {
-  outline: 2px solid var(--brand);
-  outline-offset: 5px;
-  border-radius: 3px;
-}
-.quiz-set-card__meta {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px 14px;
-  margin-top: 9px;
+.quiz-row__count.is-muted {
+  background: var(--bg-secondary);
   color: var(--muted);
+}
+.quiz-inline-note {
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text-secondary);
   font-size: 13px;
   line-height: 1.7;
 }
-.quiz-set-card__meta > span + span::before {
-  content: '·';
-  margin-right: 14px;
-  color: var(--muted);
-}
-.quiz-set-card__hint {
-  margin: 10px 0 0;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.8;
-}
-.quiz-set-card__actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.quiz-set-card__secondary {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-.quiz-set-card__secondary :deep(.el-button + .el-button) {
-  margin-left: 0;
-}
-.dialog-title {
-  margin: 0;
-}
-.quiz-inline-note {
-  margin: 12px 0 0;
-  padding: 12px 14px;
-  border-radius: 8px;
-  background: var(--bg);
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.8;
-}
-.quiz-inline-note :deep(.el-button) {
-  font-size: 12px;
-  margin-left: 6px;
+.quiz-inline-note .el-button {
+  margin-left: 4px;
+  font-size: 13px;
 }
 .quiz-inline-note--error {
-  margin: 0 0 12px;
-  color: var(--red);
   background: var(--red-soft);
+  color: var(--red);
+}
+.quiz-knowledge-scope {
+  margin-bottom: 18px;
+}
+.quiz-knowledge-scope .el-form-item {
+  margin-bottom: 6px;
+}
+.quiz-scope-help {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
+}
+.quiz-scope-help.quiz-inline-note--error {
+  margin: 4px 0 0;
+  padding: 0;
+  background: none;
+  color: var(--red);
 }
 .quiz-form-heading {
   display: flex;
+  align-items: baseline;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 10px;
-  margin: 4px 0 14px;
+  gap: 4px 12px;
+  margin: 4px 0 10px;
+}
+.quiz-form-heading strong {
+  color: var(--text);
   font-size: 14px;
+  font-weight: 500;
 }
 .quiz-form-heading span {
   color: var(--muted);
   font-size: 12px;
+  font-variant-numeric: tabular-nums;
 }
 .quiz-count-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0 12px;
 }
-.quiz-count-grid :deep(.el-input-number) {
+.quiz-count-grid .el-form-item {
+  margin-bottom: 8px;
+}
+.quiz-count-grid .el-input-number {
   width: 100%;
-  height: 46px;
-  --el-component-size: 46px;
 }
-.quiz-count-grid :deep(.el-input-number__increase),
-.quiz-count-grid :deep(.el-input-number__decrease) {
-  width: 44px;
+.quiz-count-grid + .quiz-scope-help {
+  margin: 0 0 12px;
 }
-.quiz-count-grid :deep(.el-input__wrapper) {
-  padding-inline: 48px;
-}
-.quiz-difficulty-field {
-  padding: 0 12px 18px;
-}
-.quiz-advanced {
-  border-top: 1px solid var(--line);
-  padding-top: 16px;
+.quiz-generate-dialog .el-alert {
   margin-bottom: 16px;
 }
+.quiz-difficulty-field {
+  margin-top: 8px;
+}
+.quiz-advanced {
+  margin: 0 0 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
 .quiz-advanced summary {
-  padding-bottom: 16px;
-  color: var(--muted);
+  padding-bottom: 12px;
+  color: var(--text-secondary);
   font-size: 13px;
   cursor: pointer;
 }
+.quiz-regeneration-confirm {
+  height: auto;
+  margin-top: 4px;
+}
+.quiz-regeneration-confirm :deep(.el-checkbox__label) {
+  white-space: normal;
+}
 .quiz-preview-heading {
-  padding-bottom: 20px;
+  padding-bottom: 16px;
   border-bottom: 1px solid var(--line);
 }
 .quiz-preview-heading h2 {
   margin: 0;
-  font-size: 21px;
-  line-height: 1.6;
-  overflow-wrap: anywhere;
   color: var(--text);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 .quiz-preview-heading p {
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
-  gap: 16px;
-  margin: 12px 0 0;
-  font-size: 13px;
+  gap: 6px 14px;
+  margin: 8px 0 0;
   color: var(--muted);
+  font-size: 13px;
 }
-.quiz-preview-questions {
-  display: grid;
-  gap: 0;
-  margin-top: 10px;
+.quiz-preview-heading + .quiz-inline-note {
+  margin: 16px 0 0;
 }
 .quiz-preview-question {
-  padding: 28px 0;
-  border: 0;
+  padding: 20px 0;
   border-bottom: 1px solid var(--line);
-  border-radius: 0;
 }
 .quiz-preview-question__meta {
   display: flex;
   justify-content: space-between;
-  color: var(--brand);
+  color: var(--muted);
   font-size: 12px;
 }
-.quiz-preview-question h3 {
-  margin: 14px 0;
-  color: var(--text);
-  font-size: 16px;
-  font-weight: 600;
-  line-height: 1.85;
-  overflow-wrap: anywhere;
+.quiz-preview-question__meta > span:first-child {
+  color: var(--brand);
+  font-weight: 500;
 }
-.quiz-preview-question .option-list {
+.quiz-preview-question h3 {
+  margin: 6px 0 0;
   color: var(--text);
   font-size: 15px;
-  line-height: 1.8;
+  font-weight: 600;
+  line-height: 1.75;
+  overflow-wrap: anywhere;
 }
-.quiz-preview-question .option-list > div {
-  padding: 9px 0;
-  background: transparent;
-  border-radius: 0;
+.quiz-preview-question__note {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.quiz-preview-question .option-list {
+  margin-top: 8px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.75;
 }
 .quiz-answer {
-  margin-top: 20px;
+  margin-top: 12px;
   font-size: 13px;
 }
 .quiz-answer summary {
+  width: fit-content;
   color: var(--brand);
+  font-weight: 500;
   cursor: pointer;
-  line-height: 1.8;
 }
 .quiz-answer .analysis-box {
-  border-radius: 8px;
+  margin-top: 8px;
 }
 .quiz-answer p {
-  margin: 8px 0;
-  color: var(--text);
+  margin: 6px 0;
+  color: var(--text-secondary);
+  line-height: 1.75;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 .quiz-answer p strong {
   display: block;
-  margin-bottom: 3px;
+  color: var(--text);
+  font-weight: 600;
 }
-.quiz-references {
+details.quiz-references {
+  margin-top: 20px;
+  padding-top: 16px;
   border-top: 1px solid var(--line);
-  padding-top: 20px;
 }
-.quiz-references :deep(.source-segment-list) {
-  margin-top: 16px;
+details.quiz-references > p {
+  margin: 8px 0 12px;
+  color: var(--muted);
 }
-@media (max-width: 1000px) {
-  .quiz-set-card {
-    grid-template-columns: 40px minmax(0, 1fr);
-    gap: 16px 22px;
-  }
-  .quiz-set-card__actions {
-    grid-column: 2;
-    justify-content: space-between;
-  }
-  .quiz-view .quiz-filter-bar {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
-  }
-  .quiz-view .workspace-filter-bar__search {
-    grid-column: 1 / -1;
-  }
+p.quiz-references {
+  margin-top: 20px;
 }
-@media (max-width: 600px) {
-  .quiz-view .page-header {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 24px;
-  }
-  .quiz-view .page-header > .el-button {
-    align-self: flex-start;
-  }
-  .quiz-view .quiz-filter-bar {
-    gap: 10px 4px;
-  }
-  .quiz-view .workspace-filter-bar :deep(.el-select__wrapper) {
-    padding-inline: 10px;
-  }
-  .quiz-view .workspace-toolbar {
-    padding-bottom: 20px;
-  }
-  .quiz-set-card {
-    grid-template-columns: 28px minmax(0, 1fr);
-    padding-block: 24px;
-    gap: 14px;
-  }
-  .quiz-set-card__number {
-    font-size: 20px;
-  }
-  .quiz-set-card__title {
-    font-size: 18px;
-  }
-  .quiz-set-card__meta {
-    font-size: 12px;
-    gap: 6px 10px;
-  }
-  .quiz-set-card__meta > span + span::before {
-    margin-right: 10px;
-  }
-  .quiz-set-card__date {
-    flex-basis: 100%;
-  }
-  .quiz-set-card__meta > .quiz-set-card__date::before {
-    display: none;
-  }
-  .quiz-set-card__actions > :deep(.el-button) {
-    padding-inline: 16px;
-  }
+@media (max-width: 640px) {
   .quiz-count-grid {
-    grid-template-columns: 1fr;
-    gap: 0;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .quiz-set-card,
-  .quiz-set-card__title {
-    transition: none;
-  }
-  .quiz-set-card:hover {
-    transform: none;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 </style>

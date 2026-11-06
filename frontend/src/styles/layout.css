@@ -108,6 +108,26 @@
 .workspace-body {
   padding: 20px;
 }
+/* 面板内的进度提示：比如“正在生成总结，完成后会自动打开”。 */
+.workspace-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--line);
+  background: var(--accent-soft);
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.workspace-progress__spinner {
+  flex: 0 0 14px;
+  height: 14px;
+  border: 2px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: zx-spin 0.8s linear infinite;
+}
 
 /* 列表行：卡片内上下排列的记录，悬停时整行轻微加深。 */
 .list-row {
@@ -517,6 +537,9 @@
   .workspace-toolbar,
   .workspace-body {
     padding: 14px 16px;
+  }
+  .workspace-progress {
+    padding-inline: 16px;
   }
   .workspace-pagination {
     padding-inline: 16px;

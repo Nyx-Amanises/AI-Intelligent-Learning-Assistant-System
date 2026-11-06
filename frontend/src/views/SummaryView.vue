@@ -43,8 +43,8 @@
         </el-button>
       </div>
 
-      <p v-if="taskStatusText" class="summary-progress" role="status">
-        <span class="summary-progress__spinner" aria-hidden="true" />{{ taskStatusText }}
+      <p v-if="taskStatusText" class="workspace-progress" role="status">
+        <span class="workspace-progress__spinner" aria-hidden="true" />{{ taskStatusText }}
       </p>
       <div v-if="historyLoading" class="record-list" role="status" aria-label="正在加载总结">
         <div v-for="i in 4" :key="i" class="list-row record-row record-row--loading" aria-hidden="true">
@@ -664,25 +664,6 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.summary-progress {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 0;
-  padding: 10px 20px;
-  border-bottom: 1px solid var(--line);
-  background: var(--accent-soft);
-  color: var(--text-secondary);
-  font-size: 13px;
-}
-.summary-progress__spinner {
-  flex: 0 0 14px;
-  height: 14px;
-  border: 2px solid color-mix(in srgb, var(--accent) 30%, transparent);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: zx-spin 0.8s linear infinite;
-}
 .summary-row__icon {
   display: grid;
   flex: 0 0 40px;
@@ -841,9 +822,6 @@ onUnmounted(() => {
   white-space: pre-wrap;
 }
 @media (max-width: 760px) {
-  .summary-progress {
-    padding-inline: 16px;
-  }
   .summary-mode-options {
     grid-template-columns: minmax(0, 1fr);
   }

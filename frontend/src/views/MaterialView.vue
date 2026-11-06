@@ -140,9 +140,7 @@
                   <el-dropdown-item command="parse">{{
                     row.parseStatus === 'SUCCESS' ? '重新解析' : '解析资料'
                   }}</el-dropdown-item>
-                  <el-dropdown-item command="delete" divided class="material-library-menu__danger"
-                    >删除资料</el-dropdown-item
-                  >
+                  <el-dropdown-item command="delete" divided class="menu-item--danger">删除资料</el-dropdown-item>
                 </el-dropdown-menu>
               </template>
             </el-dropdown>
@@ -1470,14 +1468,6 @@ void loadMaterials()
   background: var(--accent-soft);
   color: var(--text-secondary);
   font-size: 13px;
-}
-:global(:root .material-library-menu .material-library-menu__danger:not(.is-disabled)) {
-  color: var(--red);
-}
-:global(:root .material-library-menu .material-library-menu__danger:not(.is-disabled):hover),
-:global(:root .material-library-menu .material-library-menu__danger:not(.is-disabled):focus) {
-  background: var(--red-soft);
-  color: var(--red);
 }
 @media (max-width: 760px) {
   .material-library-detail__meta {

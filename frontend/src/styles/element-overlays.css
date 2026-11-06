@@ -123,6 +123,15 @@
   margin: 6px 4px;
   border-top-color: var(--line);
 }
+/* 删除这类不可恢复的操作：红字，悬停时浅红底。 */
+:root .el-dropdown-menu__item.menu-item--danger:not(.is-disabled) {
+  color: var(--red);
+}
+:root .el-dropdown-menu__item.menu-item--danger:not(.is-disabled):hover,
+:root .el-dropdown-menu__item.menu-item--danger:not(.is-disabled):focus {
+  background: var(--red-soft);
+  color: var(--red);
+}
 :root .el-select-dropdown__list {
   padding: 6px;
 }
