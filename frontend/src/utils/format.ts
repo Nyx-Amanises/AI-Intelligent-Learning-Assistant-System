@@ -39,6 +39,18 @@ export const formatShortDate = (value?: string | number | Date | null, fallback 
 /** 列表序号：`01`、`02`…… */
 export const formatIndex = (index: number) => String(index).padStart(2, '0')
 
+/** 相对日期：今天、昨天、3 天前；一周以前显示 `9月23日`。 */
+export const formatRelativeDay = (value?: string | number | Date | null, fallback = '--') => {
+  const date = parseDate(value)
+  if (!date) return fallback
+  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+  const days = Math.round((startOfDay(new Date()) - startOfDay(date)) / 86_400_000)
+  if (days <= 0) return '今天'
+  if (days === 1) return '昨天'
+  if (days < 7) return `${days} 天前`
+  return formatShortDate(date)
+}
+
 /** 千分位数字。 */
 export const formatNumber = (value?: number | null) =>
   Number.isFinite(Number(value)) ? Number(value).toLocaleString('zh-CN') : '0'

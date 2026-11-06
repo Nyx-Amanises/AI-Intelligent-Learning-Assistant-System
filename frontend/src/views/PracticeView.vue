@@ -22,9 +22,7 @@
         <p class="page-desc">继续作答，或查看历史练习的成绩与解析。</p>
       </div>
       <div class="toolbar toolbar--flush">
-        <el-button v-if="assistantPracticeContext" type="primary" @click="analyzePractice"
-          >用助手分析练习</el-button
-        >
+        <el-button v-if="assistantPracticeContext" type="primary" @click="analyzePractice">用助手分析练习</el-button>
         <el-button :loading="historyLoading" @click="loadHistory">刷新记录</el-button>
       </div>
     </div>
@@ -183,9 +181,8 @@ import { confirmDanger } from '@/utils/confirm'
 import { getErrorMessage } from '@/utils/errorMessage'
 import { formatPracticeStatus, statusTone } from '@/utils/labels'
 import { readStorage, readStorageJson, removeStorage, writeStorage, writeStorageJson } from '@/utils/storage'
+import { getPracticeDraftKey, PRACTICE_ACTIVE_DRAFT_KEY } from '@/utils/practiceDraft'
 
-const PRACTICE_DRAFT_KEY_PREFIX = 'ai-learning-assistant:practice-draft:'
-const PRACTICE_ACTIVE_DRAFT_KEY = 'ai-learning-assistant:practice-draft:active'
 const DRAFT_SAVE_INTERVAL = 800
 
 const route = useRoute()
@@ -266,8 +263,6 @@ const completionPercentage = computed(() => {
 })
 
 // ---------- 草稿：本地保存未提交的答案 ----------
-
-const getPracticeDraftKey = (sessionId: number | string) => `${PRACTICE_DRAFT_KEY_PREFIX}${sessionId}`
 
 const isCurrentPracticeDraftable = () => Boolean(practiceDetail.value?.sessionId && !isSubmitted.value)
 
