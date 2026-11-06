@@ -1,35 +1,26 @@
 <template>
-  <section class="learning-page wrong-view">
-    <div class="page-header">
+  <section class="learning-page wrong-view" aria-labelledby="wrong-view-title">
+    <header class="page-header">
       <div>
-        <div class="learning-eyebrow">练习与复习</div>
-        <h1 class="page-title">错题本</h1>
-        <p class="page-desc">查看错题解析，按资料或知识点筛选后重新练习。</p>
+        <h1 id="wrong-view-title" class="page-title">错题本</h1>
+        <p class="page-desc">看看错在哪里，再做一遍。重做会保留原成绩，掌握后可以手动移出错题本。</p>
       </div>
       <div class="toolbar toolbar--flush">
-        <el-button type="primary" @click="router.push('/quiz')">开始新练习</el-button>
+        <el-button type="primary" @click="router.push('/quiz')"><AppIcon name="plus" :size="16" />选择题集</el-button>
       </div>
-    </div>
+    </header>
 
     <div class="workspace-panel">
-      <div class="wrong-view__heading">
-        <ListSectionHeading
-          title="待复习错题"
-          :count="total"
-          description="重做会开启独立练习并保留原成绩；巩固后可手动移出错题本。"
-          :loading="loading"
-          @refresh="loadWrongQuestions"
-        />
-      </div>
-      <div class="workspace-toolbar">
-        <div class="workspace-filter-bar workspace-filter-bar--wrong">
+      <div class="workspace-toolbar workspace-toolbar--filter">
+        <div class="filter-bar" role="search" aria-label="筛选错题">
           <el-input
             v-model="filters.keyword"
             clearable
             placeholder="搜索题目、知识点或资料"
             aria-label="搜索错题"
-            class="workspace-filter-bar__search"
-          />
+            @keyup.enter="autoQuery.runNow"
+            ><template #prefix><AppIcon name="search" :size="16" /></template
+          ></el-input>
           <el-select
             v-model="filters.materialId"
             clearable
@@ -66,103 +57,113 @@
               :value="item.knowledgePoint"
             />
           </el-select>
-          <el-button @click="resetFilters">重置</el-button>
+          <el-button v-if="hasFilters" text @click="resetFilters">清除筛选</el-button>
         </div>
-        <p v-if="knowledgePointsError" class="wrong-filter-note" role="alert">
-          {{ knowledgePointsError }}，可继续使用其他筛选条件。
-          <el-button link type="primary" :loading="knowledgePointsLoading" @click="loadKnowledgePoints"
-            >重试知识点</el-button
+        <el-button text :loading="loading" aria-label="刷新错题列表" @click="loadWrongQuestions">
+          <AppIcon v-if="!loading" name="refresh" :size="16" /><span class="workspace-toolbar__refresh-label"
+            >刷新</span
           >
-        </p>
-        <p v-if="filters.knowledgePoint" class="wrong-filter-note">
-          当前精确筛选：{{ filters.knowledgePoint }}
-          <el-button link @click="filters.knowledgePoint = ''">清除知识点</el-button>
-        </p>
+        </el-button>
       </div>
-
-      <div class="workspace-body">
-        <div v-if="loading" class="wrong-loading" aria-live="polite">
-          <el-skeleton :rows="5" animated /><span>正在加载错题…</span>
+      <p v-if="knowledgePointsError" class="wrong-filter-note" role="alert">
+        {{ knowledgePointsError }}，可继续使用其他筛选条件。
+        <el-button link type="primary" :loading="knowledgePointsLoading" @click="loadKnowledgePoints"
+          >重试知识点</el-button
+        >
+      </p>
+      <p v-if="filters.knowledgePoint" class="wrong-filter-note">
+        知识点：{{ filters.knowledgePoint }}
+        <el-button link @click="filters.knowledgePoint = ''">清除知识点</el-button>
+      </p>
+      <div v-if="loading" class="record-list" role="status" aria-label="正在加载错题">
+        <div v-for="i in 4" :key="i" class="list-row record-row record-row--loading" aria-hidden="true">
+          <span class="skeleton record-row__sk-lead" />
+          <div class="record-row__main">
+            <span class="skeleton record-row__sk-title" /><span class="skeleton record-row__sk-meta" />
+          </div>
+          <span class="skeleton record-row__sk-actions" />
         </div>
-        <EmptyState
-          v-else-if="loadError"
-          variant="error"
-          icon="refresh"
-          title="错题本加载失败"
-          :description="loadError"
-        >
-          <el-button type="primary" @click="loadWrongQuestions">重新加载</el-button>
-        </EmptyState>
-        <EmptyState
-          v-else-if="!wrongQuestions.length"
-          icon="wrong"
-          :title="hasFilters ? '没有找到匹配的错题' : '暂无待复习错题'"
-          :description="
-            hasFilters
-              ? '试试其他关键词、资料、题型或知识点。'
-              : '练习中答错的题目会保存在这里，可查看解析或重新作答。'
-          "
-        >
-          <el-button v-if="hasFilters" @click="resetFilters">清除筛选</el-button>
-          <el-button v-else type="primary" @click="router.push('/quiz')">选择题集</el-button>
-        </EmptyState>
-        <div v-else class="wrong-question-list">
-          <article v-for="item in wrongQuestions" :key="item.answerId" class="wrong-question-card">
-            <div class="wrong-question-card__top">
-              <div>
-                <StatusPill tone="brand" hide-dot :label="formatQuestionType(item.questionType)" />
-                <GenerationModeBadge :mode="item.generationMode" /><span class="wrong-difficulty">{{
-                  formatDifficulty(item.difficultyLevel)
-                }}</span>
-              </div>
-              <span class="wrong-score"
-                >{{ item.obtainedScore ?? 0 }} <small>/ {{ item.fullScore || 0 }} 分</small></span
+      </div>
+      <EmptyState
+        v-else-if="loadError"
+        variant="error"
+        icon="refresh"
+        title="错题列表没有加载出来"
+        :description="loadError"
+      >
+        <el-button type="primary" @click="loadWrongQuestions">重新加载</el-button>
+      </EmptyState>
+      <EmptyState
+        v-else-if="!wrongQuestions.length"
+        icon="wrong"
+        :title="hasFilters ? '没有找到匹配的错题' : '目前没有待复习的错题'"
+        :description="
+          hasFilters ? '试试其他关键词、资料、题型或知识点。' : '练习中答错的题目会保存在这里，可查看解析或重新作答。'
+        "
+      >
+        <el-button v-if="hasFilters" @click="resetFilters">清除筛选</el-button>
+        <el-button v-else type="primary" @click="router.push('/quiz')">选择题集</el-button>
+      </EmptyState>
+      <ul v-else class="record-list">
+        <li v-for="item in wrongQuestions" :key="item.answerId" class="list-row record-row wrong-row">
+          <span class="wrong-row__icon" aria-hidden="true"><AppIcon name="wrong" :size="19" /></span>
+          <div class="record-row__main">
+            <h2 class="record-row__title wrong-row__title">
+              <button type="button" @click="openDetail(item)">{{ item.stemText }}</button>
+            </h2>
+            <p class="record-row__desc" :title="item.materialTitle">{{ item.materialTitle || '未关联资料' }}</p>
+            <p class="record-row__meta">
+              <span>{{ formatQuestionType(item.questionType) }}</span>
+              <span>{{ formatDifficulty(item.difficultyLevel) }}</span>
+              <span>{{ item.obtainedScore ?? 0 }} / {{ item.fullScore || 0 }} 分</span>
+              <time
+                :datetime="item.answerTime || item.createdAt"
+                :title="formatDateTime(item.answerTime || item.createdAt)"
+                >{{ formatRelativeDay(item.answerTime || item.createdAt) }}</time
               >
-            </div>
-            <button type="button" class="wrong-question-card__stem" @click="openDetail(item)">
-              {{ item.stemText }}
-            </button>
-            <p v-if="item.knowledgePoint" class="wrong-question-card__knowledge">知识点 · {{ item.knowledgePoint }}</p>
-            <div class="wrong-question-card__footer">
-              <div class="wrong-question-card__source">
-                <span :title="item.materialTitle">{{ item.materialTitle || '未关联资料' }}</span
-                ><small>{{ formatDate(item.answerTime || item.createdAt) }}</small>
-              </div>
-              <div class="wrong-question-card__actions">
-                <el-button
-                  type="primary"
-                  :loading="redoingAnswerId === item.answerId"
-                  :disabled="redoingAnswerId !== null || removingAnswerId !== null"
-                  @click="redoQuestion(item)"
-                  >重做此题</el-button
-                >
-                <el-button plain @click="openDetail(item)">查看解析</el-button>
-                <el-dropdown trigger="click" @command="handleQuestionAction($event, item)">
-                  <IconMenuButton label="错题更多操作" :loading="removingAnswerId === item.answerId" />
-                  <template #dropdown
-                    ><el-dropdown-menu
-                      ><el-dropdown-item command="practice">查看原练习</el-dropdown-item
-                      ><el-dropdown-item command="remove" divided>移出错题本</el-dropdown-item></el-dropdown-menu
-                    ></template
-                  >
-                </el-dropdown>
-              </div>
-            </div>
-          </article>
-        </div>
+              <span v-if="item.knowledgePoint" class="record-row__chip" :title="item.knowledgePoint">{{
+                item.knowledgePoint
+              }}</span>
+              <GenerationModeBadge class="record-row__chip" :mode="item.generationMode" />
+            </p>
+          </div>
+          <div class="record-row__actions" role="group" :aria-label="item.stemText + '的操作'">
+            <el-button
+              size="small"
+              type="primary"
+              plain
+              :loading="redoingAnswerId === item.answerId"
+              :disabled="redoingAnswerId !== null || removingAnswerId !== null"
+              @click="redoQuestion(item)"
+              >重做此题</el-button
+            >
+            <el-button size="small" text @click="openDetail(item)">查看解析</el-button>
+            <el-dropdown trigger="click" @command="handleQuestionAction($event, item)">
+              <IconMenuButton :label="item.stemText + '的更多操作'" :loading="removingAnswerId === item.answerId" />
+              <template #dropdown
+                ><el-dropdown-menu
+                  ><el-dropdown-item command="practice">查看原练习</el-dropdown-item
+                  ><el-dropdown-item command="remove" divided class="menu-item--danger"
+                    >移出错题本</el-dropdown-item
+                  ></el-dropdown-menu
+                ></template
+              >
+            </el-dropdown>
+          </div>
+        </li>
+      </ul>
 
-        <div v-if="total" class="workspace-pagination">
-          <div class="workspace-pagination__meta">共 {{ total }} 道错题</div>
-          <el-pagination
-            v-model:current-page="page.current"
-            v-model:page-size="page.size"
-            :page-sizes="[10, 20, 50]"
-            layout="sizes, prev, pager, next"
-            :total="total"
-            @current-change="loadWrongQuestions"
-            @size-change="loadWrongQuestions"
-          />
-        </div>
+      <div v-if="!loading && !loadError && total" class="workspace-pagination">
+        <div class="workspace-pagination__meta">共 {{ total }} 道错题</div>
+        <el-pagination
+          v-model:current-page="page.current"
+          v-model:page-size="page.size"
+          :page-sizes="[10, 20, 50]"
+          layout="sizes, prev, pager, next"
+          :total="total"
+          @current-change="loadWrongQuestions"
+          @size-change="loadWrongQuestions"
+        />
       </div>
     </div>
 
@@ -212,7 +213,7 @@
           </div>
         </div>
         <div v-if="detail.answerAnalysis" class="wrong-analysis">
-          <h3>为什么这样回答？</h3>
+          <h3>答案解析</h3>
           <p>{{ detail.answerAnalysis }}</p>
         </div>
         <div v-if="detail.reviewComment" class="wrong-analysis">
@@ -227,7 +228,14 @@
         </div>
         <p class="wrong-detail-time">作答于 {{ formatDateTime(detail.answerTime || detail.createdAt) }}</p>
       </template>
-      <div v-else class="state-block empty">暂时无法读取这道题，请关闭后重试。</div>
+      <EmptyState
+        v-else
+        variant="error"
+        title="这道题的解析没有加载出来"
+        :description="detailError || '稍后再试一次。'"
+      >
+        <el-button v-if="detailTarget" type="primary" @click="openDetail(detailTarget)">重新加载</el-button>
+      </EmptyState>
       <template #footer>
         <template v-if="detail && !detailLoading"
           ><el-button :loading="removingAnswerId === detail.answerId" @click="removeWrongQuestion(detail, true)"
@@ -253,7 +261,7 @@ import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import EmptyState from '@/components/EmptyState.vue'
 import IconMenuButton from '@/components/IconMenuButton.vue'
-import ListSectionHeading from '@/components/ListSectionHeading.vue'
+import AppIcon from '@/components/AppIcon.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import GenerationModeBadge from '@/components/GenerationModeBadge.vue'
 import { answerIncludesOption, buildOptions, formatAnswer } from '@/components/practice/practiceHelpers'
@@ -262,7 +270,7 @@ import { useLatestRequest } from '@/composables/useLatestRequest'
 import { useParsedMaterials } from '@/composables/useParsedMaterials'
 import { confirmDanger } from '@/utils/confirm'
 import { getErrorMessage } from '@/utils/errorMessage'
-import { formatDate, formatDateTime } from '@/utils/format'
+import { formatDateTime, formatRelativeDay } from '@/utils/format'
 import { formatDifficulty, formatQuestionType, formatReviewMode } from '@/utils/labels'
 import {
   getWrongQuestionDetailApi,
@@ -286,6 +294,8 @@ const redoingAnswerId = ref<number | null>(null)
 let viewDisposed = false
 const wrongQuestions = ref<WrongQuestionItem[]>([])
 const detail = ref<WrongQuestionItem | null>(null)
+const detailTarget = ref<WrongQuestionItem | null>(null)
+const detailError = ref('')
 const total = ref(0)
 const knowledgePoints = ref<WrongQuestionKnowledgePoint[]>([])
 const knowledgePointsLoading = ref(false)
@@ -423,6 +433,8 @@ const openDetail = async (item: WrongQuestionItem) => {
   drawerVisible.value = true
   detailLoading.value = true
   detail.value = null
+  detailTarget.value = item
+  detailError.value = ''
   try {
     const res = await getWrongQuestionDetailApi(item.answerId)
     if (!detailRequest.isLatest(requestId)) return
@@ -430,7 +442,7 @@ const openDetail = async (item: WrongQuestionItem) => {
   } catch (error) {
     if (!detailRequest.isLatest(requestId)) return
     detail.value = null
-    ElMessage.error(getErrorMessage(error, '加载错题详情失败'))
+    detailError.value = getErrorMessage(error, '暂时无法读取这道题的解析，请稍后重试。')
   } finally {
     if (detailRequest.isLatest(requestId)) detailLoading.value = false
   }
@@ -500,140 +512,45 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.wrong-view__heading {
-  padding: 24px 24px 0;
-}
-.wrong-view .workspace-filter-bar--wrong {
-  display: grid;
-  grid-template-columns: minmax(180px, 1.4fr) minmax(130px, 1fr) minmax(115px, 0.8fr) minmax(150px, 1.1fr) auto;
-  width: 100%;
-  margin-bottom: 0;
-}
 .wrong-filter-note {
-  width: 100%;
-  margin: 8px 0 0;
+  margin: 0;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel-hover);
   color: var(--muted);
   font-size: 12px;
   line-height: 1.8;
   overflow-wrap: anywhere;
 }
-.wrong-view .workspace-toolbar {
-  margin-top: 6px;
-}
-.wrong-loading {
+.wrong-row__icon {
   display: grid;
-  gap: 24px;
-  padding: 24px;
-  color: var(--muted);
-  font-size: 13px;
+  flex: 0 0 var(--record-lead);
+  place-items: center;
+  height: var(--record-lead);
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  color: var(--accent);
 }
-.wrong-question-list {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px;
-}
-.wrong-question-card {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  padding: 22px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--panel);
-}
-.wrong-question-card__top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-}
-.wrong-question-card__top > div {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-.wrong-difficulty {
-  font-size: 12px;
-  color: var(--muted);
+.wrong-row__title > button:first-child {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.7;
 }
 .wrong-score {
-  font-size: 18px;
-  font-weight: 550;
-  font-variant-numeric: tabular-nums;
   color: var(--text);
+  font-size: 18px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 .wrong-score small {
   color: var(--muted);
   font-size: 12px;
   font-weight: 400;
-}
-.wrong-question-card__stem {
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  min-height: 78px;
-  max-width: 100%;
-  margin: 18px 0 10px;
-  padding: 0;
-  overflow: hidden;
-  border: 0;
-  background: none;
-  color: var(--text);
-  text-align: left;
-  font: inherit;
-  font-size: 15px;
-  font-weight: 550;
-  line-height: 1.8;
-  overflow-wrap: anywhere;
-  cursor: pointer;
-}
-.wrong-question-card__stem:hover {
-  color: var(--brand);
-}
-.wrong-question-card__stem:focus-visible {
-  outline: 2px solid var(--brand);
-  outline-offset: 5px;
-  border-radius: 3px;
-}
-.wrong-question-card__knowledge {
-  margin: 0 0 20px;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.8;
-  overflow-wrap: anywhere;
-}
-.wrong-question-card__footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: auto;
-  padding-top: 16px;
-  border-top: 1px solid var(--line);
-}
-.wrong-question-card__source {
-  display: grid;
-  gap: 6px;
-  min-width: 0;
-  color: var(--muted);
-  font-size: 12px;
-}
-.wrong-question-card__source span {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-.wrong-question-card__source small {
-  font-size: 11px;
-}
-.wrong-question-card__actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  flex-shrink: 0;
-  gap: 4px;
 }
 .wrong-detail-context {
   display: grid;
@@ -765,26 +682,9 @@ onUnmounted(() => {
   color: var(--muted);
   font-size: 12px;
 }
-@media (max-width: 1050px) {
-  .wrong-question-list {
-    grid-template-columns: 1fr;
-  }
-  .wrong-view .workspace-filter-bar--wrong {
-    grid-template-columns: 1fr 1fr;
-  }
-}
-@media (max-width: 600px) {
-  .wrong-view__heading {
-    padding: 18px 16px 0;
-  }
-  .wrong-view .workspace-filter-bar--wrong {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .wrong-question-card {
-    padding: 18px;
-  }
-  .wrong-question-card__footer {
-    flex-wrap: wrap;
+@media (max-width: 760px) {
+  .wrong-filter-note {
+    padding-inline: 16px;
   }
   .wrong-answer-comparison {
     grid-template-columns: 1fr;
@@ -792,6 +692,19 @@ onUnmounted(() => {
   .wrong-detail-options > div {
     flex-wrap: wrap;
     gap: 5px;
+  }
+  .wrong-detail-question__meta {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .wrong-detail-drawer :deep(.el-drawer__footer) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .wrong-detail-drawer :deep(.el-drawer__footer .el-button) {
+    flex: 1 1 auto;
+    margin: 0;
   }
 }
 </style>
