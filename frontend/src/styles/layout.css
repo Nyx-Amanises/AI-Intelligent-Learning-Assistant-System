@@ -16,7 +16,7 @@
   margin-bottom: 24px;
 }
 .page-header > :first-child {
-  flex: 1 1 320px;
+  flex: 1 1 auto;
   min-width: 0;
 }
 .page-title {

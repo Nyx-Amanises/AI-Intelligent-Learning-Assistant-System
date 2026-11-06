@@ -17,16 +17,16 @@ export const THEME_OPTIONS: ThemeOption[] = [
   {
     key: 'light',
     label: '白天',
-    hint: '经典明亮，清晰干练',
+    hint: '白底黑字，适合光线充足时',
     icon: 'sun',
     color: '#ffffff'
   },
   {
     key: 'eye-care',
     label: '护眼',
-    hint: '柔和豆沙绿，久看舒适',
-    icon: 'eye',
-    color: '#edf2eb'
+    hint: '豆沙绿底色，长时间阅读更柔和',
+    icon: 'leaf',
+    color: '#e9eee2'
   }
 ]
 

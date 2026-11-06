@@ -71,5 +71,10 @@ declare module 'vue' {
     StatTiles: typeof import('./components/StatTiles.vue')['default']
     StatusPill: typeof import('./components/StatusPill.vue')['default']
     TrendLineChart: typeof import('./components/charts/TrendLineChart.vue')['default']
+    WorkspaceAccountMenu: typeof import('./components/layout/WorkspaceAccountMenu.vue')['default']
+    WorkspaceBottomNav: typeof import('./components/layout/WorkspaceBottomNav.vue')['default']
+    WorkspaceSearchDialog: typeof import('./components/layout/WorkspaceSearchDialog.vue')['default']
+    WorkspaceSectionNav: typeof import('./components/layout/WorkspaceSectionNav.vue')['default']
+    WorkspaceTopbar: typeof import('./components/layout/WorkspaceTopbar.vue')['default']
   }
 }

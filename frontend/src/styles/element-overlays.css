@@ -118,18 +118,10 @@
   font-size: 14px;
   line-height: 22px;
 }
+/* 2.13 起分隔线是单独的空 <li role="separator">，只保留一条细线和上下间距。 */
 :root .el-dropdown-menu__item--divided {
-  margin: 13px 0 0;
-  border-top: 0;
-}
-:root .el-dropdown-menu__item--divided::before {
-  position: absolute;
-  top: -7px;
-  right: 6px;
-  left: 6px;
-  height: 1px;
-  background: var(--line);
-  content: '';
+  margin: 6px 4px;
+  border-top-color: var(--line);
 }
 :root .el-select-dropdown__list {
   padding: 6px;
