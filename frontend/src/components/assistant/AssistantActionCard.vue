@@ -332,15 +332,42 @@ const taskLabel = (type: string) =>
 .assistant-action-card--superseded {
   border-color: var(--line);
 }
-@media (max-width: 640px) {
+@media (max-width: 760px) {
   .assistant-action-card {
-    padding: 16px 12px;
+    padding: 20px 16px;
+    border-color: var(--line);
+    background: var(--bg);
+  }
+  .assistant-action-card h3 {
+    font-size: 20px;
+  }
+  .assistant-action-card__tasks li {
+    padding: 16px 0;
+    border-top: 1px solid var(--line);
+    border-radius: 0;
+    background: transparent;
+  }
+  .assistant-action-card h4 {
+    font-size: 16px;
+  }
+  .assistant-action-card dd {
+    font-size: 14px;
   }
   .assistant-action-card dl {
     grid-template-columns: minmax(0, 1fr);
   }
   .assistant-action-card__actions {
     flex-direction: column;
+  }
+  .assistant-action-card button {
+    min-height: 48px;
+    font-size: 15px;
+  }
+  .assistant-action-card button.assistant-action-card__confirm {
+    border-color: transparent;
+    background: var(--mobile-accent, var(--brand));
+    color: var(--text);
+    font-weight: 600;
   }
 }
 </style>

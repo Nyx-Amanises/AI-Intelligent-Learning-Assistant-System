@@ -145,31 +145,59 @@ const emit = defineEmits<{
   }
 }
 
-@media (max-width: 640px) {
+@media (max-width: 760px) {
   .assistant-home {
-    gap: 22px;
-    padding: 24px 2px 16px;
+    align-items: stretch;
+    gap: 28px;
+    padding: 36px 0 24px;
   }
-
+  .assistant-home__hero {
+    text-align: left;
+  }
   .assistant-home__hero h2 {
-    font-size: 26px;
+    margin-top: 12px;
+    font-size: 32px;
+    line-height: 1.4;
   }
-
+  .assistant-home__hero p {
+    max-width: none;
+    margin: 16px 0 0;
+    font-size: 15px;
+    line-height: 1.8;
+  }
   .assistant-home__greeting {
     font-size: 14px;
+    color: var(--muted);
   }
-
   .assistant-suggestion-row {
     flex-direction: column;
-    align-items: flex-start;
+    align-items: stretch;
     width: 100%;
-    gap: 8px;
+    gap: 0;
   }
-
   .assistant-suggestion-chip {
+    justify-content: space-between;
+    gap: 14px;
     width: 100%;
-    padding: 10px 12px;
-    border-radius: 9px;
+    min-height: 56px;
+    padding: 16px 0;
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    border-radius: 0;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 14px;
+  }
+  .assistant-suggestion-chip::after {
+    flex-shrink: 0;
+    color: var(--brand);
+    content: '↗';
+    font-size: 18px;
+  }
+}
+@media (max-width: 360px) {
+  .assistant-home__hero h2 {
+    font-size: 29px;
   }
 }
 

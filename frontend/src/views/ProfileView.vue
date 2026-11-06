@@ -1,13 +1,18 @@
 <template>
-  <section class="learning-page profile-page" aria-labelledby="profile-title">
-    <header class="page-header">
+  <section
+    class="learning-page profile-page"
+    :aria-labelledby="showMobilePreferences ? undefined : 'profile-title'"
+    :aria-label="showMobilePreferences ? '学习偏好' : undefined"
+  >
+    <MobileLearningPreferences v-if="showMobilePreferences" />
+    <header v-show="!showMobilePreferences" class="page-header">
       <div>
         <h1 id="profile-title" class="page-title">个人信息</h1>
         <p class="page-desc">管理你的头像、昵称、联系邮箱和登录密码。</p>
       </div>
     </header>
 
-    <div class="page-card profile-card">
+    <div v-show="!showMobilePreferences" class="page-card profile-card">
       <div v-if="loading" class="profile-state" role="status" aria-live="polite">
         <AppIcon name="user" :size="28" />
         <p>正在加载个人信息…</p>
@@ -235,8 +240,10 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { changePasswordApi, getProfileApi, updateProfileApi, uploadAvatarApi } from '@/api/modules/auth'
 import AppIcon from '@/components/AppIcon.vue'
+import MobileLearningPreferences from '@/components/mobile/MobileLearningPreferences.vue'
 import { useUserStore, type UserProfile } from '@/stores/user'
 import { resolveAvatarUrl } from '@/utils/avatar'
 import { getErrorMessage } from '@/utils/errorMessage'
@@ -264,6 +271,13 @@ const passwordFields: {
 ]
 
 const userStore = useUserStore()
+const route = useRoute()
+const mobileViewport = window.matchMedia('(max-width: 760px)')
+const isMobileViewport = ref(mobileViewport.matches)
+const updateMobileViewport = (event: MediaQueryListEvent) => {
+  isMobileViewport.value = event.matches
+}
+const showMobilePreferences = computed(() => isMobileViewport.value && route.query.view !== 'account')
 const form = reactive({ nickname: '', email: '' })
 const savedForm = reactive({ nickname: '', email: '' })
 const fieldErrors = reactive({ nickname: '', email: '' })
@@ -484,9 +498,11 @@ watch(avatarSrc, () => {
   avatarLoadFailed.value = false
 })
 onMounted(() => {
+  mobileViewport.addEventListener('change', updateMobileViewport)
   void loadProfile()
 })
 onUnmounted(() => {
+  mobileViewport.removeEventListener('change', updateMobileViewport)
   active = false
 })
 </script>
@@ -711,17 +727,33 @@ onUnmounted(() => {
 @media (max-width: 760px) {
   .profile-forms {
     grid-template-columns: minmax(0, 1fr);
+    gap: 32px;
+    margin-top: 32px;
   }
   .profile-password-form {
-    padding: 24px 0 0;
+    padding: 32px 0 0;
     border-left: 0;
     border-top: 1px solid var(--line);
   }
   .profile-card {
-    padding: 18px;
+    padding: 4px 0 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
   }
   .profile-avatar-row {
-    gap: 16px;
+    gap: 20px;
+    padding-bottom: 28px;
+  }
+  .profile-section-title {
+    margin-bottom: 26px;
+    font-size: 21px;
+  }
+  .profile-avatar-content h2 {
+    font-size: 18px;
+  }
+  .profile-avatar-content > p {
+    line-height: 1.8;
   }
   .profile-avatar {
     width: 72px;
@@ -730,18 +762,45 @@ onUnmounted(() => {
     font-size: 28px;
   }
   .profile-field input {
+    min-height: 48px;
+    border-color: transparent;
+    border-radius: 12px;
+    background: var(--panel);
     font-size: 16px;
+  }
+  .profile-field input[readonly] {
+    background: var(--bg-secondary);
+  }
+  .profile-field input[aria-invalid='true'] {
+    border-color: var(--red);
+  }
+  .profile-field {
+    margin-bottom: 26px;
+  }
+  .profile-field label {
+    font-size: 14px;
   }
   .profile-form-actions {
     align-items: stretch;
     flex-direction: column;
+    padding-top: 6px;
+    border-top: 0;
   }
   .profile-form-buttons {
     width: 100%;
+    gap: 12px;
   }
   .profile-form-buttons :deep(.el-button) {
+    padding-inline: 14px;
+  }
+  .profile-form-buttons :deep(.el-button--primary) {
     flex: 1;
-    padding-inline: 10px;
+  }
+  .profile-form-buttons :deep(.el-button:not(.el-button--primary)) {
+    flex: 0 0 auto;
+    border-color: transparent;
+    background: transparent;
+    color: var(--muted);
   }
 }
 @media (prefers-reduced-motion: reduce) {

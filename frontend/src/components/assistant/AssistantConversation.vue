@@ -157,16 +157,16 @@ defineExpose({
   cursor: pointer;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 760px) {
   .assistant-conversation {
-    padding-bottom: calc(env(safe-area-inset-bottom) + 4px);
+    padding-bottom: 0;
   }
 
   .assistant-conversation__hero {
     display: block;
     width: 100%;
     margin: 0;
-    padding: 2px 0 12px;
+    padding: 2px 0 16px;
   }
 
   .assistant-conversation__meta {
@@ -174,8 +174,20 @@ defineExpose({
   }
 
   .assistant-conversation__hero p {
-    margin: 10px 0 0;
+    margin: 8px 0 0;
     font-size: 12px;
+  }
+  .assistant-inline-danger {
+    margin-left: auto;
+    white-space: nowrap;
+  }
+}
+@media (max-width: 760px) and (max-height: 600px) {
+  .assistant-conversation__hero {
+    padding-bottom: 8px;
+  }
+  .assistant-conversation__hero p {
+    display: none;
   }
 }
 </style>

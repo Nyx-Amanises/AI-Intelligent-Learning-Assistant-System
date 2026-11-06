@@ -1152,80 +1152,166 @@ onBeforeUnmount(() => {
   }
 }
 @media (max-width: 760px) {
-  .config-save-bar {
-    bottom: calc(80px + env(safe-area-inset-bottom));
-  }
-}
-@media (max-width: 600px) {
   .ai-settings__header {
     align-items: flex-start;
-    gap: 18px;
-  }
-  .config-context {
-    margin-bottom: 24px;
-    gap: 6px;
-  }
-  .config-context p {
-    width: 100%;
+    gap: 24px;
   }
   .config-scope {
     width: 100%;
   }
   .config-scope button {
     flex: 1;
+    min-height: 44px;
   }
+  .config-context {
+    gap: 8px;
+    margin-bottom: 32px;
+    font-size: 13px;
+  }
+  .config-context p {
+    width: 100%;
+  }
+  .config-form > fieldset {
+    gap: 0;
+  }
+  .config-mode,
   .config-section {
-    padding: 18px;
+    padding: 28px 0;
+    border: 0;
+    border-top: 1px solid var(--line);
+    border-radius: 0;
+    background: transparent;
   }
   .config-mode {
-    padding: 18px;
+    padding-top: 0;
+    border-top: 0;
+    gap: 20px;
+  }
+  .config-mode h2,
+  .config-section__heading h2,
+  .config-vector__title {
+    font-size: 21px;
+  }
+  .config-mode p,
+  .config-section__heading p,
+  .config-vector__description {
+    font-size: 14px;
+    line-height: 1.8;
+  }
+  .config-section__heading {
+    margin-bottom: 24px;
+  }
+  .config-section__icon {
+    display: none;
   }
   .config-mode__choices {
     width: 100%;
   }
   .config-mode__choices label {
+    display: flex;
     flex: 1;
-    text-align: center;
-    padding-inline: 7px;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    padding: 10px 6px;
+    font-size: 14px;
+  }
+  .config-mode__choices .is-selected {
+    color: var(--text);
+  }
+  .config-automation-item {
+    gap: 20px;
+    padding: 18px 0;
+  }
+  .config-automation-item:first-child {
+    padding-top: 0;
+    border-top: 0;
+  }
+  .config-automation-item:last-child {
+    padding-bottom: 0;
+  }
+  .config-automation-item__title {
+    font-size: 16px;
+  }
+  .config-automation-item__desc {
+    font-size: 13px;
+    line-height: 1.8;
   }
   .config-fields {
     grid-template-columns: minmax(0, 1fr);
   }
+  .config-section :deep(.el-form-item) {
+    margin-bottom: 26px;
+  }
+  .config-section :deep(.el-form-item__label) {
+    font-size: 14px;
+  }
+  .config-section :deep(.el-input__inner) {
+    font-size: 16px;
+  }
+  .config-field-help {
+    font-size: 13px;
+    line-height: 1.8;
+    overflow-wrap: anywhere;
+  }
   .config-vector__summary {
-    gap: 10px;
+    gap: 12px;
     align-items: flex-start;
   }
   .config-vector__title {
-    font-size: 17px;
-    gap: 5px;
-  }
-  .config-optional {
-    width: 100%;
+    gap: 6px 12px;
   }
   .config-vector__toggle {
-    margin-top: 5px;
+    min-height: 32px;
+    margin-top: 0;
+    font-size: 14px;
   }
-  .config-vector__description {
-    font-size: 12px;
-  }
-  .config-section__icon {
-    width: 35px;
-    height: 35px;
-    border-radius: 10px;
+  .config-vector__guide {
+    padding: 16px;
+    background: var(--panel);
+    font-size: 13px;
   }
   .config-save-bar {
+    bottom: calc(12px + env(safe-area-inset-bottom));
     flex-wrap: wrap;
-    padding: 14px 16px;
+    gap: 12px;
+    padding: 16px;
+    margin-top: 8px;
+    border: 0;
+    border-radius: 16px;
+    box-shadow: var(--shadow);
   }
   .config-save-bar > div {
     width: 100%;
+    gap: 12px;
   }
   .config-save-bar :deep(.el-button) {
-    flex: 1;
     padding-inline: 14px;
+  }
+  .config-save-bar :deep(.el-button--primary) {
+    flex: 1;
+  }
+  .config-save-bar :deep(.el-button:not(.el-button--primary)) {
+    flex: 0 0 auto;
+    border-color: transparent;
+    background: transparent;
+    color: var(--muted);
   }
   .config-secondary-actions {
     justify-content: center;
+    gap: 12px 24px;
+  }
+  .config-secondary-actions button {
+    min-height: 44px;
+    font-size: 13px;
+  }
+}
+@media (max-width: 360px) {
+  .config-optional {
+    width: 100%;
+  }
+  .config-save-bar :deep(.el-button) {
+    padding-inline: 10px;
   }
 }
 </style>

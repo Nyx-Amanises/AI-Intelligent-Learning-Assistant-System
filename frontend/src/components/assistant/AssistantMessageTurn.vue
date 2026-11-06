@@ -310,19 +310,22 @@ const evidence = computed(() => (isUser.value ? null : parseRagEvidence(props.to
   }
 }
 
-@media (max-width: 640px) {
+@media (max-width: 760px) {
   .assistant-turn {
-    margin-bottom: 22px;
+    margin-bottom: 28px;
   }
 
   .assistant-turn__content {
+    font-size: 16px;
     line-height: 1.85;
   }
 
   .assistant-turn--user .assistant-turn__content {
-    max-width: 90%;
-    padding: 12px 15px;
-    border-radius: 14px 14px 4px 14px;
+    max-width: 94%;
+    padding: 14px 16px;
+    border: 0;
+    border-radius: 16px 16px 4px 16px;
+    background: var(--bg);
   }
 }
 

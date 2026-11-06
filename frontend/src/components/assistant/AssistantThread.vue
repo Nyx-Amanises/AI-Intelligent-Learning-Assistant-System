@@ -337,32 +337,41 @@ defineExpose({ scrollToBottom, jumpToLatest })
   color: var(--brand);
 }
 
-@media (max-width: 640px) {
+@media (max-width: 760px) {
   .assistant-thread {
-    margin-top: 10px;
+    margin-top: 20px;
     padding: 0 0 10px;
     scrollbar-gutter: auto;
   }
 
   .assistant-thread__empty {
-    padding: 8px 0 16px;
+    padding: 20px 0 24px;
   }
 
   .assistant-thread__empty strong {
-    font-size: 24px;
+    font-size: 28px;
   }
 
   .assistant-suggestion-row {
     flex-direction: column;
-    align-items: flex-start;
+    align-items: stretch;
     width: 100%;
-    gap: 8px;
+    gap: 0;
   }
 
   .assistant-suggestion-chip {
     width: 100%;
-    padding: 10px 12px;
-    border-radius: 9px;
+    min-height: 56px;
+    padding: 16px 0;
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    border-radius: 0;
+    background: transparent;
+    font-size: 14px;
+  }
+  .assistant-thread__jump {
+    min-height: 44px;
+    font-size: 13px;
   }
 }
 

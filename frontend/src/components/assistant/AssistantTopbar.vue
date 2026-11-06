@@ -191,4 +191,15 @@ defineExpose({ menuButtonRef })
     transition: none;
   }
 }
+@media (max-width: 760px) {
+  .assistant-topbar {
+    min-height: 68px;
+    padding-block: 12px;
+    margin-bottom: 12px;
+  }
+  .assistant-topbar h1 {
+    font-size: 18px;
+    font-weight: 600;
+  }
+}
 </style>

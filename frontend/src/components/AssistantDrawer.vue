@@ -461,12 +461,21 @@ defineExpose({ openPracticeAnalysis })
   }
 }
 
-@media (max-width: 640px) {
+@media (max-width: 760px) {
+  .assistant-main {
+    padding: env(safe-area-inset-top) 24px calc(16px + env(safe-area-inset-bottom));
+  }
   .assistant-fab {
     right: 16px;
     bottom: 18px;
     padding: 10px;
     border-radius: 50%;
+    background: var(--mobile-accent, var(--brand));
+    color: var(--text);
+  }
+  .assistant-fab__icon {
+    background: transparent;
+    color: inherit;
   }
 
   .assistant-fab__label {
@@ -475,8 +484,16 @@ defineExpose({ openPracticeAnalysis })
 
   .assistant-mock-notice {
     width: 100%;
-    margin: 0 0 10px;
-    padding: 9px 12px;
+    margin: 0 0 16px;
+    padding: 12px 14px;
+    border: 0;
+    border-radius: 12px;
+    font-size: 13px;
+  }
+}
+@media (max-width: 360px) {
+  .assistant-main {
+    padding-inline: 20px;
   }
 }
 

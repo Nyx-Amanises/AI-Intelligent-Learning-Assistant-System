@@ -169,4 +169,18 @@ const materialLink = computed(() => ({
   white-space: pre-wrap;
   word-break: break-word;
 }
+@media (max-width: 760px) {
+  .assistant-citations__list summary {
+    min-height: 44px;
+    padding-block: 10px;
+    font-size: 14px;
+  }
+  .assistant-citations__open {
+    min-height: 44px;
+  }
+  .assistant-citations__excerpt {
+    font-size: 14px;
+    line-height: 1.85;
+  }
+}
 </style>

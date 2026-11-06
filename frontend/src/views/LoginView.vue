@@ -4,6 +4,7 @@
       <section class="login-form-panel" aria-labelledby="login-form-title">
         <div class="login-brand">
           <BrandLogo class="login-brand__logo" />
+          <span class="login-brand__mobile">{{ APP_NAME }}</span>
         </div>
 
         <div class="login-form-content">
@@ -336,6 +337,22 @@ watch(
 </script>
 
 <style scoped>
+.login-brand__mobile {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .login-brand .login-brand__logo {
+    display: none;
+  }
+  .login-brand__mobile {
+    display: block;
+    color: var(--text);
+    font-size: 28px;
+    font-weight: 750;
+    letter-spacing: 0.03em;
+  }
+}
 .login-page {
   --auth-ink: var(--text);
   --auth-muted: var(--muted);
@@ -721,72 +738,109 @@ watch(
 
 @media (max-width: 760px) {
   .login-page {
-    padding: 24px;
+    display: block;
+    padding: 0;
   }
   .login-shell {
     grid-template-columns: minmax(0, 1fr);
     width: min(480px, 100%);
-    min-height: min(720px, calc(100svh - 48px));
+    min-height: 100svh;
+    margin-inline: auto;
     padding: 0;
-    border-radius: var(--radius-lg);
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
   }
   .login-form-panel {
-    padding: 36px 38px 28px;
+    padding: calc(36px + env(safe-area-inset-top)) 28px calc(28px + env(safe-area-inset-bottom));
   }
   .login-visual {
     display: none;
   }
+  .login-brand,
   .login-form-content {
-    padding-block: 48px;
+    width: 100%;
+  }
+  .login-brand__logo {
+    width: 152px;
+  }
+  .login-form-content {
+    padding-block: 52px 24px;
+  }
+  .login-form-heading,
+  .login-shell--register .login-form-heading {
+    margin-bottom: 34px;
+  }
+  .login-form-heading h1 {
+    font-size: 34px;
+    font-weight: 650;
+    line-height: 1.35;
+  }
+  .login-form-description {
+    margin-top: 12px;
+    font-size: 15px;
+  }
+  .auth-form,
+  .login-shell--register .auth-form {
+    gap: 24px;
+  }
+  .auth-name-row--register {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+  }
+  .auth-field label {
+    font-size: 14px;
+    margin-bottom: 10px;
   }
   .auth-field input {
+    height: 52px;
+    border-color: transparent;
+    border-radius: 12px;
+    background: var(--panel);
     font-size: 16px;
   }
-  .auth-name-row--register input {
+  .auth-field input[aria-invalid='true'] {
+    border-color: var(--red);
+  }
+  .auth-password__toggle {
+    top: 4px;
+    right: 4px;
+  }
+  .auth-submit {
+    min-height: 52px;
+    margin-top: 8px;
+    border-color: transparent;
+    border-radius: 12px;
+    background: var(--mobile-accent, var(--brand));
+    color: var(--text);
+    font-size: 16px;
+    font-weight: 600;
+    box-shadow: none;
+  }
+  .auth-submit:hover:not(:disabled) {
+    border-color: transparent;
+    background: var(--mobile-accent, var(--brand));
+    filter: brightness(0.97);
+    box-shadow: none;
+  }
+  .auth-switch {
     font-size: 14px;
   }
 }
 
 @media (max-width: 480px) {
-  .login-page {
-    padding: 16px;
-  }
-  .login-shell {
-    min-height: min(720px, calc(100svh - 32px));
-    border-radius: var(--radius-lg);
-  }
   .login-form-panel {
-    padding: 30px 25px 25px;
-  }
-  .login-brand__logo {
-    width: 168px;
-  }
-  .login-form-heading h1 {
-    font-size: 26px;
-  }
-  .auth-name-row {
-    gap: 13px;
+    padding-inline: 24px;
   }
 }
 
 @media (max-width: 360px) {
-  .login-page {
-    padding: 10px;
-  }
-  .login-shell {
-    min-height: calc(100svh - 20px);
-  }
   .login-form-panel {
-    padding: 26px 20px 22px;
+    padding-inline: 20px;
   }
   .login-form-heading h1 {
-    font-size: 27px;
-  }
-  .auth-name-row--register {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .auth-name-row--register input {
-    font-size: 16px;
+    font-size: 32px;
   }
 }
 

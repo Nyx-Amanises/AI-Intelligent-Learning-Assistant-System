@@ -215,36 +215,70 @@ defineExpose({
   background: currentColor;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 760px) {
   .assistant-composer--hero {
-    padding: 14px;
+    padding: 18px;
+    border-color: transparent;
+    border-radius: 18px;
+    background: var(--bg);
+    box-shadow: none;
   }
-
   .assistant-composer--dock {
     margin-top: 8px;
-    padding: 12px 14px;
+    padding: 14px 16px;
+    border-color: transparent;
+    border-radius: 18px;
+    background: var(--bg);
+    box-shadow: none;
   }
-
   .assistant-composer__topline {
     gap: 8px;
+    flex-wrap: wrap;
   }
   .assistant-composer__shortcut {
     display: none;
   }
-
   .assistant-textarea {
-    min-height: 90px;
+    min-height: 112px;
     font-size: 16px;
-    line-height: 1.55;
+    line-height: 1.8;
   }
-
   .assistant-textarea--compact {
-    min-height: 36px;
+    min-height: 44px;
+    max-height: 18dvh;
   }
-
   .assistant-send-button {
-    min-width: 70px;
-    padding: 9px 15px;
+    min-width: 88px;
+    min-height: 48px;
+    padding: 12px 20px;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 600;
+    background: var(--mobile-accent, var(--brand));
+    color: var(--text);
+  }
+  .assistant-send-button:not(:disabled):hover {
+    background: var(--mobile-accent, var(--brand));
+    filter: brightness(0.97);
+  }
+  .assistant-send-button--stop {
+    background: var(--panel);
+    color: var(--text);
+  }
+  .assistant-send-button--stop:not(:disabled):hover {
+    background: var(--red-soft);
+    color: var(--red);
+  }
+}
+@media (max-width: 760px) and (max-height: 600px) {
+  .assistant-composer--dock {
+    padding: 8px 12px;
+  }
+  .assistant-composer--dock .assistant-textarea {
+    min-height: 38px;
+  }
+  .assistant-composer__topline {
+    font-size: 11px;
   }
 }
 

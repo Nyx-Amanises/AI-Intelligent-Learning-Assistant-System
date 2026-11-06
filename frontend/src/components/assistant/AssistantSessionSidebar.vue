@@ -469,9 +469,47 @@ defineExpose({ rootRef })
   }
 }
 
-@media (max-width: 640px) {
+@media (max-width: 760px) {
+  .assistant-sidebar {
+    width: min(88vw, 340px);
+    padding: calc(24px + env(safe-area-inset-top)) 20px calc(20px + env(safe-area-inset-bottom));
+    gap: 20px;
+  }
+  .assistant-sidebar__logo {
+    background: var(--mobile-accent, var(--brand));
+    color: var(--text);
+  }
+  .assistant-sidebar__brand h2 {
+    font-size: 20px;
+  }
+  .assistant-context-card {
+    padding-bottom: 20px;
+  }
   .assistant-context-card p {
-    font-size: 12px;
+    font-size: 13px;
+  }
+  .assistant-control {
+    min-height: 48px;
+  }
+  .assistant-control--primary,
+  .assistant-control--primary:not(:disabled):hover {
+    background: var(--mobile-accent, var(--brand));
+    color: var(--text);
+    font-weight: 600;
+  }
+  .assistant-session-list {
+    gap: 8px;
+    padding-right: 0;
+  }
+  .assistant-session-card {
+    padding-block: 5px;
+    border-radius: 12px;
+  }
+  .assistant-session-card__select {
+    font-size: 14px;
+  }
+  .assistant-session-card--active .assistant-session-card__select {
+    color: var(--text);
   }
 }
 
