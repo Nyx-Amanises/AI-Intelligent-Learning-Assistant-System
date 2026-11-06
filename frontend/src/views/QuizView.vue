@@ -918,6 +918,7 @@ const questionSetRequest = useLatestRequest()
 /** `silent` 为 true 时不显示骨架屏、不改动错误态，供轮询与后台刷新使用。 */
 const loadQuestionSets = async (silent = false) => {
   if (viewDisposed) return
+  if (silent && questionSetLoading.value) return
   const requestId = questionSetRequest.begin()
   if (!silent) {
     questionSetLoading.value = true
@@ -1123,6 +1124,9 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.quiz-row .record-row__actions {
+  flex-wrap: wrap;
+}
 .quiz-row__count {
   display: grid;
   flex: 0 0 40px;
