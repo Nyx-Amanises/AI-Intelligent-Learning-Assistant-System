@@ -14,7 +14,7 @@
     </header>
 
     <div class="workspace-panel material-library__panel">
-      <div class="workspace-toolbar material-library__toolbar">
+      <div class="workspace-toolbar workspace-toolbar--filter">
         <div class="filter-bar" role="search" aria-label="筛选资料">
           <el-input
             v-model="searchKeyword"
@@ -37,20 +37,20 @@
           <el-button v-if="hasActiveFilters" text @click="resetFilters">清除筛选</el-button>
         </div>
         <el-button text :loading="tableLoading" aria-label="刷新资料列表" @click="loadMaterials">
-          <AppIcon v-if="!tableLoading" name="refresh" :size="16" /><span class="material-library__refresh-label"
+          <AppIcon v-if="!tableLoading" name="refresh" :size="16" /><span class="workspace-toolbar__refresh-label"
             >刷新</span
           >
         </el-button>
       </div>
 
-      <div v-if="tableLoading" class="material-library__list" role="status" aria-label="正在加载资料">
-        <div v-for="i in 4" :key="i" class="list-row material-row material-row--loading" aria-hidden="true">
-          <span class="skeleton material-row__sk-badge" />
-          <div class="material-row__main">
-            <span class="skeleton material-row__sk-title" />
-            <span class="skeleton material-row__sk-meta" />
+      <div v-if="tableLoading" class="record-list" role="status" aria-label="正在加载资料">
+        <div v-for="i in 4" :key="i" class="list-row record-row record-row--loading" aria-hidden="true">
+          <span class="skeleton record-row__sk-lead" />
+          <div class="record-row__main">
+            <span class="skeleton record-row__sk-title" />
+            <span class="skeleton record-row__sk-meta" />
           </div>
-          <span class="skeleton material-row__sk-actions" />
+          <span class="skeleton record-row__sk-actions" />
         </div>
       </div>
       <EmptyState v-else-if="loadError" variant="error" title="资料列表没有加载出来" :description="loadError">
@@ -75,21 +75,21 @@
         >
         <el-button @click="textDialogVisible = true">粘贴文本</el-button>
       </EmptyState>
-      <ul v-else class="material-library__list">
-        <li v-for="row in materialRows" :key="row.id" class="list-row material-row">
+      <ul v-else class="record-list">
+        <li v-for="row in materialRows" :key="row.id" class="list-row record-row">
           <MaterialTypeBadge :type="row.materialType" :size="40" />
-          <div class="material-row__main">
-            <h2 class="material-row__title">
+          <div class="record-row__main">
+            <h2 class="record-row__title">
               <button type="button" :title="row.title" @click="viewDetail(row.id)">{{ row.title }}</button>
               <StatusPill v-if="isProcessing(row)" tone="processing" :label="getProcessingText(row)" />
               <StatusPill v-else-if="row.parseStatus === 'FAILED'" tone="failed" label="解析失败" />
               <StatusPill v-else-if="row.parseStatus === 'PENDING'" tone="muted" label="待解析" />
             </h2>
-            <p v-if="row.description" class="material-row__desc" :title="row.description">{{ row.description }}</p>
+            <p v-if="row.description" class="record-row__desc" :title="row.description">{{ row.description }}</p>
             <p v-if="row.parseStatus === 'FAILED'" class="material-row__error">
               {{ row.parseErrorMessage || '没有记录失败原因，重新解析一次可以看到详情。' }}
             </p>
-            <p class="material-row__meta">
+            <p class="record-row__meta">
               <span class="visually-hidden">{{ formatMaterialType(row.materialType) }}</span>
               <span v-if="row.totalCharacters">{{ formatCharacters(row.totalCharacters) }}</span>
               <time :datetime="row.createdAt" :title="formatDateTime(row.createdAt)"
@@ -100,15 +100,15 @@
                   v-if="row.summaryGenerationMode === 'MOCK'"
                   :mode="row.summaryGenerationMode"
               /></span>
-              <span v-for="tag in row.tagList.slice(0, 3)" :key="tag" class="material-row__tag" :title="tag">{{
+              <span v-for="tag in row.tagList.slice(0, 3)" :key="tag" class="record-row__chip" :title="tag">{{
                 tag
               }}</span>
-              <span v-if="row.tagList.length > 3" class="material-row__tag" :title="row.tagList.slice(3).join('、')"
+              <span v-if="row.tagList.length > 3" class="record-row__chip" :title="row.tagList.slice(3).join('、')"
                 >+{{ row.tagList.length - 3 }}</span
               >
             </p>
           </div>
-          <div class="material-row__actions" role="group" :aria-label="`${row.title}的操作`">
+          <div class="record-row__actions" role="group" :aria-label="`${row.title}的操作`">
             <el-button size="small" @click="viewDetail(row.id)">打开</el-button>
             <el-button
               size="small"
@@ -1189,137 +1189,16 @@ void loadMaterials()
 </script>
 
 <style scoped>
-.material-library__toolbar > .el-button {
-  margin: 0;
-}
-.material-library__list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.material-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 16px;
-}
-.material-row__main {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-.material-row__title {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-  line-height: 1.5;
-}
-.material-row__title button {
-  min-width: 0;
-  padding: 0;
-  overflow: hidden;
-  border: 0;
-  border-radius: var(--radius-xs);
-  background: none;
-  color: var(--text);
-  font: inherit;
-  text-align: left;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  cursor: pointer;
-}
-.material-row__title button:hover {
-  color: var(--brand);
-}
-.material-row__title :deep(.status-pill) {
-  flex: 0 0 auto;
-}
-.material-row__desc {
-  margin: 2px 0 0;
-  overflow: hidden;
-  color: var(--text-secondary);
-  font-size: 13px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 .material-row__error {
   margin: 4px 0 0;
   color: var(--red);
   font-size: 13px;
   overflow-wrap: anywhere;
 }
-.material-row__meta {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 4px 8px;
-  margin: 6px 0 0;
-  color: var(--muted);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-}
-/* 字数、日期、总结之间用圆点分隔；标签另起一组，不加圆点。换行后每行都从左边对齐。 */
-.material-row__meta > :not(.visually-hidden, .material-row__tag) + :not(.material-row__tag)::before {
-  margin-right: 8px;
-  color: var(--line-strong);
-  content: '·';
-}
 .material-row__summary :deep(.generation-mode-badge) {
   margin-left: 6px;
   padding: 0 7px;
   font-size: 11px;
-}
-.material-row__tag {
-  max-width: 10em;
-  padding: 0 8px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: var(--bg-secondary);
-  color: var(--text-secondary);
-  line-height: 20px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.material-row__actions {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 4px;
-  align-self: center;
-}
-.material-row__actions .el-button {
-  margin: 0;
-}
-.material-row__actions .el-button.is-text {
-  padding-inline: 10px;
-}
-.material-row--loading:hover {
-  background: none;
-}
-.material-row__sk-badge {
-  flex: 0 0 40px;
-  height: 40px;
-  border-radius: 11px;
-}
-.material-row__sk-title {
-  display: block;
-  width: min(360px, 70%);
-  height: 18px;
-  margin-top: 2px;
-}
-.material-row__sk-meta {
-  display: block;
-  width: min(220px, 45%);
-  height: 12px;
-  margin-top: 12px;
-}
-.material-row__sk-actions {
-  flex: 0 0 180px;
-  height: 32px;
-  align-self: center;
-  border-radius: var(--radius-sm);
 }
 .material-library__spinner {
   display: inline-block;
@@ -1601,44 +1480,6 @@ void loadMaterials()
   color: var(--red);
 }
 @media (max-width: 760px) {
-  .material-library .toolbar--flush {
-    width: 100%;
-  }
-  .material-library .toolbar--flush .el-button {
-    flex: 1 1 0;
-  }
-  .material-library__toolbar {
-    align-items: flex-start;
-    flex-wrap: nowrap;
-  }
-  .material-library__refresh-label {
-    display: none;
-  }
-  .material-row {
-    flex-wrap: wrap;
-    gap: 12px 14px;
-  }
-  .material-row__main {
-    flex-basis: calc(100% - 54px);
-  }
-  .material-row__title {
-    flex-wrap: wrap;
-    row-gap: 4px;
-  }
-  .material-row__title button {
-    white-space: normal;
-    overflow-wrap: anywhere;
-  }
-  .material-row__actions {
-    flex-basis: 100%;
-    padding-left: 54px;
-  }
-  .material-row__sk-actions {
-    display: none;
-  }
-  .material-library .workspace-pagination :deep(.el-pagination__sizes) {
-    display: none;
-  }
   .material-library-detail__meta {
     grid-template-columns: minmax(0, 1fr);
   }
