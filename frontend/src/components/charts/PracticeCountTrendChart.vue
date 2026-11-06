@@ -29,7 +29,7 @@
           ><span>{{ point.fullRange }}</span
           ><strong>{{ point.value }} 次练习</strong></template
         >
-        <template #empty><p>当前范围暂无可定位到日期的练习记录。</p></template>
+        <template #empty><p>这个范围内还没有带有效提交日期的练习记录。</p></template>
       </TrendLineChart>
       <details
         v-if="chartPoints.length"
@@ -102,7 +102,7 @@ const axisMax = computed(() =>
 }
 .count-heading h2 {
   margin: 0;
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 600;
 }
 .count-heading p,

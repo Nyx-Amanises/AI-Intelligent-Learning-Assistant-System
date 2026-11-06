@@ -1,23 +1,14 @@
 <template>
-  <section class="knowledge-page" :aria-busy="loading">
-    <header class="knowledge-heading">
+  <section class="learning-page knowledge-page" :aria-busy="loading" aria-labelledby="knowledge-title">
+    <header class="page-header">
       <div>
-        <h1>知识掌握</h1>
-        <p>根据练习评分查看各知识点的掌握情况。</p>
+        <h1 id="knowledge-title" class="page-title">知识掌握</h1>
+        <p class="page-desc">看看哪些知识点已经掌握，哪些还需要练习。评估来自已完成评分的作答记录。</p>
       </div>
-      <div class="knowledge-heading__actions">
-        <RouterLink to="/analytics" class="knowledge-text-link"
-          >学习统计 <AppIcon name="arrow-up-right" :size="17"
-        /></RouterLink>
-        <button
-          class="knowledge-refresh"
-          type="button"
-          :disabled="loading"
-          aria-label="刷新知识掌握统计"
-          @click="loadMastery"
-        >
-          <AppIcon name="refresh" :size="21" :class="{ 'is-spinning': loading }" />
-        </button>
+      <div class="toolbar toolbar--flush">
+        <el-button :loading="loading" @click="loadMastery">
+          <AppIcon v-if="!loading" name="refresh" :size="16" />刷新统计
+        </el-button>
       </div>
     </header>
 
@@ -29,7 +20,7 @@
       <el-button :loading="materialsLoading" @click="loadMaterials">重新加载资料</el-button>
     </div>
 
-    <section v-if="hasLoaded && !loadError" class="knowledge-overview" aria-label="知识点掌握概览">
+    <section v-if="hasLoaded && !loadError" class="knowledge-overview surface" aria-label="知识点掌握概览">
       <StatTiles :items="overviewTiles" />
       <div class="knowledge-overview__notes">
         <span
@@ -49,12 +40,12 @@
       </p>
     </section>
 
-    <section class="knowledge-library" aria-labelledby="knowledge-list-title">
+    <section class="knowledge-library workspace-panel" aria-labelledby="knowledge-list-title">
       <div class="knowledge-section-heading">
-        <h2 id="knowledge-list-title">我的知识点</h2>
+        <h2 id="knowledge-list-title">知识点记录</h2>
         <span v-if="hasLoaded && !loadError">{{ total }} 个</span>
       </div>
-      <div class="knowledge-filters" aria-label="筛选知识点">
+      <div class="knowledge-filters" role="search" aria-label="筛选知识点">
         <el-input
           v-model="filters.keyword"
           clearable
@@ -80,7 +71,7 @@
             label="判断题"
             value="JUDGE" /><el-option label="简答题" value="SHORT"
         /></el-select>
-        <button type="button" class="knowledge-reset" @click="resetFilters">重置条件</button>
+        <el-button text :disabled="!hasFilters" @click="resetFilters">清除筛选</el-button>
       </div>
 
       <div v-if="hasLoaded && !loadError && reviewPoints.length" class="knowledge-priorities">
@@ -555,72 +546,18 @@ void loadMastery()
 
 <style scoped>
 .knowledge-page {
-  max-width: 1180px;
-  margin: 0 auto;
-  padding: 12px 0 36px;
+  padding-bottom: 24px;
   color: var(--text);
 }
-.knowledge-heading,
-.knowledge-heading__actions,
 .knowledge-section-heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 20px;
 }
-.knowledge-heading {
-  margin-bottom: 32px;
-}
-.knowledge-heading h1 {
-  margin: 0;
-  font-size: clamp(27px, 3vw, 34px);
-  font-weight: 600;
-  letter-spacing: -0.04em;
-}
-.knowledge-heading p {
-  margin: 11px 0 0;
-  color: var(--muted);
-  font-size: 14px;
-  line-height: 1.7;
-}
-.knowledge-heading__actions {
-  flex-shrink: 0;
-  gap: 24px;
-}
-.knowledge-text-link {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-  gap: 8px;
-  color: var(--brand);
-  text-decoration: none;
-  font-size: 13px;
-  white-space: nowrap;
-}
-.knowledge-refresh {
-  display: grid;
-  width: 44px;
-  height: 44px;
-  place-items: center;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: var(--bg-secondary);
-  color: var(--text-secondary);
-  cursor: pointer;
-}
-.knowledge-refresh:hover {
-  background: var(--line);
-}
-.knowledge-refresh:disabled {
-  opacity: 0.6;
-  cursor: wait;
-}
 .knowledge-overview {
-  padding: 32px 36px 23px;
-  margin-bottom: 42px;
-  border-radius: 22px;
-  background: var(--panel);
+  padding: 24px;
+  margin-bottom: 20px;
 }
 .knowledge-overview__notes {
   display: flex;
@@ -648,15 +585,17 @@ void loadMastery()
   line-height: 1.9;
 }
 .knowledge-assessment-note {
-  padding-bottom: 16px;
+  margin: 0;
+  padding: 16px 20px;
   border-bottom: 1px solid var(--line);
 }
 .knowledge-section-heading {
-  margin-bottom: 22px;
+  padding: 16px 20px 0;
+  margin-bottom: 14px;
 }
 .knowledge-section-heading h2 {
   margin: 0;
-  font-size: 19px;
+  font-size: 17px;
   font-weight: 600;
 }
 .knowledge-section-heading > span {
@@ -665,41 +604,21 @@ void loadMastery()
 }
 .knowledge-filters {
   display: grid;
-  grid-template-columns: minmax(200px, 1.5fr) minmax(130px, 1fr) minmax(130px, 0.85fr) minmax(120px, 0.8fr) 80px;
+  grid-template-columns: minmax(200px, 1.5fr) minmax(130px, 1fr) minmax(130px, 0.85fr) minmax(120px, 0.8fr) auto;
   gap: 12px;
-  padding-bottom: 22px;
+  padding: 0 20px 16px;
   border-bottom: 1px solid var(--line);
 }
 .knowledge-filters > * {
   min-width: 0;
 }
-.knowledge-filters :deep(.el-select__wrapper),
-.knowledge-filters :deep(.el-input__wrapper) {
-  min-height: 44px;
-  border-radius: 10px;
-  background: transparent;
-  box-shadow: 0 0 0 1px var(--line) inset;
-}
-.knowledge-filters :deep(.el-input__wrapper.is-focus),
-.knowledge-filters :deep(.el-select__wrapper.is-focused) {
-  box-shadow: 0 0 0 1px var(--brand) inset;
-}
-.knowledge-reset {
-  padding: 0 5px;
-  min-height: 44px;
-  background: transparent;
-  border: 0;
-  color: var(--muted);
-  font: inherit;
-  font-size: 13px;
-  cursor: pointer;
-}
 .knowledge-priorities {
   display: flex;
   align-items: baseline;
   gap: 16px;
-  padding: 13px 0 8px;
+  padding: 16px 20px 8px;
   border-bottom: 1px solid var(--line);
+  background: var(--panel-hover);
 }
 .knowledge-priorities > span {
   flex-shrink: 0;
@@ -767,9 +686,16 @@ void loadMastery()
   display: grid;
   grid-template-columns: minmax(170px, 1.1fr) 160px minmax(230px, 1.45fr) 96px;
   align-items: start;
-  gap: 32px;
-  padding: 27px 0;
+  gap: 24px;
+  padding: 20px;
   border-bottom: 1px solid var(--line);
+  transition: background-color var(--duration-fast) ease;
+}
+.knowledge-record:hover {
+  background: var(--panel-hover);
+}
+.knowledge-record:last-child {
+  border-bottom: 0;
 }
 .knowledge-record > div {
   min-width: 0;
@@ -894,7 +820,8 @@ void loadMastery()
   align-items: center;
   flex-wrap: wrap;
   gap: 18px;
-  padding-top: 26px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--line);
 }
 .knowledge-pagination p {
   margin: 0;
@@ -908,20 +835,17 @@ void loadMastery()
 .knowledge-pagination :deep(.el-pagination__sizes) {
   margin-right: 12px;
 }
-.knowledge-pagination :deep(.el-pager li),
-.knowledge-pagination :deep(.btn-prev),
-.knowledge-pagination :deep(.btn-next) {
-  background: transparent;
-}
 .knowledge-notice {
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 20px;
-  padding: 24px 0;
-  border-top: 1px solid var(--line);
-  margin-bottom: 24px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  margin-bottom: 20px;
+  background: var(--panel);
 }
 .knowledge-notice strong {
   font-size: 15px;
@@ -1033,14 +957,6 @@ void loadMastery()
   outline: 2px solid var(--brand);
   outline-offset: 4px;
 }
-.is-spinning {
-  animation: knowledge-spin 1s linear infinite;
-}
-@keyframes knowledge-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
 @media (max-width: 1100px) {
   .knowledge-record {
     grid-template-columns: minmax(160px, 1fr) 145px minmax(170px, 1.2fr) 85px;
@@ -1058,7 +974,7 @@ void loadMastery()
 }
 @media (max-width: 840px) {
   .knowledge-overview {
-    padding: 27px;
+    padding: 24px;
   }
   .knowledge-record {
     grid-template-columns: minmax(0, 1fr) 155px;
@@ -1080,49 +996,25 @@ void loadMastery()
   .knowledge-page {
     padding-top: 4px;
   }
-  .knowledge-heading {
-    align-items: start;
-    margin-bottom: 26px;
-  }
-  .knowledge-heading h1 {
-    font-size: 26px;
-  }
-  .knowledge-heading p {
-    max-width: 220px;
-    font-size: 12px;
-  }
-  .knowledge-heading__actions {
-    gap: 8px;
-  }
-  .knowledge-text-link {
-    font-size: 12px;
-    gap: 4px;
-  }
-  .knowledge-heading__actions .app-icon {
-    width: 18px;
-  }
-  .knowledge-text-link .app-icon {
-    display: none;
-  }
-  .knowledge-refresh {
-    height: 40px;
-    width: 40px;
-  }
   .knowledge-overview {
-    padding: 26px 22px 21px;
-    margin-bottom: 32px;
-    border-radius: 19px;
+    padding: 18px 16px;
   }
   .knowledge-overview__notes {
     font-size: 11px;
     gap: 10px 16px;
   }
   .knowledge-section-heading h2 {
-    font-size: 18px;
+    font-size: 16px;
+  }
+  .knowledge-section-heading,
+  .knowledge-assessment-note,
+  .knowledge-priorities {
+    padding-inline: 16px;
   }
   .knowledge-filters {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 11px;
+    padding-inline: 16px;
   }
   .knowledge-search {
     grid-column: 1 / -1;
@@ -1146,7 +1038,7 @@ void loadMastery()
   .knowledge-record {
     grid-template-columns: minmax(0, 1fr) 116px;
     gap: 18px 21px;
-    padding: 24px 0;
+    padding: 18px 16px;
   }
   .knowledge-record__title h3 {
     font-size: 15px;
@@ -1194,18 +1086,10 @@ void loadMastery()
     justify-content: center;
   }
   .knowledge-pagination :deep(.el-pagination__sizes) {
-    flex-basis: 100%;
-    display: flex;
-    justify-content: center;
-    margin: 0 0 8px;
+    display: none;
   }
   .knowledge-detail-facts {
     gap: 0 20px;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .is-spinning {
-    animation: none;
   }
 }
 </style>

@@ -1,87 +1,80 @@
 <template>
-  <section class="statistics-page" :aria-busy="loading">
-    <header class="statistics-heading">
+  <section class="learning-page statistics-page" :aria-busy="loading" aria-labelledby="statistics-title">
+    <header class="page-header">
       <div>
-        <h1>学习统计</h1>
-        <p>练习记录、学习时长与知识掌握情况。</p>
+        <h1 id="statistics-title" class="page-title">学习统计</h1>
+        <p class="page-desc">回顾练习次数、用时和答题表现，找到接下来需要复习的知识点。</p>
       </div>
-      <div class="statistics-heading__actions">
-        <RouterLink class="statistics-text-link" to="/mastery"
-          >知识掌握 <AppIcon name="arrow-up-right" :size="17"
-        /></RouterLink>
-        <button
-          class="statistics-refresh"
-          type="button"
-          aria-label="刷新学习统计"
-          :disabled="loading"
-          @click="loadAnalytics"
-        >
-          <AppIcon name="refresh" :size="21" :class="{ 'is-spinning': loading }" />
-        </button>
+      <div class="toolbar toolbar--flush">
+        <el-button :loading="loading" @click="loadAnalytics">
+          <AppIcon v-if="!loading" name="refresh" :size="16" />刷新统计
+        </el-button>
       </div>
     </header>
 
-    <div class="statistics-filters">
-      <div class="statistics-periods" role="group" aria-label="统计时间范围">
-        <button
-          v-for="period in periods"
-          :key="period.days"
-          type="button"
-          :aria-pressed="!isCustomRange && filters.days === period.days"
-          :class="{ 'is-active': !isCustomRange && filters.days === period.days }"
-          @click="setPeriod(period.days)"
+    <div class="statistics-filter-panel surface">
+      <div class="statistics-filters">
+        <div class="statistics-periods segmented" role="group" aria-label="统计时间范围">
+          <button
+            v-for="period in periods"
+            :key="period.days"
+            type="button"
+            :aria-pressed="!isCustomRange && filters.days === period.days"
+            :class="{ 'is-active': !isCustomRange && filters.days === period.days }"
+            @click="setPeriod(period.days)"
+          >
+            {{ period.label }}
+          </button>
+        </div>
+        <el-select
+          v-model="filters.materialId"
+          clearable
+          filterable
+          placeholder="全部资料"
+          aria-label="按学习资料筛选统计"
+          :loading="materialsLoading"
+          class="statistics-material-filter"
+          @change="loadAnalytics"
         >
-          {{ period.label }}
-        </button>
+          <el-option v-for="item in materials" :key="item.id" :label="item.title" :value="item.id" />
+        </el-select>
+        <el-button v-if="hasFilters" text @click="clearFilters">清除筛选</el-button>
       </div>
-      <el-select
-        v-model="filters.materialId"
-        clearable
-        filterable
-        placeholder="全部资料"
-        aria-label="按学习资料筛选统计"
-        :loading="materialsLoading"
-        class="statistics-material-filter"
-        @change="loadAnalytics"
-      >
-        <el-option v-for="item in materials" :key="item.id" :label="item.title" :value="item.id" />
-      </el-select>
-      <el-button @click="clearFilters">重置筛选</el-button>
+      <form class="statistics-custom-range" @submit.prevent="applyCustomRange">
+        <div class="statistics-date-fields">
+          <label
+            >开始日期<input
+              v-model="draftRange.startDate"
+              type="date"
+              min="1000-01-01"
+              :max="todayDate"
+              aria-label="统计开始日期"
+              @focus="todayDate = localToday()"
+          /></label>
+          <label
+            >结束日期<input
+              v-model="draftRange.endDate"
+              type="date"
+              min="1000-01-01"
+              :max="todayDate"
+              aria-label="统计结束日期"
+              @focus="todayDate = localToday()"
+          /></label>
+          <el-button native-type="submit" :disabled="Boolean(customRangeError)">应用日期范围</el-button>
+        </div>
+        <p
+          v-if="customRangeError && (draftRange.startDate || draftRange.endDate)"
+          class="statistics-range-error"
+          role="alert"
+        >
+          {{ customRangeError }}
+        </p>
+        <p v-else-if="hasUnappliedDates" class="statistics-range-hint">日期已修改，点击“应用日期范围”后更新统计。</p>
+        <p class="statistics-range-hint" aria-live="polite">
+          已应用范围：{{ appliedRangeLabel }} · {{ selectedMaterialTitle }}
+        </p>
+      </form>
     </div>
-    <form class="statistics-custom-range" @submit.prevent="applyCustomRange">
-      <div class="statistics-date-fields">
-        <label
-          >开始日期<input
-            v-model="draftRange.startDate"
-            type="date"
-            min="1000-01-01"
-            :max="todayDate"
-            aria-label="统计开始日期"
-            @focus="todayDate = localToday()"
-        /></label>
-        <label
-          >结束日期<input
-            v-model="draftRange.endDate"
-            type="date"
-            min="1000-01-01"
-            :max="todayDate"
-            aria-label="统计结束日期"
-            @focus="todayDate = localToday()"
-        /></label>
-        <el-button native-type="submit" :disabled="Boolean(customRangeError)">应用日期范围</el-button>
-      </div>
-      <p
-        v-if="customRangeError && (draftRange.startDate || draftRange.endDate)"
-        class="statistics-range-error"
-        role="alert"
-      >
-        {{ customRangeError }}
-      </p>
-      <p v-else-if="hasUnappliedDates" class="statistics-range-hint">日期尚未应用，统计仍使用下方已应用范围。</p>
-      <p class="statistics-range-hint" aria-live="polite">
-        已应用范围：{{ appliedRangeLabel }} · {{ selectedMaterialTitle }}
-      </p>
-    </form>
 
     <div v-if="materialsError" class="statistics-notice" role="alert">
       <div>
@@ -93,7 +86,7 @@
     <div v-if="loadError" class="statistics-notice" role="alert">
       <div>
         <strong>{{ loadError }}</strong>
-        <p>请重试，学习记录会保留。</p>
+        <p>请稍后重试。</p>
       </div>
       <el-button type="primary" :loading="loading" @click="loadAnalytics">重新加载统计</el-button>
     </div>
@@ -105,7 +98,7 @@
       <div v-if="!analytics.totalPracticeCount" class="statistics-empty-intro">
         <div>
           <h2>
-            {{ hasFilters ? '这个范围内还没有练习记录' : '完成一次练习，留下第一份记录' }}
+            {{ hasFilters ? '这个范围内还没有练习记录' : '还没有练习记录' }}
           </h2>
           <p>提交练习后，就可以在这里回顾表现与复习重点。</p>
         </div>
@@ -122,7 +115,7 @@
         已记录练习次数，评分数据暂未就绪。
       </p>
 
-      <div class="statistics-sheet">
+      <div class="statistics-sheet surface">
         <section class="statistics-overview" aria-labelledby="statistics-overview-title">
           <div class="statistics-section-heading statistics-section-heading--overview">
             <h2 id="statistics-overview-title">{{ periodLabel }}概览</h2>
@@ -151,7 +144,7 @@
                 {{ analytics.practiceTrend.length }} 次评分已完成的练习。
               </p>
             </div>
-            <div class="statistics-metric-switch" role="group" aria-label="趋势统计指标">
+            <div class="statistics-metric-switch segmented" role="group" aria-label="趋势统计指标">
               <button
                 v-for="metric in trendMetrics"
                 :key="metric.key"
@@ -218,9 +211,7 @@
             />
             <p class="statistics-assessment-note">
               至少完成
-              {{
-                MASTERY_REQUIRED_QUESTION_COUNT
-              }}
+              {{ MASTERY_REQUIRED_QUESTION_COUNT }}
               道不同的已评分题目后才评估等级，未标注知识点的题目需先完善标注。待评估知识点不计入薄弱推荐。
             </p>
           </section>
@@ -634,38 +625,15 @@ void loadAnalytics()
 
 <style scoped>
 .statistics-page {
-  max-width: 1180px;
-  margin: 0 auto;
-  padding: 12px 0 36px;
+  padding-bottom: 24px;
   color: var(--text);
 }
-.statistics-heading,
-.statistics-heading__actions,
 .statistics-filters,
 .statistics-section-heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-}
-.statistics-heading {
-  margin-bottom: 36px;
-}
-.statistics-heading h1 {
-  margin: 0;
-  font-size: clamp(27px, 3vw, 34px);
-  font-weight: 600;
-  letter-spacing: -0.04em;
-}
-.statistics-heading p {
-  margin: 11px 0 0;
-  color: var(--muted);
-  font-size: 14px;
-  line-height: 1.7;
-}
-.statistics-heading__actions {
-  gap: 24px;
-  flex-shrink: 0;
 }
 .statistics-text-link {
   display: inline-flex;
@@ -680,31 +648,17 @@ void loadAnalytics()
 .statistics-text-link:hover {
   color: var(--brand-hover);
 }
-.statistics-refresh {
-  display: grid;
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  place-items: center;
-  border: 0;
-  border-radius: 50%;
-  background: var(--bg-secondary);
-  color: var(--text-secondary);
-  cursor: pointer;
-}
-.statistics-refresh:hover {
-  background: var(--line);
-}
-.statistics-refresh:disabled {
-  cursor: wait;
-  opacity: 0.6;
+.statistics-filter-panel {
+  margin-bottom: 20px;
+  padding: 16px 20px;
 }
 .statistics-filters {
   flex-wrap: wrap;
   margin-bottom: 14px;
 }
 .statistics-custom-range {
-  margin-bottom: 24px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
 }
 .statistics-date-fields {
   display: flex;
@@ -722,17 +676,19 @@ void loadAnalytics()
 .statistics-date-fields input {
   min-width: 0;
   width: 170px;
-  height: 44px;
+  height: 40px;
   padding: 0 12px;
   color: var(--text);
   background: var(--panel);
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: 10px;
   font: inherit;
-  color-scheme: light dark;
+  color-scheme: light;
 }
-.statistics-date-fields .el-button {
-  min-height: 44px;
+.statistics-date-fields input:focus-visible {
+  border-color: var(--brand);
+  outline: 2px solid var(--brand-soft);
+  outline-offset: 1px;
 }
 .statistics-range-hint,
 .statistics-range-error {
@@ -747,50 +703,19 @@ void loadAnalytics()
 .statistics-range-error {
   color: var(--el-color-danger);
 }
-.statistics-periods {
-  display: inline-flex;
-  padding: 4px;
-  border-radius: 999px;
-  background: var(--bg-secondary);
-}
-.statistics-periods button {
-  min-height: 42px;
-  min-width: 88px;
-  padding: 9px 21px;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--muted);
-  font: inherit;
-  font-size: 14px;
-  cursor: pointer;
-}
-.statistics-periods button.is-active {
-  color: var(--text);
-  background: var(--panel);
-  box-shadow: var(--shadow-sm);
-  font-weight: 600;
-}
 .statistics-material-filter {
-  width: 250px;
-}
-.statistics-material-filter :deep(.el-select__wrapper) {
-  min-height: 44px;
-  border-radius: 11px;
-  box-shadow: 0 0 0 1px var(--line) inset;
-  background: transparent;
+  flex: 1 1 200px;
+  max-width: 300px;
 }
 .statistics-sheet {
-  padding: 32px 36px;
-  background: var(--panel);
-  border-radius: 22px;
+  padding: 24px;
 }
 .statistics-section-heading {
   margin-bottom: 24px;
 }
 .statistics-section-heading h2 {
   margin: 0;
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 600;
   letter-spacing: -0.015em;
 }
@@ -835,44 +760,18 @@ void loadAnalytics()
   padding-top: 28px;
 }
 .statistics-metric-switch {
-  display: flex;
   align-self: start;
-  gap: 22px;
-}
-.statistics-metric-switch button {
-  position: relative;
-  min-height: 42px;
-  padding: 0 0 10px;
-  border: 0;
-  background: transparent;
-  color: var(--muted);
-  font: inherit;
-  font-size: 13px;
-  cursor: pointer;
-}
-.statistics-metric-switch button.is-active {
-  color: var(--brand);
-  font-weight: 600;
-}
-.statistics-metric-switch button.is-active::after {
-  position: absolute;
-  right: calc(50% - 7px);
-  bottom: 0;
-  width: 14px;
-  height: 3px;
-  border-radius: 2px;
-  background: var(--accent);
-  content: '';
+  flex-shrink: 0;
 }
 .statistics-breakdowns {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 56px;
-  padding: 44px 0;
+  gap: 32px;
+  padding: 28px 0;
   border-bottom: 1px solid var(--line);
 }
 .statistics-question-types {
-  padding-left: 44px;
+  padding-left: 28px;
   border-left: 1px solid var(--line);
 }
 .statistics-type-list,
@@ -886,7 +785,7 @@ void loadAnalytics()
   gap: 22px;
 }
 .statistics-review {
-  padding: 38px 0 30px;
+  padding: 28px 0;
   border-bottom: 1px solid var(--line);
 }
 .statistics-review-list {
@@ -989,8 +888,8 @@ void loadAnalytics()
 .statistics-record-columns {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 56px;
-  padding-top: 38px;
+  gap: 32px;
+  padding-top: 28px;
 }
 .statistics-small-label {
   color: var(--muted);
@@ -1046,8 +945,10 @@ void loadAnalytics()
   align-items: center;
   flex-wrap: wrap;
   gap: 18px;
-  padding: 23px 0;
-  border-top: 1px solid var(--line);
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--panel);
   margin-bottom: 20px;
 }
 .statistics-notice strong,
@@ -1099,22 +1000,14 @@ void loadAnalytics()
   outline: 2px solid var(--brand);
   outline-offset: 4px;
 }
-.is-spinning {
-  animation: statistics-spin 1s linear infinite;
-}
 @keyframes statistics-pulse {
   to {
     opacity: 0.25;
   }
 }
-@keyframes statistics-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
 @media (max-width: 1000px) {
   .statistics-sheet {
-    padding: 28px;
+    padding: 24px;
   }
   .statistics-breakdowns,
   .statistics-record-columns {
@@ -1127,13 +1020,6 @@ void loadAnalytics()
 @media (max-width: 760px) {
   .statistics-page {
     padding-top: 4px;
-  }
-  .statistics-heading {
-    align-items: start;
-    margin-bottom: 28px;
-  }
-  .statistics-heading__actions {
-    gap: 14px;
   }
   .statistics-overview__notes > span:last-child {
     margin-left: 0;
@@ -1166,27 +1052,6 @@ void loadAnalytics()
     grid-column: 1 / -1;
     width: 100%;
   }
-  .statistics-heading h1 {
-    font-size: 26px;
-  }
-  .statistics-heading p {
-    max-width: 210px;
-    font-size: 12px;
-  }
-  .statistics-heading__actions {
-    gap: 6px;
-  }
-  .statistics-heading__actions .statistics-text-link {
-    font-size: 12px;
-    gap: 4px;
-  }
-  .statistics-heading__actions .statistics-text-link .app-icon {
-    display: none;
-  }
-  .statistics-refresh {
-    width: 40px;
-    height: 40px;
-  }
   .statistics-filters {
     flex-wrap: wrap;
     gap: 14px;
@@ -1197,14 +1062,15 @@ void loadAnalytics()
   .statistics-periods button {
     flex: 1;
     min-width: 0;
-    padding-inline: 12px;
+    padding-inline: 8px;
   }
   .statistics-material-filter {
     width: 100%;
+    max-width: none;
   }
-  .statistics-sheet {
-    padding: 24px 20px;
-    border-radius: 19px;
+  .statistics-sheet,
+  .statistics-filter-panel {
+    padding: 16px;
   }
   .statistics-section-heading {
     align-items: start;
@@ -1257,7 +1123,6 @@ void loadAnalytics()
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .is-spinning,
   .statistics-loading__line {
     animation: none;
   }
