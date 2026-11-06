@@ -10,7 +10,7 @@
     <div class="workspace-panel">
       <div class="workspace-toolbar">
         <div class="filter-bar" role="search" aria-label="筛选任务">
-          <el-select v-model="filters.taskType" clearable placeholder="全部任务类型" aria-label="按任务类型筛选">
+          <el-select v-model="filters.taskType" clearable placeholder="任务类型" aria-label="按任务类型筛选">
             <el-option label="生成总结" value="SUMMARY" />
             <el-option label="生成题集" value="QUESTION_GENERATE" />
             <el-option label="简答题评分" value="PRACTICE_REVIEW" />
