@@ -29,11 +29,12 @@ export const formatDate = (value?: string | number | Date | null, fallback = '--
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
 }
 
-/** `9月23日`，用于首页这类轻量场景。 */
+/** `9月23日`，用于首页这类轻量场景；不是今年的日期会带上年份，如 `2025年9月23日`。 */
 export const formatShortDate = (value?: string | number | Date | null, fallback = '--') => {
   const date = parseDate(value)
   if (!date) return fallback
-  return new Intl.DateTimeFormat('zh-CN', { month: 'numeric', day: 'numeric' }).format(date)
+  const monthDay = `${date.getMonth() + 1}月${date.getDate()}日`
+  return date.getFullYear() === new Date().getFullYear() ? monthDay : `${date.getFullYear()}年${monthDay}`
 }
 
 /** 列表序号：`01`、`02`…… */
