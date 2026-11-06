@@ -14,7 +14,13 @@
 
     <div class="workspace-panel">
       <div class="workspace-toolbar workspace-toolbar--filter">
-        <div class="filter-bar" role="search" aria-label="筛选题集">
+        <div
+          id="quiz-list-filters"
+          class="filter-bar mobile-filter-bar"
+          :class="{ 'is-expanded': mobileFiltersOpen }"
+          role="search"
+          aria-label="筛选题集"
+        >
           <el-input
             v-model="filters.keyword"
             clearable
@@ -24,7 +30,14 @@
           >
             <template #prefix><AppIcon name="search" :size="16" /></template>
           </el-input>
-          <el-select v-model="filters.status" clearable placeholder="全部状态" aria-label="按状态筛选">
+          <MobileFilterToggle v-model="mobileFiltersOpen" :count="mobileFilterCount" controls="quiz-list-filters" />
+          <el-select
+            v-model="filters.status"
+            class="mobile-filter-detail"
+            clearable
+            placeholder="全部状态"
+            aria-label="按状态筛选"
+          >
             <el-option
               v-for="status in FILTERABLE_STATUSES"
               :key="status"
@@ -32,10 +45,16 @@
               :value="status"
             />
           </el-select>
-          <el-select v-model="filters.difficultyLevel" clearable placeholder="全部难度" aria-label="按难度筛选">
+          <el-select
+            v-model="filters.difficultyLevel"
+            class="mobile-filter-detail"
+            clearable
+            placeholder="全部难度"
+            aria-label="按难度筛选"
+          >
             <el-option v-for="level in 5" :key="level" :label="formatDifficulty(level)" :value="level" />
           </el-select>
-          <el-button v-if="hasFilters" text @click="resetFilters">清除筛选</el-button>
+          <el-button v-if="hasFilters" class="mobile-filter-detail" text @click="resetFilters">清除筛选</el-button>
         </div>
         <el-button text :loading="questionSetLoading" aria-label="刷新题集列表" @click="loadQuestionSets()">
           <AppIcon v-if="!questionSetLoading" name="refresh" :size="16" /><span class="workspace-toolbar__refresh-label"
@@ -514,6 +533,7 @@ import { useLatestRequest } from '@/composables/useLatestRequest'
 import { useParsedMaterials } from '@/composables/useParsedMaterials'
 import { usePolling } from '@/composables/usePolling'
 import AppIcon from '@/components/AppIcon.vue'
+import MobileFilterToggle from '@/components/MobileFilterToggle.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import GenerationModeBadge from '@/components/GenerationModeBadge.vue'
 import IconMenuButton from '@/components/IconMenuButton.vue'
@@ -648,6 +668,8 @@ const filters = reactive({
   difficultyLevel: undefined as number | undefined
 })
 const hasFilters = computed(() => Boolean(filters.keyword || filters.status || filters.difficultyLevel))
+const mobileFiltersOpen = ref(false)
+const mobileFilterCount = computed(() => [filters.status, filters.difficultyLevel].filter(Boolean).length)
 const canPracticeQuestionSet = (status?: string) => status === 'PUBLISHED'
 const canPreviewQuestionSet = (status?: string) => canPracticeQuestionSet(status) || status === 'DISABLED'
 
@@ -1337,6 +1359,78 @@ p.quiz-references {
 @media (max-width: 640px) {
   .quiz-count-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 760px) {
+  .quiz-preview-heading {
+    padding-bottom: 24px;
+  }
+  .quiz-preview-heading h2 {
+    font-size: 24px;
+    line-height: 1.5;
+  }
+  .quiz-preview-question {
+    padding-block: 28px;
+  }
+  .quiz-preview-question h3 {
+    margin-top: 12px;
+    font-size: 20px;
+    line-height: 1.75;
+  }
+  .quiz-preview-question__note {
+    margin-top: 10px;
+    font-size: 13px;
+    line-height: 1.8;
+  }
+  .quiz-preview-question .option-list {
+    gap: 10px;
+    margin-top: 18px;
+    font-size: 16px;
+    line-height: 1.85;
+    overflow-wrap: anywhere;
+  }
+  .quiz-answer {
+    margin-top: 20px;
+    font-size: 16px;
+  }
+  .quiz-answer summary {
+    min-height: 48px;
+    padding-block: 10px;
+    font-size: 16px;
+  }
+  .quiz-answer .analysis-box {
+    margin-top: 0;
+    padding: 12px 0 0;
+    border-top: 1px solid var(--line);
+    border-radius: 0;
+    background: transparent;
+  }
+  .quiz-answer p {
+    margin-block: 8px 20px;
+    font-size: 16px;
+    line-height: 1.85;
+  }
+  .quiz-answer p strong {
+    margin-bottom: 6px;
+    font-size: 18px;
+    line-height: 1.6;
+  }
+  .quiz-references :deep(.source-segment-list) {
+    gap: 0;
+  }
+  .quiz-references :deep(.source-segment) {
+    padding: 20px 0;
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    border-radius: 0;
+    background: transparent;
+  }
+  .quiz-references :deep(.source-segment__title) {
+    font-size: 18px;
+  }
+  .quiz-references :deep(.source-segment__body) {
+    font-size: 16px;
+    line-height: 1.85;
   }
 }
 </style>

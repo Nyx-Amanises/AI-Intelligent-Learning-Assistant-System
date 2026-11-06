@@ -12,7 +12,13 @@
 
     <div class="workspace-panel">
       <div class="workspace-toolbar workspace-toolbar--filter">
-        <div class="filter-bar" role="search" aria-label="筛选总结">
+        <div
+          id="summary-list-filters"
+          class="filter-bar mobile-filter-bar"
+          :class="{ 'is-expanded': mobileFiltersOpen }"
+          role="search"
+          aria-label="筛选总结"
+        >
           <el-input
             v-model="keyword"
             clearable
@@ -21,8 +27,10 @@
           >
             <template #prefix><AppIcon name="search" :size="16" /></template>
           </el-input>
+          <MobileFilterToggle v-model="mobileFiltersOpen" :count="mobileFilterCount" controls="summary-list-filters" />
           <el-select
             v-model="filterMaterialId"
+            class="mobile-filter-detail"
             clearable
             filterable
             placeholder="全部资料"
@@ -31,10 +39,18 @@
           >
             <el-option v-for="item in materials" :key="item.id" :label="item.title" :value="item.id" />
           </el-select>
-          <el-select v-model="filterSummaryType" clearable placeholder="全部类型" aria-label="按类型筛选">
+          <el-select
+            v-model="filterSummaryType"
+            class="mobile-filter-detail"
+            clearable
+            placeholder="全部类型"
+            aria-label="按类型筛选"
+          >
             <el-option v-for="mode in summaryModes" :key="mode.value" :label="mode.title" :value="mode.value" />
           </el-select>
-          <el-button v-if="hasActiveFilters" text @click="resetFilters">清除筛选</el-button>
+          <el-button v-if="hasActiveFilters" class="mobile-filter-detail" text @click="resetFilters"
+            >清除筛选</el-button
+          >
         </div>
         <el-button text :loading="historyLoading" aria-label="刷新总结列表" @click="loadSummaryHistory()">
           <AppIcon v-if="!historyLoading" name="refresh" :size="16" /><span class="workspace-toolbar__refresh-label"
@@ -327,6 +343,7 @@ import { useLatestRequest } from '@/composables/useLatestRequest'
 import { useParsedMaterials } from '@/composables/useParsedMaterials'
 import { usePolling } from '@/composables/usePolling'
 import AppIcon from '@/components/AppIcon.vue'
+import MobileFilterToggle from '@/components/MobileFilterToggle.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import GenerationModeBadge from '@/components/GenerationModeBadge.vue'
 import LearningNoteContent from '@/components/LearningNoteContent.vue'
@@ -389,6 +406,8 @@ const materialId = ref<number>()
 const summaryType = ref('STANDARD')
 const filterMaterialId = ref<number>()
 const filterSummaryType = ref('')
+const mobileFiltersOpen = ref(false)
+const mobileFilterCount = computed(() => [filterMaterialId.value, filterSummaryType.value].filter(Boolean).length)
 const keyword = ref('')
 const debouncedKeyword = ref('')
 const selectedMaterialDetail = ref<MaterialDetail | null>(null)
@@ -825,6 +844,67 @@ onUnmounted(() => {
 @media (max-width: 760px) {
   .summary-mode-options {
     grid-template-columns: minmax(0, 1fr);
+  }
+  .summary-dialog .dialog-title {
+    font-size: 24px;
+    line-height: 1.5;
+  }
+  .summary-reader__title {
+    margin-top: 12px;
+  }
+  .summary-reader__body {
+    padding-block: 8px 24px;
+  }
+  .summary-reader__body :deep(.learning-note) {
+    font-size: 16px;
+    line-height: 1.85;
+  }
+  .summary-reader__body :deep(h2.learning-note__heading) {
+    font-size: 23px;
+  }
+  .summary-reader__body :deep(h3.learning-note__heading) {
+    font-size: 20px;
+  }
+  .summary-reader__body :deep(h4.learning-note__heading),
+  .summary-reader__body :deep(h5.learning-note__heading),
+  .summary-reader__body :deep(h6.learning-note__heading) {
+    font-size: 18px;
+  }
+  .summary-reader__body :deep(.learning-note__quote) {
+    padding: 8px 0 8px 16px;
+    border-radius: 0;
+    background: transparent;
+  }
+  .summary-sources summary {
+    min-height: 48px;
+    padding-block: 8px 16px;
+    font-size: 20px;
+  }
+  .summary-sources :deep(.source-segment-list) {
+    gap: 0;
+  }
+  .summary-sources :deep(.source-segment) {
+    padding: 20px 0;
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    border-radius: 0;
+    background: transparent;
+  }
+  .summary-sources :deep(.source-segment__title) {
+    font-size: 18px;
+  }
+  .summary-sources :deep(.source-segment__body),
+  .summary-preview__segment p {
+    font-size: 16px;
+    line-height: 1.85;
+  }
+  .summary-preview__segment {
+    padding-block: 24px;
+  }
+  .summary-preview__segment h3 {
+    margin-block: 8px 12px;
+    font-size: 20px;
+    line-height: 1.6;
   }
 }
 </style>

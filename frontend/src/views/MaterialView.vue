@@ -1,6 +1,11 @@
 <template>
-  <section class="learning-page material-library" aria-labelledby="material-library-title">
-    <header class="page-header">
+  <section
+    class="learning-page material-library"
+    :aria-labelledby="showMobileHub ? undefined : 'material-library-title'"
+    :aria-label="showMobileHub ? '我的内容' : undefined"
+  >
+    <MobileContentHub v-if="showMobileHub" />
+    <header v-show="!showMobileHub" class="page-header">
       <div>
         <h1 id="material-library-title" class="page-title">资料库</h1>
         <p class="page-desc">上传讲义、教材或笔记，解析完成后可以阅读原文、生成总结和练习题。</p>
@@ -13,9 +18,15 @@
       </div>
     </header>
 
-    <div class="workspace-panel material-library__panel">
+    <div v-show="!showMobileHub" class="workspace-panel material-library__panel">
       <div class="workspace-toolbar workspace-toolbar--filter">
-        <div class="filter-bar" role="search" aria-label="筛选资料">
+        <div
+          id="material-list-filters"
+          class="filter-bar mobile-filter-bar"
+          :class="{ 'is-expanded': mobileFiltersOpen }"
+          role="search"
+          aria-label="筛选资料"
+        >
           <el-input
             v-model="searchKeyword"
             clearable
@@ -25,16 +36,31 @@
           >
             <template #prefix><AppIcon name="search" :size="16" /></template>
           </el-input>
-          <el-select v-model="filters.materialType" clearable aria-label="资料类型" placeholder="全部类型">
+          <MobileFilterToggle v-model="mobileFiltersOpen" :count="mobileFilterCount" controls="material-list-filters" />
+          <el-select
+            v-model="filters.materialType"
+            class="mobile-filter-detail"
+            clearable
+            aria-label="资料类型"
+            placeholder="全部类型"
+          >
             <el-option v-for="item in materialTypes" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
-          <el-select v-model="filters.parseStatus" clearable aria-label="解析状态" placeholder="全部状态">
+          <el-select
+            v-model="filters.parseStatus"
+            class="mobile-filter-detail"
+            clearable
+            aria-label="解析状态"
+            placeholder="全部状态"
+          >
             <el-option label="待解析" value="PENDING" />
             <el-option label="解析中" value="PROCESSING" />
             <el-option label="已解析" value="SUCCESS" />
             <el-option label="解析失败" value="FAILED" />
           </el-select>
-          <el-button v-if="hasActiveFilters" text @click="resetFilters">清除筛选</el-button>
+          <el-button v-if="hasActiveFilters" class="mobile-filter-detail" text @click="resetFilters"
+            >清除筛选</el-button
+          >
         </div>
         <el-button text :loading="tableLoading" aria-label="刷新资料列表" @click="loadMaterials">
           <AppIcon v-if="!tableLoading" name="refresh" :size="16" /><span class="workspace-toolbar__refresh-label"
@@ -564,11 +590,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onUnmounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { UploadRequestOptions } from 'element-plus'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import AppIcon from '@/components/AppIcon.vue'
+import MobileFilterToggle from '@/components/MobileFilterToggle.vue'
+import MobileContentHub from '@/components/mobile/MobileContentHub.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import IconMenuButton from '@/components/IconMenuButton.vue'
 import MaterialTypeBadge from '@/components/MaterialTypeBadge.vue'
@@ -599,6 +627,19 @@ import {
 
 const router = useRouter()
 const route = useRoute()
+const mobileViewport = window.matchMedia('(max-width: 760px)')
+const isMobileViewport = ref(mobileViewport.matches)
+const updateMobileViewport = (event: MediaQueryListEvent) => {
+  isMobileViewport.value = event.matches
+}
+const showMobileHub = computed(
+  () =>
+    isMobileViewport.value &&
+    route.query.view !== 'library' &&
+    !route.query.keyword &&
+    !route.query.materialId &&
+    route.query.action !== 'upload'
+)
 const materials = ref<MaterialPageItem[]>([])
 const total = ref(0)
 const detail = ref<MaterialDetail | null>(null)
@@ -671,6 +712,7 @@ const searchKeyword = computed({
     filters.keyword = keyword
     if (route.path !== '/materials') return
     const query = { ...route.query }
+    if (isMobileViewport.value) query.view = 'library'
     if (keyword) query.keyword = keyword
     else delete query.keyword
     void router.replace({ path: route.path, query, hash: route.hash })
@@ -683,6 +725,8 @@ const page = reactive({
 })
 
 const hasActiveFilters = computed(() => Boolean(filters.keyword.trim() || filters.materialType || filters.parseStatus))
+const mobileFiltersOpen = ref(false)
+const mobileFilterCount = computed(() => [filters.materialType, filters.parseStatus].filter(Boolean).length)
 
 const autoQuery = useAutoListQuery(
   [() => filters.keyword, () => filters.materialType, () => filters.parseStatus],
@@ -1125,6 +1169,7 @@ const handleMaterialCommand = (command: string, row: MaterialPageItem) => {
 const clearMaterialDeepLink = () => {
   if (route.path !== '/materials' || !route.query.materialId) return
   const query = { ...route.query }
+  if (isMobileViewport.value) query.view = 'library'
   delete query.materialId
   void router.replace({ path: route.path, query })
 }
@@ -1173,13 +1218,19 @@ watch(
     if (route.path !== '/materials' || value !== 'upload') return
     uploadDialogVisible.value = true
     const query = { ...route.query }
+    if (isMobileViewport.value) query.view = 'library'
     delete query.action
     void router.replace({ path: route.path, query })
   },
   { immediate: true }
 )
 
+onMounted(() => {
+  mobileViewport.addEventListener('change', updateMobileViewport)
+})
+
 onUnmounted(() => {
+  mobileViewport.removeEventListener('change', updateMobileViewport)
   listRequestVersion += 1
   detailRequestVersion += 1
 })
@@ -1478,6 +1529,83 @@ void loadMaterials()
 @media (max-width: 640px) {
   .material-library-form__grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 760px) {
+  .material-library-detail__heading {
+    align-items: flex-start;
+  }
+  .material-library-detail__heading h2 {
+    margin-top: 6px;
+    font-size: 24px;
+    line-height: 1.5;
+  }
+  .material-library-detail__meta {
+    padding: 20px 0;
+    margin-block: 20px 24px;
+    gap: 16px;
+    border-block: 1px solid var(--line);
+    border-radius: 0;
+    background: transparent;
+  }
+  .material-library-detail__meta dd {
+    margin-top: 4px;
+    font-size: 15px;
+    line-height: 1.8;
+  }
+  .material-library-detail__meta-wide dd {
+    font-size: 16px;
+    line-height: 1.85;
+  }
+  .material-library-detail__retrieval {
+    margin-top: 28px;
+    padding: 24px 0 0;
+    border: 0;
+    border-top: 1px solid var(--line);
+    border-radius: 0;
+  }
+  .material-library-detail__retrieval h3,
+  .material-library-detail__segments > h3 {
+    font-size: 20px;
+    line-height: 1.5;
+  }
+  .material-library-detail__retrieval p {
+    margin-top: 8px;
+    font-size: 14px;
+    line-height: 1.85;
+  }
+  .material-library-detail__segments {
+    margin-top: 32px;
+  }
+  .material-library-detail__segment {
+    padding-block: 24px;
+  }
+  .material-library-detail__segment h4 {
+    margin-block: 8px 12px;
+    font-size: 20px;
+    line-height: 1.6;
+  }
+  .material-library-detail__segment p,
+  .material-library-retrieval__result .summary-block {
+    font-size: 16px;
+    line-height: 1.85;
+  }
+  .material-library-retrieval__result {
+    gap: 0;
+  }
+  .material-library-retrieval__result > .section-card {
+    padding: 24px 0;
+    border: 0;
+    border-top: 1px solid var(--line);
+    border-radius: 0;
+    background: transparent;
+  }
+  .material-library-retrieval__result .section-card__title {
+    font-size: 20px;
+    line-height: 1.6;
+  }
+  .material-library-retrieval__result .summary-history-card__top {
+    flex-wrap: wrap;
   }
 }
 </style>

@@ -1,0 +1,81 @@
+/* 仅列表筛选折叠使用；保持下拉框为 filter-bar 的直接子元素，桌面沿用原布局。 */
+.mobile-filter-toggle {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .workspace-toolbar--filter:has(> .mobile-filter-bar) {
+    position: relative;
+    display: block;
+  }
+  .filter-bar.mobile-filter-bar {
+    align-items: flex-start;
+    width: 100%;
+    gap: 10px;
+  }
+  .filter-bar.mobile-filter-bar > .el-input {
+    flex: 1 1 100%;
+    width: 100%;
+    min-width: 0;
+  }
+  :root .workspace-toolbar--filter:has(> .mobile-filter-bar) > .el-button {
+    position: absolute;
+    top: 58px;
+    right: 0;
+    min-width: 44px;
+    min-height: 48px;
+    margin: 0;
+    padding-inline: 12px;
+  }
+  .mobile-filter-toggle {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 48px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 12px;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: 14px;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .mobile-filter-toggle.has-filters,
+  .mobile-filter-toggle[aria-expanded='true'] {
+    background: var(--brand-light);
+    color: var(--brand);
+  }
+  .mobile-filter-toggle[aria-expanded='true'] .app-icon {
+    transform: rotate(180deg);
+  }
+  .filter-bar.mobile-filter-bar:not(.is-expanded) > .mobile-filter-detail {
+    display: none;
+  }
+  .filter-bar.mobile-filter-bar.is-expanded::before {
+    order: 1;
+    flex-basis: 100%;
+    height: 0;
+    margin-block: -5px;
+    content: '';
+  }
+  .filter-bar.mobile-filter-bar.is-expanded > .mobile-filter-detail {
+    order: 2;
+  }
+  .filter-bar.mobile-filter-bar.is-expanded > .el-select {
+    flex: 1 1 calc(50% - 5px);
+    min-width: 0;
+  }
+  .filter-bar.mobile-filter-bar.is-expanded > .mobile-filter-detail--wide {
+    flex-basis: 100%;
+  }
+  .filter-bar.mobile-filter-bar.is-expanded > .el-button.mobile-filter-detail {
+    order: 3;
+    flex-basis: 100%;
+    justify-content: flex-start;
+    padding-inline: 0;
+  }
+}

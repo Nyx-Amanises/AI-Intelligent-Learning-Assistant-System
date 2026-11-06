@@ -12,7 +12,13 @@
 
     <div class="workspace-panel">
       <div class="workspace-toolbar workspace-toolbar--filter">
-        <div class="filter-bar" role="search" aria-label="筛选错题">
+        <div
+          id="wrong-question-list-filters"
+          class="filter-bar mobile-filter-bar"
+          :class="{ 'is-expanded': mobileFiltersOpen }"
+          role="search"
+          aria-label="筛选错题"
+        >
           <el-input
             v-model="filters.keyword"
             clearable
@@ -21,8 +27,14 @@
             @keyup.enter="autoQuery.runNow"
             ><template #prefix><AppIcon name="search" :size="16" /></template
           ></el-input>
+          <MobileFilterToggle
+            v-model="mobileFiltersOpen"
+            :count="mobileFilterCount"
+            controls="wrong-question-list-filters"
+          />
           <el-select
             v-model="filters.materialId"
+            class="mobile-filter-detail"
             clearable
             filterable
             placeholder="全部资料"
@@ -31,7 +43,13 @@
           >
             <el-option v-for="item in materials" :key="item.id" :label="item.title" :value="item.id" />
           </el-select>
-          <el-select v-model="filters.questionType" clearable placeholder="全部题型" aria-label="筛选题型">
+          <el-select
+            v-model="filters.questionType"
+            class="mobile-filter-detail"
+            clearable
+            placeholder="全部题型"
+            aria-label="筛选题型"
+          >
             <el-option label="单选题" value="SINGLE" />
             <el-option label="多选题" value="MULTIPLE" />
             <el-option label="判断题" value="JUDGE" />
@@ -39,6 +57,7 @@
           </el-select>
           <el-select
             v-model="filters.knowledgePoint"
+            class="mobile-filter-detail mobile-filter-detail--wide"
             clearable
             filterable
             placeholder="全部知识点"
@@ -57,7 +76,7 @@
               :value="item.knowledgePoint"
             />
           </el-select>
-          <el-button v-if="hasFilters" text @click="resetFilters">清除筛选</el-button>
+          <el-button v-if="hasFilters" class="mobile-filter-detail" text @click="resetFilters">清除筛选</el-button>
         </div>
         <el-button text :loading="loading" aria-label="刷新错题列表" @click="loadWrongQuestions">
           <AppIcon v-if="!loading" name="refresh" :size="16" /><span class="workspace-toolbar__refresh-label"
@@ -263,6 +282,7 @@ import { useRoute, useRouter } from 'vue-router'
 import EmptyState from '@/components/EmptyState.vue'
 import IconMenuButton from '@/components/IconMenuButton.vue'
 import AppIcon from '@/components/AppIcon.vue'
+import MobileFilterToggle from '@/components/MobileFilterToggle.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import GenerationModeBadge from '@/components/GenerationModeBadge.vue'
 import { answerIncludesOption, buildOptions, formatAnswer } from '@/components/practice/practiceHelpers'
@@ -321,6 +341,10 @@ const filters = reactive({
 
 const hasFilters = computed(() =>
   Boolean(filters.keyword || filters.materialId || filters.questionType || filters.knowledgePoint)
+)
+const mobileFiltersOpen = ref(false)
+const mobileFilterCount = computed(
+  () => [filters.materialId, filters.questionType, filters.knowledgePoint].filter(Boolean).length
 )
 const selectedKnowledgePointMissing = computed(
   () =>
@@ -706,6 +730,66 @@ onUnmounted(() => {
   .wrong-detail-drawer :deep(.el-drawer__footer .el-button) {
     flex: 1 1 auto;
     margin: 0;
+  }
+  .wrong-detail-question h2 {
+    margin-block: 24px;
+    font-size: 20px;
+    line-height: 1.75;
+  }
+  .wrong-detail-options {
+    gap: 12px;
+  }
+  .wrong-detail-options > div {
+    padding: 16px;
+    border-radius: 12px;
+    font-size: 16px;
+    line-height: 1.85;
+  }
+  .wrong-detail-options small {
+    font-size: 12px;
+  }
+  .wrong-detail-options .wrong-option--correct {
+    border-color: var(--green);
+    color: var(--green);
+    background: var(--green-soft);
+  }
+  .wrong-answer-comparison__reference p {
+    color: var(--green);
+  }
+  .wrong-answer-comparison {
+    gap: 0;
+    margin-top: 28px;
+    border-block: 1px solid var(--line);
+  }
+  .wrong-answer-comparison > div {
+    padding: 20px 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+  .wrong-answer-comparison > div + div {
+    border-top: 1px solid var(--line);
+  }
+  .wrong-answer-comparison p,
+  .wrong-analysis p,
+  .wrong-knowledge p {
+    font-size: 16px;
+    line-height: 1.85;
+  }
+  .wrong-analysis {
+    margin-top: 28px;
+    padding-top: 24px;
+  }
+  .wrong-analysis h3 {
+    flex-wrap: wrap;
+    font-size: 20px;
+    line-height: 1.6;
+  }
+  .wrong-knowledge {
+    padding: 20px 0 0;
+    border-top: 1px solid var(--line);
+    border-radius: 0;
+    background: transparent;
   }
 }
 </style>
