@@ -1,0 +1,206 @@
+/* 手机以内容阅读和单一主操作为重心；桌面沿用原有墨绿主题。 */
+@media (max-width: 760px) {
+  /* clip 不建立滚动容器，保证顶栏和页内 sticky 操作跟随页面滚动。 */
+  html,
+  body,
+  #app {
+    overflow-x: clip;
+  }
+
+  :root,
+  [data-theme='light'],
+  [data-theme='eye-care'] {
+    --mobile-accent: #ff7621;
+    --mobile-accent-hover: #ff8b3d;
+    --mobile-on-accent: #25262b;
+    --bg: #f5f5f5;
+    --bg-secondary: #eeeeee;
+    --panel: #ffffff;
+    --panel-hover: #fafafa;
+    --line: #f0f0f0;
+    --line-strong: #dedede;
+    --text: #292b2d;
+    --text-secondary: #66686a;
+    --muted: #888a8c;
+    --brand: #b94700;
+    --brand-hover: #9e3c00;
+    --brand-ink: #792e00;
+    --brand-soft: #ffe9da;
+    --brand-light: #fff3e9;
+    --topbar-bg: rgb(245 245 245 / 96%);
+    --shadow-sm: 0 1px 2px rgb(37 38 43 / 4%);
+    --shadow: 0 2px 12px rgb(37 38 43 / 4%);
+    --shadow-md: 0 8px 24px rgb(37 38 43 / 7%);
+    --shadow-lg: 0 12px 36px rgb(37 38 43 / 12%);
+    --shadow-xl: 0 20px 56px rgb(37 38 43 / 18%);
+    --el-color-primary-light-3: #ce7e4d;
+    --el-color-primary-light-5: #dca380;
+    --el-color-primary-light-7: #eac8b3;
+    --el-border-color-hover: #c6c1ba;
+    --el-disabled-text-color: #98969a;
+    --el-overlay-color-lighter: rgb(24 24 28 / 38%);
+    --el-component-size: 48px;
+  }
+
+  [data-theme='eye-care'] {
+    --bg: #eee8dc;
+    --bg-secondary: #e5ddce;
+    --panel: #f7f2e8;
+    --panel-hover: #f0eade;
+    --line: #dfd6c7;
+    --line-strong: #cfc4b2;
+    --muted: #696357;
+    --text-secondary: #565149;
+    --brand-soft: #efdbc6;
+    --brand-light: #f4e5d4;
+    --topbar-bg: rgb(238 232 220 / 94%);
+  }
+
+  :root .el-button:not(.is-link, .is-text, .el-button--small) {
+    height: 48px;
+    border-radius: 12px;
+    font-size: 15px;
+  }
+  :root .el-button--primary:not(.is-plain, .is-text, .is-link) {
+    --el-button-text-color: var(--mobile-on-accent);
+    --el-button-bg-color: var(--mobile-accent);
+    --el-button-border-color: var(--mobile-accent);
+    --el-button-hover-text-color: var(--mobile-on-accent);
+    --el-button-hover-bg-color: var(--mobile-accent-hover);
+    --el-button-hover-border-color: var(--mobile-accent-hover);
+    --el-button-active-text-color: var(--mobile-on-accent);
+    --el-button-active-bg-color: var(--mobile-accent);
+    --el-button-active-border-color: var(--mobile-accent);
+    --el-button-disabled-text-color: #74675c;
+    --el-button-disabled-bg-color: #f4d7be;
+    --el-button-disabled-border-color: #f4d7be;
+    box-shadow: none;
+  }
+  :root .el-input__wrapper,
+  :root .el-select__wrapper {
+    min-height: 44px;
+    border-radius: 10px;
+  }
+  :root .el-dropdown-menu__item:not([role='separator']),
+  :root .el-select-dropdown__item {
+    min-height: 44px;
+    line-height: 28px;
+    padding-block: 8px;
+  }
+  :root .el-dialog {
+    --el-dialog-title-font-size: 22px;
+    --el-dialog-border-radius: 20px;
+  }
+  :root .el-dialog__headerbtn,
+  :root .el-drawer__close-btn,
+  :root .el-message-box__headerbtn {
+    width: 44px;
+    height: 44px;
+  }
+  :root .el-drawer__title {
+    font-size: 20px;
+  }
+  :root .el-pagination .el-select__wrapper {
+    min-height: 34px;
+  }
+
+  .learning-page > .page-header {
+    justify-content: flex-end;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  /* 手机标题由顶栏呈现，正文直接进入内容。 */
+  .learning-page > .page-header > :first-child:not(.toolbar) {
+    display: none;
+  }
+  .learning-page > .page-header .toolbar {
+    width: auto;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  :root .learning-page > .page-header .el-button {
+    flex: 0 1 auto;
+    height: 38px;
+    min-height: 38px;
+    padding-inline: 14px;
+    border-radius: 9px;
+    font-size: 13px;
+  }
+  .learning-page .page-title {
+    font-size: 22px;
+    font-weight: 600;
+  }
+  .learning-page .page-desc {
+    font-size: 13px;
+  }
+  .learning-page > .workspace-panel {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+  .learning-page .workspace-toolbar--filter {
+    padding: 0 0 12px;
+    border-bottom: 0;
+  }
+  .learning-page .record-list {
+    overflow: hidden;
+    border-radius: 13px;
+    background: var(--panel);
+  }
+  .learning-page .record-row {
+    padding: 18px 14px;
+    gap: 8px 12px;
+  }
+  .learning-page .record-row__title {
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.6;
+  }
+  .learning-page .record-row__desc {
+    display: -webkit-box;
+    margin-top: 4px;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    font-size: 12px;
+    line-height: 1.7;
+    white-space: normal;
+  }
+  .learning-page .record-row__meta {
+    margin-top: 6px;
+    row-gap: 4px;
+    font-size: 11px;
+  }
+  .learning-page .record-row__actions {
+    gap: 6px;
+    padding-left: 0;
+    flex-wrap: wrap;
+  }
+  :root .learning-page .record-row__actions > .el-button,
+  :root .learning-page .record-row__actions .icon-menu-button {
+    min-width: 44px;
+    min-height: 40px;
+    margin-left: 0;
+    font-size: 12px;
+  }
+  .learning-page .workspace-pagination {
+    padding: 16px 0;
+    border-top: 0;
+  }
+  .practice-view--current .practice-navigation {
+    display: none;
+  }
+  .practice-view--current .practice-paper-hero h2 {
+    font-size: 22px;
+  }
+}
+
+@media (max-width: 360px) {
+  :root .workspace-pagination .el-pagination {
+    --el-pagination-button-width: 30px;
+    --el-pagination-button-height: 44px;
+    column-gap: 2px;
+  }
+  :root .workspace-pagination .el-pager li {
+    margin-inline: 0;
+  }
+}

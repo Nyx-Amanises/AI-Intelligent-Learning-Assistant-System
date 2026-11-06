@@ -1,28 +1,28 @@
 <template>
-  <nav class="bottom-nav" aria-label="底部导航">
+  <nav v-if="route.path === '/dashboard'" class="bottom-nav" aria-label="首页快捷导航">
     <RouterLink
-      v-for="item in mobileLinks"
-      :key="item.key"
+      v-for="item in homeLinks"
+      :key="item.path"
       :to="item.path"
       class="bottom-nav__item"
-      :class="{ 'is-active': activeKey === item.key }"
-      :aria-current="activeKey === item.key ? 'page' : undefined"
+      :aria-label="item.label"
     >
-      <span class="bottom-nav__icon"><AppIcon :name="item.icon" :size="22" /></span>
-      <span>{{ item.label }}</span>
+      <MobileIcon :name="item.icon" :size="26" />
     </RouterLink>
   </nav>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
-import AppIcon from '@/components/AppIcon.vue'
-import { activeNavigationKey, mobileLinks } from '@/config/navigation'
+import MobileIcon from '@/components/MobileIcon.vue'
 
-/** 手机底部的五个主入口，只在窄屏显示。 */
+/** 首页的三个手机入口，进入子页后使用顶栏返回。 */
 const route = useRoute()
-const activeKey = computed(() => activeNavigationKey(route.path))
+const homeLinks = [
+  { path: '/quiz', label: '题集与练习', icon: 'study' },
+  { path: '/materials', label: '我的内容', icon: 'archive' },
+  { path: '/analytics', label: '我的学习与偏好', icon: 'chart-settings' }
+]
 </script>
 
 <style scoped>
@@ -36,43 +36,24 @@ const activeKey = computed(() => activeNavigationKey(route.path))
     bottom: 0;
     left: 0;
     z-index: 40;
-    display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
-    border-top: 1px solid var(--line);
-    background: var(--topbar-bg);
-    backdrop-filter: saturate(1.4) blur(14px);
-    -webkit-backdrop-filter: saturate(1.4) blur(14px);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: calc(76px + env(safe-area-inset-bottom));
+    padding: 6px 20px calc(10px + env(safe-area-inset-bottom));
+    border: 0;
+    background: transparent;
   }
   .bottom-nav__item {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 2px;
-    min-height: 52px;
-    color: var(--muted);
-    font-size: 12px;
-    font-weight: 500;
-    line-height: 1.3;
-    transition: color var(--duration-fast) ease;
-  }
-  .bottom-nav__icon {
     display: grid;
     place-items: center;
-    width: 52px;
-    height: 28px;
-    border-radius: 999px;
-    transition: background-color var(--duration) var(--ease-out);
+    width: 44px;
+    height: 48px;
+    color: #202827;
+    -webkit-tap-highlight-color: transparent;
   }
-  .bottom-nav__item.is-active {
-    color: var(--brand);
-  }
-  .bottom-nav__item.is-active .bottom-nav__icon {
-    background: var(--brand-soft);
-  }
-  .bottom-nav__item:active .bottom-nav__icon {
-    background: var(--bg-secondary);
+  .bottom-nav__item:active {
+    opacity: 0.5;
   }
 }
 </style>

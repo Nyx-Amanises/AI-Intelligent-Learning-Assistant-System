@@ -1,5 +1,5 @@
 <template>
-  <div class="learning-shell">
+  <div class="learning-shell" :class="{ 'learning-shell--home': route.path === '/dashboard' }">
     <span ref="scrollSentinel" class="learning-shell__sentinel" aria-hidden="true" />
     <div
       v-if="pageProgress.visible.value"
@@ -245,13 +245,19 @@ onUnmounted(() => {
 @media (max-width: 760px) {
   .learning-shell {
     --shell-header-height: calc(56px + env(safe-area-inset-top));
-    padding-bottom: calc(66px + env(safe-area-inset-bottom));
+    padding-bottom: env(safe-area-inset-bottom);
   }
   .workspace-content {
-    padding: 20px 16px 24px;
+    padding: 16px 16px 28px;
+  }
+  .learning-shell--home .workspace-content {
+    padding: 0;
+  }
+  .workspace-content > :deep(.section-nav) {
+    display: none;
   }
   .workspace-footer {
-    margin-top: 40px;
+    display: none;
   }
 }
 </style>

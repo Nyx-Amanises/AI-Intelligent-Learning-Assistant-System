@@ -1,5 +1,14 @@
 <template>
   <div class="home">
+    <MobileStudyHome
+      :loading="continueLoading"
+      :error="materialsState.error && !materials.length && !draft"
+      :practice="draft"
+      :material="continueMaterial"
+      :wrong-count="wrongState.loaded && !wrongState.error ? wrongCount : null"
+      :material-count="materialsState.loaded && !materialsState.error ? materialTotal : null"
+      @reload="reloadAll"
+    />
     <header class="home-head reveal">
       <div class="home-greeting">
         <p class="home-greeting__date">{{ todayLabel }}</p>
@@ -16,7 +25,7 @@
 
     <div class="home-grid">
       <DashboardContinueCard
-        class="home-grid__tall reveal"
+        class="home-grid__tall home-continue reveal"
         style="--i: 1"
         :loading="continueLoading"
         :error="materialsState.error && !materials.length && !draft"
@@ -25,7 +34,7 @@
         @reload="reloadAll"
       />
       <DashboardWeekCard
-        class="home-grid__tall reveal"
+        class="home-grid__tall home-week reveal"
         style="--i: 2"
         :loading="weekState.loading"
         :error="weekState.error"
@@ -36,7 +45,7 @@
         @reload="loadWeek"
       />
       <DashboardRecentCard
-        class="reveal"
+        class="home-recent reveal"
         style="--i: 3"
         :loading="materialsState.loading"
         :error="materialsState.error"
@@ -45,7 +54,7 @@
         @reload="loadMaterials"
       />
       <DashboardShortcuts
-        class="reveal"
+        class="home-shortcuts reveal"
         style="--i: 4"
         :wrong-count="wrongCount"
         @open-assistant="emit('openAssistant')"
@@ -67,6 +76,7 @@ import DashboardRecentCard from '@/components/dashboard/DashboardRecentCard.vue'
 import DashboardShortcuts from '@/components/dashboard/DashboardShortcuts.vue'
 import DashboardWeakPoints from '@/components/dashboard/DashboardWeakPoints.vue'
 import DashboardWeekCard from '@/components/dashboard/DashboardWeekCard.vue'
+import MobileStudyHome from '@/components/dashboard/MobileStudyHome.vue'
 import { groupAnswers, type PracticeDetail } from '@/components/practice/practiceHelpers'
 import { useDailyQuote } from '@/composables/useDailyQuote'
 import { useUserStore } from '@/stores/user'
@@ -114,7 +124,7 @@ const weekState = useSection()
 const loadWeek = () =>
   run(
     weekState,
-    () => getLearningAnalyticsOverviewApi({ days: 7, trendLimit: 1 }),
+    () => getLearningAnalyticsOverviewApi({ days: 7, trendLimit: 5 }),
     (res) => {
       week.value = res.data.data as LearningAnalyticsOverviewPayload
     }
@@ -325,23 +335,10 @@ onUnmounted(() => {
   }
 }
 @media (max-width: 760px) {
-  .home-head {
-    margin-bottom: 18px;
-  }
-  .home-greeting h1 {
-    font-size: 23px;
-  }
-  .home-greeting__status {
-    font-size: 14px;
-  }
-  .home-quote {
-    flex-basis: 100%;
-  }
-  .home-quote blockquote {
-    font-size: 14px;
-  }
+  .home-head,
+  .home-grid,
   .home-weak {
-    margin-top: 24px;
+    display: none;
   }
 }
 </style>

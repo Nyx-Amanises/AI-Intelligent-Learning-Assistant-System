@@ -11,7 +11,12 @@ const router = createRouter({
     if (to.hash) {
       return { el: to.hash, behavior: 'smooth' }
     }
-    if (to.path !== from.path) {
+    if (
+      to.path !== from.path ||
+      (window.matchMedia('(max-width: 760px)').matches &&
+        ['/materials', '/analytics', '/profile'].includes(to.path) &&
+        to.query.view !== from.query.view)
+    ) {
       return { top: 0, left: 0 }
     }
   },
