@@ -74,6 +74,7 @@
           :current-page="current"
           :page-size="size"
           :page-sizes="[10, 20, 50]"
+          :pager-count="5"
           layout="sizes, prev, pager, next"
           :total="total"
           @update:current-page="emit('update:current', $event)"

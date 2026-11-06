@@ -150,6 +150,7 @@
           v-model:current-page="pagination.current"
           v-model:page-size="pagination.size"
           :page-sizes="[10, 20, 50]"
+          :pager-count="5"
           layout="sizes, prev, pager, next"
           :total="filteredSummaryHistory.length"
         />
