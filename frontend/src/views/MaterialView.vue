@@ -1,171 +1,126 @@
 <template>
   <section class="learning-page material-library" aria-labelledby="material-library-title">
-    <div class="page-header">
+    <header class="page-header">
       <div>
-        <div class="learning-eyebrow">我的内容</div>
         <h1 id="material-library-title" class="page-title">资料库</h1>
-        <p class="page-desc">管理学习资料，阅读原文、生成摘要或练习题。</p>
+        <p class="page-desc">上传讲义、教材或笔记，解析完成后可以阅读原文、生成总结和练习题。</p>
       </div>
       <div class="toolbar toolbar--flush">
-        <el-button @click="textDialogVisible = true">
-          <AppIcon name="summary" :size="18" />
-          写入文本
-        </el-button>
-        <el-button type="primary" @click="uploadDialogVisible = true">
-          <AppIcon name="upload" :size="18" />
-          上传资料
-        </el-button>
-      </div>
-    </div>
-
-    <p class="material-library__hint">
-      <AppIcon name="search" :size="16" />
-      <span>上传后系统会自动建立向量索引，AI 可按含义查找资料片段；也可在卡片菜单中管理向量与预览检索。</span>
-      <RouterLink to="/ai-config#vector-model">配置向量模型<AppIcon name="arrow-up-right" :size="14" /></RouterLink>
-    </p>
-
-    <div class="material-library__filters" role="search" aria-label="筛选学习资料">
-      <el-input
-        v-model="searchKeyword"
-        clearable
-        aria-label="按名称、标签或说明搜索资料"
-        placeholder="搜索资料名称、标签或说明…"
-        class="material-library__search"
-        @keyup.enter="autoQuery.runNow"
-      >
-        <template #prefix><AppIcon name="search" :size="18" /></template>
-      </el-input>
-      <el-select v-model="filters.materialType" clearable aria-label="资料类型" placeholder="全部类型">
-        <el-option v-for="item in materialTypes" :key="item.value" :label="item.label" :value="item.value" />
-      </el-select>
-      <el-select v-model="filters.parseStatus" clearable aria-label="解析状态" placeholder="全部状态">
-        <el-option label="待解析" value="PENDING" />
-        <el-option label="解析中" value="PROCESSING" />
-        <el-option label="已解析" value="SUCCESS" />
-        <el-option label="解析失败" value="FAILED" />
-      </el-select>
-      <el-button text class="material-library__reset" :disabled="!hasActiveFilters" @click="resetFilters"
-        >重置</el-button
-      >
-    </div>
-
-    <div class="material-library__section-heading">
-      <ListSectionHeading
-        :title="hasActiveFilters ? '筛选结果' : '全部资料'"
-        :count="tableLoading || loadError ? undefined : total"
-        :loading="tableLoading"
-        @refresh="loadMaterials"
-      />
-    </div>
-
-    <div v-if="tableLoading" class="material-library__grid" role="status" aria-label="正在加载资料" aria-busy="true">
-      <div v-for="i in 3" :key="i" class="material-library-card material-library-card--loading">
-        <div class="material-library__skeleton material-library__skeleton--icon"></div>
-        <div class="material-library__skeleton material-library__skeleton--title"></div>
-        <div class="material-library__skeleton material-library__skeleton--text"></div>
-        <div class="material-library__skeleton material-library__skeleton--footer"></div>
-      </div>
-    </div>
-    <EmptyState v-else-if="loadError" variant="error" icon="refresh" title="资料加载失败" :description="loadError">
-      <el-button type="primary" @click="loadMaterials">重新加载</el-button>
-    </EmptyState>
-    <EmptyState
-      v-else-if="!materialRows.length && hasActiveFilters"
-      icon="search"
-      title="没有找到匹配的资料"
-      description="可以尝试更换关键词或重置筛选条件。"
-    >
-      <el-button @click="resetFilters">清空筛选条件</el-button>
-    </EmptyState>
-    <EmptyState
-      v-else-if="!materialRows.length"
-      icon="book-open"
-      title="还没有学习资料"
-      description="上传课程讲义、教材文档，或直接添加文本。解析完成后，可以阅读原文、生成摘要和练习题。"
-    >
-      <el-button type="primary" @click="uploadDialogVisible = true"
-        ><AppIcon name="upload" :size="18" />上传第一份资料</el-button
-      >
-      <button type="button" class="material-library__text-link" @click="textDialogVisible = true">
-        也可以直接写入文本 <AppIcon name="arrow-right" :size="16" />
-      </button>
-    </EmptyState>
-    <div v-else class="material-library__grid">
-      <article v-for="row in materialRows" :key="row.id" class="material-library-card" :aria-label="row.title">
-        <button
-          type="button"
-          class="material-library-card__cover"
-          :data-kind="row.materialType"
-          :aria-label="`查看${row.title}`"
-          @click="viewDetail(row.id)"
+        <el-button @click="textDialogVisible = true"><AppIcon name="summary" :size="16" />粘贴文本</el-button>
+        <el-button type="primary" @click="uploadDialogVisible = true"
+          ><AppIcon name="upload" :size="16" />上传资料</el-button
         >
-          <AppIcon :name="materialTypeIcon(row.materialType)" :size="26" />
-          <span>{{ row.materialType === 'MARKDOWN' ? 'MD' : row.materialType }}</span>
-        </button>
-        <div class="material-library-card__content">
-          <h3 :title="row.title">
-            <button type="button" @click="viewDetail(row.id)">{{ row.title }}</button>
-          </h3>
-          <p v-if="row.description" class="material-library-card__desc" :title="row.description">
-            {{ row.description }}
-          </p>
-          <p class="material-library-card__meta">
-            <span>{{ formatDate(row.createdAt) }}</span>
-            <span>{{ formatCharacters(row.totalCharacters) }}</span>
-            <StatusPill v-if="isProcessing(row)" tone="processing" :label="getProcessingText(row)" />
-            <StatusPill v-else-if="row.parseStatus === 'FAILED'" tone="failed" label="解析失败" />
-            <StatusPill v-else-if="row.parseStatus === 'PENDING'" tone="muted" label="待解析" />
-            <GenerationModeBadge
-              v-if="row.summaryStatus === 'SUCCESS'"
-              :mode="row.summaryGenerationMode"
-              aria-label="学习摘要的生成来源"
-            />
-          </p>
-          <p v-if="row.parseStatus === 'FAILED'" class="material-library-card__parse-error">
-            {{ row.parseErrorMessage || '历史记录未保存失败原因，请重新解析以查看详情。' }}
-          </p>
-          <div v-if="row.tagList.length" class="material-library-card__tags">
-            <span v-for="tag in row.tagList.slice(0, 3)" :key="tag" class="material-library-card__tag" :title="tag">{{
-              tag
-            }}</span>
-            <span
-              v-if="row.tagList.length > 3"
-              class="material-library-card__tag"
-              :title="row.tagList.slice(3).join('、')"
-              >+{{ row.tagList.length - 3 }}</span
-            >
-          </div>
+      </div>
+    </header>
+
+    <div class="workspace-panel material-library__panel">
+      <div class="workspace-toolbar material-library__toolbar">
+        <div class="filter-bar" role="search" aria-label="筛选资料">
+          <el-input
+            v-model="searchKeyword"
+            clearable
+            aria-label="按标题、标签或说明搜索"
+            placeholder="搜索标题、标签或说明"
+            @keyup.enter="autoQuery.runNow"
+          >
+            <template #prefix><AppIcon name="search" :size="16" /></template>
+          </el-input>
+          <el-select v-model="filters.materialType" clearable aria-label="资料类型" placeholder="全部类型">
+            <el-option v-for="item in materialTypes" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+          <el-select v-model="filters.parseStatus" clearable aria-label="解析状态" placeholder="全部状态">
+            <el-option label="待解析" value="PENDING" />
+            <el-option label="解析中" value="PROCESSING" />
+            <el-option label="已解析" value="SUCCESS" />
+            <el-option label="解析失败" value="FAILED" />
+          </el-select>
+          <el-button v-if="hasActiveFilters" text @click="resetFilters">清除筛选</el-button>
         </div>
-        <div class="material-library-card__aside" role="group" :aria-label="`${row.title}的操作`">
-          <div class="material-library-card__actions">
-            <button type="button" class="material-library-card__open" @click="viewDetail(row.id)">
-              阅读<AppIcon name="arrow-right" :size="16" />
-            </button>
-            <button
-              type="button"
-              class="material-library-card__study"
-              :class="{ 'is-loading': row.summaryStatus === 'RUNNING' }"
+        <el-button text :loading="tableLoading" aria-label="刷新资料列表" @click="loadMaterials">
+          <AppIcon v-if="!tableLoading" name="refresh" :size="16" /><span class="material-library__refresh-label"
+            >刷新</span
+          >
+        </el-button>
+      </div>
+
+      <div v-if="tableLoading" class="material-library__list" role="status" aria-label="正在加载资料">
+        <div v-for="i in 4" :key="i" class="list-row material-row material-row--loading" aria-hidden="true">
+          <span class="skeleton material-row__sk-badge" />
+          <div class="material-row__main">
+            <span class="skeleton material-row__sk-title" />
+            <span class="skeleton material-row__sk-meta" />
+          </div>
+          <span class="skeleton material-row__sk-actions" />
+        </div>
+      </div>
+      <EmptyState v-else-if="loadError" variant="error" title="资料列表没有加载出来" :description="loadError">
+        <el-button type="primary" @click="loadMaterials">重新加载</el-button>
+      </EmptyState>
+      <EmptyState
+        v-else-if="!materialRows.length && hasActiveFilters"
+        icon="search"
+        title="没有找到匹配的资料"
+        description="换个关键词，或者清除筛选条件再看看。"
+      >
+        <el-button @click="resetFilters">清除筛选</el-button>
+      </EmptyState>
+      <EmptyState
+        v-else-if="!materialRows.length"
+        icon="book-open"
+        title="还没有资料"
+        description="上传讲义或教材，也可以直接粘贴一段文字。解析完成后就能生成总结和练习题。"
+      >
+        <el-button type="primary" @click="uploadDialogVisible = true"
+          ><AppIcon name="upload" :size="16" />上传资料</el-button
+        >
+        <el-button @click="textDialogVisible = true">粘贴文本</el-button>
+      </EmptyState>
+      <ul v-else class="material-library__list">
+        <li v-for="row in materialRows" :key="row.id" class="list-row material-row">
+          <MaterialTypeBadge :type="row.materialType" :size="40" />
+          <div class="material-row__main">
+            <h2 class="material-row__title">
+              <button type="button" :title="row.title" @click="viewDetail(row.id)">{{ row.title }}</button>
+              <StatusPill v-if="isProcessing(row)" tone="processing" :label="getProcessingText(row)" />
+              <StatusPill v-else-if="row.parseStatus === 'FAILED'" tone="failed" label="解析失败" />
+              <StatusPill v-else-if="row.parseStatus === 'PENDING'" tone="muted" label="待解析" />
+            </h2>
+            <p v-if="row.description" class="material-row__desc" :title="row.description">{{ row.description }}</p>
+            <p v-if="row.parseStatus === 'FAILED'" class="material-row__error">
+              {{ row.parseErrorMessage || '没有记录失败原因，重新解析一次可以看到详情。' }}
+            </p>
+            <p class="material-row__meta">
+              <span class="visually-hidden">{{ formatMaterialType(row.materialType) }}</span>
+              <span v-if="row.totalCharacters">{{ formatCharacters(row.totalCharacters) }}</span>
+              <time :datetime="row.createdAt" :title="formatDateTime(row.createdAt)"
+                >{{ formatRelativeDay(row.createdAt) }}添加</time
+              >
+              <span v-if="row.summaryStatus === 'SUCCESS'" class="material-row__summary"
+                >有总结<GenerationModeBadge
+                  v-if="row.summaryGenerationMode === 'MOCK'"
+                  :mode="row.summaryGenerationMode"
+              /></span>
+              <span v-for="tag in row.tagList.slice(0, 3)" :key="tag" class="material-row__tag" :title="tag">{{
+                tag
+              }}</span>
+              <span v-if="row.tagList.length > 3" class="material-row__tag" :title="row.tagList.slice(3).join('、')"
+                >+{{ row.tagList.length - 3 }}</span
+              >
+            </p>
+          </div>
+          <div class="material-row__actions" role="group" :aria-label="`${row.title}的操作`">
+            <el-button size="small" @click="viewDetail(row.id)">打开</el-button>
+            <el-button
+              size="small"
+              text
               :disabled="row.parseStatus !== 'SUCCESS' || row.summaryStatus === 'RUNNING'"
-              :aria-label="`${row.title}的 AI 摘要`"
               @click="goSummary(row.id)"
+              >总结</el-button
             >
-              <span
-                v-if="row.summaryStatus === 'RUNNING'"
-                class="material-library__spinner material-library__spinner--inline"
-              ></span>
-              {{ row.summaryStatus === 'RUNNING' ? '摘要生成中' : '摘要' }}
-            </button>
-            <button
-              type="button"
-              class="material-library-card__study"
-              :disabled="row.parseStatus !== 'SUCCESS'"
-              :aria-label="`根据${row.title}生成练习`"
-              @click="goQuiz(row.id)"
+            <el-button size="small" text :disabled="row.parseStatus !== 'SUCCESS'" @click="goQuiz(row.id)"
+              >出题</el-button
             >
-              出题
-            </button>
             <el-dropdown
-              class="material-library-card__menu"
               trigger="click"
               :disabled="actionLoadingId === row.id"
               @command="(command: string) => handleMaterialCommand(command, row)"
@@ -183,7 +138,7 @@
                   >
                   <el-dropdown-item command="edit" divided>编辑信息</el-dropdown-item>
                   <el-dropdown-item command="parse">{{
-                    row.parseStatus === 'SUCCESS' ? '重新解析资料' : '解析资料'
+                    row.parseStatus === 'SUCCESS' ? '重新解析' : '解析资料'
                   }}</el-dropdown-item>
                   <el-dropdown-item command="delete" divided class="material-library-menu__danger"
                     >删除资料</el-dropdown-item
@@ -192,27 +147,29 @@
               </template>
             </el-dropdown>
           </div>
-        </div>
-      </article>
-    </div>
+        </li>
+      </ul>
 
-    <div v-if="!tableLoading && !loadError && total > 0" class="workspace-pagination">
-      <div class="workspace-pagination__meta">共 {{ total }} 份资料</div>
-      <el-pagination
-        v-model:current-page="page.current"
-        v-model:page-size="page.size"
-        :page-sizes="[10, 20, 50]"
-        layout="sizes, prev, pager, next"
-        :total="total"
-        @current-change="loadMaterials"
-        @size-change="loadMaterials"
-      />
+      <footer v-if="!tableLoading && !loadError && total > 0" class="workspace-pagination">
+        <span class="workspace-pagination__meta">{{
+          hasActiveFilters ? `找到 ${total} 份资料` : `共 ${total} 份资料`
+        }}</span>
+        <el-pagination
+          v-model:current-page="page.current"
+          v-model:page-size="page.size"
+          :page-sizes="[10, 20, 50]"
+          layout="sizes, prev, pager, next"
+          :total="total"
+          @current-change="loadMaterials"
+          @size-change="loadMaterials"
+        />
+      </footer>
     </div>
 
     <el-dialog
       v-model="uploadDialogVisible"
       class="material-library-modal"
-      title="上传学习资料"
+      title="上传资料"
       width="min(560px, calc(100vw - 32px))"
       :close-on-click-modal="!uploading"
       :close-on-press-escape="!uploading"
@@ -220,7 +177,6 @@
       destroy-on-close
     >
       <div class="material-library-upload">
-        <p>添加课程讲义或教材，随后就能整理重点、生成练习。</p>
         <el-upload
           drag
           :show-file-list="false"
@@ -229,11 +185,12 @@
           :disabled="uploading"
           accept=".pdf,.docx,.txt"
         >
-          <AppIcon name="upload" :size="36" />
-          <strong>{{ uploading ? '正在上传，请稍候…' : '点击选择文件，或拖到这里' }}</strong>
-          <span>支持 PDF、Word（.docx）和 TXT 文本</span>
+          <span class="material-library-upload__icon"><AppIcon name="upload" :size="24" /></span>
+          <strong>{{ uploading ? '正在上传…' : '把文件拖到这里，或点击选择' }}</strong>
+          <span>支持 PDF、Word（.docx）和 TXT</span>
           <span v-if="uploading" class="material-library__spinner" role="status" aria-label="上传中"></span>
         </el-upload>
+        <p class="material-library-upload__note">扫描版 PDF 里没有可以复制的文字，需要先做 OCR 识别再上传。</p>
       </div>
       <template #footer
         ><div class="material-library-dialog__footer">
@@ -247,60 +204,63 @@
     <el-dialog
       v-model="textDialogVisible"
       class="material-library-modal"
-      title="写入学习笔记"
+      title="粘贴文本"
       width="min(720px, calc(100vw - 32px))"
+      top="6vh"
       destroy-on-close
     >
       <el-form label-position="top" class="material-library-form">
-        <el-form-item label="资料标题" required>
+        <el-form-item label="标题" required>
           <el-input v-model="form.title" maxlength="100" placeholder="例如：数据库系统原理 第三章事务管理" />
         </el-form-item>
         <div class="material-library-form__grid">
-          <el-form-item label="资料类型">
+          <el-form-item label="格式">
             <el-select v-model="form.materialType" class="material-library-form__full">
-              <el-option label="纯文本笔记" value="TEXT" />
-              <el-option label="格式化笔记（Markdown）" value="MARKDOWN" />
+              <el-option label="纯文本" value="TEXT" />
+              <el-option label="Markdown" value="MARKDOWN" />
             </el-select>
           </el-form-item>
           <el-form-item label="标签">
-            <el-input v-model="form.tags" placeholder="例如：数据库、期末复习、重点章节" />
+            <el-input v-model="form.tags" placeholder="用逗号或顿号分隔，例如：数据库、期末复习" />
           </el-form-item>
         </div>
-        <el-form-item label="难度等级">
+        <el-form-item label="难度">
           <el-slider
             v-model="form.difficultyLevel"
             :min="1"
             :max="5"
             show-stops
+            :marks="DIFFICULTY_LABELS"
             :format-tooltip="formatDifficulty"
+            :format-value-text="formatDifficulty"
             aria-label="资料难度"
           />
         </el-form-item>
-        <el-form-item label="资料说明">
+        <el-form-item label="说明（选填）">
           <el-input
             v-model="form.description"
             type="textarea"
             :rows="2"
             maxlength="500"
             show-word-limit
-            placeholder="选填，可记录来源、版本或用途"
+            placeholder="例如来源、版本或用途"
           />
         </el-form-item>
-        <el-form-item label="资料内容" required>
+        <el-form-item label="内容" required>
           <el-input
             v-model="form.contentText"
             type="textarea"
-            :rows="10"
+            :rows="8"
             maxlength="10000"
             show-word-limit
-            placeholder="请输入课堂笔记、知识点整理或教材摘录内容"
+            placeholder="粘贴课堂笔记、知识点整理或教材摘录"
           />
         </el-form-item>
       </el-form>
       <template #footer>
         <div class="material-library-dialog__footer">
           <el-button @click="textDialogVisible = false">取消</el-button>
-          <el-button type="primary" :loading="creating" @click="createMaterial">保存资料</el-button>
+          <el-button type="primary" :loading="creating" @click="createMaterial">保存</el-button>
         </div>
       </template>
     </el-dialog>
@@ -313,40 +273,38 @@
       destroy-on-close
     >
       <el-form label-position="top" class="material-library-form" @submit.prevent="saveMaterialInfo">
-        <el-form-item label="资料标题" required :error="editTitleError">
+        <el-form-item label="标题" required :error="editTitleError">
           <el-input
             v-model="editForm.title"
             maxlength="200"
             show-word-limit
-            placeholder="请输入资料标题"
+            placeholder="输入标题"
             @input="editTitleError = ''"
           />
         </el-form-item>
         <el-form-item label="标签">
-          <el-input
-            v-model="editForm.tags"
-            maxlength="255"
-            placeholder="多个标签用逗号或顿号分隔，例如：期末复习、第三章"
-          />
+          <el-input v-model="editForm.tags" maxlength="255" placeholder="用逗号或顿号分隔，例如：期末复习、第三章" />
         </el-form-item>
-        <el-form-item label="难度等级">
+        <el-form-item label="难度">
           <el-slider
             v-model="editForm.difficultyLevel"
             :min="1"
             :max="5"
             show-stops
+            :marks="DIFFICULTY_LABELS"
             :format-tooltip="formatDifficulty"
+            :format-value-text="formatDifficulty"
             aria-label="资料难度"
           />
         </el-form-item>
-        <el-form-item label="资料说明">
+        <el-form-item label="说明（选填）">
           <el-input
             v-model="editForm.description"
             type="textarea"
             :rows="3"
             maxlength="500"
             show-word-limit
-            placeholder="可记录来源、版本或用途，例如：人教版生物必修 1 第 3 章课件，仅用于个人复习"
+            placeholder="例如来源、版本或用途"
           />
         </el-form-item>
       </el-form>
@@ -374,14 +332,14 @@
           v-else-if="detailError"
           variant="error"
           icon="refresh"
-          title="暂时无法打开这份资料"
+          title="这份资料打不开"
           :description="detailError"
         >
           <el-button @click="viewDetail(detailId)">重试</el-button>
         </EmptyState>
         <template v-else-if="detail">
           <div class="material-library-detail__heading">
-            <AppIcon :name="materialTypeIcon(detail.materialType)" :size="42" />
+            <MaterialTypeBadge :type="detail.materialType" :size="44" />
             <div>
               <span>{{ formatMaterialType(detail.materialType) }}</span>
               <h2>{{ detail.title }}</h2>
@@ -397,15 +355,15 @@
               <dd>{{ formatCharacters(detail.totalCharacters) }}</dd>
             </div>
             <div>
-              <dt>内容解析</dt>
+              <dt>解析状态</dt>
               <dd>{{ formatParseStatus(detail.parseStatus) }}</dd>
             </div>
             <div>
-              <dt>分块方案</dt>
+              <dt>分块方式</dt>
               <dd>{{ formatChunking(detail) }}</dd>
             </div>
             <div>
-              <dt>学习摘要</dt>
+              <dt>学习总结</dt>
               <dd>
                 {{ formatSummaryStatus(detail.summaryStatus) }}
                 <GenerationModeBadge v-if="detail.summaryStatus === 'SUCCESS'" :mode="detail.summaryGenerationMode" />
@@ -416,23 +374,23 @@
               <dd>{{ formatEmbeddingStatus(detail.embeddingStatus) }} · {{ formatEmbeddingProgress(detail) }}</dd>
             </div>
             <div>
-              <dt>资料标签</dt>
-              <dd>{{ getTags(detail.tags).join('、') || '暂无标签' }}</dd>
+              <dt>标签</dt>
+              <dd>{{ getTags(detail.tags).join('、') || '没有标签' }}</dd>
             </div>
             <div>
-              <dt>难度等级</dt>
+              <dt>难度</dt>
               <dd>{{ formatDifficulty(detail.difficultyLevel) }}</dd>
             </div>
             <div class="material-library-detail__meta-wide">
-              <dt>资料说明</dt>
+              <dt>说明</dt>
               <dd :class="{ 'is-empty': !detail.description }">
-                {{ detail.description || '暂无说明，可在“编辑信息”中补充来源、版本或备注。' }}
+                {{ detail.description || '还没有说明，可以在“编辑信息”里补充来源或版本。' }}
               </dd>
             </div>
           </dl>
           <el-alert
             v-if="detail.parseStatus === 'FAILED'"
-            :title="detail.parseErrorMessage || '历史记录未保存失败原因，请重新解析以查看详情。'"
+            :title="detail.parseErrorMessage || '没有记录失败原因，重新解析一次可以看到详情。'"
             type="error"
             :closable="false"
             show-icon
@@ -443,12 +401,12 @@
               type="primary"
               :loading="actionLoadingId === detail.id"
               @click="parseMaterial(detail.id)"
-              >解析这份资料</el-button
+              >解析资料</el-button
             >
             <el-button v-else type="primary" @click="goSummary(detail.id)"
-              ><AppIcon name="summary" :size="16" />生成或查看摘要</el-button
+              ><AppIcon name="summary" :size="16" />查看总结</el-button
             >
-            <el-button @click="goQuiz(detail.id)"><AppIcon name="quiz" :size="16" />生成练习</el-button>
+            <el-button @click="goQuiz(detail.id)"><AppIcon name="quiz" :size="16" />出题</el-button>
             <el-button @click="openEditDialog(detail)">编辑信息</el-button>
           </div>
           <section class="material-library-detail__retrieval" aria-labelledby="material-detail-retrieval-title">
@@ -461,8 +419,8 @@
             <p>
               {{
                 detail.parseStatus === 'SUCCESS'
-                  ? '生成向量后，可按问题的含义查找这份资料中的相关片段。'
-                  : '先解析资料，再生成向量，即可查找相关片段。'
+                  ? '生成向量后，可以按问题的意思找到资料里的相关片段。'
+                  : '先解析资料，再生成向量。'
               }}
             </p>
             <div class="material-library-detail__actions">
@@ -479,13 +437,13 @@
                 v-if="detail.embeddingStatus === 'RUNNING'"
                 class="material-library-detail__task-link"
                 to="/ai-tasks"
-                >查看生成进度</RouterLink
+                >查看进度</RouterLink
               >
             </div>
           </section>
           <div v-if="detail.segments?.length" class="material-library-detail__segments">
             <h3>
-              资料内容 <span>{{ detail.segments.length }} 个片段</span>
+              原文 <span>共 {{ detail.segments.length }} 个片段</span>
             </h3>
             <article v-for="segment in detail.segments" :key="segment.id" class="material-library-detail__segment">
               <div class="material-library-detail__segment-meta">{{ formatSegmentMeta(segment) }}</div>
@@ -493,28 +451,26 @@
               <p>{{ segment.contentText }}</p>
             </article>
           </div>
-          <div v-else class="material-library-detail__empty">
-            解析后可以在这里阅读资料内容，并基于内容生成摘要和练习。
-          </div>
+          <div v-else class="material-library-detail__empty">解析后可以在这里阅读原文。</div>
         </template>
       </div>
     </el-drawer>
 
     <el-dialog
       v-model="parseDialogVisible"
-      title="解析与分块"
+      :title="parseTarget?.parseStatus === 'SUCCESS' ? '重新解析' : '解析资料'"
       width="min(540px, calc(100vw - 32px))"
       :close-on-click-modal="!parsing"
       :close-on-press-escape="!parsing"
       :show-close="!parsing"
     >
-      <p>{{ parseTarget?.title || '当前资料' }}</p>
-      <p class="page-desc">按原文重新切分。新的片段将使用这里的参数，随后可在 RAG 评测中比较检索效果。</p>
+      <p class="material-parse__target">{{ parseTarget?.title || '当前资料' }}</p>
+      <p class="material-parse__desc">按下面的参数把原文切成片段。调整参数后，可以在检索评测里比较效果。</p>
       <el-form label-position="top">
-        <el-form-item label="每块最多字符数（200–4000）">
+        <el-form-item label="每段最多字符数（200–4000）">
           <el-input-number v-model="parseForm.chunkSize" :min="200" :max="4000" :step="100" :disabled="parsing" />
         </el-form-item>
-        <el-form-item label="相邻块重叠字符数（小于分块大小，最多500）">
+        <el-form-item label="相邻两段重叠的字符数（最多 500，且小于每段字符数）">
           <el-input-number
             v-model="parseForm.chunkOverlap"
             :min="0"
@@ -524,19 +480,19 @@
           />
         </el-form-item>
       </el-form>
-      <p v-if="parseTarget?.parseStatus === 'SUCCESS'" class="page-desc">
-        重新解析会替换片段并清除旧向量，需要重新生成向量。已有评测的片段 ID 标注需要更新；历史运行仍保留原参数和结果。
+      <p v-if="parseTarget?.parseStatus === 'SUCCESS'" class="material-parse__warning">
+        重新解析会替换原有片段并清除向量，之后需要重新生成向量。检索评测里按片段编号标注的样本需要重新核对，已有的评测记录不受影响。
       </p>
       <template #footer>
         <el-button :disabled="parsing" @click="parseDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="parsing" @click="confirmParseMaterial">应用并解析</el-button>
+        <el-button type="primary" :loading="parsing" @click="confirmParseMaterial">开始解析</el-button>
       </template>
     </el-dialog>
 
     <el-dialog
       v-model="retrievalDialogVisible"
       class="material-library-modal"
-      title="检索资料内容"
+      title="检索预览"
       width="min(860px, calc(100vw - 32px))"
       destroy-on-close
     >
@@ -545,16 +501,16 @@
           <el-form-item label="资料">
             <el-input :model-value="retrievalForm.materialTitle" disabled />
           </el-form-item>
-          <el-form-item label="返回片段数">
+          <el-form-item label="返回几个片段">
             <el-input-number v-model="retrievalForm.limit" :min="1" :max="10" class="material-library-form__full" />
           </el-form-item>
         </div>
-        <el-form-item label="检索问题">
+        <el-form-item label="问题">
           <el-input
             v-model="retrievalForm.queryText"
             type="textarea"
             :rows="3"
-            placeholder="例如：事务的 ACID 特性 / 本章核心知识点 / 死锁的产生条件"
+            placeholder="例如：事务的 ACID 特性是什么？"
           />
         </el-form-item>
 
@@ -562,7 +518,7 @@
           <el-button :loading="retrievalLoading" type="primary" @click="runRetrievalPreview">开始检索</el-button>
         </div>
 
-        <div v-if="retrievalLoading" class="state-block" role="status">正在查找相关资料片段…</div>
+        <div v-if="retrievalLoading" class="state-block" role="status">正在查找相关片段…</div>
         <div v-else-if="retrievalError" class="material-library-detail__empty" role="alert">
           {{ retrievalError }}<el-button @click="runRetrievalPreview">重新检索</el-button>
         </div>
@@ -572,19 +528,19 @@
             type="warning"
             :closable="false"
             show-icon
-            title="已降级为数据库文本检索"
-            :description="retrievalResult.degradeReason || '向量检索暂不可用。'"
+            title="向量检索暂时不可用，改用了文本检索"
+            :description="retrievalResult.degradeReason || '可以稍后再试，或检查向量模型配置。'"
           />
           <el-alert
             v-else-if="retrievalResult.mockEmbedding"
             type="info"
             :closable="false"
             show-icon
-            title="当前使用 Mock 演示向量"
-            description="向量由文本哈希生成，相似度没有语义意义，排序主要由词面匹配决定。"
+            title="当前是演示向量"
+            description="演示向量由文字哈希生成，不代表语义相似度，排序主要取决于字面匹配。"
           />
           <div class="soft-text">
-            {{ formatRetrievalMode(retrievalResult) }} · 共命中 {{ retrievalResult.hitCount }} 条
+            {{ formatRetrievalMode(retrievalResult) }} · 找到 {{ retrievalResult.hitCount }} 个片段
           </div>
           <div v-for="segment in retrievalResult.segments" :key="segment.segmentId" class="section-card">
             <div class="summary-history-card__top">
@@ -600,7 +556,7 @@
             <div class="summary-block">{{ segment.contentText || '暂无内容' }}</div>
           </div>
           <div v-if="!retrievalResult.segments.length" class="state-block empty">
-            没有找到相关内容，可以换个更具体的问题再试试。
+            没有找到相关片段，换个更具体的问法试试。
           </div>
         </div>
       </div>
@@ -616,15 +572,15 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import AppIcon from '@/components/AppIcon.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import IconMenuButton from '@/components/IconMenuButton.vue'
-import ListSectionHeading from '@/components/ListSectionHeading.vue'
+import MaterialTypeBadge from '@/components/MaterialTypeBadge.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import GenerationModeBadge from '@/components/GenerationModeBadge.vue'
 import { useAutoListQuery } from '@/composables/useAutoListQuery'
 import { usePolling } from '@/composables/usePolling'
 import { confirmDanger } from '@/utils/confirm'
 import { getErrorMessage } from '@/utils/errorMessage'
-import { formatCharacters, formatDate, formatDateTime, formatSegmentMeta } from '@/utils/format'
-import { formatDifficulty, formatMaterialType, formatParseStatus, materialTypeIcon } from '@/utils/labels'
+import { formatCharacters, formatDateTime, formatRelativeDay, formatSegmentMeta } from '@/utils/format'
+import { DIFFICULTY_LABELS, formatDifficulty, formatMaterialType, formatParseStatus } from '@/utils/labels'
 import {
   previewMaterialRetrievalApi,
   submitEmbeddingTaskApi,
@@ -646,7 +602,7 @@ const router = useRouter()
 const route = useRoute()
 const materials = ref<MaterialPageItem[]>([])
 const total = ref(0)
-const detail = ref<any>(null)
+const detail = ref<MaterialDetail | null>(null)
 const detailId = ref(0)
 const drawerVisible = ref(false)
 const uploadDialogVisible = ref(false)
@@ -673,13 +629,17 @@ const editTargetId = ref<number | null>(null)
 let listRequestVersion = 0
 let detailRequestVersion = 0
 
+interface MaterialDetail extends MaterialPageItem {
+  segments?: { id: number; segmentNo?: number; pageNo?: number; sectionTitle?: string; contentText?: string }[]
+}
+
 const materialTypes = [
-  { value: 'PDF', label: 'PDF 文档' },
-  { value: 'DOCX', label: 'Word 文档' },
-  { value: 'TXT', label: '文本文件' },
-  { value: 'TEXT', label: '纯文本笔记' },
-  { value: 'MARKDOWN', label: '格式化笔记' },
-  { value: 'FILE', label: '其他文档' }
+  { value: 'PDF', label: 'PDF' },
+  { value: 'DOCX', label: 'Word' },
+  { value: 'TXT', label: 'TXT 文件' },
+  { value: 'TEXT', label: '纯文本' },
+  { value: 'MARKDOWN', label: 'Markdown' },
+  { value: 'FILE', label: '其他格式' }
 ]
 
 const readQueryText = (value: unknown) => (typeof value === 'string' ? value : '')
@@ -755,12 +715,12 @@ const materialRows = computed(() => materials.value.map((row) => ({ ...row, tagL
 
 const formatSummaryStatus = (value?: string) =>
   ({
-    SUCCESS: '摘要已就绪',
-    PENDING: '尚无摘要',
-    PROCESSING: '摘要生成中',
-    RUNNING: '摘要生成中',
-    FAILED: '摘要生成失败'
-  })[String(value || '').toUpperCase()] || '尚无摘要'
+    SUCCESS: '已生成',
+    PENDING: '还没有',
+    PROCESSING: '生成中',
+    RUNNING: '生成中',
+    FAILED: '生成失败'
+  })[String(value || '').toUpperCase()] || '还没有'
 
 const isProcessing = (row: MaterialPageItem) => {
   return row.parseStatus === 'PROCESSING' || row.summaryStatus === 'RUNNING' || row.embeddingStatus === 'RUNNING'
@@ -771,10 +731,10 @@ const getProcessingText = (row: MaterialPageItem) => {
     return '解析中…'
   }
   if (row.summaryStatus === 'RUNNING') {
-    return '摘要生成中…'
+    return '总结生成中…'
   }
   if (row.embeddingStatus === 'RUNNING') {
-    return '向量索引中…'
+    return '向量生成中…'
   }
   return '处理中…'
 }
@@ -782,7 +742,7 @@ const getProcessingText = (row: MaterialPageItem) => {
 const formatScore = (value?: number | null) => (typeof value === 'number' ? value.toFixed(3) : '--')
 
 const formatRetrievalMode = (result: RetrievalPreviewPayload) =>
-  result.degraded || result.retrievalMode === 'TEXT' ? '数据库文本检索' : '向量检索 + 词面重排'
+  result.degraded || result.retrievalMode === 'TEXT' ? '文本检索' : '向量检索 + 词面重排'
 
 /** 文本检索没有向量分，只展示词面匹配度；向量检索同时展示综合、向量和词面三项得分。 */
 const formatSegmentScores = (segment: RetrievalPreviewSegment) =>
@@ -818,17 +778,17 @@ const formatEmbeddingProgress = (row: MaterialPageItem) => {
   const embedded = Number(row.embeddedSegmentCount || 0)
   const total = Number(row.totalSegmentCount || 0)
   if (total > 0) {
-    return `已索引 ${embedded} / ${total} 个片段`
+    return `${embedded} / ${total} 个片段`
   }
   const parseStatus = String(row.parseStatus || '').toUpperCase()
   if (parseStatus === 'PROCESSING') {
-    return '解析完成后可生成'
+    return '解析完成后可以生成'
   }
   if (parseStatus === 'FAILED') {
-    return '当前资料解析失败'
+    return '解析失败，无法生成'
   }
-  if (parseStatus === 'SUCCESS') return '暂无资料片段'
-  return '需先解析后生成'
+  if (parseStatus === 'SUCCESS') return '没有片段'
+  return '先解析资料'
 }
 
 const shouldRegenerateEmbedding = (row: MaterialPageItem) =>
@@ -878,20 +838,19 @@ const loadMaterials = async (silentOrEvent?: boolean | unknown) => {
       await loadMaterials()
     }
   } catch (error) {
-    if (requestVersion === listRequestVersion && !silent)
-      loadError.value = getErrorMessage(error, '资料暂时无法加载，请稍后重试。')
+    if (requestVersion === listRequestVersion && !silent) loadError.value = getErrorMessage(error, '请稍后再试。')
   } finally {
     if (requestVersion === listRequestVersion && !silent) tableLoading.value = false
   }
 }
 
-// 有资料在解析 / 生成摘要 / 建索引时，每 3 秒静默刷新一次列表，全部完成后自动停止。
+// 有资料在解析、生成总结或生成向量时，每 3 秒静默刷新一次列表，全部完成后自动停止。
 const hasProcessingMaterials = computed(() => materials.value.some((item) => isProcessing(item)))
 usePolling(hasProcessingMaterials, () => loadMaterials(true), 3000)
 
 const createMaterial = async () => {
   if (!form.title.trim() || !form.contentText.trim()) {
-    ElMessage.warning('请先填写资料标题和内容')
+    ElMessage.warning('请填写标题和内容')
     return
   }
 
@@ -904,12 +863,12 @@ const createMaterial = async () => {
       description: form.description.trim(),
       contentText: form.contentText.trim()
     })
-    ElMessage.success('资料保存成功，系统正在自动生成摘要…')
+    ElMessage.success('资料已保存')
     resetForm()
     textDialogVisible.value = false
     await loadMaterials()
   } catch (error) {
-    ElMessage.error(getErrorMessage(error, '新增资料失败，请稍后重试。'))
+    ElMessage.error(getErrorMessage(error, '资料没有保存成功，请稍后重试。'))
   } finally {
     creating.value = false
   }
@@ -917,10 +876,10 @@ const createMaterial = async () => {
 
 const formatChunking = (material: MaterialPageItem) =>
   material.chunkStrategy === 'CHAR_WINDOW_V2'
-    ? `每块 ${material.chunkSize} 字符 · 重叠 ${material.chunkOverlap} 字符`
+    ? `每段 ${material.chunkSize} 字符，重叠 ${material.chunkOverlap} 字符`
     : material.chunkStrategy === 'ORIGINAL_CONTEXT'
-      ? '导入时按原始段落保留'
-      : '历史参数未记录'
+      ? '按原文段落'
+      : '未记录'
 
 const parseMaterial = (id: number) => {
   if (parsing.value) return
@@ -942,7 +901,7 @@ const confirmParseMaterial = async () => {
     parseForm.chunkOverlap > 500 ||
     parseForm.chunkOverlap >= parseForm.chunkSize
   ) {
-    ElMessage.warning('请填写有效分块参数，重叠字符数必须小于分块大小')
+    ElMessage.warning('请检查分段参数：重叠字符数要小于每段字符数')
     return
   }
   const id = parseTarget.value.id
@@ -950,12 +909,12 @@ const confirmParseMaterial = async () => {
   actionLoadingId.value = id
   try {
     await parseMaterialApi(id, { ...parseForm })
-    ElMessage.success('资料解析成功')
+    ElMessage.success('解析完成')
     parseDialogVisible.value = false
     await loadMaterials()
     if (drawerVisible.value && detailId.value === id) await viewDetail(id)
   } catch (error) {
-    ElMessage.error(getErrorMessage(error, '资料解析失败，请稍后重试。'))
+    ElMessage.error(getErrorMessage(error, '解析没有完成，请稍后重试。'))
     await loadMaterials()
     if (drawerVisible.value && detailId.value === id) await viewDetail(id)
   } finally {
@@ -967,18 +926,18 @@ const confirmParseMaterial = async () => {
 const generateEmbedding = async (row: MaterialPageItem) => {
   if (actionLoadingId.value === row.id) return
   if (row.parseStatus !== 'SUCCESS') {
-    ElMessage.warning('请先解析这份资料，再生成向量')
+    ElMessage.warning('请先解析资料，再生成向量')
     return
   }
   if (row.embeddingStatus === 'RUNNING') {
-    ElMessage.info('向量正在生成，请在任务中心查看进度')
+    ElMessage.info('向量正在生成，可以在任务中心查看进度')
     return
   }
 
   const forceRegenerate = shouldRegenerateEmbedding(row)
   if (forceRegenerate) {
     const confirmed = await confirmDanger(
-      `将使用当前配置的向量模型，重新生成“${row.title}”的全部向量。已有向量会被更新。`,
+      `会用当前配置的向量模型重新生成“${row.title}”的全部向量，原有向量会被替换。`,
       { title: '重新生成向量', confirmText: '重新生成' }
     )
     if (!confirmed) return
@@ -987,26 +946,26 @@ const generateEmbedding = async (row: MaterialPageItem) => {
   actionLoadingId.value = row.id
   try {
     await submitEmbeddingTaskApi(row.id, { forceRegenerate })
-    ElMessage.success('向量索引已开始生成，可在任务中心查看进度')
+    ElMessage.success('已开始生成向量，可以在任务中心查看进度')
     await loadMaterials()
     if (drawerVisible.value && detailId.value === row.id) await viewDetail(row.id)
   } catch (error) {
-    ElMessage.error(getErrorMessage(error, '生成向量索引失败，请稍后重试。'))
+    ElMessage.error(getErrorMessage(error, '向量没有开始生成，请稍后重试。'))
   } finally {
     actionLoadingId.value = null
   }
 }
 
 const removeMaterial = async (id: number) => {
-  if (!(await confirmDanger('删除后该资料及其解析分段将不可恢复，确定继续吗？'))) return
+  if (!(await confirmDanger('删除后，资料和解析出的片段都无法恢复。确定删除吗？'))) return
 
   actionLoadingId.value = id
   try {
     await deleteMaterialApi(id)
-    ElMessage.success('资料删除成功')
+    ElMessage.success('资料已删除')
     await loadMaterials()
   } catch (error) {
-    ElMessage.error(getErrorMessage(error, '删除资料失败，请稍后重试。'))
+    ElMessage.error(getErrorMessage(error, '没有删除成功，请稍后重试。'))
   } finally {
     actionLoadingId.value = null
   }
@@ -1024,11 +983,11 @@ const viewDetail = async (id: number) => {
     const res = await getMaterialDetailApi(id)
     if (requestVersion !== detailRequestVersion) return
     detail.value = res.data.data
-    if (!detail.value) detailError.value = '这份资料不存在或已被删除，请返回资料库重新选择。'
+    if (!detail.value) detailError.value = '这份资料不存在或已经删除了。'
   } catch (error) {
     if (requestVersion !== detailRequestVersion) return
     detail.value = null
-    detailError.value = getErrorMessage(error, '资料详情加载失败，请重试。')
+    detailError.value = getErrorMessage(error, '资料详情没有加载出来，请重试。')
   } finally {
     if (requestVersion === detailRequestVersion) detailLoading.value = false
   }
@@ -1049,7 +1008,7 @@ const saveMaterialInfo = async () => {
   if (!id || savingInfo.value) return
   const title = editForm.title.trim()
   if (!title) {
-    editTitleError.value = '资料标题不能为空'
+    editTitleError.value = '标题不能为空'
     return
   }
   const payload = {
@@ -1068,7 +1027,7 @@ const saveMaterialInfo = async () => {
     }
     await loadMaterials()
   } catch (error) {
-    ElMessage.error(getErrorMessage(error, '保存资料信息失败，请稍后重试。'))
+    ElMessage.error(getErrorMessage(error, '没有保存成功，请稍后重试。'))
   } finally {
     savingInfo.value = false
   }
@@ -1090,7 +1049,7 @@ const runRetrievalPreview = async () => {
     return
   }
   if (!retrievalForm.queryText.trim()) {
-    ElMessage.warning('请输入检索问题')
+    ElMessage.warning('请输入问题')
     return
   }
 
@@ -1103,11 +1062,11 @@ const runRetrievalPreview = async () => {
     })
     retrievalResult.value = res.data.data as RetrievalPreviewPayload
     if (!retrievalResult.value.segments.length) {
-      ElMessage.info('没有找到相关内容，可以换个更具体的问题试试')
+      ElMessage.info('没有找到相关片段，换个更具体的问法试试')
     }
   } catch (error) {
     retrievalResult.value = null
-    retrievalError.value = getErrorMessage(error, '暂时无法检索资料，请稍后重试。')
+    retrievalError.value = getErrorMessage(error, '检索没有完成，请稍后重试。')
   } finally {
     retrievalLoading.value = false
   }
@@ -1123,13 +1082,13 @@ const uploadMaterial = async (options: UploadRequestOptions) => {
     const uploadedId = Number(response.data.data)
     const uploaded = materialRows.value.find((row) => row.id === uploadedId)
     if (uploaded?.parseStatus === 'FAILED') {
-      ElMessage.warning(uploaded.parseErrorMessage || '资料已保存，但解析失败，请打开详情查看原因。')
+      ElMessage.warning(uploaded.parseErrorMessage || '文件已上传，但解析没有成功，打开详情可以看到原因。')
     } else {
-      ElMessage.success('资料已上传，解析结果可在资料卡片中查看。')
+      ElMessage.success('上传完成')
     }
   } catch (error) {
     options.onError?.(error as Parameters<UploadRequestOptions['onError']>[0])
-    ElMessage.error(getErrorMessage(error, '资料上传失败，请稍后重试。'))
+    ElMessage.error(getErrorMessage(error, '上传失败，请稍后重试。'))
   } finally {
     uploading.value = false
   }
@@ -1201,7 +1160,7 @@ watch(
     if (!rawId) return
     const id = Number(rawId)
     if (!/^[1-9]\d*$/.test(rawId) || !Number.isSafeInteger(id)) {
-      ElMessage.warning('资料链接无效，请从资料库重新选择')
+      ElMessage.warning('这个资料链接无效，请从资料库重新打开')
       return
     }
     void viewDetail(id)
@@ -1230,449 +1189,213 @@ void loadMaterials()
 </script>
 
 <style scoped>
-.material-library-card__parse-error {
-  margin: 8px 0;
-  color: var(--el-color-danger);
-  font-size: 12px;
-  line-height: 1.6;
-  overflow-wrap: anywhere;
-}
-.material-library :deep(.el-button) {
-  min-height: 44px;
-}
-.toolbar--flush :deep(.el-button) {
-  margin: 0;
-  padding-inline: 22px;
-}
-.material-library :deep(.el-button > span),
-.material-library-detail :deep(.el-button > span) {
-  gap: 7px;
-}
-.material-library__hint {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px 10px;
-  margin: 0 0 22px;
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.7;
-}
-.material-library__hint > .app-icon {
-  flex: 0 0 auto;
-  color: var(--brand);
-}
-.material-library__hint > span {
-  flex: 1 1 320px;
-  min-width: 0;
-}
-.material-library__hint a,
-.material-library-detail__retrieval a {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  min-height: 44px;
-  border-radius: 6px;
-  color: var(--brand);
-  font-size: 13px;
-  text-decoration: none;
-}
-.material-library__hint a:hover,
-.material-library-detail__retrieval a:hover {
-  color: var(--brand-hover);
-  text-decoration: underline;
-  text-underline-offset: 4px;
-}
-.material-library__filters {
-  display: grid;
-  grid-template-columns: minmax(180px, 1fr) 158px 150px 64px;
-  gap: 12px;
-  align-items: center;
-  padding-bottom: 26px;
-  border-bottom: 1px solid var(--line);
-}
-.material-library__filters :deep(.el-select),
-.material-library__filters :deep(.el-input) {
-  min-width: 0;
-  width: 100%;
-}
-.material-library__filters :deep(.el-input__wrapper),
-.material-library__filters :deep(.el-select__wrapper) {
-  min-height: 46px;
-  background: transparent;
-  box-shadow: none;
-  border-radius: 999px;
-  padding-inline: 16px;
-}
-.material-library__filters :deep(.el-input__wrapper) {
-  background: var(--bg-secondary);
-}
-.material-library__filters :deep(.el-select__wrapper:hover) {
-  background: var(--bg-secondary);
-}
-.material-library__filters :deep(.el-input__wrapper.is-focus),
-.material-library__filters :deep(.el-select__wrapper.is-focused) {
-  box-shadow: 0 0 0 2px var(--brand);
-}
-.material-library__search :deep(.el-input__prefix) {
-  margin-right: 6px;
-  color: var(--muted);
-}
-.material-library__reset {
+.material-library__toolbar > .el-button {
   margin: 0;
 }
-.material-library__section-heading {
-  margin: 26px 0 6px;
+.material-library__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
-.material-library__grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-}
-.material-library-card {
-  display: grid;
-  grid-template-columns: 74px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 24px;
-  min-width: 0;
-  padding: 20px 18px;
-  border-radius: var(--radius);
-  border: 1px solid transparent;
-  border-bottom: 1px solid var(--line);
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-}
-.material-library-card:hover {
-  background: var(--panel-hover);
-  border-color: var(--line);
-  box-shadow: var(--shadow);
-  transform: translateY(-2px);
-}
-.material-library-card__cover {
+.material-row {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  width: 74px;
-  height: 104px;
-  padding: 14px 6px 12px 10px;
-  border: 0;
-  border-left: 5px solid color-mix(in srgb, var(--brand) 35%, var(--panel));
-  border-radius: 2px 8px 8px 2px;
-  background: var(--brand-light);
-  color: var(--brand);
-  font: inherit;
-  cursor: pointer;
-  box-shadow: var(--shadow-sm);
-  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  align-items: flex-start;
+  gap: 16px;
 }
-.material-library-card__cover:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
-}
-.material-library-card__cover[data-kind='PDF'] {
-  background: var(--accent-soft);
-  color: var(--accent);
-  border-left-color: color-mix(in srgb, var(--accent) 45%, var(--panel));
-}
-.material-library-card__cover[data-kind='DOC'],
-.material-library-card__cover[data-kind='DOCX'],
-.material-library-card__cover[data-kind='WORD'] {
-  background: var(--blue-soft);
-  color: var(--blue);
-  border-left-color: color-mix(in srgb, var(--blue) 40%, var(--panel));
-}
-.material-library-card__cover span {
-  max-width: 100%;
-  color: inherit;
-  font-size: 10px;
-  letter-spacing: 0.02em;
-  text-align: center;
-  overflow-wrap: anywhere;
-}
-.material-library-card__cover :deep(.app-icon path[stroke]) {
-  stroke: currentColor;
-}
-.material-library-card__cover :deep(.app-icon path[fill-opacity]),
-.material-library-card__cover :deep(.app-icon rect) {
-  fill: currentColor;
-}
-.material-library-card__content,
-.material-library-card__aside {
+.material-row__main {
+  flex: 1 1 auto;
   min-width: 0;
 }
-.material-library-card__aside {
+.material-row__title {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-}
-.material-library-card__menu {
-  flex-shrink: 0;
-}
-.material-library-card h3 {
+  gap: 10px;
   min-width: 0;
   margin: 0;
-  color: var(--text);
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 600;
-  line-height: 1.65;
-  overflow-wrap: anywhere;
+  line-height: 1.5;
 }
-.material-library-card h3 button {
-  display: block;
-  max-width: 100%;
-  min-height: 44px;
-  padding: 5px 0;
+.material-row__title button {
+  min-width: 0;
+  padding: 0;
+  overflow: hidden;
   border: 0;
-  background: transparent;
-  color: inherit;
+  border-radius: var(--radius-xs);
+  background: none;
+  color: var(--text);
   font: inherit;
   text-align: left;
-  overflow-wrap: anywhere;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   cursor: pointer;
 }
-.material-library-card h3 button:hover {
+.material-row__title button:hover {
   color: var(--brand);
 }
-.material-library-card__meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px 12px;
-  margin: 2px 0 10px;
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.65;
-  font-variant-numeric: tabular-nums;
+.material-row__title :deep(.status-pill) {
+  flex: 0 0 auto;
 }
-.material-library-card__meta span + span:not(.status-pill)::before {
-  content: '·';
-  margin-right: 12px;
-}
-.material-library-card__desc {
-  margin: 0 0 4px;
+.material-row__desc {
+  margin: 2px 0 0;
   overflow: hidden;
   color: var(--text-secondary);
   font-size: 13px;
-  line-height: 1.65;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.material-library-card__tags {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px 12px;
-  margin-top: 10px;
+.material-row__error {
+  margin: 4px 0 0;
+  color: var(--red);
+  font-size: 13px;
+  overflow-wrap: anywhere;
 }
-.material-library-card__tag {
-  max-width: 14em;
-  overflow: hidden;
+.material-row__meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin: 6px 0 0;
   color: var(--muted);
   font-size: 12px;
-  line-height: 1.6;
+  font-variant-numeric: tabular-nums;
+}
+/* 字数、日期、总结之间用圆点分隔；标签另起一组，不加圆点。换行后每行都从左边对齐。 */
+.material-row__meta > :not(.visually-hidden, .material-row__tag) + :not(.material-row__tag)::before {
+  margin-right: 8px;
+  color: var(--line-strong);
+  content: '·';
+}
+.material-row__summary :deep(.generation-mode-badge) {
+  margin-left: 6px;
+  padding: 0 7px;
+  font-size: 11px;
+}
+.material-row__tag {
+  max-width: 10em;
+  padding: 0 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  line-height: 20px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.material-library-card__tag::before {
-  content: '#';
-  margin-right: 2px;
-  opacity: 0.65;
-}
-.material-library-card__actions {
+.material-row__actions {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
+  gap: 4px;
+  align-self: center;
 }
-.material-library-card__actions button {
-  min-width: 0;
-  min-height: 40px;
-  padding: 0 14px;
-  border: 0;
-  border-radius: 999px;
-  font: inherit;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition:
-    background 0.18s ease,
-    color 0.18s ease,
-    box-shadow 0.18s ease,
-    transform 0.12s ease;
+.material-row__actions .el-button {
+  margin: 0;
 }
-.material-library-card__actions button:active {
-  transform: scale(0.97);
+.material-row__actions .el-button.is-text {
+  padding-inline: 10px;
 }
-.material-library-card__open {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  background: var(--brand-soft);
-  color: var(--brand);
-  font-weight: 600;
-  box-shadow: var(--shadow-sm);
+.material-row--loading:hover {
+  background: none;
 }
-.material-library-card__open:hover {
-  background: var(--brand);
-  color: #fff;
-  box-shadow: var(--shadow-md);
-}
-.material-library-card__study {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--muted);
-  background: transparent;
-  padding: 0 12px;
-}
-.material-library-card__study:hover:not(:disabled) {
-  color: var(--brand);
-  background: var(--bg-secondary);
-}
-.material-library-card__study:disabled {
-  color: var(--line);
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-.material-library-card__study.is-loading {
-  color: var(--brand);
-  background: var(--brand-light);
-}
-.material-library__text-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 44px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--muted);
-  font: inherit;
-  font-size: 14px;
-  cursor: pointer;
-}
-.material-library-card--loading {
-  min-height: 150px;
-  gap: 14px 24px;
-}
-.material-library__skeleton {
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--muted) 10%, var(--panel));
-  animation: materialLibraryPulse 1.7s ease-in-out infinite;
-}
-.material-library__skeleton--icon {
-  width: 74px;
-  height: 104px;
-  grid-row: 1 / 3;
-}
-.material-library__skeleton--title {
-  width: 76%;
-  height: 22px;
-  align-self: end;
-}
-.material-library__skeleton--text {
-  width: 50%;
-  height: 16px;
-  grid-column: 2;
-  align-self: start;
-}
-.material-library__skeleton--footer {
+.material-row__sk-badge {
+  flex: 0 0 40px;
   height: 40px;
-  width: 220px;
-  justify-self: end;
-  grid-row: 1 / 3;
-  grid-column: 3;
+  border-radius: 11px;
+}
+.material-row__sk-title {
+  display: block;
+  width: min(360px, 70%);
+  height: 18px;
+  margin-top: 2px;
+}
+.material-row__sk-meta {
+  display: block;
+  width: min(220px, 45%);
+  height: 12px;
+  margin-top: 12px;
+}
+.material-row__sk-actions {
+  flex: 0 0 180px;
+  height: 32px;
+  align-self: center;
+  border-radius: var(--radius-sm);
 }
 .material-library__spinner {
   display: inline-block;
+  flex: 0 0 auto;
   width: 18px;
   height: 18px;
-  flex: 0 0 auto;
   border: 2px solid var(--line);
   border-top-color: var(--brand);
   border-radius: 50%;
-  animation: materialLibrarySpin 0.8s linear infinite;
+  animation: zx-spin 0.8s linear infinite;
 }
-.material-library__spinner--inline {
-  width: 12px;
-  height: 12px;
-  margin-right: 4px;
-  border-width: 1.5px;
-}
-@keyframes materialLibraryPulse {
-  50% {
-    opacity: 0.45;
-  }
-}
-@keyframes materialLibrarySpin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-.material-library .workspace-pagination {
-  padding-top: 26px;
-}
-
-.material-library-upload > p {
-  margin: 0 0 20px;
-  color: var(--muted);
-  font-size: 14px;
-  line-height: 1.8;
-}
-.material-library-upload :deep(.el-upload) {
+.material-library-upload :deep(.el-upload),
+.material-library-upload :deep(.el-upload-dragger) {
   display: block;
   width: 100%;
 }
 .material-library-upload :deep(.el-upload-dragger) {
-  padding: 36px 18px;
-  border: 1px dashed color-mix(in srgb, var(--brand) 35%, var(--line));
-  border-radius: 14px;
+  padding: 36px 20px 32px;
+  border: 1px dashed color-mix(in srgb, var(--brand) 35%, var(--line-strong));
+  border-radius: var(--radius-lg);
   background: color-mix(in srgb, var(--brand) 3%, var(--panel));
+  transition:
+    border-color var(--duration-fast) ease,
+    background-color var(--duration-fast) ease;
 }
-.material-library-upload .app-icon {
-  margin: 0 auto 18px;
+.material-library-upload :deep(.el-upload-dragger:hover),
+.material-library-upload :deep(.el-upload-dragger.is-dragover) {
+  border-color: var(--brand);
+  background: var(--brand-light);
+}
+.material-library-upload__icon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 14px;
+  border-radius: 14px;
+  background: var(--brand-soft);
   color: var(--brand);
 }
 .material-library-upload strong {
   display: block;
   color: var(--text);
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
-  line-height: 1.7;
 }
-.material-library-upload span:not(.material-library__spinner) {
+.material-library-upload strong + span {
   display: block;
-  margin-top: 10px;
+  margin-top: 6px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 13px;
 }
 .material-library-upload .material-library__spinner {
-  margin-top: 18px;
+  margin-top: 16px;
+}
+.material-library-upload__note {
+  margin: 12px 2px 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
 }
 .material-library-form__grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 18px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 16px;
 }
 .material-library-form__full {
   width: 100%;
-}
-.material-library-form :deep(.el-input__wrapper),
-.material-library-form :deep(.el-select__wrapper),
-.material-library-form :deep(.el-input-number) {
-  min-height: 44px;
 }
 .material-library-dialog__footer {
   display: flex;
   justify-content: flex-end;
   flex-wrap: wrap;
   gap: 10px;
-  margin-top: 16px;
 }
-.material-library-dialog__footer :deep(.el-button) {
-  min-height: 44px;
+.material-library-dialog__footer .el-button {
   margin: 0;
 }
 .material-library-retrieval__result {
@@ -1686,7 +1409,7 @@ void loadMaterials()
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 16px;
+  gap: 14px;
   min-height: 320px;
   color: var(--muted);
   font-size: 14px;
@@ -1696,8 +1419,8 @@ void loadMaterials()
 }
 .material-library-detail__heading {
   display: flex;
-  align-items: flex-start;
-  gap: 16px;
+  align-items: center;
+  gap: 14px;
 }
 .material-library-detail__heading > div {
   min-width: 0;
@@ -1707,36 +1430,37 @@ void loadMaterials()
   font-size: 12px;
 }
 .material-library-detail__heading h2 {
-  margin: 8px 0 0;
+  margin: 2px 0 0;
   color: var(--text);
-  font-size: 23px;
-  font-weight: 650;
-  line-height: 1.5;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.45;
   overflow-wrap: anywhere;
 }
 .material-library-detail__meta {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
-  margin: 24px 0;
-  padding: 20px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 20px;
+  margin: 20px 0;
+  padding: 16px 18px;
+  border-radius: var(--radius);
   background: var(--bg);
 }
 .material-library-detail__meta div {
   min-width: 0;
 }
 .material-library-detail__meta dt {
-  margin-bottom: 7px;
   color: var(--muted);
   font-size: 12px;
 }
 .material-library-detail__meta dd {
-  margin: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 2px 0 0;
   color: var(--text);
-  font-size: 13px;
-  line-height: 1.7;
+  font-size: 14px;
   overflow-wrap: anywhere;
 }
 .material-library-detail__meta .material-library-detail__meta-wide {
@@ -1745,27 +1469,30 @@ void loadMaterials()
 .material-library-detail__meta dd.is-empty {
   color: var(--muted);
 }
+.material-library-detail :deep(.el-alert) {
+  margin-bottom: 16px;
+}
 .material-library-detail__actions {
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
   gap: 10px;
 }
-.material-library-detail :deep(.el-button) {
-  min-height: 44px;
+.material-library-detail__actions .el-button {
   margin: 0;
 }
 .material-library-detail__retrieval {
-  margin-top: 24px;
-  padding: 18px 20px;
-  border-radius: 12px;
-  background: var(--bg);
+  margin-top: 20px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
 }
 .material-library-detail__retrieval-heading {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
   flex-wrap: wrap;
-  gap: 0 14px;
+  gap: 4px 14px;
 }
 .material-library-detail__retrieval h3 {
   margin: 0;
@@ -1774,25 +1501,34 @@ void loadMaterials()
   font-weight: 600;
 }
 .material-library-detail__retrieval p {
-  margin: 6px 0 16px;
+  margin: 4px 0 14px;
   color: var(--muted);
   font-size: 13px;
-  line-height: 1.8;
 }
-.material-library-detail__task-link {
-  padding-inline: 8px;
+.material-library-detail__retrieval a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--brand);
+  font-size: 13px;
+  text-decoration: none;
+}
+.material-library-detail__retrieval a:hover {
+  color: var(--brand-hover);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 .material-library-detail__segments {
-  margin-top: 30px;
+  margin-top: 28px;
 }
 .material-library-detail__segments > h3 {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  margin: 0 0 16px;
-  font-size: 16px;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 4px;
   color: var(--text);
+  font-size: 16px;
+  font-weight: 600;
 }
 .material-library-detail__segments > h3 span {
   color: var(--muted);
@@ -1800,161 +1536,116 @@ void loadMaterials()
   font-weight: 400;
 }
 .material-library-detail__segment {
-  padding: 20px 0;
+  padding: 16px 0;
   border-top: 1px solid var(--line);
+}
+.material-library-detail__segments > h3 + .material-library-detail__segment {
+  border-top: 0;
 }
 .material-library-detail__segment-meta {
   color: var(--muted);
   font-size: 12px;
 }
 .material-library-detail__segment h4 {
-  margin: 10px 0;
+  margin: 4px 0 8px;
   color: var(--text);
   font-size: 15px;
   font-weight: 600;
 }
 .material-library-detail__segment p {
   margin: 0;
-  color: var(--text);
+  color: var(--text-secondary);
   font-size: 14px;
-  line-height: 1.95;
+  line-height: 1.9;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
 .material-library-detail__empty {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 14px;
-  margin-top: 24px;
-  padding: 22px;
-  border: 1px dashed var(--line);
-  border-radius: 12px;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 20px;
+  padding: 20px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius);
   color: var(--muted);
   font-size: 14px;
-  line-height: 1.8;
 }
-:global(.material-library-menu .el-dropdown-menu__item) {
-  min-height: 44px;
+.material-parse__target {
+  margin: 0;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.material-parse__desc {
+  margin: 4px 0 18px;
+  color: var(--muted);
   font-size: 13px;
 }
-:global(.material-library-menu .material-library-menu__danger) {
-  color: color-mix(in srgb, var(--red) 70%, var(--text));
+.material-parse__warning {
+  margin: 4px 0 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--text-secondary);
+  font-size: 13px;
 }
-:global(.material-library-modal .el-dialog__headerbtn),
-:global(.material-library-modal .el-drawer__close-btn) {
-  min-width: 44px;
-  min-height: 44px;
+:global(:root .material-library-menu .material-library-menu__danger:not(.is-disabled)) {
+  color: var(--red);
 }
-.material-library button:focus-visible,
-.material-library a:focus-visible,
-.material-library-detail a:focus-visible,
-.material-library-upload :deep(.el-upload:focus-visible) {
-  outline: 2px solid var(--brand);
-  outline-offset: 3px;
+:global(:root .material-library-menu .material-library-menu__danger:not(.is-disabled):hover),
+:global(:root .material-library-menu .material-library-menu__danger:not(.is-disabled):focus) {
+  background: var(--red-soft);
+  color: var(--red);
 }
-
-@media (max-width: 920px) {
-  .material-library__filters {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 64px;
-  }
-  .material-library__search {
-    grid-column: 1 / -1;
-  }
-  .material-library-card {
-    grid-template-columns: 64px minmax(0, 1fr);
-    gap: 14px 20px;
-  }
-  .material-library-card__cover {
-    width: 64px;
-    height: 90px;
-  }
-  .material-library-card__aside {
-    grid-column: 2;
-  }
-  .material-library-card--loading {
-    grid-template-columns: 64px minmax(0, 1fr);
-  }
-  .material-library__skeleton--icon {
-    width: 64px;
-    height: 90px;
-  }
-  .material-library__skeleton--footer {
-    display: none;
-  }
-}
-@media (max-width: 640px) {
+@media (max-width: 760px) {
   .material-library .toolbar--flush {
     width: 100%;
   }
-  .material-library .toolbar--flush :deep(.el-button) {
-    flex: 1;
-    padding-inline: 14px;
+  .material-library .toolbar--flush .el-button {
+    flex: 1 1 0;
   }
-  .material-library__hint {
-    margin-bottom: 18px;
+  .material-library__toolbar {
+    align-items: flex-start;
+    flex-wrap: nowrap;
   }
-  .material-library__hint a {
-    margin-left: 26px;
+  .material-library__refresh-label {
+    display: none;
   }
-  .material-library__filters {
-    gap: 10px 4px;
-    padding-bottom: 18px;
+  .material-row {
+    flex-wrap: wrap;
+    gap: 12px 14px;
   }
-  .material-library__filters :deep(.el-select__wrapper) {
-    padding-inline: 10px;
+  .material-row__main {
+    flex-basis: calc(100% - 54px);
   }
-  .material-library__section-heading {
-    margin-top: 18px;
+  .material-row__title {
+    flex-wrap: wrap;
+    row-gap: 4px;
   }
-  .material-library-card {
-    padding-block: 24px;
-    gap: 16px;
+  .material-row__title button {
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
-  .material-library-card h3 {
-    font-size: 17px;
+  .material-row__actions {
+    flex-basis: 100%;
+    padding-left: 54px;
   }
-  .material-library-card__meta {
-    font-size: 12px;
-    gap: 4px 8px;
+  .material-row__sk-actions {
+    display: none;
   }
-  .material-library-card__meta span + span:not(.status-pill)::before {
-    margin-right: 8px;
-  }
-  .material-library-card__aside {
-    grid-column: 1 / -1;
-  }
-  .material-library-form__grid {
-    grid-template-columns: 1fr;
-    gap: 0;
-  }
-  .material-library-form :deep(.el-input__inner),
-  .material-library-form :deep(.el-textarea__inner) {
-    font-size: 16px;
+  .material-library .workspace-pagination :deep(.el-pagination__sizes) {
+    display: none;
   }
   .material-library-detail__meta {
-    grid-template-columns: 1fr;
-    gap: 18px;
-  }
-  .material-library-detail__heading h2 {
-    font-size: 20px;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
-
-@media (prefers-reduced-motion: reduce) {
-  .material-library-card,
-  .material-library-card__cover,
-  .material-library-card__actions button {
-    transition: none;
-  }
-  .material-library-card:hover,
-  .material-library-card__cover:hover,
-  .material-library-card__actions button:active {
-    transform: none;
-  }
-  .material-library__skeleton,
-  .material-library__spinner {
-    animation: none;
+@media (max-width: 640px) {
+  .material-library-form__grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 </style>

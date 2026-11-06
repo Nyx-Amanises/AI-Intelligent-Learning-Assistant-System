@@ -159,6 +159,20 @@
   margin-top: 3px;
 }
 
+/* 带刻度文字的滑块（如难度“入门…挑战”）：给下方刻度留出位置，文字用次要颜色。 */
+:root .el-slider:has(.el-slider__marks-text) {
+  height: 28px;
+  margin: 0 12px 22px;
+}
+:root .el-slider__marks-text {
+  margin-top: 14px;
+  color: var(--muted);
+  font-size: 12px;
+}
+:root .el-slider__stop {
+  background-color: var(--panel);
+}
+
 @media (max-width: 760px) {
   :root .el-input__inner,
   :root .el-textarea__inner,
