@@ -8,8 +8,10 @@
 
         <div class="login-form-content">
           <header class="login-form-heading">
-            <p v-if="!isRegister" class="login-form-eyebrow">WELCOME BACK</p>
-            <h1 id="login-form-title">{{ isRegister ? '注册' : '欢迎回来' }}</h1>
+            <h1 id="login-form-title">{{ isRegister ? '创建账号' : '欢迎回来' }}</h1>
+            <p class="login-form-description">
+              {{ isRegister ? '创建账号，保存资料和练习记录。' : '登录后，继续上次的学习。' }}
+            </p>
           </header>
 
           <p v-if="registrationNotice" class="auth-notice auth-notice--success" role="status">
@@ -345,7 +347,7 @@ watch(
   padding: 40px 32px;
   background: var(--bg);
   color: var(--auth-ink);
-  font-family: 'Microsoft YaHei', 'PingFang SC', 'Segoe UI', sans-serif;
+  font-family: var(--font-sans);
 }
 
 .login-shell {
@@ -355,10 +357,10 @@ watch(
   min-height: 704px;
   padding: 12px;
   border: 1px solid var(--line);
-  border-radius: 28px;
+  border-radius: var(--radius-xl);
   background: var(--panel);
-  box-shadow: var(--shadow-lg);
-  animation: auth-reveal 0.5s ease-out both;
+  box-shadow: var(--shadow-md);
+  animation: auth-reveal var(--duration-slow) var(--ease-out) both;
 }
 
 .login-form-panel {
@@ -386,20 +388,18 @@ watch(
 .login-form-heading {
   margin-bottom: 32px;
 }
-.login-form-eyebrow {
-  margin: 0 0 12px;
+.login-form-description {
+  margin: 8px 0 0;
   color: var(--auth-muted);
-  font:
-    500 10px/1.5 'Segoe UI',
-    sans-serif;
-  letter-spacing: 2.1px;
+  font-size: 14px;
+  line-height: 1.75;
 }
 .login-form-heading h1 {
   margin: 0;
-  font-size: 32px;
+  font-size: 28px;
   font-weight: 600;
   line-height: 1.45;
-  letter-spacing: -1px;
+  letter-spacing: 0.01em;
 }
 
 .auth-form {
@@ -436,17 +436,17 @@ watch(
   width: 100%;
   height: 50px;
   padding: 0 15px;
-  border: 1px solid var(--auth-line);
-  border-radius: 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--el-border-radius-base);
   outline: none;
   background: var(--panel);
   color: var(--auth-ink);
   font: inherit;
-  font-size: 13px;
+  font-size: 14px;
   transition:
-    border-color 0.18s ease,
-    box-shadow 0.18s ease,
-    background-color 0.18s ease;
+    border-color var(--duration-fast) ease,
+    box-shadow var(--duration-fast) ease,
+    background-color var(--duration-fast) ease;
 }
 .auth-field input::placeholder {
   color: var(--auth-muted);
@@ -517,7 +517,7 @@ watch(
 .auth-notice {
   margin: 0 0 22px;
   padding: 12px 14px;
-  border-radius: 8px;
+  border-radius: var(--el-border-radius-base);
   font-size: 13px;
   line-height: 1.75;
 }
@@ -539,9 +539,9 @@ watch(
   margin-top: 5px;
   padding: 12px 45px;
   border: 1px solid var(--auth-green);
-  border-radius: 8px;
+  border-radius: var(--el-border-radius-base);
   background: var(--auth-green);
-  color: #fff;
+  color: var(--on-brand);
   font: inherit;
   font-size: 14px;
   font-weight: 500;
@@ -621,7 +621,7 @@ watch(
   isolation: isolate;
   min-width: 0;
   overflow: hidden;
-  border-radius: 18px;
+  border-radius: var(--radius);
   background: var(--bg-secondary);
 }
 .login-visual__image {
@@ -655,7 +655,7 @@ watch(
 .login-visual__quote p {
   margin: 0;
   color: var(--brand-hover);
-  font-family: 'Noto Serif SC', 'Songti SC', 'STSong', 'SimSun', serif;
+  font-family: var(--font-serif);
   font-size: clamp(27px, 2.6vw, 36px);
   font-weight: 400;
   line-height: 1.7;
@@ -728,7 +728,7 @@ watch(
     width: min(480px, 100%);
     min-height: min(720px, calc(100svh - 48px));
     padding: 0;
-    border-radius: 22px;
+    border-radius: var(--radius-lg);
   }
   .login-form-panel {
     padding: 36px 38px 28px;
@@ -753,7 +753,7 @@ watch(
   }
   .login-shell {
     min-height: min(720px, calc(100svh - 32px));
-    border-radius: 20px;
+    border-radius: var(--radius-lg);
   }
   .login-form-panel {
     padding: 30px 25px 25px;
@@ -762,7 +762,7 @@ watch(
     width: 168px;
   }
   .login-form-heading h1 {
-    font-size: 30px;
+    font-size: 26px;
   }
   .auth-name-row {
     gap: 13px;

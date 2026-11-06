@@ -1,5 +1,5 @@
 <template>
-  <section class="profile-page" aria-labelledby="profile-title">
+  <section class="learning-page profile-page" aria-labelledby="profile-title">
     <header class="page-header">
       <div>
         <h1 id="profile-title" class="page-title">个人信息</h1>
@@ -65,163 +65,169 @@
           />
         </section>
 
-        <form class="profile-form" novalidate :aria-busy="submitting" @submit.prevent="saveProfile">
-          <h2 class="profile-section-title">基本资料</h2>
-          <fieldset :disabled="busy">
-            <legend class="visually-hidden">账号与个人信息</legend>
-            <div class="profile-field">
-              <label for="profile-username">账号<span class="profile-label-detail">不可修改</span></label>
+        <div class="profile-forms">
+          <form class="profile-form" novalidate :aria-busy="submitting" @submit.prevent="saveProfile">
+            <h2 class="profile-section-title">基本资料</h2>
+            <fieldset :disabled="busy">
+              <legend class="visually-hidden">账号与个人信息</legend>
+              <div class="profile-field">
+                <label for="profile-username">账号<span class="profile-label-detail">不可修改</span></label>
+                <input
+                  id="profile-username"
+                  :value="userStore.profile?.username || ''"
+                  type="text"
+                  readonly
+                  autocomplete="username"
+                  aria-describedby="profile-username-help"
+                />
+                <p id="profile-username-help" class="profile-field-help">用于登录的账号。</p>
+              </div>
+              <div class="profile-field">
+                <label for="profile-nickname">昵称<span class="profile-label-detail">必填</span></label>
+                <input
+                  id="profile-nickname"
+                  ref="nicknameInputRef"
+                  v-model="form.nickname"
+                  type="text"
+                  autocomplete="nickname"
+                  maxlength="20"
+                  required
+                  :aria-invalid="Boolean(fieldErrors.nickname)"
+                  :aria-describedby="'profile-nickname-help' + (fieldErrors.nickname ? ' profile-nickname-error' : '')"
+                  @blur="validateField('nickname')"
+                  @input="handleFieldInput('nickname')"
+                />
+                <p id="profile-nickname-help" class="profile-field-help">1–20 个字符。</p>
+                <p v-if="fieldErrors.nickname" id="profile-nickname-error" class="profile-field-error" role="alert">
+                  {{ fieldErrors.nickname }}
+                </p>
+              </div>
+              <div class="profile-field">
+                <label for="profile-email">邮箱<span class="profile-label-detail">选填</span></label>
+                <input
+                  id="profile-email"
+                  ref="emailInputRef"
+                  v-model="form.email"
+                  type="email"
+                  autocomplete="email"
+                  inputmode="email"
+                  maxlength="100"
+                  spellcheck="false"
+                  :aria-invalid="Boolean(fieldErrors.email)"
+                  :aria-describedby="'profile-email-help' + (fieldErrors.email ? ' profile-email-error' : '')"
+                  @blur="validateField('email')"
+                  @input="handleFieldInput('email')"
+                />
+                <p id="profile-email-help" class="profile-field-help">留空保存，可清除已填写的邮箱。</p>
+                <p v-if="fieldErrors.email" id="profile-email-error" class="profile-field-error" role="alert">
+                  {{ fieldErrors.email }}
+                </p>
+              </div>
+
+              <p v-if="saveFeedback?.type === 'error'" class="profile-feedback profile-feedback--error" role="alert">
+                {{ saveFeedback.message }} 请重试。
+              </p>
+              <div class="profile-form-actions">
+                <p class="profile-save-status" role="status" aria-live="polite">
+                  <AppIcon v-if="!dirty && !submitting" name="check" :size="16" />
+                  {{
+                    submitting
+                      ? '正在保存…'
+                      : saveFeedback?.type === 'success'
+                        ? saveFeedback.message
+                        : dirty
+                          ? '有未保存的更改'
+                          : '信息已保存'
+                  }}
+                </p>
+                <div class="profile-form-buttons">
+                  <el-button native-type="button" :disabled="!dirty || busy" @click="resetForm">撤销修改</el-button>
+                  <el-button type="primary" native-type="submit" :loading="submitting" :disabled="!dirty || busy">{{
+                    submitting ? '正在保存…' : '保存修改'
+                  }}</el-button>
+                </div>
+              </div>
+            </fieldset>
+          </form>
+
+          <form
+            class="profile-form profile-password-form"
+            novalidate
+            :aria-busy="passwordSubmitting"
+            @submit.prevent="submitPasswordChange"
+          >
+            <h2 class="profile-section-title">修改密码</h2>
+            <p class="profile-section-desc">修改成功后，其他设备上的登录会失效，需要用新密码重新登录。</p>
+            <fieldset :disabled="busy">
+              <legend class="visually-hidden">修改登录密码</legend>
+              <!-- 供浏览器密码管理器识别账号，不参与交互。 -->
               <input
-                id="profile-username"
                 :value="userStore.profile?.username || ''"
                 type="text"
-                readonly
                 autocomplete="username"
-                aria-describedby="profile-username-help"
+                class="visually-hidden"
+                tabindex="-1"
+                aria-hidden="true"
+                readonly
               />
-              <p id="profile-username-help" class="profile-field-help">用于登录的账号。</p>
-            </div>
-            <div class="profile-field">
-              <label for="profile-nickname">昵称<span class="profile-label-detail">必填</span></label>
-              <input
-                id="profile-nickname"
-                ref="nicknameInputRef"
-                v-model="form.nickname"
-                type="text"
-                autocomplete="nickname"
-                maxlength="20"
-                required
-                :aria-invalid="Boolean(fieldErrors.nickname)"
-                :aria-describedby="'profile-nickname-help' + (fieldErrors.nickname ? ' profile-nickname-error' : '')"
-                @blur="validateField('nickname')"
-                @input="handleFieldInput('nickname')"
-              />
-              <p id="profile-nickname-help" class="profile-field-help">1–20 个字符。</p>
-              <p v-if="fieldErrors.nickname" id="profile-nickname-error" class="profile-field-error" role="alert">
-                {{ fieldErrors.nickname }}
-              </p>
-            </div>
-            <div class="profile-field">
-              <label for="profile-email">邮箱<span class="profile-label-detail">选填</span></label>
-              <input
-                id="profile-email"
-                ref="emailInputRef"
-                v-model="form.email"
-                type="email"
-                autocomplete="email"
-                inputmode="email"
-                maxlength="100"
-                spellcheck="false"
-                :aria-invalid="Boolean(fieldErrors.email)"
-                :aria-describedby="'profile-email-help' + (fieldErrors.email ? ' profile-email-error' : '')"
-                @blur="validateField('email')"
-                @input="handleFieldInput('email')"
-              />
-              <p id="profile-email-help" class="profile-field-help">留空保存，可清除已填写的邮箱。</p>
-              <p v-if="fieldErrors.email" id="profile-email-error" class="profile-field-error" role="alert">
-                {{ fieldErrors.email }}
-              </p>
-            </div>
-
-            <p v-if="saveFeedback?.type === 'error'" class="profile-feedback profile-feedback--error" role="alert">
-              {{ saveFeedback.message }} 请重试。
-            </p>
-            <div class="profile-form-actions">
-              <p class="profile-save-status" role="status" aria-live="polite">
-                <AppIcon v-if="!dirty && !submitting" name="check" :size="16" />
-                {{
-                  submitting
-                    ? '正在保存…'
-                    : saveFeedback?.type === 'success'
-                      ? saveFeedback.message
-                      : dirty
-                        ? '有未保存的更改'
-                        : '信息已保存'
-                }}
-              </p>
-              <div class="profile-form-buttons">
-                <el-button native-type="button" :disabled="!dirty || busy" @click="resetForm">撤销修改</el-button>
-                <el-button type="primary" native-type="submit" :loading="submitting" :disabled="!dirty || busy">{{
-                  submitting ? '正在保存…' : '保存修改'
-                }}</el-button>
+              <div v-for="field in passwordFields" :key="field.name" class="profile-field">
+                <label :for="field.id">{{ field.label }}</label>
+                <input
+                  :id="field.id"
+                  v-model="passwordForm[field.name]"
+                  type="password"
+                  :autocomplete="field.autocomplete"
+                  :maxlength="field.name === 'oldPassword' ? undefined : 64"
+                  required
+                  :aria-invalid="Boolean(passwordErrors[field.name])"
+                  :aria-describedby="
+                    [field.help ? field.id + '-help' : '', passwordErrors[field.name] ? field.id + '-error' : '']
+                      .filter(Boolean)
+                      .join(' ') || undefined
+                  "
+                  @blur="validatePasswordField(field.name)"
+                  @input="handlePasswordInput(field.name)"
+                />
+                <p v-if="field.help" :id="field.id + '-help'" class="profile-field-help">{{ field.help }}</p>
+                <p v-if="passwordErrors[field.name]" :id="field.id + '-error'" class="profile-field-error" role="alert">
+                  {{ passwordErrors[field.name] }}
+                </p>
               </div>
-            </div>
-          </fieldset>
-        </form>
 
-        <form
-          class="profile-form profile-password-form"
-          novalidate
-          :aria-busy="passwordSubmitting"
-          @submit.prevent="submitPasswordChange"
-        >
-          <h2 class="profile-section-title">修改密码</h2>
-          <p class="profile-section-desc">修改成功后，其他设备上的登录会失效，需要用新密码重新登录。</p>
-          <fieldset :disabled="busy">
-            <legend class="visually-hidden">修改登录密码</legend>
-            <!-- 供浏览器密码管理器识别账号，不参与交互。 -->
-            <input
-              :value="userStore.profile?.username || ''"
-              type="text"
-              autocomplete="username"
-              class="visually-hidden"
-              tabindex="-1"
-              aria-hidden="true"
-              readonly
-            />
-            <div v-for="field in passwordFields" :key="field.name" class="profile-field">
-              <label :for="field.id">{{ field.label }}</label>
-              <input
-                :id="field.id"
-                v-model="passwordForm[field.name]"
-                type="password"
-                :autocomplete="field.autocomplete"
-                :maxlength="field.name === 'oldPassword' ? undefined : 64"
-                required
-                :aria-invalid="Boolean(passwordErrors[field.name])"
-                :aria-describedby="
-                  [field.help ? field.id + '-help' : '', passwordErrors[field.name] ? field.id + '-error' : '']
-                    .filter(Boolean)
-                    .join(' ') || undefined
-                "
-                @blur="validatePasswordField(field.name)"
-                @input="handlePasswordInput(field.name)"
-              />
-              <p v-if="field.help" :id="field.id + '-help'" class="profile-field-help">{{ field.help }}</p>
-              <p v-if="passwordErrors[field.name]" :id="field.id + '-error'" class="profile-field-error" role="alert">
-                {{ passwordErrors[field.name] }}
+              <p
+                v-if="passwordFeedback?.type === 'error'"
+                class="profile-feedback profile-feedback--error"
+                role="alert"
+              >
+                {{ passwordFeedback.message }}
               </p>
-            </div>
-
-            <p v-if="passwordFeedback?.type === 'error'" class="profile-feedback profile-feedback--error" role="alert">
-              {{ passwordFeedback.message }}
-            </p>
-            <div class="profile-form-actions">
-              <p class="profile-save-status" role="status" aria-live="polite">
-                <AppIcon v-if="passwordFeedback?.type === 'success'" name="check" :size="16" />
-                {{
-                  passwordSubmitting
-                    ? '正在修改…'
-                    : passwordFeedback?.type === 'success'
-                      ? passwordFeedback.message
-                      : ''
-                }}
-              </p>
-              <div class="profile-form-buttons">
-                <el-button native-type="button" :disabled="!passwordDirty || busy" @click="resetPasswordForm"
-                  >清空</el-button
-                >
-                <el-button
-                  type="primary"
-                  native-type="submit"
-                  :loading="passwordSubmitting"
-                  :disabled="!passwordDirty || busy"
-                  >{{ passwordSubmitting ? '正在修改…' : '修改密码' }}</el-button
-                >
+              <div class="profile-form-actions">
+                <p class="profile-save-status" role="status" aria-live="polite">
+                  <AppIcon v-if="passwordFeedback?.type === 'success'" name="check" :size="16" />
+                  {{
+                    passwordSubmitting
+                      ? '正在修改…'
+                      : passwordFeedback?.type === 'success'
+                        ? passwordFeedback.message
+                        : ''
+                  }}
+                </p>
+                <div class="profile-form-buttons">
+                  <el-button native-type="button" :disabled="!passwordDirty || busy" @click="resetPasswordForm"
+                    >清空</el-button
+                  >
+                  <el-button
+                    type="primary"
+                    native-type="submit"
+                    :loading="passwordSubmitting"
+                    :disabled="!passwordDirty || busy"
+                    >{{ passwordSubmitting ? '正在修改…' : '修改密码' }}</el-button
+                  >
+                </div>
               </div>
-            </div>
-          </fieldset>
-        </form>
+            </fieldset>
+          </form>
+        </div>
       </template>
     </div>
   </section>
@@ -487,10 +493,10 @@ onUnmounted(() => {
 
 <style scoped>
 .profile-page {
-  max-width: 820px;
+  max-width: 980px;
 }
 .profile-card {
-  padding: 32px;
+  padding: 24px;
 }
 .profile-state {
   display: flex;
@@ -515,8 +521,8 @@ onUnmounted(() => {
 .profile-avatar-row {
   display: flex;
   align-items: flex-start;
-  gap: 24px;
-  padding-bottom: 28px;
+  gap: 20px;
+  padding-bottom: 24px;
   border-bottom: 1px solid var(--line);
 }
 .profile-avatar {
@@ -554,8 +560,16 @@ onUnmounted(() => {
   font-size: 13px;
   line-height: 1.7;
 }
+.profile-forms {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 28px;
+  margin-top: 24px;
+}
 .profile-form {
-  margin-top: 28px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 .profile-section-title {
   margin: 0 0 22px;
@@ -564,9 +578,8 @@ onUnmounted(() => {
   font-weight: 600;
 }
 .profile-password-form {
-  margin-top: 36px;
-  padding-top: 28px;
-  border-top: 1px solid var(--line);
+  padding-left: 28px;
+  border-left: 1px solid var(--line);
 }
 .profile-password-form .profile-section-title {
   margin-bottom: 6px;
@@ -578,6 +591,9 @@ onUnmounted(() => {
   line-height: 1.7;
 }
 .profile-form fieldset {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
   min-width: 0;
   margin: 0;
   padding: 0;
@@ -602,24 +618,24 @@ onUnmounted(() => {
 .profile-field input {
   box-sizing: border-box;
   width: 100%;
-  min-height: 46px;
-  padding: 10px 13px;
+  min-height: 40px;
+  padding: 8px 12px;
   border: 1px solid var(--el-border-color);
-  border-radius: var(--radius-sm);
+  border-radius: var(--el-border-radius-base);
   background: var(--panel);
   color: var(--text);
   font: inherit;
   line-height: 1.5;
   transition:
-    border-color 0.18s,
-    background-color 0.18s;
+    border-color var(--duration-fast) ease,
+    box-shadow var(--duration-fast) ease;
 }
 .profile-field input:hover:not(:disabled):not(:read-only) {
   border-color: var(--muted);
 }
 .profile-field input:focus {
-  outline: 2px solid var(--brand);
-  outline-offset: 2px;
+  outline: none;
+  box-shadow: 0 0 0 3px var(--brand-soft);
   border-color: var(--brand);
 }
 .profile-field input[readonly] {
@@ -665,9 +681,10 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  margin-top: 28px;
-  padding-top: 24px;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: auto;
+  padding-top: 18px;
   border-top: 1px solid var(--line);
 }
 .profile-save-status {
@@ -688,15 +705,20 @@ onUnmounted(() => {
   flex-shrink: 0;
   gap: 8px;
 }
-.profile-page :deep(.el-button) {
-  min-height: 44px;
-}
 .profile-form-buttons :deep(.el-button + .el-button) {
   margin-left: 0;
 }
-@media (max-width: 600px) {
+@media (max-width: 760px) {
+  .profile-forms {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .profile-password-form {
+    padding: 24px 0 0;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
   .profile-card {
-    padding: 24px 20px;
+    padding: 18px;
   }
   .profile-avatar-row {
     gap: 16px;

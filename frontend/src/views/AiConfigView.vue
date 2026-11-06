@@ -1,11 +1,11 @@
 <template>
-  <section class="ai-settings" aria-labelledby="ai-settings-title">
+  <section class="learning-page ai-settings" aria-labelledby="ai-settings-title">
     <header class="page-header ai-settings__header">
       <div>
         <h1 id="ai-settings-title" class="page-title">AI 配置</h1>
         <p class="page-desc">设置用于总结、出题、对话和资料检索的模型。</p>
       </div>
-      <div v-if="canManageGlobal" class="config-scope" role="group" aria-label="配置范围">
+      <div v-if="canManageGlobal" class="config-scope segmented" role="group" aria-label="配置范围">
         <button type="button" :aria-pressed="saveScope === 'USER'" :disabled="busy" @click="changeScope('USER')">
           我的配置
         </button>
@@ -63,34 +63,26 @@
             <div class="config-section__heading">
               <span class="config-section__icon"><AppIcon name="refresh" :size="22" /></span>
               <div>
-                <h2 id="automation-title">自动化处理</h2>
-                <p>上传或写入资料后，自动流转后续 AI 处理流水线。</p>
+                <h2 id="automation-title">资料处理</h2>
+                <p>选择资料解析完成后自动执行的操作。</p>
               </div>
             </div>
 
             <div class="config-automation-list">
               <div class="config-automation-item">
                 <div class="config-automation-item__info">
-                  <label for="auto-summary-switch" class="config-automation-item__title">上传后自动生成摘要</label>
-                  <p class="config-automation-item__desc">资料解析完成后，后台自动调度 AI 生成核心要点与学习总结。</p>
+                  <label for="auto-summary-switch" class="config-automation-item__title">自动生成总结</label>
+                  <p class="config-automation-item__desc">解析完成后生成学习总结，可以在学习总结页查看。</p>
                 </div>
-                <el-switch id="auto-summary-switch" v-model="form.autoSummary" aria-label="上传后自动生成摘要" />
+                <el-switch id="auto-summary-switch" v-model="form.autoSummary" aria-label="自动生成总结" />
               </div>
 
               <div class="config-automation-item">
                 <div class="config-automation-item__info">
-                  <label for="auto-embedding-switch" class="config-automation-item__title"
-                    >上传后自动建立向量索引</label
-                  >
-                  <p class="config-automation-item__desc">
-                    自动将资料切片索引至向量库以便语义检索；若未配置向量模型则安全跳过。
-                  </p>
+                  <label for="auto-embedding-switch" class="config-automation-item__title">自动生成向量</label>
+                  <p class="config-automation-item__desc">让资料支持按含义检索。未配置向量模型时会跳过。</p>
                 </div>
-                <el-switch
-                  id="auto-embedding-switch"
-                  v-model="form.autoEmbedding"
-                  aria-label="上传后自动建立向量索引"
-                />
+                <el-switch id="auto-embedding-switch" v-model="form.autoEmbedding" aria-label="自动生成向量" />
               </div>
             </div>
           </section>
@@ -329,7 +321,7 @@
         <footer class="config-save-bar">
           <p role="status" aria-live="polite">
             <AppIcon v-if="!dirty && !saving" name="check" :size="16" />
-            {{ saving ? '正在保存…' : dirty ? '有未保存的更改' : savedFeedback || '配置已同步' }}
+            {{ saving ? '正在保存…' : dirty ? '有未保存的更改' : savedFeedback || '配置已保存' }}
           </p>
           <div>
             <el-button native-type="button" :disabled="!dirty || busy" @click="resetChanges">撤销修改</el-button>
@@ -743,34 +735,14 @@ onBeforeUnmount(() => {
   margin-bottom: 24px;
 }
 .config-scope {
-  display: flex;
   flex-shrink: 0;
-  gap: 4px;
-  padding: 4px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-}
-.config-scope button {
-  padding: 9px 18px;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--muted);
-  font: inherit;
-  font-size: 13px;
-  cursor: pointer;
-}
-.config-scope button[aria-pressed='true'] {
-  background: var(--brand-light);
-  color: var(--brand);
-  font-weight: 600;
 }
 .config-context {
   display: flex;
   align-items: baseline;
   gap: 10px 18px;
   flex-wrap: wrap;
-  margin-bottom: 30px;
+  margin-bottom: 20px;
   font-size: 13px;
 }
 .config-context__source {
@@ -793,7 +765,7 @@ onBeforeUnmount(() => {
 .config-form > fieldset {
   display: grid;
   min-width: 0;
-  gap: 22px;
+  gap: 18px;
   padding: 0;
   border: 0;
   margin: 0;
@@ -803,11 +775,14 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   gap: 18px 28px;
-  padding: 0 2px 4px;
+  padding: 20px 24px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--panel);
 }
 .config-mode h2 {
   margin: 0 0 7px;
-  font-size: 15px;
+  font-size: 17px;
   font-weight: 600;
   color: var(--text);
 }
@@ -815,22 +790,22 @@ onBeforeUnmount(() => {
   max-width: 440px;
   margin: 0;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.8;
 }
 .config-mode__choices {
   display: flex;
   flex-shrink: 0;
-  padding: 4px;
+  padding: 3px;
   gap: 2px;
-  background: var(--panel);
-  border-radius: 12px;
+  background: var(--bg-secondary);
+  border-radius: 10px;
 }
 .config-mode__choices label {
   position: relative;
   display: block;
-  padding: 11px 15px;
-  border-radius: 9px;
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
   color: var(--muted);
   font-size: 13px;
   cursor: pointer;
@@ -843,41 +818,42 @@ onBeforeUnmount(() => {
   opacity: 0;
 }
 .config-mode__choices .is-selected {
-  background: var(--brand-light);
-  color: var(--brand);
-  font-weight: 600;
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+  font-weight: 500;
 }
 .config-mode__choices label:has(input:focus-visible) {
   outline: 2px solid var(--brand);
   outline-offset: 3px;
 }
 .config-section {
-  padding: 28px 32px;
+  padding: 24px;
 }
 .config-section__heading {
   display: flex;
   align-items: center;
-  gap: 14px;
-  margin-bottom: 27px;
+  gap: 12px;
+  margin-bottom: 22px;
 }
 .config-section__icon {
   flex-shrink: 0;
   display: grid;
   place-items: center;
-  width: 42px;
-  height: 42px;
-  border-radius: 13px;
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius);
   background: var(--brand-light);
   color: var(--brand);
 }
 .config-section__heading h2 {
   margin: 0;
-  font-size: 19px;
+  font-size: 17px;
   font-weight: 600;
   color: var(--text);
 }
 .config-section__heading p {
-  margin: 6px 0 0;
+  margin: 3px 0 0;
   font-size: 13px;
   color: var(--muted);
   line-height: 1.65;
@@ -901,10 +877,6 @@ onBeforeUnmount(() => {
 }
 .config-section :deep(.el-form-item__content) {
   align-content: flex-start;
-}
-.config-section :deep(.el-input__wrapper),
-.config-section :deep(.el-select__wrapper) {
-  min-height: 44px;
 }
 .config-section :deep(.el-form-item__error) {
   position: static;
@@ -999,7 +971,7 @@ onBeforeUnmount(() => {
   align-items: center;
   flex-wrap: wrap;
   gap: 8px 12px;
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 600;
   color: var(--text);
 }
@@ -1067,24 +1039,21 @@ onBeforeUnmount(() => {
   padding: 13px 17px;
   border-radius: 12px;
   color: var(--red);
-  background: var(--red-light, #fdf0ed);
+  background: var(--red-soft);
   font-size: 13px;
   line-height: 1.7;
 }
 .config-automation-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
 }
 .config-automation-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  padding: 16px 20px;
-  border-radius: 12px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--line);
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
 }
 .config-automation-item__info {
   flex: 1;
@@ -1118,7 +1087,7 @@ onBeforeUnmount(() => {
   border: 1px solid var(--line);
   border-radius: 16px;
   background: var(--panel);
-  box-shadow: 0 6px 24px rgb(35 49 38 / 5%);
+  box-shadow: var(--shadow);
 }
 .config-save-bar > p {
   display: flex;
@@ -1182,6 +1151,11 @@ onBeforeUnmount(() => {
     max-width: none;
   }
 }
+@media (max-width: 760px) {
+  .config-save-bar {
+    bottom: calc(80px + env(safe-area-inset-bottom));
+  }
+}
 @media (max-width: 600px) {
   .ai-settings__header {
     align-items: flex-start;
@@ -1201,7 +1175,10 @@ onBeforeUnmount(() => {
     flex: 1;
   }
   .config-section {
-    padding: 22px 18px;
+    padding: 18px;
+  }
+  .config-mode {
+    padding: 18px;
   }
   .config-mode__choices {
     width: 100%;
@@ -1239,7 +1216,6 @@ onBeforeUnmount(() => {
   .config-save-bar {
     flex-wrap: wrap;
     padding: 14px 16px;
-    bottom: 86px;
   }
   .config-save-bar > div {
     width: 100%;
