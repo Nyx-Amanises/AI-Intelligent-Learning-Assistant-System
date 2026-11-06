@@ -1,29 +1,35 @@
 <template>
-  <aside class="page-card practice-paper-sidebar" aria-label="题目导航">
+  <aside
+    class="page-card practice-paper-sidebar"
+    :class="{ 'practice-paper-sidebar--submitted': submitted }"
+    aria-label="题目导航"
+  >
     <div class="practice-paper-sidebar__title">
       答题卡 <span>{{ answeredCount }} / {{ totalQuestions }}</span>
     </div>
     <p class="practice-paper-sidebar__hint">点击题号，快速定位题目。</p>
-    <div v-for="section in sections" :key="section.type" class="practice-paper-sidebar__group">
-      <div class="practice-paper-sidebar__group-title">{{ section.sidebarTitle }}</div>
-      <div class="practice-paper-sidebar__grid">
-        <button
-          v-for="answer in section.items"
-          :key="answer.questionId"
-          type="button"
-          class="practice-paper-sidebar__item"
-          :class="{
-            'practice-paper-sidebar__item--active': activeQuestionId === answer.questionId,
-            'practice-paper-sidebar__item--done': !submitted && hasAnswerValue(answerForm[answer.questionId]),
-            'practice-paper-sidebar__item--correct': submitted && answer.isCorrect,
-            'practice-paper-sidebar__item--wrong': submitted && !answer.isCorrect && !isPendingReview(answer)
-          }"
-          :aria-label="'第 ' + answer.globalIndex + ' 题，' + questionNavStatus(answer, answerForm, submitted)"
-          :aria-current="activeQuestionId === answer.questionId ? 'step' : undefined"
-          @click="emit('select', answer.questionId)"
-        >
-          {{ answer.globalIndex }}
-        </button>
+    <div class="practice-paper-sidebar__groups">
+      <div v-for="section in sections" :key="section.type" class="practice-paper-sidebar__group">
+        <div class="practice-paper-sidebar__group-title">{{ section.sidebarTitle }}</div>
+        <div class="practice-paper-sidebar__grid">
+          <button
+            v-for="answer in section.items"
+            :key="answer.questionId"
+            type="button"
+            class="practice-paper-sidebar__item"
+            :class="{
+              'practice-paper-sidebar__item--active': activeQuestionId === answer.questionId,
+              'practice-paper-sidebar__item--done': !submitted && hasAnswerValue(answerForm[answer.questionId]),
+              'practice-paper-sidebar__item--correct': submitted && answer.isCorrect,
+              'practice-paper-sidebar__item--wrong': submitted && !answer.isCorrect && !isPendingReview(answer)
+            }"
+            :aria-label="'第 ' + answer.globalIndex + ' 题，' + questionNavStatus(answer, answerForm, submitted)"
+            :aria-current="activeQuestionId === answer.questionId ? 'step' : undefined"
+            @click="emit('select', answer.questionId)"
+          >
+            {{ answer.globalIndex }}
+          </button>
+        </div>
       </div>
     </div>
     <div class="practice-paper-sidebar__legend">
@@ -93,6 +99,9 @@ const emit = defineEmits<{ select: [questionId: number] }>()
   font-size: 12px;
   font-weight: 500;
   color: var(--muted);
+}
+.practice-paper-sidebar__groups {
+  display: contents;
 }
 .practice-paper-sidebar__grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -181,6 +190,90 @@ const emit = defineEmits<{ select: [questionId: number] }>()
 @media (prefers-reduced-motion: reduce) {
   .practice-paper-sidebar__item {
     transition: none;
+  }
+}
+@media (max-width: 760px) {
+  .practice-paper-sidebar {
+    padding: 10px 16px;
+    border: 0;
+    border-radius: 18px;
+    background: var(--panel);
+  }
+  .practice-paper-sidebar__title {
+    margin-bottom: 4px;
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 1.4;
+  }
+  .practice-paper-sidebar__title span {
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-variant-numeric: tabular-nums;
+  }
+  .practice-paper-sidebar__hint,
+  .practice-paper-sidebar__group-title {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+  .practice-paper-sidebar__groups {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px;
+    padding: 2px;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: none;
+  }
+  .practice-paper-sidebar__groups::-webkit-scrollbar {
+    display: none;
+  }
+  .practice-paper-sidebar__group,
+  .practice-paper-sidebar__grid {
+    display: contents;
+  }
+  .practice-paper-sidebar__item {
+    flex: 0 0 48px;
+    min-height: 48px;
+    border: 1px solid transparent;
+    border-radius: 13px;
+    background: var(--bg);
+    color: var(--text-secondary);
+    font-size: 16px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+  .practice-paper-sidebar__item--done {
+    background: var(--brand-light);
+    color: var(--brand);
+  }
+  .practice-paper-sidebar__item--correct {
+    background: var(--green-soft);
+    color: var(--green);
+  }
+  .practice-paper-sidebar__item--wrong {
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+  .practice-paper-sidebar__item--active {
+    border-color: var(--brand);
+    box-shadow: 0 0 0 1px var(--brand);
+  }
+  .practice-paper-sidebar__legend {
+    margin-top: 4px;
+    padding-top: 0;
+    border: 0;
+    font-size: 12px;
+  }
+  .practice-paper-sidebar--submitted .practice-paper-sidebar__legend .is-done {
+    border-color: var(--green);
+    background: var(--green-soft);
   }
 }
 </style>

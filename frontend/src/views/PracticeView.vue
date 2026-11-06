@@ -1,5 +1,9 @@
 <template>
-  <section class="learning-page practice-view" aria-labelledby="practice-view-title">
+  <section
+    class="learning-page practice-view"
+    :class="{ 'practice-view--current': activeTab === 'current' && practiceDetail }"
+    aria-labelledby="practice-view-title"
+  >
     <nav
       v-if="activeTab === 'current' && (practiceDetail || detailSessionId)"
       class="practice-navigation"
@@ -704,6 +708,73 @@ onUnmounted(() => {
   }
   .practice-back-link {
     min-height: 44px;
+  }
+}
+@media (max-width: 760px) {
+  .practice-view > .workspace-panel {
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+  .practice-view > .workspace-panel > .workspace-toolbar {
+    padding: 0 0 18px;
+    border: 0;
+    gap: 12px;
+  }
+  .practice-view > .workspace-panel > .workspace-body {
+    padding: 0;
+  }
+  .workspace-tabs {
+    gap: 8px;
+    padding: 0;
+    background: transparent;
+  }
+  .workspace-tab {
+    min-height: 48px;
+    padding: 10px 14px;
+    border-radius: 14px;
+    font-size: 16px;
+  }
+  .workspace-tab--active {
+    background: var(--panel);
+    color: var(--text);
+    font-weight: 650;
+    box-shadow: none;
+  }
+  .practice-navigation {
+    margin-bottom: 8px;
+  }
+  .practice-view--current .page-header {
+    align-items: center;
+    gap: 10px 12px;
+    margin-bottom: 20px;
+  }
+  .practice-view--current .page-title {
+    font-size: 22px;
+  }
+  .practice-view--current .page-desc {
+    display: none;
+  }
+  .practice-view--current .toolbar--flush {
+    width: auto;
+  }
+  .practice-view--current .toolbar--flush :deep(.el-button) {
+    min-height: 44px;
+    padding-inline: 14px;
+    border-color: var(--line);
+    background: var(--panel);
+    color: var(--text);
+    box-shadow: none;
+  }
+  .practice-paper-layout {
+    gap: 28px;
+  }
+  .practice-paper-layout > .practice-paper-sidebar {
+    grid-row: 2;
+  }
+  .practice-loading {
+    padding: 24px 0;
   }
 }
 </style>

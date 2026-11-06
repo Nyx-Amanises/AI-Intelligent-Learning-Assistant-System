@@ -164,4 +164,59 @@ const handleAction = (command: string, item: PracticeHistoryItem) => {
   color: var(--text);
   font-weight: 600;
 }
+@media (max-width: 760px) {
+  .practice-history .record-list {
+    display: grid;
+    gap: 16px;
+  }
+  .practice-history .record-row {
+    --record-lead: 36px;
+    gap: 12px;
+    padding: 20px;
+    border: 0;
+    border-radius: 18px;
+    background: var(--panel);
+  }
+  .practice-record__icon {
+    border-radius: 12px;
+    background: var(--bg);
+    color: var(--text-secondary);
+  }
+  .record-row__main {
+    flex-basis: calc(100% - var(--record-lead) - 12px);
+  }
+  .record-row__title {
+    gap: 8px;
+    font-size: 18px;
+    line-height: 1.5;
+  }
+  .practice-record__result {
+    gap: 6px 14px;
+    margin-top: 12px;
+    font-size: 14px;
+  }
+  .practice-record__result strong {
+    font-size: 17px;
+  }
+  .record-row__meta {
+    margin-top: 10px;
+    font-size: 12px;
+  }
+  .record-row__actions {
+    justify-content: flex-end;
+    gap: 8px;
+    padding-left: 0;
+  }
+  .record-row__actions :deep(.el-button) {
+    min-height: 48px;
+    padding-inline: 18px;
+    border-radius: 14px;
+    font-size: 15px;
+  }
+  .workspace-pagination {
+    margin-top: 20px;
+    padding-inline: 0;
+    border: 0;
+  }
+}
 </style>
