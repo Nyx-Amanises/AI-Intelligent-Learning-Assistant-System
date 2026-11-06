@@ -1,178 +1,188 @@
 <template>
-  <section class="learning-page summary-view">
-    <div class="page-header">
+  <section class="learning-page summary-view" aria-labelledby="summary-view-title">
+    <header class="page-header">
       <div>
-        <div class="learning-eyebrow">我的内容</div>
-        <h1 class="page-title">学习总结</h1>
-        <p class="page-desc">根据学习资料生成总结、考试重点或结构提纲。</p>
+        <h1 id="summary-view-title" class="page-title">学习总结</h1>
+        <p class="page-desc">把资料整理成总结、考试重点或提纲，阅读时可以随时对照原文。</p>
       </div>
-      <el-button type="primary" @click="openGenerateDialog">
-        <AppIcon name="plus" :size="17" />
-        生成总结
-      </el-button>
-    </div>
+      <div class="toolbar toolbar--flush">
+        <el-button type="primary" @click="openGenerateDialog"><AppIcon name="plus" :size="16" />生成总结</el-button>
+      </div>
+    </header>
 
     <div class="workspace-panel">
-      <ListSectionHeading
-        title="全部总结"
-        :count="summaryHistory.length"
-        :loading="historyLoading"
-        @refresh="loadSummaryHistory()"
-      />
-      <div class="workspace-toolbar">
-        <div class="workspace-filter-bar workspace-filter-bar--summary">
+      <div class="workspace-toolbar workspace-toolbar--filter">
+        <div class="filter-bar" role="search" aria-label="筛选总结">
           <el-input
             v-model="keyword"
             clearable
             placeholder="搜索资料名称或总结内容"
-            aria-label="搜索总结"
-            class="workspace-filter-bar__search"
+            aria-label="搜索资料名称或总结内容"
           >
-            <template #prefix><AppIcon name="search" :size="18" /></template>
+            <template #prefix><AppIcon name="search" :size="16" /></template>
           </el-input>
           <el-select
             v-model="filterMaterialId"
             clearable
             filterable
             placeholder="全部资料"
-            aria-label="筛选资料"
+            aria-label="按资料筛选"
             :loading="materialsLoading"
           >
             <el-option v-for="item in materials" :key="item.id" :label="item.title" :value="item.id" />
           </el-select>
-          <el-select v-model="filterSummaryType" clearable placeholder="全部类型" aria-label="筛选总结类型">
+          <el-select v-model="filterSummaryType" clearable placeholder="全部类型" aria-label="按类型筛选">
             <el-option v-for="mode in summaryModes" :key="mode.value" :label="mode.title" :value="mode.value" />
           </el-select>
-          <el-button text @click="resetFilters">重置</el-button>
+          <el-button v-if="hasActiveFilters" text @click="resetFilters">清除筛选</el-button>
         </div>
+        <el-button text :loading="historyLoading" aria-label="刷新总结列表" @click="loadSummaryHistory()">
+          <AppIcon v-if="!historyLoading" name="refresh" :size="16" /><span class="workspace-toolbar__refresh-label"
+            >刷新</span
+          >
+        </el-button>
       </div>
 
-      <div class="workspace-body">
-        <el-alert
-          v-if="taskStatusText"
-          :title="taskStatusText"
-          type="info"
-          :closable="false"
-          show-icon
-          class="generation-notice"
-        />
-        <div v-if="historyLoading" class="summary-loading" aria-live="polite">
-          <el-skeleton :rows="5" animated />
-          <span>正在加载总结…</span>
+      <p v-if="taskStatusText" class="summary-progress" role="status">
+        <span class="summary-progress__spinner" aria-hidden="true" />{{ taskStatusText }}
+      </p>
+      <div v-if="historyLoading" class="record-list" role="status" aria-label="正在加载总结">
+        <div v-for="i in 4" :key="i" class="list-row record-row record-row--loading" aria-hidden="true">
+          <span class="skeleton record-row__sk-lead" />
+          <div class="record-row__main">
+            <span class="skeleton record-row__sk-title" />
+            <span class="skeleton record-row__sk-meta" />
+            <span class="skeleton summary-row__sk-excerpt" />
+          </div>
+          <span class="skeleton record-row__sk-actions" />
         </div>
-        <EmptyState
-          v-else-if="loadError"
-          variant="error"
-          icon="summary"
-          title="总结加载失败"
-          :description="loadError"
-        >
-          <el-button type="primary" @click="loadSummaryHistory()">重新加载</el-button>
-        </EmptyState>
-        <EmptyState
-          v-else-if="!pagedSummaryHistory.length"
-          icon="summary"
-          :title="summaryHistory.length ? '没有找到匹配的总结' : '还没有学习总结'"
-          :description="
-            summaryHistory.length
-              ? '试试其他关键词，或清除筛选条件。'
-              : '选择一份已解析的资料，生成总结、考试重点或提纲。阅读时可以对照原文。'
-          "
-        >
-          <el-button v-if="summaryHistory.length" @click="resetFilters">清除筛选</el-button>
-          <el-button v-else-if="materials.length" type="primary" @click="openGenerateDialog">生成第一份总结</el-button>
-          <el-button v-else type="primary" @click="router.push('/materials')">前往资料库</el-button>
-        </EmptyState>
-        <div v-else class="summary-card-grid">
-          <article v-for="(item, index) in pagedSummaryHistory" :key="item.recordId" class="summary-note-card">
-            <span class="summary-note-card__number" aria-hidden="true">{{
-              formatIndex((pagination.current - 1) * pagination.size + index + 1)
-            }}</span>
-            <div class="summary-note-card__content">
-              <div class="summary-note-card__top">
-                <span class="summary-type">{{ formatSummaryType(item.summaryType) }}</span>
-                <StatusPill
-                  :tone="statusTone(getSummaryStatus(item))"
-                  :label="formatSummaryStatus(getSummaryStatus(item))"
-                />
-                <GenerationModeBadge v-if="isSummaryReady(item)" :mode="item.generationMode" />
-                <span class="summary-note-card__date">{{ formatDate(item.createdAt) }}</span>
-              </div>
-              <button
-                type="button"
-                class="summary-note-card__title"
-                :disabled="!isSummaryReady(item)"
-                @click="openSummaryDialog(item)"
-              >
+      </div>
+      <EmptyState v-else-if="loadError" variant="error" title="总结列表没有加载出来" :description="loadError">
+        <el-button type="primary" @click="loadSummaryHistory()">重新加载</el-button>
+      </EmptyState>
+      <EmptyState
+        v-else-if="!pagedSummaryHistory.length && filteredMaterialHasNoSummary"
+        icon="summary"
+        title="这份资料还没有总结"
+        description="生成一份总结，把重点先理一遍。"
+      >
+        <el-button type="primary" @click="openGenerateDialog">生成总结</el-button>
+        <el-button @click="resetFilters">查看全部总结</el-button>
+      </EmptyState>
+      <EmptyState
+        v-else-if="!pagedSummaryHistory.length && summaryHistory.length"
+        icon="search"
+        title="没有找到匹配的总结"
+        description="换个关键词，或者清除筛选条件再看看。"
+      >
+        <el-button @click="resetFilters">清除筛选</el-button>
+      </EmptyState>
+      <EmptyState
+        v-else-if="!pagedSummaryHistory.length"
+        icon="summary"
+        title="还没有学习总结"
+        :description="
+          materials.length
+            ? '选一份已解析的资料，生成总结、考试重点或提纲。'
+            : '先在资料库上传一份资料，解析完成后就能生成总结。'
+        "
+      >
+        <el-button v-if="materials.length" type="primary" @click="openGenerateDialog">生成总结</el-button>
+        <el-button v-else type="primary" @click="router.push('/materials')">去资料库</el-button>
+      </EmptyState>
+      <ul v-else class="record-list">
+        <li v-for="item in pagedSummaryHistory" :key="item.recordId" class="list-row record-row summary-row">
+          <span
+            class="summary-row__icon"
+            :class="'summary-row__icon--' + summaryTypeIcon(item.summaryType).tone"
+            aria-hidden="true"
+          >
+            <AppIcon :name="summaryTypeIcon(item.summaryType).icon" :size="18" />
+          </span>
+          <div class="record-row__main">
+            <h2 class="record-row__title">
+              <button v-if="isSummaryReady(item)" type="button" @click="openSummaryDialog(item)">
                 {{ item.materialTitle || '未命名资料' }}
               </button>
-              <p class="summary-note-card__excerpt">{{ buildCardExcerpt(item) }}</p>
-            </div>
-            <div class="summary-note-card__actions">
-              <el-button v-if="isSummaryReady(item)" link type="primary" @click="openSummaryDialog(item)"
-                >阅读总结 <AppIcon name="arrow-right" :size="16"
-              /></el-button>
-              <el-button v-else-if="getSummaryStatus(item) === 'GENERATING'" link type="primary" loading disabled
-                >生成中</el-button
+              <span v-else>{{ item.materialTitle || '未命名资料' }}</span>
+              <StatusPill
+                v-if="!isSummaryReady(item)"
+                :tone="statusTone(getSummaryStatus(item))"
+                :label="formatSummaryStatus(getSummaryStatus(item))"
+              />
+              <GenerationModeBadge v-else-if="item.generationMode === 'MOCK'" :mode="item.generationMode" />
+            </h2>
+            <p class="summary-row__excerpt">{{ buildCardExcerpt(item) }}</p>
+            <p class="record-row__meta">
+              <span>{{ formatSummaryType(item.summaryType) }}</span>
+              <time :datetime="item.createdAt" :title="formatDateTime(item.createdAt)">{{
+                formatRelativeDay(item.createdAt)
+              }}</time>
+              <span v-if="isSummaryReady(item) && item.sourceSegments?.length"
+                >引用 {{ item.sourceSegments.length }} 处原文</span
               >
-              <el-button v-else link type="primary" @click="router.push('/ai-tasks')">查看任务</el-button>
-              <div>
-                <el-button link @click="previewMaterial(item)">原始资料</el-button>
-                <el-button
-                  link
-                  :disabled="getSummaryStatus(item) === 'GENERATING'"
-                  @click="quickGenerateForMaterial(item.materialId)"
-                  >重新生成</el-button
-                >
-              </div>
-            </div>
-          </article>
-        </div>
+            </p>
+          </div>
+          <div class="record-row__actions" role="group" :aria-label="`${item.materialTitle || '这份总结'}的操作`">
+            <el-button v-if="isSummaryReady(item)" size="small" @click="openSummaryDialog(item)">阅读</el-button>
+            <el-button v-else-if="getSummaryStatus(item) === 'FAILED'" size="small" @click="router.push('/ai-tasks')"
+              >查看原因</el-button
+            >
+            <el-button size="small" text @click="previewMaterial(item)">原文</el-button>
+            <el-button
+              size="small"
+              text
+              :disabled="getSummaryStatus(item) === 'GENERATING'"
+              @click="quickGenerateForMaterial(item.materialId)"
+              >重新生成</el-button
+            >
+          </div>
+        </li>
+      </ul>
 
-        <div v-if="filteredSummaryHistory.length" class="workspace-pagination">
-          <div class="workspace-pagination__meta">共 {{ filteredSummaryHistory.length }} 份总结</div>
-          <el-pagination
-            v-model:current-page="pagination.current"
-            v-model:page-size="pagination.size"
-            :page-sizes="[5, 10, 20, 50]"
-            layout="sizes, prev, pager, next"
-            :total="filteredSummaryHistory.length"
-          />
-        </div>
-      </div>
+      <footer v-if="!historyLoading && !loadError && filteredSummaryHistory.length" class="workspace-pagination">
+        <span class="workspace-pagination__meta">{{
+          hasActiveFilters
+            ? `找到 ${filteredSummaryHistory.length} 份总结`
+            : `共 ${filteredSummaryHistory.length} 份总结`
+        }}</span>
+        <el-pagination
+          v-model:current-page="pagination.current"
+          v-model:page-size="pagination.size"
+          :page-sizes="[10, 20, 50]"
+          layout="sizes, prev, pager, next"
+          :total="filteredSummaryHistory.length"
+        />
+      </footer>
     </div>
 
     <el-dialog
       v-model="generateDialogVisible"
-      title="生成 AI 总结"
+      title="生成总结"
       width="min(680px, calc(100vw - 32px))"
       destroy-on-close
       class="summary-dialog"
     >
-      <template #header="{ titleId, titleClass }">
-        <h2 :id="titleId" :class="[titleClass, 'dialog-title']">生成 AI 总结</h2>
-        <div class="dialog-subtitle">选择学习资料和总结类型。</div>
-      </template>
       <EmptyState
         v-if="!materialsLoading && !materialsError && !materials.length"
         variant="compact"
         icon="folder"
-        title="先准备一份学习资料"
-        description="上传并解析资料后，就可以生成总结了。"
+        title="还没有可用的资料"
+        description="资料上传并解析完成后，才能生成总结。"
       >
-        <el-button type="primary" @click="router.push('/materials')">前往资料库</el-button>
+        <el-button type="primary" @click="router.push('/materials')">去资料库</el-button>
       </EmptyState>
       <el-form v-else label-position="top">
         <p v-if="materialsError" class="summary-form-note summary-form-note--error" role="alert">
-          资料列表加载失败：{{ materialsError }}
+          资料列表没有加载出来：{{ materialsError }}
           <el-button link type="primary" :loading="materialsLoading" @click="loadMaterials">重试</el-button>
         </p>
-        <el-form-item label="选择资料">
+        <el-form-item label="资料">
           <el-select
             v-model="materialId"
             filterable
             style="width: 100%"
-            placeholder="选择要整理的资料"
+            placeholder="选择一份已解析的资料"
             :loading="materialsLoading"
           >
             <el-option
@@ -183,7 +193,7 @@
             />
           </el-select>
         </el-form-item>
-        <el-form-item label="总结类型">
+        <el-form-item label="类型">
           <el-radio-group v-model="summaryType" class="summary-mode-options">
             <el-radio v-for="mode in summaryModes" :key="mode.value" :value="mode.value" border>
               <strong>{{ mode.title }}</strong
@@ -191,7 +201,9 @@
             </el-radio>
           </el-radio-group>
         </el-form-item>
-        <p class="summary-form-note">生成后会自动打开总结，你也可以在任务中心查看进度。</p>
+        <p class="summary-form-note">
+          一般需要几十秒。留在这个页面，生成好会自动打开；离开页面也会继续生成，进度可以在任务中心查看。
+        </p>
       </el-form>
       <template #footer>
         <el-button @click="generateDialogVisible = false">取消</el-button>
@@ -215,67 +227,79 @@
       class="summary-dialog summary-reader"
     >
       <template #header="{ titleId, titleClass }">
-        <span class="summary-type">{{ formatSummaryType(activeSummary?.summaryType) }}</span>
-        <GenerationModeBadge :mode="activeSummary?.generationMode" />
+        <p class="summary-reader__eyebrow">
+          <span>{{ formatSummaryType(activeSummary?.summaryType) }}</span>
+          <span>{{ formatDateTime(activeSummary?.createdAt) }}</span>
+          <GenerationModeBadge :mode="activeSummary?.generationMode" />
+        </p>
         <h2 :id="titleId" :class="[titleClass, 'dialog-title', 'summary-reader__title']">
           {{ activeSummary?.materialTitle || '学习总结' }}
         </h2>
-        <div class="dialog-subtitle">{{ formatDateTime(activeSummary?.createdAt) }}</div>
       </template>
       <article class="summary-reader__body">
-        <p v-if="activeSummary?.generationMode === 'MOCK'" class="summary-form-note">
-          这份总结为模拟数据，仅用于体验整理与阅读流程。
+        <p v-if="activeSummary?.generationMode === 'MOCK'" class="summary-reader__mock">
+          这份总结由演示模式生成，只用来体验流程，内容不一定准确。
         </p>
         <LearningNoteContent :text="activeSummary?.summaryText" />
       </article>
       <details class="summary-sources">
         <summary>
-          引用资料 <span>{{ activeSummary?.sourceSegments?.length || 0 }} 处</span>
+          引用的原文 <span>{{ activeSummary?.sourceSegments?.length || 0 }} 处</span>
         </summary>
-        <SourceSegmentList :segments="activeSummary?.sourceSegments" empty-text="这份总结暂未记录引用资料。" />
+        <SourceSegmentList :segments="activeSummary?.sourceSegments" empty-text="这份总结没有记录引用的原文。" />
       </details>
       <template #footer>
-        <el-button @click="previewMaterial(activeSummary)">查看原始资料</el-button>
-        <el-button type="primary" @click="summaryDialogVisible = false">完成阅读</el-button>
+        <el-button @click="previewMaterial(activeSummary)">查看原文</el-button>
+        <el-button type="primary" @click="goQuiz(activeSummary?.materialId)">根据这份资料出题</el-button>
       </template>
     </el-dialog>
 
     <el-dialog
       v-model="previewDialogVisible"
-      title="原始资料"
+      title="原文"
       width="min(900px, calc(100vw - 32px))"
       top="5vh"
-      :close-on-click-modal="false"
       destroy-on-close
       class="summary-dialog"
     >
       <template #header="{ titleId, titleClass }">
-        <h2 :id="titleId" :class="[titleClass, 'dialog-title']">原始资料</h2>
-        <div class="dialog-subtitle">{{ selectedMaterialDetail?.title || '资料预览' }}</div>
-      </template>
-      <div v-if="detailLoading" class="state-block">正在读取资料内容…</div>
-      <template v-else-if="selectedMaterialDetail">
-        <div class="summary-material-meta">
-          <span>{{ formatCharacters(selectedMaterialDetail.totalCharacters) }}</span>
-          <span>{{ formatParseStatus(selectedMaterialDetail.parseStatus) }}</span>
-          <span v-if="selectedMaterialDetail.tags">{{ selectedMaterialDetail.tags }}</span>
+        <h2 :id="titleId" :class="[titleClass, 'dialog-title']">
+          {{ selectedMaterialDetail?.title || previewTitle || '原文' }}
+        </h2>
+        <div v-if="selectedMaterialDetail" class="dialog-subtitle">
+          原文 · {{ formatCharacters(selectedMaterialDetail.totalCharacters) }}
         </div>
-        <div v-if="selectedMaterialDetail.segments?.length" class="summary-preview-list">
-          <div
+      </template>
+      <div v-if="detailLoading" class="state-block" role="status">正在打开原文…</div>
+      <EmptyState v-else-if="detailError" variant="error" title="原文没有加载出来" :description="detailError">
+        <el-button @click="loadMaterialDetail(previewMaterialId)">重试</el-button>
+      </EmptyState>
+      <template v-else-if="selectedMaterialDetail">
+        <div v-if="selectedMaterialDetail.segments?.length">
+          <article
             v-for="segment in selectedMaterialDetail.segments.slice(0, PREVIEW_SEGMENT_LIMIT)"
             :key="segment.id"
-            class="summary-preview-card"
+            class="summary-preview__segment"
           >
-            <div class="summary-preview-card__label">段落 {{ segment.segmentNo || segment.id }}</div>
-            <div class="summary-block">{{ segment.contentText }}</div>
-          </div>
+            <div class="summary-preview__meta">{{ formatSegmentMeta(segment) }}</div>
+            <h3 v-if="segment.sectionTitle">{{ segment.sectionTitle }}</h3>
+            <p>{{ segment.contentText }}</p>
+          </article>
           <p v-if="selectedMaterialDetail.segments.length > PREVIEW_SEGMENT_LIMIT" class="summary-form-note">
-            此处预览前 {{ PREVIEW_SEGMENT_LIMIT }} 个段落，完整内容可在资料库查看。
+            这里只显示前 {{ PREVIEW_SEGMENT_LIMIT }} 段，完整原文可以在资料库里阅读。
           </p>
         </div>
-        <div v-else class="state-block empty">这份资料还没有可预览的内容。</div>
+        <div v-else class="state-block empty">这份资料还没有可以阅读的原文。</div>
       </template>
-      <template #footer><el-button @click="previewDialogVisible = false">关闭预览</el-button></template>
+      <template #footer>
+        <el-button @click="previewDialogVisible = false">关闭</el-button>
+        <el-button
+          v-if="selectedMaterialDetail"
+          type="primary"
+          @click="router.push({ path: '/materials', query: { materialId: String(selectedMaterialDetail.id) } })"
+          >在资料库中打开</el-button
+        >
+      </template>
     </el-dialog>
   </section>
 </template>
@@ -291,12 +315,12 @@ import { getErrorMessage } from '@/utils/errorMessage'
 import {
   buildExcerpt,
   formatCharacters,
-  formatDate,
   formatDateTime,
-  formatIndex,
+  formatRelativeDay,
+  formatSegmentMeta,
   type SourceSegmentLike
 } from '@/utils/format'
-import { formatParseStatus, formatSummaryStatus, formatSummaryType, statusTone } from '@/utils/labels'
+import { formatSummaryStatus, formatSummaryType, statusTone } from '@/utils/labels'
 import { useAssistantContext } from '@/composables/useAssistantContext'
 import { useLatestRequest } from '@/composables/useLatestRequest'
 import { useParsedMaterials } from '@/composables/useParsedMaterials'
@@ -305,7 +329,6 @@ import AppIcon from '@/components/AppIcon.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import GenerationModeBadge from '@/components/GenerationModeBadge.vue'
 import LearningNoteContent from '@/components/LearningNoteContent.vue'
-import ListSectionHeading from '@/components/ListSectionHeading.vue'
 import SourceSegmentList from '@/components/SourceSegmentList.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import type { GenerationMode } from '@/utils/generationMode'
@@ -329,6 +352,8 @@ type SummaryTaskResult = Partial<SummaryHistoryItem>
 interface MaterialSegment {
   id: number
   segmentNo?: number
+  pageNo?: number
+  sectionTitle?: string
   contentText?: string
 }
 
@@ -345,10 +370,19 @@ const assistantContext = useAssistantContext()
 const { materials, loading: materialsLoading, error: materialsError, load: loadMaterials } = useParsedMaterials()
 
 const summaryModes = [
-  { value: 'STANDARD', title: '标准总结', description: '提炼核心概念与主要结论' },
-  { value: 'EXAM', title: '考试重点', description: '整理复习重点与易错内容' },
-  { value: 'OUTLINE', title: '结构提纲', description: '按层级列出内容要点' }
+  { value: 'STANDARD', title: '标准总结', description: '提炼核心概念和主要结论' },
+  { value: 'EXAM', title: '考试重点', description: '整理复习重点和易错点' },
+  { value: 'OUTLINE', title: '结构提纲', description: '按章节层级列出要点' }
 ]
+
+/** 列表左侧的类型图标：标准总结、考试重点、结构提纲各用一种颜色。 */
+const SUMMARY_TYPE_ICONS: Record<string, { icon: string; tone: string }> = {
+  STANDARD: { icon: 'summary', tone: 'brand' },
+  EXAM: { icon: 'target', tone: 'accent' },
+  OUTLINE: { icon: 'list', tone: 'blue' }
+}
+const summaryTypeIcon = (type?: string) =>
+  SUMMARY_TYPE_ICONS[String(type || '').toUpperCase()] || SUMMARY_TYPE_ICONS.STANDARD
 
 const materialId = ref<number>()
 const summaryType = ref('STANDARD')
@@ -363,6 +397,9 @@ const summaryDialogVisible = ref(false)
 const previewDialogVisible = ref(false)
 const generateDialogVisible = ref(false)
 const detailLoading = ref(false)
+const detailError = ref('')
+const previewMaterialId = ref(0)
+const previewTitle = ref('')
 const generating = ref(false)
 const historyLoading = ref(false)
 const loadError = ref('')
@@ -379,9 +416,9 @@ const getSummaryStatus = (item?: SummaryHistoryItem | null) =>
 const isSummaryReady = (item?: SummaryHistoryItem | null) => getSummaryStatus(item) === 'SUCCESS'
 
 const CARD_HINTS: Record<string, string> = {
-  GENERATING: '正在整理资料，完成后即可阅读总结。',
-  FAILED: '生成未完成，可到任务中心查看原因并重试。',
-  CANCELLED: '本次生成已取消，可以重新生成总结。'
+  GENERATING: '正在生成，完成后就可以阅读。',
+  FAILED: '这次没有生成成功，可以在任务中心查看原因，或者重新生成。',
+  CANCELLED: '这次生成已取消，可以重新生成。'
 }
 const buildCardExcerpt = (item: SummaryHistoryItem) =>
   CARD_HINTS[getSummaryStatus(item)] || buildExcerpt(item.summaryText, 160)
@@ -396,6 +433,19 @@ const filteredSummaryHistory = computed(() => {
     return matchesMaterial && matchesType && matchesKeyword
   })
 })
+
+const hasActiveFilters = computed(() =>
+  Boolean(keyword.value.trim() || filterMaterialId.value || filterSummaryType.value)
+)
+
+/** 只按资料筛选、且这份资料一份总结都没有（比如从资料库点“总结”进来）。 */
+const filteredMaterialHasNoSummary = computed(
+  () =>
+    Boolean(filterMaterialId.value) &&
+    !keyword.value.trim() &&
+    !filterSummaryType.value &&
+    !summaryHistory.value.some((item) => item.materialId === filterMaterialId.value)
+)
 
 const pagedSummaryHistory = computed(() => {
   const start = (pagination.current - 1) * pagination.size
@@ -419,7 +469,7 @@ const preferredAssistantMaterialId = computed(() => {
 const taskStatusText = computed(() => {
   if (!generating.value || !currentTask.value || isAiTaskTerminal(currentTask.value.status)) return ''
   const materialLabel = materials.value.find((item) => item.id === currentTask.value?.bizId)?.title
-  return `正在整理总结${materialLabel ? `：${materialLabel}` : ''}，完成后将自动打开。`
+  return `正在生成${materialLabel ? `“${materialLabel}”的` : ''}总结，完成后会自动打开。`
 })
 
 // 关键词做 300ms 防抖，避免每次击键都对所有总结正文做全文匹配。
@@ -461,7 +511,7 @@ const loadSummaryHistory = async (silent = false) => {
     loadError.value = ''
   } catch (error) {
     if (!viewDisposed && historyRequest.isLatest(requestId) && !silent) {
-      loadError.value = getErrorMessage(error, '总结列表暂时无法加载，请稍后重试。')
+      loadError.value = getErrorMessage(error, '请稍后重试。')
     }
   } finally {
     if (!viewDisposed && historyRequest.isLatest(requestId)) historyLoading.value = false
@@ -473,16 +523,19 @@ usePolling(hasGeneratingSummary, () => loadSummaryHistory(true), 3000)
 const materialDetailRequest = useLatestRequest()
 
 const loadMaterialDetail = async (id: number) => {
+  if (!id) return
   const requestId = materialDetailRequest.begin()
   detailLoading.value = true
+  detailError.value = ''
+  selectedMaterialDetail.value = null
   try {
     const res = await getMaterialDetailApi(id)
     if (!materialDetailRequest.isLatest(requestId)) return
     selectedMaterialDetail.value = res.data.data
+    if (!selectedMaterialDetail.value) detailError.value = '这份资料不存在或已经删除了。'
   } catch (error) {
     if (!materialDetailRequest.isLatest(requestId)) return
-    selectedMaterialDetail.value = null
-    ElMessage.error(getErrorMessage(error, '加载资料详情失败'))
+    detailError.value = getErrorMessage(error, '请稍后重试。')
   } finally {
     if (materialDetailRequest.isLatest(requestId)) detailLoading.value = false
   }
@@ -512,11 +565,20 @@ const openSummaryDialog = (item: SummaryHistoryItem) => {
   summaryDialogVisible.value = true
 }
 
-const previewMaterial = async (item?: SummaryHistoryItem | null) => {
+/** 先打开对话框再加载，加载中和失败时都在对话框里显示状态。 */
+const previewMaterial = (item?: SummaryHistoryItem | null) => {
   if (!item?.materialId) return
-  await loadMaterialDetail(item.materialId)
-  if (viewDisposed) return
+  previewMaterialId.value = item.materialId
+  previewTitle.value = item.materialTitle || ''
   previewDialogVisible.value = true
+  void loadMaterialDetail(item.materialId)
+}
+
+/** 读完总结直接去出题：题集页会选好这份资料并打开生成对话框。 */
+const goQuiz = (id?: number) => {
+  if (!id) return
+  summaryDialogVisible.value = false
+  void router.push({ path: '/quiz', query: { materialId: String(id), generate: '1' } })
 }
 
 const quickGenerateForMaterial = (id: number) => {
@@ -543,7 +605,7 @@ const generateSummary = async () => {
     if (viewDisposed) return
     currentTask.value = submittedTask
     generateDialogVisible.value = false
-    ElMessage.success('AI 总结任务已提交')
+    ElMessage.success('已开始生成总结')
     // 后台刷新即可：保留用户当前的筛选条件，不闪骨架屏。
     await loadSummaryHistory(true)
 
@@ -559,7 +621,7 @@ const generateSummary = async () => {
     await loadSummaryHistory(true)
     if (viewDisposed) return
     if (!isAiTaskSuccess(finishedTask.status)) {
-      throw new Error(finishedTask.errorMessage || 'AI 总结任务执行失败')
+      throw new Error(finishedTask.errorMessage || '总结没有生成成功')
     }
 
     const taskResult = parseAiTaskResult<SummaryTaskResult>(finishedTask)
@@ -574,10 +636,10 @@ const generateSummary = async () => {
         materialTitle: created.materialTitle || materials.value.find((item) => item.id === generatingMaterialId)?.title
       })
     }
-    ElMessage.success(created?.generationMode === 'MOCK' ? '模拟总结生成完成' : 'AI 总结生成完成')
+    ElMessage.success(created?.generationMode === 'MOCK' ? '总结已生成（演示模式）' : '总结已生成')
   } catch (error) {
     if (!viewDisposed) {
-      ElMessage.error(getErrorMessage(error, 'AI 总结任务失败'))
+      ElMessage.error(getErrorMessage(error, '总结没有生成成功，可以在任务中心查看原因。'))
       if (currentTask.value && !isAiTaskTerminal(currentTask.value.status)) await loadSummaryHistory(true)
     }
   } finally {
@@ -602,195 +664,77 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.summary-view .workspace-panel {
-  background: transparent;
-  border: 0;
-  border-radius: 0;
-  overflow: visible;
-}
-.summary-view .workspace-filter-bar--summary {
-  display: grid;
-  grid-template-columns: minmax(200px, 1.6fr) minmax(150px, 0.8fr) minmax(130px, 0.7fr) auto;
-  gap: 12px;
-  width: 100%;
-  margin-bottom: 0;
-}
-.summary-view .workspace-toolbar {
-  margin: 0;
-  padding: 0 0 26px;
-  border-bottom: 1px solid var(--line);
-  background: transparent;
-}
-.summary-view .workspace-filter-bar :deep(.el-input__wrapper),
-.summary-view .workspace-filter-bar :deep(.el-select__wrapper) {
-  min-height: 46px;
-  padding-inline: 16px;
-  border-radius: 999px;
-  background: transparent;
-  box-shadow: none;
-}
-.summary-view .workspace-filter-bar :deep(.el-input__wrapper) {
-  background: var(--bg-secondary);
-}
-.summary-view .workspace-filter-bar :deep(.el-select__wrapper:hover) {
-  background: var(--bg-secondary);
-}
-.summary-view .workspace-filter-bar :deep(.el-input__wrapper.is-focus),
-.summary-view .workspace-filter-bar :deep(.el-select__wrapper.is-focused) {
-  box-shadow: 0 0 0 2px var(--brand);
-}
-.summary-view .workspace-body {
-  padding: 0;
-}
-.generation-notice {
-  margin-top: 20px;
-}
-.summary-loading {
-  display: grid;
-  gap: 24px;
-  padding: 40px 0;
-  color: var(--muted);
-  font-size: 14px;
-}
-.summary-card-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-}
-.summary-note-card {
-  display: grid;
-  grid-template-columns: 46px minmax(0, 1fr) 184px;
-  gap: 26px;
-  align-items: start;
-  min-width: 0;
-  padding: 30px 0;
-  border-bottom: 1px solid var(--line);
-}
-.summary-note-card__number {
-  padding-top: 4px;
-  color: var(--muted);
-  font-size: 25px;
-  font-weight: 400;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.04em;
-}
-.summary-note-card__content {
-  min-width: 0;
-}
-.summary-note-card__top {
+.summary-progress {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 10px 18px;
-}
-.summary-type {
-  display: inline-flex;
-  color: var(--brand);
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0.04em;
-}
-.summary-note-card__date {
-  font-size: 12px;
-  color: var(--muted);
-}
-.summary-note-card__title {
-  width: fit-content;
-  max-width: 100%;
-  min-height: 44px;
-  margin: 9px 0 0;
-  padding: 4px 0;
-  border: 0;
-  background: none;
-  color: var(--text);
-  font: inherit;
-  font-size: 20px;
-  font-weight: 600;
-  line-height: 1.6;
-  text-align: left;
-  overflow-wrap: anywhere;
-  cursor: pointer;
-}
-.summary-note-card__title:hover:not(:disabled) {
-  color: var(--brand);
-}
-.summary-note-card__title:disabled {
-  cursor: default;
-}
-.summary-note-card__title:focus-visible {
-  outline: 2px solid var(--brand);
-  outline-offset: 5px;
-  border-radius: 3px;
-}
-.summary-note-card__excerpt {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  margin: 8px 0 0;
-  overflow: hidden;
-  color: var(--muted);
-  font-size: 15px;
-  line-height: 1.85;
-  overflow-wrap: anywhere;
-}
-.summary-note-card__actions {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  justify-content: center;
-  gap: 3px;
-  align-self: center;
-}
-.summary-note-card__actions > div {
-  display: flex;
-  gap: 14px;
-}
-.summary-note-card__actions :deep(.el-button + .el-button) {
-  margin-left: 0;
-}
-.summary-note-card__actions :deep(.el-button) {
-  min-height: 44px;
+  gap: 10px;
+  margin: 0;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--line);
+  background: var(--accent-soft);
+  color: var(--text-secondary);
   font-size: 13px;
 }
-.summary-note-card__actions > :deep(.el-button) {
-  font-size: 15px;
-}
-.summary-note-card__actions :deep(.el-button span) {
-  gap: 6px;
-}
-.summary-view .workspace-pagination {
-  border-top: 0;
-  margin-top: 0;
-  padding-top: 26px;
-}
-.summary-view .workspace-pagination :deep(.el-pager li),
-.summary-view .workspace-pagination :deep(.btn-prev),
-.summary-view .workspace-pagination :deep(.btn-next) {
-  min-width: 44px;
-  height: 44px;
+.summary-progress__spinner {
+  flex: 0 0 14px;
+  height: 14px;
+  border: 2px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-top-color: var(--accent);
   border-radius: 50%;
-  background: transparent;
+  animation: zx-spin 0.8s linear infinite;
 }
-.summary-view .workspace-pagination :deep(.el-pager li.is-active) {
+.summary-row__icon {
+  display: grid;
+  flex: 0 0 40px;
+  place-items: center;
+  height: 40px;
+  border-radius: 11px;
+  background: var(--brand-light);
   color: var(--brand);
-  background: var(--brand-soft);
 }
-.dialog-title {
-  margin: 0;
+.summary-row__icon--accent {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.summary-row__icon--blue {
+  background: var(--blue-soft);
+  color: var(--blue);
+}
+.summary-row__excerpt {
+  display: -webkit-box;
+  margin: 2px 0 0;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.75;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+.summary-row__sk-excerpt {
+  display: block;
+  width: min(520px, 85%);
+  height: 12px;
+  margin-top: 10px;
 }
 .summary-mode-options {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: stretch;
   gap: 10px;
   width: 100%;
 }
-.summary-mode-options :deep(.el-radio.is-bordered) {
-  height: auto;
-  min-height: 100px;
-  margin: 0;
-  padding: 16px 12px;
-  border-radius: 9px;
-  white-space: normal;
+.summary-mode-options .el-radio.is-bordered {
   align-items: flex-start;
+  height: auto;
+  margin: 0;
+  padding: 14px 12px;
+  border-radius: var(--radius);
+  white-space: normal;
+}
+.summary-mode-options .el-radio.is-bordered.is-checked {
+  background: var(--brand-light);
 }
 .summary-mode-options :deep(.el-radio__input) {
   margin-top: 3px;
@@ -801,136 +745,107 @@ onUnmounted(() => {
 }
 .summary-mode-options strong {
   display: block;
-  margin-bottom: 7px;
+  color: var(--text);
   font-size: 14px;
+  font-weight: 600;
 }
 .summary-mode-options span {
   display: block;
+  margin-top: 4px;
   color: var(--muted);
   font-size: 12px;
-  line-height: 1.7;
-}
-.summary-mode-options :deep(.is-checked) {
-  background: var(--brand-light);
+  line-height: 1.6;
 }
 .summary-form-note {
-  margin: 12px 0;
+  margin: 4px 0 0;
   color: var(--muted);
-  font-size: 12px;
-  line-height: 1.8;
+  font-size: 13px;
+  line-height: 1.7;
 }
 .summary-form-note--error {
-  margin-top: 0;
-  padding: 10px 14px;
-  border-radius: 8px;
-  color: var(--red);
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
   background: var(--red-soft);
+  color: var(--red);
 }
-.summary-form-note--error :deep(.el-button) {
-  margin-left: 6px;
+.summary-reader__eyebrow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin: 0;
+  color: var(--muted);
   font-size: 12px;
 }
+.summary-reader__eyebrow > span:first-child {
+  color: var(--brand);
+  font-weight: 600;
+}
 .summary-reader__title {
-  margin-top: 13px;
+  margin-top: 6px;
   overflow-wrap: anywhere;
 }
 .summary-reader__body {
-  padding: 10px 0 24px;
+  padding: 4px 0 20px;
+}
+.summary-reader__mock {
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--text-secondary);
+  font-size: 13px;
 }
 .summary-sources {
-  padding-top: 20px;
+  padding-top: 16px;
   border-top: 1px solid var(--line);
 }
 .summary-sources summary {
-  padding-bottom: 18px;
+  padding-bottom: 12px;
   color: var(--text);
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
 }
 .summary-sources summary span {
-  margin-left: 6px;
+  margin-left: 4px;
   color: var(--muted);
   font-size: 12px;
   font-weight: 400;
 }
-.summary-material-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-bottom: 20px;
-  color: var(--muted);
-  font-size: 13px;
-}
-.summary-preview-card {
-  padding: 24px 0;
-  border: 0;
+.summary-preview__segment {
+  padding: 16px 0;
   border-top: 1px solid var(--line);
-  border-radius: 0;
-  background: transparent;
 }
-@media (max-width: 1000px) {
-  .summary-note-card {
-    grid-template-columns: 40px minmax(0, 1fr);
-    gap: 12px 22px;
-  }
-  .summary-note-card__actions {
-    grid-column: 2;
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-  }
-  .summary-view .workspace-filter-bar--summary {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
-  }
-  .summary-view .workspace-filter-bar__search {
-    grid-column: 1 / -1;
-  }
+.summary-preview__segment:first-child {
+  padding-top: 0;
+  border-top: 0;
 }
-@media (max-width: 600px) {
-  .summary-view .page-header {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 24px;
-  }
-  .summary-view .page-header > .el-button {
-    align-self: flex-start;
-  }
-  .summary-view .workspace-filter-bar--summary {
-    gap: 10px 4px;
-  }
-  .summary-view .workspace-filter-bar :deep(.el-select__wrapper) {
-    padding-inline: 10px;
-  }
-  .summary-view .workspace-toolbar {
-    padding-bottom: 20px;
-  }
-  .summary-note-card {
-    grid-template-columns: 28px minmax(0, 1fr);
-    padding-block: 24px;
-    gap: 12px 14px;
-  }
-  .summary-note-card__number {
-    font-size: 20px;
-  }
-  .summary-note-card__title {
-    font-size: 18px;
-  }
-  .summary-note-card__excerpt {
-    font-size: 14px;
-  }
-  .summary-note-card__actions {
-    flex-wrap: wrap;
-  }
-  .summary-note-card__actions > div {
-    gap: 12px;
+.summary-preview__meta {
+  color: var(--muted);
+  font-size: 12px;
+}
+.summary-preview__segment h3 {
+  margin: 4px 0 6px;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+}
+.summary-preview__segment p {
+  margin: 4px 0 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.9;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+@media (max-width: 760px) {
+  .summary-progress {
+    padding-inline: 16px;
   }
   .summary-mode-options {
-    grid-template-columns: 1fr;
-  }
-  .summary-mode-options :deep(.el-radio.is-bordered) {
-    min-height: 75px;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 </style>
