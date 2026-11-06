@@ -1,57 +1,69 @@
 <template>
-  <section>
-    <div class="page-header">
+  <section class="learning-page task-view" aria-labelledby="task-view-title">
+    <header class="page-header">
       <div>
-        <h1 class="page-title">任务中心</h1>
-        <p class="page-desc">查看自己的 AI 任务；等待较久可重新派发，失败后可重试，并前往对应页面查看结果。</p>
+        <h1 id="task-view-title" class="page-title">任务中心</h1>
+        <p class="page-desc">查看总结、出题、评分和向量处理的进度。任务完成后，可以打开对应页面查看结果。</p>
       </div>
-      <div class="toolbar toolbar--flush">
-        <el-button :loading="loading" :disabled="taskActionBusy" @click="loadTasks()">刷新列表</el-button>
-      </div>
-    </div>
+    </header>
 
     <div class="workspace-panel">
       <div class="workspace-toolbar">
-        <div class="workspace-filter-bar workspace-filter-bar--task">
-          <el-select v-model="filters.taskType" clearable placeholder="任务类型">
-            <el-option label="AI 总结" value="SUMMARY" />
-            <el-option label="AI 出题" value="QUESTION_GENERATE" />
+        <div class="filter-bar" role="search" aria-label="筛选任务">
+          <el-select v-model="filters.taskType" clearable placeholder="全部任务类型" aria-label="按任务类型筛选">
+            <el-option label="生成总结" value="SUMMARY" />
+            <el-option label="生成题集" value="QUESTION_GENERATE" />
             <el-option label="简答题评分" value="PRACTICE_REVIEW" />
-            <el-option label="Embedding" value="EMBEDDING" />
+            <el-option label="生成向量" value="EMBEDDING" />
           </el-select>
-          <el-select v-model="filters.status" clearable placeholder="任务状态">
+          <el-select v-model="filters.status" clearable placeholder="全部状态" aria-label="按任务状态筛选">
             <el-option label="等待中" value="PENDING" />
             <el-option label="执行中" value="RUNNING" />
             <el-option label="已完成" value="SUCCESS" />
             <el-option label="失败" value="FAILED" />
             <el-option label="已取消" value="CANCELLED" />
           </el-select>
-          <el-button @click="resetFilters">重置条件</el-button>
+          <el-button v-if="hasFilters" text @click="resetFilters">清除筛选</el-button>
         </div>
-
-        <div class="workspace-toolbar__meta">
-          <span class="workspace-chip">共 {{ total }} 条任务</span>
-          <span class="workspace-chip">本页处理中 {{ activeCount }} 条</span>
-          <span class="workspace-chip workspace-chip--brand">本页失败 {{ failedCount }} 条</span>
-        </div>
+        <el-button text :loading="loading" :disabled="taskActionBusy" @click="loadTasks()">
+          <AppIcon v-if="!loading" name="refresh" :size="16" />刷新
+        </el-button>
       </div>
 
-      <div class="workspace-body">
-        <el-alert
-          v-if="activeCount > 0"
-          title="任务状态会自动更新。等待较久仍未开始时，可重新派发原任务；失败任务可重试。"
-          type="info"
-          :closable="false"
-          show-icon
-          style="margin-bottom: 16px"
-        />
-
-        <div v-if="loading" class="state-block">正在加载任务列表...</div>
-        <div v-else-if="!tasks.length" class="state-block empty">当前条件下还没有任务记录。</div>
+      <p v-if="activeCount > 0 && !loadError" class="workspace-progress" role="status">
+        <span class="workspace-progress__spinner" aria-hidden="true" />
+        本页有 {{ activeCount }} 个任务正在处理，状态会自动更新。
+      </p>
+      <div class="task-view__body">
+        <div v-if="loading" class="record-list" role="status" aria-label="正在加载任务">
+          <div v-for="i in 4" :key="i" class="list-row record-row record-row--loading" aria-hidden="true">
+            <span class="skeleton record-row__sk-lead" />
+            <div class="record-row__main">
+              <span class="skeleton record-row__sk-title" /><span class="skeleton record-row__sk-meta" />
+            </div>
+            <span class="skeleton record-row__sk-actions" />
+          </div>
+        </div>
+        <EmptyState v-else-if="loadError" variant="error" title="任务列表没有加载出来" :description="loadError">
+          <el-button type="primary" @click="loadTasks()">重新加载</el-button>
+        </EmptyState>
+        <EmptyState
+          v-else-if="!tasks.length"
+          icon="tasks"
+          :title="hasFilters ? '没有找到匹配的任务' : '还没有任务记录'"
+          :description="
+            hasFilters
+              ? '换个筛选条件，或者查看全部任务。'
+              : '生成总结、题集、向量或提交简答题评分后，可以在这里查看进度。'
+          "
+        >
+          <el-button v-if="hasFilters" @click="resetFilters">清除筛选</el-button>
+          <el-button v-else type="primary" @click="router.push('/materials')">去资料库</el-button>
+        </EmptyState>
         <div v-else class="workspace-table">
           <div class="workspace-table__head workspace-table__head--task">
             <span>任务</span>
-            <span>业务对象</span>
+            <span>关联内容</span>
             <span>状态</span>
             <span>模型</span>
             <span>创建时间</span>
@@ -70,7 +82,7 @@
               >
             </div>
 
-            <div class="task-meta-stack" data-label="业务对象">
+            <div class="task-meta-stack" data-label="关联内容">
               <strong>{{ formatBizLabel(item) }}</strong>
               <span>{{ formatBizHint(item) }}</span>
             </div>
@@ -90,7 +102,7 @@
 
             <div class="workspace-action-row workspace-action-row--task" data-label="操作">
               <el-button link type="primary" @click="openTaskDetail(item.id)">查看详情</el-button>
-              <el-button v-if="canOpenBizPage(item)" link @click="openBizPage(item)">前往业务</el-button>
+              <el-button v-if="canOpenBizPage(item)" link @click="openBizPage(item)">打开对应页面</el-button>
               <el-button
                 v-if="item.status === 'PENDING'"
                 link
@@ -124,15 +136,16 @@
           </div>
         </div>
 
-        <div class="workspace-pagination">
+        <div v-if="!loadError && total" class="workspace-pagination">
           <div class="workspace-pagination__meta">
-            第 {{ page.current }} / {{ Math.max(1, Math.ceil(total / page.size)) }} 页
+            共 {{ total }} 个任务<span v-if="failedCount"> · 本页失败 {{ failedCount }} 个</span>
           </div>
           <el-pagination
             v-model:current-page="page.current"
             v-model:page-size="page.size"
             :page-sizes="[10, 20, 50]"
-            layout="total, sizes, prev, pager, next"
+            :pager-count="5"
+            layout="sizes, prev, pager, next"
             :total="total"
             @current-change="loadTasks()"
             @size-change="loadTasks()"
@@ -142,7 +155,10 @@
     </div>
 
     <el-drawer v-model="drawerVisible" title="任务详情" size="min(760px, 100vw)">
-      <div v-if="detailLoading" class="state-block">正在加载任务详情...</div>
+      <div v-if="detailLoading" class="state-block" role="status">正在加载任务详情…</div>
+      <EmptyState v-else-if="detailError" variant="error" title="任务详情没有加载出来" :description="detailError">
+        <el-button v-if="detailTaskId" type="primary" @click="openTaskDetail(detailTaskId)">重新加载</el-button>
+      </EmptyState>
       <template v-else-if="taskDetail">
         <div class="detail-meta-grid">
           <div class="detail-meta-item">
@@ -161,7 +177,7 @@
             <GenerationModeBadge :mode="taskDetail.generationMode" />
           </div>
           <div class="detail-meta-item">
-            <span>业务对象</span>
+            <span>关联内容</span>
             <strong>{{ formatBizLabel(taskDetail) }}</strong>
           </div>
           <div v-if="isAdmin" class="detail-meta-item">
@@ -194,7 +210,7 @@
           style="margin-bottom: 16px"
         />
         <div class="task-detail-actions">
-          <el-button v-if="canOpenBizPage(taskDetail)" @click="openBizPage(taskDetail)">前往业务页</el-button>
+          <el-button v-if="canOpenBizPage(taskDetail)" @click="openBizPage(taskDetail)">打开对应页面</el-button>
           <el-button
             v-if="taskDetail.status === 'PENDING'"
             type="warning"
@@ -249,6 +265,8 @@
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import GenerationModeBadge from '@/components/GenerationModeBadge.vue'
+import AppIcon from '@/components/AppIcon.vue'
+import EmptyState from '@/components/EmptyState.vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   deleteAiTaskApi,
@@ -272,6 +290,8 @@ const route = useRoute()
 const userStore = useUserStore()
 const isAdmin = computed(() => userStore.isAdmin)
 const loading = ref(false)
+const loadError = ref('')
+const detailError = ref('')
 const detailLoading = ref(false)
 const drawerVisible = ref(false)
 const retryingTaskId = ref<number | null>(null)
@@ -289,6 +309,7 @@ const filters = reactive({
   taskType: '',
   status: ''
 })
+const hasFilters = computed(() => Boolean(filters.taskType || filters.status))
 
 const page = reactive({
   current: 1,
@@ -331,16 +352,16 @@ const isAnimatedStatus = (value?: string) => ['PENDING', 'RUNNING'].includes(Str
 const buildTaskStatusHint = (task: AiTaskPageItem) => {
   const status = String(task.status || '').toUpperCase()
   if (status === 'PENDING') {
-    return '任务排队中；等待较久仍未开始，可重新派发原任务'
+    return '正在排队。等待较久仍未开始时，可以重新派发'
   }
   if (status === 'RUNNING') {
-    return '任务执行中，列表会自动刷新'
+    return '正在处理，完成后会自动更新'
   }
   if (status === 'SUCCESS') {
     return task.finishedAt ? `已完成 · ${formatDateTime(task.finishedAt)}` : '已完成'
   }
   if (status === 'FAILED') {
-    return '任务执行失败，可查看错误信息后重试原任务'
+    return '处理失败，请查看详情中的原因后重试'
   }
   if (status === 'CANCELLED') return '任务已取消，可前往对应页面重新发起生成'
   return '状态未知'
@@ -367,18 +388,18 @@ const formatBizHint = (task: Pick<AiTaskPageItem, 'taskType' | 'bizType'>) => {
   const taskType = String(task.taskType || '').toUpperCase()
   const bizType = String(task.bizType || '').toUpperCase()
   if (taskType === 'SUMMARY' && bizType === 'MATERIAL') {
-    return '总结生成结果会回到 AI 总结列表'
+    return '完成后可在学习总结中阅读'
   }
   if (taskType === 'QUESTION_GENERATE' && bizType === 'MATERIAL') {
-    return '题集生成结果会回到 AI 出题列表'
+    return '完成后可在题集页开始练习'
   }
   if (taskType === 'PRACTICE_REVIEW' && bizType === 'PRACTICE_SESSION') {
     return '简答题评分完成后可在练习记录查看'
   }
   if (taskType === 'EMBEDDING') {
-    return '为后续 RAG 检索准备向量化数据'
+    return '将资料转换为可用于语义检索的向量'
   }
-  return '统一由任务中心调度执行'
+  return '可在任务详情中查看处理结果'
 }
 
 const canOpenBizPage = (task: Pick<AiTaskPageItem, 'taskType' | 'bizId'>) => Boolean(resolveBizRoute(task))
@@ -422,9 +443,11 @@ const taskListRequest = useLatestRequest()
 const taskDetailRequest = useLatestRequest()
 
 const loadTasks = async (silent = false) => {
+  if (silent && loading.value) return
   const requestId = taskListRequest.begin()
   if (!silent) {
     loading.value = true
+    loadError.value = ''
   }
   try {
     const res = await getAiTaskPageApi({
@@ -437,9 +460,10 @@ const loadTasks = async (silent = false) => {
     const data = res.data.data as AiTaskPagePayload
     tasks.value = data.records || []
     total.value = data.total || 0
+    loadError.value = ''
   } catch (error) {
     if (!taskListRequest.isLatest(requestId) || silent) return
-    ElMessage.error(getErrorMessage(error, '加载任务列表失败'))
+    loadError.value = getErrorMessage(error, '暂时无法读取任务列表，请稍后重试。')
   } finally {
     if (taskListRequest.isLatest(requestId)) {
       loading.value = false
@@ -462,15 +486,17 @@ const openTaskDetail = async (taskId: number, silent = false) => {
   if (!silent) {
     detailLoading.value = true
     taskDetail.value = null
+    detailError.value = ''
   }
   try {
     const res = await getAiTaskDetailApi(taskId)
     if (!taskDetailRequest.isLatest(requestId)) return
     taskDetail.value = res.data.data as AiTaskDetail
+    detailError.value = taskDetail.value ? '' : '这条任务记录不存在或已被删除。'
   } catch (error) {
     if (!taskDetailRequest.isLatest(requestId) || silent) return
     taskDetail.value = null
-    ElMessage.error(getErrorMessage(error, '加载任务详情失败'))
+    detailError.value = getErrorMessage(error, '暂时无法读取任务详情，请稍后重试。')
   } finally {
     if (taskDetailRequest.isLatest(requestId)) {
       detailLoading.value = false
@@ -514,7 +540,7 @@ const removeTask = async (taskId: number, closeDetail = false, status?: string, 
     ? `删除这条任务记录后，仍在生成中的${generationLabel}将标记为“已取消”，后续返回的内容不再保存。确定继续吗？`
     : normalizedStatus === 'RUNNING'
       ? '删除后只会移除这条任务记录，不会中断已经发出的 AI 请求，确定继续吗？'
-      : '删除后将只移除任务记录，不会删除已经生成的业务结果，确定继续吗？'
+      : '删除这条任务记录？已生成的总结、题集和评分结果会保留。'
   try {
     await ElMessageBox.confirm(confirmMessage, '删除确认', {
       type: 'warning',
@@ -601,3 +627,40 @@ onUnmounted(() => {
   stopAutoRefresh()
 })
 </script>
+
+<style scoped>
+.task-view__body {
+  min-width: 0;
+}
+.workspace-table__head {
+  padding: 12px 20px;
+  background: var(--panel-hover);
+}
+.workspace-table__row {
+  padding: 18px 20px;
+}
+.workspace-table__row > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.workspace-table__row > span {
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.workspace-action-row {
+  gap: 8px 12px;
+}
+.workspace-action-row .el-button {
+  margin: 0;
+}
+@media (max-width: 760px) {
+  .workspace-table__row {
+    padding: 16px;
+    gap: 12px;
+  }
+  .workspace-action-row {
+    padding-top: 4px;
+  }
+}
+</style>

@@ -1,31 +1,33 @@
 <template>
-  <section>
-    <div class="page-header">
+  <section class="learning-page rag-eval-view" aria-labelledby="rag-eval-title">
+    <header class="page-header">
       <div>
-        <h1 class="page-title">RAG 评测集</h1>
-        <p class="page-desc">用同一组标注样本比较文本检索、纯向量与重排方案，保留每次运行的参数、指标和逐题结果。</p>
+        <h1 id="rag-eval-title" class="page-title">检索评测</h1>
+        <p class="page-desc">用标注好的问题比较文本、向量和重排方案，查看命中情况及每次运行的差异。</p>
       </div>
       <div class="toolbar toolbar--flush">
-        <el-button type="primary" @click="openDatasetDialog">新建评测集</el-button>
-        <el-button type="success" plain @click="openCmrcDialog">导入 CMRC2018</el-button>
-        <el-button :loading="datasetLoading" @click="loadDatasets">刷新列表</el-button>
+        <el-button type="primary" @click="openDatasetDialog"><AppIcon name="plus" :size="16" />新建评测集</el-button>
+        <el-button @click="openCmrcDialog">导入 CMRC2018</el-button>
       </div>
-    </div>
+    </header>
 
     <div class="workspace-panel">
       <div class="workspace-toolbar">
-        <div class="workspace-filter-bar workspace-filter-bar--rag-eval">
+        <div class="filter-bar" role="search" aria-label="筛选评测集">
           <el-input
             v-model="filters.keyword"
             clearable
-            placeholder="按评测集名称或说明搜索"
+            placeholder="搜索评测集名称或说明"
+            aria-label="搜索评测集名称或说明"
             class="workspace-filter-bar__search"
-          />
+            ><template #prefix><AppIcon name="search" :size="16" /></template
+          ></el-input>
           <el-select
             v-model="filters.materialId"
             clearable
             filterable
-            placeholder="关联资料"
+            placeholder="全部资料"
+            aria-label="按关联资料筛选"
             :loading="materialsLoading"
           >
             <el-option
@@ -35,28 +37,49 @@
               :value="item.id"
             />
           </el-select>
-          <el-button @click="resetFilters">重置条件</el-button>
+          <el-button v-if="hasFilters" text @click="resetFilters">清除筛选</el-button>
         </div>
 
-        <div class="workspace-toolbar__meta">
-          <span class="workspace-chip">共 {{ datasetTotal }} 个评测集</span>
-          <span class="workspace-chip workspace-chip--brand">当前样本 {{ selectedDataset?.sampleCount || 0 }} 条</span>
-        </div>
+        <el-button text :loading="datasetLoading" @click="loadDatasets"
+          ><AppIcon v-if="!datasetLoading" name="refresh" :size="16" />刷新</el-button
+        >
       </div>
 
       <div class="workspace-body rag-eval-layout">
         <div class="page-card workspace-card">
           <div class="workspace-card__header workspace-card__header--spaced">
             <div>
-              <h3>评测集列表</h3>
-              <p>先选择一份资料建立评测集，再录入问题和标准相关片段。</p>
+              <h2 class="rag-section-title">
+                评测集 <span v-if="!datasetError">{{ datasetTotal }}</span>
+              </h2>
+              <p>选择一个评测集，管理样本或查看运行记录。</p>
             </div>
           </div>
 
-          <div v-if="datasetLoading && !datasets.length" class="state-block">正在加载评测集...</div>
-          <div v-else-if="!datasets.length" class="state-block empty">
-            还没有评测集。可以先为生物学必修 1 新建一个评测集。
+          <div v-if="datasetLoading" class="record-list" role="status" aria-label="正在加载评测集">
+            <div v-for="i in 3" :key="i" class="list-row record-row record-row--loading" aria-hidden="true">
+              <div class="record-row__main">
+                <span class="skeleton record-row__sk-title" /><span class="skeleton record-row__sk-meta" />
+              </div>
+              <span class="skeleton record-row__sk-actions" />
+            </div>
           </div>
+          <EmptyState v-else-if="datasetError" variant="error" title="评测集没有加载出来" :description="datasetError">
+            <el-button type="primary" @click="loadDatasets">重新加载</el-button>
+          </EmptyState>
+          <EmptyState
+            v-else-if="!datasets.length"
+            icon="search"
+            :title="hasFilters ? '没有找到匹配的评测集' : '还没有评测集'"
+            :description="
+              hasFilters
+                ? '换个关键词，或者清除筛选条件再看看。'
+                : '选择一份资料，新建评测集后添加问题和对应的原文片段。'
+            "
+          >
+            <el-button v-if="hasFilters" @click="resetFilters">清除筛选</el-button>
+            <el-button v-else type="primary" @click="openDatasetDialog">新建评测集</el-button>
+          </EmptyState>
           <div v-else class="workspace-table">
             <div class="workspace-table__head workspace-table__head--rag-eval">
               <span>评测集</span>
@@ -86,17 +109,17 @@
                 <span>{{ formatDateTime(item.lastRunAt) }}</span>
               </div>
               <div class="workspace-action-row workspace-action-row--fit" data-label="操作">
-                <el-button link type="primary" @click="selectDataset(item)">配置样本</el-button>
-                <el-button link type="success" :disabled="!item.sampleCount || runningEval" @click="runDataset(item)"
+                <el-button link type="primary" @click="selectDataset(item)">管理样本</el-button>
+                <el-button link :disabled="!item.sampleCount || runningEval" @click="runDataset(item)"
                   >运行评测</el-button
                 >
-                <el-button link type="info" @click="selectDataset(item)">运行历史</el-button>
+                <el-button link @click="selectDataset(item)">运行历史</el-button>
                 <el-button link type="danger" @click="removeDataset(item)">删除</el-button>
               </div>
             </div>
           </div>
 
-          <div class="workspace-pagination">
+          <div v-if="!datasetError && datasetTotal" class="workspace-pagination">
             <div class="workspace-pagination__meta">
               第 {{ datasetPage.current }} / {{ Math.max(1, Math.ceil(datasetTotal / datasetPage.size)) }} 页
             </div>
@@ -104,7 +127,8 @@
               v-model:current-page="datasetPage.current"
               v-model:page-size="datasetPage.size"
               :page-sizes="[10, 20, 50]"
-              layout="total, sizes, prev, pager, next"
+              :pager-count="5"
+              layout="sizes, prev, pager, next"
               :total="datasetTotal"
               @current-change="loadDatasets"
               @size-change="loadDatasets"
@@ -115,12 +139,12 @@
         <div class="page-card workspace-card rag-eval-side">
           <div class="workspace-card__header workspace-card__header--spaced">
             <div>
-              <h3>样本标注</h3>
+              <h2 class="rag-section-title">样本标注</h2>
               <p v-if="selectedDataset">
                 当前评测集：{{ selectedDataset.name }}，基于
                 {{ selectedDataset.materialTitle || `资料 #${selectedDataset.materialId}` }}。
               </p>
-              <p v-else>选择左侧评测集后，在这里维护人工标注样本。</p>
+              <p v-else>选择上方的评测集后，在这里添加问题和相关片段。</p>
             </div>
             <div class="toolbar toolbar--flush">
               <el-button :disabled="!selectedDataset" @click="openSegmentDrawer">资料分段参考</el-button>
@@ -129,11 +153,24 @@
             </div>
           </div>
 
-          <div v-if="!selectedDataset" class="state-block empty">先从左侧选择一个评测集。</div>
-          <div v-else-if="sampleLoading && !samples.length" class="state-block">正在加载评测样本...</div>
-          <div v-else-if="!samples.length" class="state-block empty">
-            还没有样本。建议先打开“资料分段参考”，选 20-50 个问题做第一版评测集。
-          </div>
+          <EmptyState
+            v-if="!selectedDataset"
+            icon="quiz"
+            title="先选择一个评测集"
+            description="点击上方评测集的“管理样本”，即可查看和编辑标注。"
+          />
+          <div v-else-if="sampleLoading" class="state-block" role="status">正在加载评测样本…</div>
+          <EmptyState v-else-if="sampleError" variant="error" title="样本没有加载出来" :description="sampleError"
+            ><el-button type="primary" @click="loadSamples">重新加载</el-button></EmptyState
+          >
+          <EmptyState
+            v-else-if="!samples.length"
+            icon="quiz"
+            title="这个评测集还没有样本"
+            description="对照“资料分段参考”添加问题，并标出能回答问题的原文片段。"
+          >
+            <el-button type="primary" @click="openSampleDialog()">新增样本</el-button>
+          </EmptyState>
           <div v-else>
             <div class="rag-sample-list">
               <article v-for="sample in visibleSamples" :key="sample.id" class="rag-sample-card">
@@ -247,6 +284,7 @@
             v-model:page-size="runHistoryPage.size"
             :page-sizes="[10, 20, 50]"
             :total="runHistoryTotal"
+            :pager-count="5"
             layout="sizes, prev, pager, next"
             @current-change="loadRunHistory"
             @size-change="resetRunHistoryPage"
@@ -391,7 +429,7 @@
             v-model="datasetForm.name"
             maxlength="120"
             show-word-limit
-            placeholder="例如：生物必修1 RAG 检索评测集"
+            placeholder="例如：计算机网络 · 第一轮检索评测"
           />
         </el-form-item>
         <el-form-item label="说明">
@@ -594,7 +632,7 @@
     </el-dialog>
 
     <el-drawer v-model="segmentDrawerVisible" title="资料分段参考" size="58%">
-      <div v-if="segmentLoading" class="state-block">正在加载资料分段...</div>
+      <div v-if="segmentLoading" class="state-block" role="status">正在加载资料分段…</div>
       <template v-else-if="materialDetail">
         <div class="detail-meta-grid" style="margin-bottom: 18px">
           <div class="detail-meta-item">
@@ -657,6 +695,8 @@ import { formatDateTime, formatSegmentMeta } from '@/utils/format'
 import RagRunParameters from '@/components/rag/RagRunParameters.vue'
 import RagRunComparison from '@/components/rag/RagRunComparison.vue'
 import RagRunEvidence from '@/components/rag/RagRunEvidence.vue'
+import AppIcon from '@/components/AppIcon.vue'
+import EmptyState from '@/components/EmptyState.vue'
 
 interface MaterialSegment {
   id: number
@@ -693,6 +733,8 @@ const pendingRunId = ref<number | null>(null)
 let viewDisposed = false
 
 const datasetLoading = ref(false)
+const datasetError = ref('')
+const sampleError = ref('')
 const materialsLoading = ref(false)
 const sampleLoading = ref(false)
 const segmentLoading = ref(false)
@@ -722,6 +764,7 @@ const filters = reactive({
   keyword: '',
   materialId: undefined as number | undefined
 })
+const hasFilters = computed(() => Boolean(filters.keyword || filters.materialId))
 
 const datasetPage = reactive({
   current: 1,
@@ -922,6 +965,7 @@ const clearComparisonSelection = () => {
 const resetSelectedDataset = (dataset: RagEvalDataset | null) => {
   selectedDataset.value = dataset
   samples.value = []
+  sampleError.value = ''
   lastRun.value = null
   materialDetail.value = null
   segmentDrawerVisible.value = false
@@ -998,6 +1042,7 @@ const compareRuns = async () => {
 const loadDatasets = async () => {
   const requestId = datasetRequest.begin()
   datasetLoading.value = true
+  datasetError.value = ''
   try {
     const res = await getRagEvalDatasetPageApi({
       current: datasetPage.current,
@@ -1017,7 +1062,7 @@ const loadDatasets = async () => {
     }
   } catch (error) {
     if (!datasetRequest.isLatest(requestId)) return
-    ElMessage.error(getErrorMessage(error, '加载评测集失败'))
+    datasetError.value = getErrorMessage(error, '暂时无法读取评测集，请稍后重试。')
   } finally {
     if (datasetRequest.isLatest(requestId)) datasetLoading.value = false
   }
@@ -1166,6 +1211,7 @@ const loadSamples = async () => {
   const datasetId = selectedDataset.value.id
   const requestId = sampleRequest.begin()
   sampleLoading.value = true
+  sampleError.value = ''
   try {
     const res = await getRagEvalSamplesApi(datasetId)
     if (!sampleRequest.isLatest(requestId) || selectedDataset.value?.id !== datasetId) return
@@ -1173,7 +1219,7 @@ const loadSamples = async () => {
     resetSampleVisibleCount()
   } catch (error) {
     if (!sampleRequest.isLatest(requestId)) return
-    ElMessage.error(getErrorMessage(error, '加载评测样本失败'))
+    sampleError.value = getErrorMessage(error, '暂时无法读取评测样本，请稍后重试。')
   } finally {
     if (sampleRequest.isLatest(requestId)) sampleLoading.value = false
   }
@@ -1398,6 +1444,53 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.rag-eval-layout {
+  padding: 0;
+  gap: 0;
+}
+.rag-eval-layout > .workspace-card {
+  min-width: 0;
+  padding: 20px;
+  border: 0;
+  border-radius: 0;
+}
+.rag-eval-layout > .workspace-card + .workspace-card {
+  border-top: 1px solid var(--line);
+}
+.rag-section-title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0;
+  color: var(--text);
+  font-size: 17px;
+  font-weight: 600;
+}
+.rag-section-title span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+.rag-eval-view .workspace-pagination {
+  padding-inline: 0;
+}
+.rag-eval-view .workspace-table__row > *,
+.rag-eval-view .workspace-table__title strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.rag-eval-view .workspace-action-row {
+  gap: 8px 14px;
+}
+.rag-eval-view .workspace-action-row .el-button {
+  margin: 0;
+}
+.rag-eval-view .rag-sample-card:hover,
+.rag-eval-view .rag-segment-card:hover {
+  box-shadow: none;
+  background: var(--panel-hover);
+}
 .rag-history-actions {
   display: flex;
   align-items: center;
@@ -1440,6 +1533,15 @@ onUnmounted(() => {
   font-size: 12px;
 }
 @media (max-width: 720px) {
+  .rag-eval-layout > .workspace-card {
+    padding: 16px;
+  }
+  .rag-eval-side .toolbar {
+    width: 100%;
+  }
+  .rag-eval-side .toolbar .el-button {
+    flex: 1 1 auto;
+  }
   .rag-history-row {
     grid-template-columns: 22px minmax(0, 1fr) auto;
     gap: 10px;
