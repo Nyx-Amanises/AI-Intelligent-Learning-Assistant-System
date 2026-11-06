@@ -1092,4 +1092,142 @@ void loadMastery()
     gap: 0 20px;
   }
 }
+@media (max-width: 760px) {
+  .knowledge-page {
+    padding-top: 0;
+  }
+  .knowledge-page > .page-header {
+    position: relative;
+  }
+  .knowledge-page .page-title {
+    padding-right: 108px;
+  }
+  .knowledge-page .page-header .toolbar--flush {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: auto;
+  }
+  .knowledge-page .page-header .el-button {
+    height: 40px;
+    padding-inline: 12px;
+    border: 0;
+    background: transparent;
+    font-size: 13px;
+  }
+  .knowledge-overview {
+    margin-bottom: 30px;
+    padding: 4px 0 24px;
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    border-radius: 0;
+    background: transparent;
+  }
+  .knowledge-overview :deep(.stat-tile) {
+    border-left: 0;
+  }
+  .knowledge-overview :deep(.stat-tile dd) {
+    margin-top: 10px;
+    font-size: 42px;
+    font-weight: 500;
+  }
+  .knowledge-overview__notes {
+    margin-top: 24px;
+    gap: 8px 16px;
+    font-size: 12px;
+  }
+  .knowledge-assessment-rule {
+    margin-top: 14px;
+    line-height: 1.8;
+  }
+  .knowledge-section-heading {
+    padding: 0;
+    margin-bottom: 18px;
+  }
+  .knowledge-section-heading h2 {
+    font-size: 20px;
+    letter-spacing: -0.02em;
+  }
+  .knowledge-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    padding: 0 0 20px;
+  }
+  .knowledge-search {
+    grid-column: 1 / -1;
+  }
+  .knowledge-filters > :nth-child(4) {
+    grid-column: auto;
+  }
+  .knowledge-filters > :last-child {
+    justify-self: start;
+  }
+  .knowledge-priorities {
+    display: block;
+    margin-top: 20px;
+    padding: 16px;
+    border: 0;
+    border-radius: 16px;
+    background: var(--panel);
+  }
+  .knowledge-priorities > div {
+    grid-template-columns: minmax(0, 1fr);
+    margin-top: 8px;
+    gap: 8px;
+  }
+  .knowledge-priority__point {
+    font-size: 15px;
+  }
+  .knowledge-assessment-note {
+    padding: 18px 0;
+  }
+  .knowledge-record {
+    grid-template-columns: minmax(0, 1fr) 116px;
+    gap: 18px 20px;
+    padding: 24px 0;
+  }
+  .knowledge-record__title h3 {
+    font-size: 18px;
+    font-weight: 600;
+  }
+  .knowledge-record__title p {
+    margin-top: 6px;
+    font-size: 13px;
+  }
+  .knowledge-record__mastery b {
+    font-size: 28px;
+  }
+  .knowledge-record__mastery > div:first-child {
+    gap: 6px;
+  }
+  .knowledge-record__context {
+    grid-column: 1 / -1;
+  }
+  .knowledge-record__context p {
+    font-size: 14px;
+    line-height: 1.8;
+  }
+  .knowledge-record__actions {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 24px;
+    margin-top: -6px;
+  }
+  .knowledge-record__actions button {
+    min-height: 44px;
+    font-size: 14px;
+  }
+  .knowledge-pagination {
+    padding: 20px 0;
+  }
+  .knowledge-pagination :deep(.el-pagination__sizes) {
+    display: none;
+  }
+  .knowledge-notice {
+    padding: 20px;
+    border: 0;
+    border-radius: 18px;
+  }
+}
 </style>

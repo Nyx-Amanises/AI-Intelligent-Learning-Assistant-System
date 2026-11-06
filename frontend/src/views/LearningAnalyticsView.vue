@@ -1,5 +1,12 @@
 <template>
-  <section class="learning-page statistics-page" :aria-busy="loading" aria-labelledby="statistics-title">
+  <MobileLearningCenter
+    v-if="isMobile"
+    :materials="materials"
+    :materials-loading="materialsLoading"
+    :materials-error="materialsError"
+    @reload-materials="loadMaterials"
+  />
+  <section v-else class="learning-page statistics-page" :aria-busy="loading" aria-labelledby="statistics-title">
     <header class="page-header">
       <div>
         <h1 id="statistics-title" class="page-title">学习统计</h1>
@@ -340,6 +347,7 @@
 import { computed, onUnmounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import AppIcon from '@/components/AppIcon.vue'
+import MobileLearningCenter from '@/components/mobile/MobileLearningCenter.vue'
 import StatTiles, { type StatTileItem } from '@/components/StatTiles.vue'
 import TrendLineChart, { type TrendChartPoint } from '@/components/charts/TrendLineChart.vue'
 import PracticeCountTrendChart from '@/components/charts/PracticeCountTrendChart.vue'
@@ -361,6 +369,13 @@ import {
 import { getMaterialPageApi, type MaterialPageItem } from '@/api/modules/material'
 
 const router = useRouter()
+const mobileQuery = window.matchMedia('(max-width: 760px)')
+const isMobile = ref(mobileQuery.matches)
+const updateMobile = (event: MediaQueryListEvent) => {
+  isMobile.value = event.matches
+  if (!event.matches && !hasLoaded.value && !loading.value) void loadAnalytics()
+}
+mobileQuery.addEventListener('change', updateMobile)
 const loading = ref(false)
 const hasLoaded = ref(false)
 const loadError = ref('')
@@ -616,11 +631,12 @@ const goWrongQuestions = (item: WeakKnowledgePointItem) =>
   })
 
 onUnmounted(() => {
+  mobileQuery.removeEventListener('change', updateMobile)
   analyticsRequestId++
   materialRequestId++
 })
 void loadMaterials()
-void loadAnalytics()
+if (!isMobile.value) void loadAnalytics()
 </script>
 
 <style scoped>
@@ -1125,6 +1141,122 @@ void loadAnalytics()
 @media (prefers-reduced-motion: reduce) {
   .statistics-loading__line {
     animation: none;
+  }
+}
+@media (max-width: 760px) {
+  .statistics-page {
+    padding-top: 0;
+  }
+  .statistics-page > .page-header {
+    position: relative;
+  }
+  .statistics-page .page-title {
+    padding-right: 108px;
+  }
+  .statistics-page .page-header .toolbar--flush {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: auto;
+  }
+  .statistics-page .page-header .el-button {
+    height: 40px;
+    padding-inline: 12px;
+    border: 0;
+    background: transparent;
+    font-size: 13px;
+  }
+  .statistics-filter-panel {
+    margin-bottom: 28px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+  .statistics-periods {
+    width: 100%;
+    border-radius: 12px;
+  }
+  .statistics-periods button {
+    flex: 1;
+    min-height: 40px;
+    padding-inline: 10px;
+  }
+  .statistics-material-filter {
+    max-width: none;
+  }
+  .statistics-custom-range {
+    padding-top: 16px;
+  }
+  .statistics-date-fields {
+    gap: 10px;
+  }
+  .statistics-date-fields input {
+    height: 48px;
+    border-radius: 12px;
+  }
+  .statistics-date-fields .el-button {
+    min-height: 44px;
+    font-size: 14px;
+  }
+  .statistics-sheet {
+    padding: 26px 0 0;
+    border: 0;
+    border-top: 1px solid var(--line);
+    border-radius: 0;
+    background: transparent;
+  }
+  .statistics-section-heading h2 {
+    font-size: 20px;
+    line-height: 1.5;
+    letter-spacing: -0.02em;
+  }
+  .statistics-section-heading p {
+    font-size: 13px;
+  }
+  .statistics-overview :deep(.stat-tile) {
+    border-left: 0;
+  }
+  .statistics-overview :deep(.stat-tile dd) {
+    margin-top: 10px;
+    font-size: 42px;
+    font-weight: 500;
+  }
+  .statistics-overview__notes {
+    padding-block: 18px 24px;
+  }
+  .statistics-trend {
+    padding-top: 32px;
+  }
+  .statistics-trend > .statistics-section-heading {
+    flex-wrap: wrap;
+  }
+  .statistics-metric-switch button {
+    min-height: 40px;
+    font-size: 13px;
+  }
+  .statistics-breakdowns {
+    padding-block: 34px;
+  }
+  .statistics-review-row {
+    padding-block: 24px;
+  }
+  .statistics-review-row__main strong,
+  .statistics-record-list strong {
+    font-size: 16px;
+    line-height: 1.6;
+  }
+  .statistics-review-row__score strong,
+  .statistics-record-list b {
+    font-size: 28px;
+  }
+  .statistics-record-list li {
+    padding-block: 20px;
+  }
+  .statistics-notice,
+  .statistics-empty-intro {
+    padding: 20px;
+    border: 0;
+    border-radius: 18px;
   }
 }
 </style>
