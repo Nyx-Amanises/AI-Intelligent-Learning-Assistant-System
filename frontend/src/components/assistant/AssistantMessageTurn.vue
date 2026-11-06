@@ -24,7 +24,7 @@
       <span class="assistant-thinking__dot" />
       <span class="assistant-thinking__dot" />
       <span class="assistant-thinking__dot" />
-      <span>正在整理上下文并开始生成...</span>
+      <span>正在思考…</span>
     </div>
 
     <div
@@ -45,7 +45,11 @@
 
     <AssistantCitations v-if="!isUser && evidence" :evidence="evidence" />
 
-    <AssistantToolActivity v-if="!isUser && toolCalls.length" :tools="toolCalls" @open-practice="emit('openPractice')" />
+    <AssistantToolActivity
+      v-if="!isUser && toolCalls.length"
+      :tools="toolCalls"
+      @open-practice="emit('openPractice')"
+    />
     <details v-if="!isUser && memories.length" class="assistant-turn__trace">
       <summary>参考的学习记忆</summary>
       <div class="assistant-trace-block">
@@ -102,10 +106,11 @@ const evidence = computed(() => (isUser.value ? null : parseRagEvidence(props.to
 .assistant-turn__meta {
   display: flex;
   align-items: center;
-  gap: 12px;
-  color: var(--text-secondary);
-  font-size: 11px;
-  font-weight: 600;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
 }
 
 .assistant-turn--user .assistant-turn__meta {
@@ -136,7 +141,7 @@ const evidence = computed(() => (isUser.value ? null : parseRagEvidence(props.to
   margin-top: 8px;
   color: var(--text);
   font-size: 15px;
-  line-height: 1.95;
+  line-height: 1.85;
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -191,7 +196,7 @@ const evidence = computed(() => (isUser.value ? null : parseRagEvidence(props.to
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  width: fit-content;
+  max-width: 100%;
   margin-top: 8px;
   color: var(--text-secondary);
 }

@@ -3,7 +3,7 @@
     <div class="assistant-conversation__hero">
       <div class="assistant-conversation__meta">
         <span class="assistant-status-chip assistant-status-chip--brand">{{ contextLabel }}</span>
-        <span class="assistant-status-chip">消息 {{ session.messages.length }}</span>
+        <span class="assistant-status-chip">{{ session.messages.length }} 条消息</span>
       </div>
       <p v-if="lastActiveAt">最近活跃 {{ formatDateTime(lastActiveAt) }}</p>
     </div>
@@ -41,7 +41,7 @@
       <template #topline>
         <span v-if="actionBusy">正在处理任务确认，请稍候。</span>
         <span v-else-if="session.currentContextType">{{ contextLabel }}</span>
-        <button type="button" class="assistant-inline-danger" @click="emit('delete')">删除会话</button>
+        <button type="button" class="assistant-inline-danger" @click="emit('delete')">删除对话</button>
       </template>
     </AssistantComposer>
   </section>
@@ -114,6 +114,7 @@ defineExpose({
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  flex-wrap: wrap;
   width: min(920px, 100%);
   margin: 0 auto;
   padding: 0 0 14px;
@@ -121,13 +122,17 @@ defineExpose({
 }
 
 .assistant-conversation__hero p {
-  color: var(--text-secondary);
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .assistant-conversation__meta {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .assistant-status-chip {
@@ -135,7 +140,7 @@ defineExpose({
   align-items: center;
   color: var(--text-secondary);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 400;
 }
 
 .assistant-status-chip--brand {

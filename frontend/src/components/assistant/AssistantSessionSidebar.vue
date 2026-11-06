@@ -12,21 +12,22 @@
           <AppIcon name="copilot" :size="25" />
         </span>
         <div>
-          <div class="assistant-sidebar__kicker">学习问答</div>
           <h2>{{ ASSISTANT_NAME }}</h2>
         </div>
         <button type="button" class="assistant-sidebar__close" aria-label="收起会话列表" @click="emit('close-mobile')">
           收起
         </button>
       </div>
-      <p>{{ bindingHelperText }}</p>
     </div>
 
-    <div class="assistant-context-card">
-      <span class="assistant-context-card__label">对话范围</span>
-      <strong>{{ bindingLabel }}</strong>
-      <em>提问时说明资料或题集的名称，便于找到学习内容。</em>
-    </div>
+    <details class="assistant-context-card">
+      <summary>
+        <span>对话范围</span><strong>{{ bindingLabel }}</strong
+        ><AppIcon name="chevron-down" :size="14" />
+      </summary>
+      <p>{{ bindingHelperText }}</p>
+      <p>提问时可以说明资料或题集的名称。</p>
+    </details>
 
     <div class="assistant-sidebar__actions">
       <button
@@ -35,27 +36,28 @@
         :disabled="creating"
         @click="emit('create')"
       >
-        {{ creating ? '创建中...' : '新对话' }}
+        <AppIcon name="plus" :size="17" />{{ creating ? '正在创建…' : '新对话' }}
       </button>
       <button
         type="button"
         class="assistant-control assistant-control--ghost"
         :disabled="loading"
+        :aria-label="loading ? '正在刷新对话' : '刷新对话列表'"
         @click="emit('refresh')"
       >
-        {{ loading ? '刷新中...' : '刷新列表' }}
+        <AppIcon name="refresh" :size="17" :class="{ 'is-loading': loading }" />
       </button>
     </div>
 
     <div class="assistant-session-header">
       <div>
-        <span>对话</span>
+        <span>最近对话</span>
         <strong>{{ total }}</strong>
       </div>
     </div>
 
-    <div v-if="loading && !sessions.length" class="assistant-sidebar__empty">正在加载会话...</div>
-    <div v-else-if="!sessions.length" class="assistant-sidebar__empty">还没有对话，先新建一个会话吧。</div>
+    <div v-if="loading && !sessions.length" class="assistant-sidebar__empty" role="status">正在加载对话…</div>
+    <div v-else-if="!sessions.length" class="assistant-sidebar__empty">还没有对话。输入问题，就能开始。</div>
     <div v-else class="assistant-session-list">
       <article
         v-for="item in sessions"
@@ -89,7 +91,7 @@
               type="button"
               class="assistant-session-card__menu-button"
               :disabled="busySessionIds.includes(item.id)"
-              aria-label="更多对话操作"
+              :aria-label="`${item.title || '新对话'}的更多操作`"
               @click.stop
             >
               <AppIcon name="more-horizontal" :size="16" />
@@ -98,7 +100,7 @@
               <el-dropdown-menu>
                 <el-dropdown-item command="rename">重命名</el-dropdown-item>
                 <el-dropdown-item :command="isSessionPinned(item) ? 'unpin' : 'pin'">
-                  {{ isSessionPinned(item) ? '取消置顶' : '置顶聊天' }}
+                  {{ isSessionPinned(item) ? '取消置顶' : '置顶对话' }}
                 </el-dropdown-item>
                 <el-dropdown-item command="delete" divided class="assistant-session-menu__danger">
                   删除
@@ -162,7 +164,7 @@ defineExpose({ rootRef })
   min-height: 0;
   padding: 24px 18px;
   border-right: 1px solid var(--line);
-  background: var(--bg-secondary);
+  background: var(--bg);
   overflow: hidden;
 }
 
@@ -180,25 +182,19 @@ defineExpose({ rootRef })
   height: 40px;
   border-radius: 11px;
   background: var(--brand);
-  color: #fff;
-}
-
-.assistant-sidebar__kicker {
-  color: var(--text-secondary);
-  font-size: 10px;
-  font-weight: 700;
+  color: var(--on-brand);
 }
 
 .assistant-sidebar__brand h2 {
-  margin: 4px 0 0;
+  margin: 0;
   color: var(--text);
   font-size: 17px;
+  font-weight: 600;
   line-height: 1.5;
   letter-spacing: -0.3px;
 }
 
-.assistant-sidebar__brand p,
-.assistant-context-card em {
+.assistant-context-card p {
   display: block;
   margin: 10px 0 0;
   color: var(--text-secondary);
@@ -212,50 +208,75 @@ defineExpose({ rootRef })
 }
 
 .assistant-context-card {
-  padding: 0 0 14px;
+  padding: 4px 0 14px;
   border-bottom: 1px solid var(--line);
 }
 
-.assistant-context-card__label {
-  display: block;
-  color: var(--text-secondary);
+.assistant-context-card summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  color: var(--muted);
   font-size: 12px;
-  font-weight: 700;
+  list-style: none;
+  cursor: pointer;
+}
+.assistant-context-card summary::-webkit-details-marker {
+  display: none;
+}
+.assistant-context-card summary .app-icon {
+  flex-shrink: 0;
+  margin-left: auto;
+}
+.assistant-context-card[open] summary .app-icon {
+  transform: rotate(180deg);
 }
 
 .assistant-context-card strong {
-  display: block;
-  margin-top: 12px;
-  color: var(--text);
-  font-size: 16px;
+  min-width: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
 }
 
 .assistant-sidebar__actions {
   display: grid;
-  gap: 2px;
+  grid-template-columns: minmax(0, 1fr) 44px;
+  gap: 6px;
 }
 
 .assistant-control {
   display: flex;
   align-items: center;
+  gap: 8px;
   width: 100%;
   min-height: 44px;
-  padding: 12px 14px;
+  padding: 10px 12px;
   border: 0;
-  border-radius: 9px;
+  border-radius: var(--el-border-radius-base);
   background: transparent;
   color: var(--text-secondary);
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
   text-align: left;
   cursor: pointer;
-  transition: background 0.2s ease;
+  transition: background var(--duration-fast) ease;
 }
 
 .assistant-control--primary {
-  border: 1px solid var(--line);
-  background: var(--panel);
-  color: var(--brand);
+  background: var(--brand);
+  color: var(--on-brand);
+}
+.assistant-control--primary:not(:disabled):hover {
+  background: var(--brand-hover);
+}
+.assistant-control--ghost {
+  justify-content: center;
+}
+.assistant-control .is-loading {
+  animation: zx-spin 0.8s linear infinite;
 }
 
 .assistant-control:disabled {
@@ -263,7 +284,7 @@ defineExpose({ rootRef })
   opacity: 0.55;
 }
 
-.assistant-control:not(:disabled):hover {
+.assistant-control--ghost:not(:disabled):hover {
   background: var(--brand-light);
 }
 
@@ -275,13 +296,15 @@ defineExpose({ rootRef })
 }
 
 .assistant-session-header span {
-  color: var(--text-secondary);
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .assistant-session-header strong {
   margin-left: 8px;
   color: var(--text);
-  font-size: 18px;
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .assistant-sidebar__empty {
@@ -323,7 +346,8 @@ defineExpose({ rootRef })
 
 .assistant-session-card {
   padding: 3px 8px;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
+  transition: background var(--duration-fast) ease;
   cursor: pointer;
 }
 
@@ -388,7 +412,7 @@ defineExpose({ rootRef })
   background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: background 0.2s ease;
+  transition: background var(--duration-fast) ease;
 }
 
 .assistant-session-card__menu-button:not(:disabled):hover,
@@ -419,8 +443,8 @@ defineExpose({ rootRef })
     transform: translateX(-105%);
     visibility: hidden;
     transition:
-      transform 0.2s ease,
-      visibility 0.2s ease;
+      transform var(--duration) var(--ease-out),
+      visibility var(--duration) ease;
   }
 
   .assistant-sidebar--mobile-open {
@@ -446,8 +470,7 @@ defineExpose({ rootRef })
 }
 
 @media (max-width: 640px) {
-  .assistant-sidebar__brand p,
-  .assistant-context-card em {
+  .assistant-context-card p {
     font-size: 12px;
   }
 }

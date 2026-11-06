@@ -11,17 +11,14 @@
       :class="{ 'assistant-textarea--compact': variant === 'dock' }"
       maxlength="4000"
       :aria-label="variant === 'hero' ? `向${ASSISTANT_NAME}提问` : `继续向${ASSISTANT_NAME}提问`"
-      :placeholder="
-        variant === 'hero'
-          ? '输入你的问题。回车发送，Shift + 回车换行。'
-          : '继续提问… 回车发送，Shift + 回车换行。'
-      "
+      :placeholder="variant === 'hero' ? '输入问题，也可以写下资料或题集的名称…' : '继续提问…'"
       @keydown="handleKeydown"
     />
 
     <div class="assistant-composer__bottom">
       <div class="assistant-composer__meta">
         <span v-if="metaLabel">{{ metaLabel }}</span>
+        <span class="assistant-composer__shortcut">回车发送 · Shift + 回车换行</span>
         <span>{{ modelValue.length }}/4000</span>
       </div>
       <button
@@ -83,7 +80,7 @@ const text = computed({
 
 const sendLabel = computed(() => {
   if (props.variant === 'hero') {
-    return props.sending ? '发送中...' : '开始对话'
+    return props.sending ? '发送中…' : '发送'
   }
   return '发送'
 })
@@ -108,12 +105,12 @@ defineExpose({
   width: min(720px, 100%);
   padding: 16px 20px;
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: var(--radius-lg);
   background: var(--panel);
   box-shadow: var(--shadow-sm);
   transition:
-    border-color 0.18s ease,
-    box-shadow 0.18s ease;
+    border-color var(--duration-fast) ease,
+    box-shadow var(--duration-fast) ease;
 }
 
 .assistant-composer:focus-within {
@@ -134,6 +131,10 @@ defineExpose({
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+.assistant-composer__topline {
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .assistant-textarea {
@@ -162,22 +163,25 @@ defineExpose({
 .assistant-composer__meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 16px;
-  color: var(--text-secondary);
+  gap: 4px 12px;
+  min-width: 0;
+  color: var(--muted);
   font-size: 12px;
+  overflow-wrap: anywhere;
 }
 
 .assistant-send-button {
+  flex: 0 0 auto;
   min-height: 44px;
   padding: 10px 18px;
   border: 0;
-  border-radius: 9px;
+  border-radius: var(--el-border-radius-base);
   background: var(--brand);
-  color: #fff;
+  color: var(--on-brand);
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
-  transition: background 0.2s ease;
+  transition: background var(--duration-fast) ease;
 }
 
 .assistant-send-button:not(:disabled):hover {
@@ -222,6 +226,9 @@ defineExpose({
   }
 
   .assistant-composer__topline {
+    gap: 8px;
+  }
+  .assistant-composer__shortcut {
     display: none;
   }
 

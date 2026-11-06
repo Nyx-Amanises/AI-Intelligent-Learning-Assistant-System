@@ -57,9 +57,9 @@
               @close="closePanel"
             />
 
-            <div v-if="aiMockMode" class="assistant-mock-notice">
-              <strong>当前使用模拟回复</strong>
-              <span>当前回复由模拟模式提供。需要真实 AI 回答时，可在 AI 设置中关闭模拟模式。</span>
+            <div v-if="aiMockMode" class="assistant-mock-notice" role="status">
+              <strong>演示模式</strong>
+              <span>当前使用模拟回复。连接真实模型，可前往「AI 配置」切换使用方式。</span>
             </div>
 
             <AssistantHome
@@ -318,9 +318,9 @@ defineExpose({ openPracticeAnalysis })
   min-height: 52px;
   padding: 12px 18px;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-lg);
   background: var(--brand);
-  color: #fff;
+  color: var(--on-brand);
   box-shadow: var(--shadow-lg);
   cursor: pointer;
 }
@@ -332,12 +332,12 @@ defineExpose({ openPracticeAnalysis })
   height: 34px;
   border-radius: 50%;
   background: rgb(255 255 255 / 16%);
-  color: #fff;
+  color: var(--on-brand);
 }
 
 .assistant-fab__label {
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .assistant-overlay {
@@ -347,18 +347,26 @@ defineExpose({ openPracticeAnalysis })
   display: grid;
   place-items: center;
   padding: 20px;
-  background: rgb(27 42 32 / 32%);
-  backdrop-filter: blur(4px);
+  background: var(--el-overlay-color-lighter);
+  backdrop-filter: blur(2px);
 }
 
 .assistant-overlay-enter-active,
 .assistant-overlay-leave-active {
-  transition: opacity 0.24s ease;
+  transition: opacity var(--duration) ease;
 }
 
 .assistant-overlay-enter-from,
 .assistant-overlay-leave-to {
   opacity: 0;
+}
+.assistant-overlay-enter-active .assistant-panel,
+.assistant-overlay-leave-active .assistant-panel {
+  transition: transform var(--duration) var(--ease-out);
+}
+.assistant-overlay-enter-from .assistant-panel,
+.assistant-overlay-leave-to .assistant-panel {
+  transform: translateY(8px);
 }
 
 .assistant-mobile-scrim {
@@ -368,14 +376,14 @@ defineExpose({ openPracticeAnalysis })
 .assistant-panel {
   position: relative;
   display: grid;
-  grid-template-columns: 270px minmax(0, 1fr);
-  width: min(1380px, 100%);
+  grid-template-columns: 250px minmax(0, 1fr);
+  width: min(1280px, 100%);
   height: min(920px, calc(100dvh - 40px));
   max-height: calc(100dvh - 40px);
   border: 1px solid var(--line);
-  border-radius: 20px;
+  border-radius: var(--radius-lg);
   background: var(--panel);
-  box-shadow: 0 28px 80px rgb(27 42 32 / 18%);
+  box-shadow: var(--shadow-xl);
   outline: none;
   overflow: hidden;
 }
@@ -395,31 +403,33 @@ defineExpose({ openPracticeAnalysis })
   min-width: 0;
   min-height: 0;
   height: 100%;
-  padding: 22px 28px 18px;
+  padding: 18px 24px;
   background: var(--panel);
   overflow: hidden;
 }
 
 .assistant-mock-notice {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
   width: min(920px, 100%);
   margin: 0 auto 12px;
   padding: 10px 14px;
   border: 1px solid var(--accent-soft);
-  border-left: 3px solid var(--accent);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: var(--accent-soft);
   color: var(--text);
   line-height: 1.6;
 }
 
 .assistant-mock-notice strong {
-  display: block;
+  color: var(--accent);
   font-size: 13px;
+  font-weight: 500;
 }
 
 .assistant-mock-notice span {
-  display: block;
-  margin-top: 2px;
   font-size: 12px;
 }
 
@@ -473,6 +483,8 @@ defineExpose({ openPracticeAnalysis })
 @media (prefers-reduced-motion: reduce) {
   .assistant-overlay-enter-active,
   .assistant-overlay-leave-active,
+  .assistant-overlay-enter-active .assistant-panel,
+  .assistant-overlay-leave-active .assistant-panel,
   .assistant-panel :deep(button) {
     transition: none;
   }

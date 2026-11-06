@@ -2,8 +2,8 @@
   <section class="assistant-home">
     <div class="assistant-home__hero">
       <div class="assistant-home__greeting">你好，{{ greetingName }}</div>
-      <h2>有什么学习问题？</h2>
-      <p>可以提问、查找资料，或讨论练习中不理解的地方。</p>
+      <h2>今天想弄懂什么？</h2>
+      <p>问知识点、查资料，也可以一起复盘错题。</p>
     </div>
 
     <AssistantComposer
@@ -66,28 +66,30 @@ const emit = defineEmits<{
 }
 
 .assistant-home__hero {
-  max-width: 760px;
+  width: min(720px, 100%);
   text-align: center;
 }
 
 .assistant-home__greeting {
   color: var(--brand);
   font-size: 15px;
+  overflow-wrap: anywhere;
 }
 
 .assistant-home__hero h2 {
   margin: 6px 0 0;
   color: var(--text);
-  font-size: clamp(28px, 3.3vw, 38px);
+  font-size: clamp(25px, 2.5vw, 30px);
+  font-weight: 600;
   line-height: 1.4;
-  letter-spacing: -0.8px;
+  letter-spacing: 0.01em;
 }
 
 .assistant-home__hero p {
   display: block;
   max-width: 42ch;
   margin: 12px auto 0;
-  color: var(--text-secondary);
+  color: var(--muted);
   font-size: 14px;
   line-height: 1.7;
 }
@@ -98,7 +100,7 @@ const emit = defineEmits<{
   align-items: center;
   justify-content: center;
   gap: 10px;
-  max-width: 820px;
+  max-width: 720px;
 }
 
 .assistant-suggestion-chip {
@@ -107,20 +109,22 @@ const emit = defineEmits<{
   min-height: 44px;
   padding: 10px 14px;
   border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--bg);
+  border-radius: var(--el-border-radius-base);
+  background: var(--panel);
   color: var(--text-secondary);
   font-size: 13px;
   line-height: 1.6;
   text-align: left;
   cursor: pointer;
   transition:
-    border-color 0.18s ease,
-    color 0.18s ease;
+    border-color var(--duration-fast) ease,
+    background-color var(--duration-fast) ease,
+    color var(--duration-fast) ease;
 }
 
 .assistant-suggestion-chip:hover {
   border-color: var(--brand);
+  background: var(--brand-light);
   color: var(--brand);
 }
 
@@ -132,7 +136,7 @@ const emit = defineEmits<{
 
   .assistant-home__hero h2 {
     margin-top: 8px;
-    font-size: 32px;
+    font-size: 28px;
   }
 
   .assistant-home__hero p {
@@ -148,7 +152,7 @@ const emit = defineEmits<{
   }
 
   .assistant-home__hero h2 {
-    font-size: 30px;
+    font-size: 26px;
   }
 
   .assistant-home__greeting {

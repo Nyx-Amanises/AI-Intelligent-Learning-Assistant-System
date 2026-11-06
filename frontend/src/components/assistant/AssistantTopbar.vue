@@ -8,22 +8,20 @@
       :aria-expanded="mobileSidebarOpen"
       @click="emit('open-menu')"
     >
-      <span />
-      <span />
-      <span />
+      <AppIcon name="menu" :size="19" />
     </button>
     <div class="assistant-topbar__title-block">
-      <span class="assistant-topbar__eyebrow">{{ ASSISTANT_NAME }}</span>
-      <h1>{{ title }}</h1>
+      <h1 :title="title">{{ title }}</h1>
     </div>
     <div class="assistant-topbar__actions">
       <button
         type="button"
         class="assistant-top-button assistant-top-button--ghost"
         :disabled="loading"
+        aria-label="刷新对话列表"
         @click="emit('refresh')"
       >
-        {{ loading ? '刷新中...' : '刷新' }}
+        <AppIcon name="refresh" :size="18" :class="{ 'is-loading': loading }" />
       </button>
       <button
         type="button"
@@ -31,7 +29,7 @@
         :aria-label="`关闭${ASSISTANT_NAME}`"
         @click="emit('close')"
       >
-        关闭
+        <AppIcon name="close" :size="19" />
       </button>
     </div>
   </header>
@@ -40,6 +38,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { ASSISTANT_NAME } from '@/config/brand'
+import AppIcon from '@/components/AppIcon.vue'
 
 defineProps<{
   title: string
@@ -66,25 +65,21 @@ defineExpose({ menuButtonRef })
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 22px;
+  min-height: 44px;
+  margin-bottom: 16px;
 }
 
 .assistant-topbar__title-block {
+  flex: 1;
   min-width: 0;
 }
 
-.assistant-topbar__eyebrow {
-  color: var(--brand);
-  font-size: 11px;
-  font-weight: 700;
-}
-
 .assistant-topbar h1 {
-  margin: 6px 0 0;
+  margin: 0;
   color: var(--text);
   font-size: 19px;
+  font-weight: 600;
   line-height: 1.5;
-  letter-spacing: -0.03em;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -98,16 +93,19 @@ defineExpose({ menuButtonRef })
 }
 
 .assistant-top-button {
+  display: grid;
+  place-items: center;
+  width: 40px;
   min-height: 44px;
-  padding: 8px 12px;
-  border: 1px solid var(--line);
-  border-radius: 9px;
+  padding: 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-secondary);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.2s ease;
+  transition: background var(--duration-fast) ease;
 }
 
 .assistant-top-button--ghost {
@@ -120,7 +118,11 @@ defineExpose({ menuButtonRef })
 }
 
 .assistant-top-button:not(:disabled):hover {
-  background: var(--brand-light);
+  background: var(--panel-hover);
+  color: var(--brand);
+}
+.assistant-top-button .is-loading {
+  animation: zx-spin 0.8s linear infinite;
 }
 
 .assistant-topbar__menu-button {
@@ -130,10 +132,10 @@ defineExpose({ menuButtonRef })
 @media (max-width: 900px) {
   .assistant-topbar {
     display: grid;
-    grid-template-columns: 44px minmax(0, 1fr) 56px;
+    grid-template-columns: 44px minmax(0, 1fr) 44px;
     align-items: center;
     gap: 8px;
-    min-height: 76px;
+    min-height: 64px;
     margin-bottom: 8px;
     padding: 10px 0;
   }
@@ -142,14 +144,7 @@ defineExpose({ menuButtonRef })
     text-align: center;
   }
 
-  .assistant-topbar__eyebrow {
-    display: block;
-    font-size: 10px;
-    line-height: 1.5;
-  }
-
   .assistant-topbar h1 {
-    margin: 3px 0 0;
     font-size: 17px;
     line-height: 1.4;
     letter-spacing: 0;
@@ -168,31 +163,26 @@ defineExpose({ menuButtonRef })
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 48px;
-    padding: 6px 10px;
+    min-width: 44px;
+    padding: 8px;
     font-size: 12px;
   }
 
   .assistant-topbar__menu-button {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    gap: 5px;
+    display: grid;
+    place-items: center;
     width: 44px;
     height: 44px;
-    padding: 11px 10px;
-    border: 1px solid var(--line);
-    border-radius: 10px;
+    padding: 10px;
+    border: 0;
+    border-radius: var(--radius-sm);
     background: transparent;
     cursor: pointer;
   }
 
-  .assistant-topbar__menu-button span {
-    display: block;
-    width: 100%;
-    height: 2px;
-    border-radius: 2px;
-    background: var(--text-secondary);
+  .assistant-topbar__menu-button:hover {
+    background: var(--panel-hover);
+    color: var(--brand);
   }
 }
 

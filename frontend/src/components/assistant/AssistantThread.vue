@@ -255,8 +255,8 @@ defineExpose({ scrollToBottom, jumpToLatest })
 
 .assistant-thread__empty strong {
   display: block;
-  font-size: 28px;
-  letter-spacing: -0.03em;
+  font-size: 23px;
+  font-weight: 600;
 }
 
 .assistant-thread__empty p {
@@ -272,6 +272,7 @@ defineExpose({ scrollToBottom, jumpToLatest })
   align-items: center;
   justify-content: flex-start;
   gap: 10px;
+  margin-top: 18px;
   max-width: 820px;
 }
 
@@ -281,20 +282,22 @@ defineExpose({ scrollToBottom, jumpToLatest })
   min-height: 44px;
   padding: 10px 14px;
   border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--bg);
+  border-radius: var(--el-border-radius-base);
+  background: var(--panel);
   color: var(--text-secondary);
   font-size: 13px;
   line-height: 1.6;
   text-align: left;
   cursor: pointer;
   transition:
-    border-color 0.18s ease,
-    color 0.18s ease;
+    border-color var(--duration-fast) ease,
+    background-color var(--duration-fast) ease,
+    color var(--duration-fast) ease;
 }
 
 .assistant-suggestion-chip:hover {
   border-color: var(--brand);
+  background: var(--brand-light);
   color: var(--brand);
 }
 
