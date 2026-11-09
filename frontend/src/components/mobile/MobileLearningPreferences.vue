@@ -1,6 +1,14 @@
 <template>
   <section class="mobile-preferences" aria-label="学习偏好">
+    <header class="preferences-desktop-heading">
+      <h1>学习偏好</h1>
+      <nav aria-label="我的学习与偏好">
+        <RouterLink to="/analytics">我的学习</RouterLink>
+        <RouterLink to="/profile" aria-current="page">学习偏好</RouterLink>
+      </nav>
+    </header>
     <div class="preference-group">
+      <h2 class="preference-group__title">账户</h2>
       <RouterLink :to="{ path: '/profile', query: { view: 'account' } }" class="preference-row">
         <span class="preference-row__label">账户资料</span>
         <span class="preference-row__value" :title="displayName">{{ displayName }}</span>
@@ -8,6 +16,7 @@
       </RouterLink>
     </div>
     <div class="preference-group">
+      <h2 class="preference-group__title">阅读与助手</h2>
       <button
         type="button"
         class="preference-row"
@@ -43,6 +52,7 @@
       </RouterLink>
     </div>
     <div class="preference-group">
+      <h2 class="preference-group__title">学习工具</h2>
       <RouterLink to="/ai-tasks" class="preference-row">
         <span class="preference-row__label">任务中心</span>
         <MobileIcon name="next" :size="16" />
@@ -53,6 +63,7 @@
       </RouterLink>
     </div>
     <div class="preference-group">
+      <h2 class="preference-group__title">更多</h2>
       <RouterLink to="/materials" class="preference-row">
         <span class="preference-row__label">我的内容</span>
         <MobileIcon name="next" :size="16" />
@@ -85,6 +96,10 @@ const logout = () => {
 </script>
 
 <style scoped>
+.preferences-desktop-heading,
+.preference-group__title {
+  display: none;
+}
 .mobile-preferences {
   display: grid;
   gap: 12px;
@@ -152,6 +167,71 @@ const logout = () => {
 .preference-theme-options button[aria-pressed='true'] {
   color: var(--brand);
   background: var(--brand-light);
+}
+.mobile-preferences a:focus-visible,
+.mobile-preferences button:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 3px;
+}
+@media (min-width: 761px) {
+  .mobile-preferences {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    gap: 24px;
+    padding-top: 0;
+  }
+  .preferences-desktop-heading {
+    display: flex;
+    grid-column: 1 / -1;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    margin-bottom: 8px;
+  }
+  .preferences-desktop-heading h1 {
+    margin: 0;
+    font-size: 26px;
+    font-weight: 600;
+  }
+  .preferences-desktop-heading nav {
+    display: flex;
+    gap: 4px;
+    padding: 4px;
+    border-radius: 26px;
+    background: var(--panel);
+  }
+  .preferences-desktop-heading a {
+    min-height: 44px;
+    padding: 12px 20px;
+    border-radius: 22px;
+    color: var(--text-secondary);
+    text-decoration: none;
+  }
+  .preferences-desktop-heading a[aria-current='page'] {
+    background: var(--brand-soft);
+    color: var(--brand);
+  }
+  .preference-group {
+    min-width: 0;
+    padding: 20px 24px 12px;
+    border-radius: 16px;
+  }
+  .preference-group__title {
+    display: block;
+    margin: 0 0 8px;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .preference-row {
+    min-height: 60px;
+  }
+  .preference-row__label {
+    font-size: 15px;
+  }
+  .preference-row__value {
+    font-size: 13px;
+  }
 }
 @media (max-width: 360px) {
   .preference-group {

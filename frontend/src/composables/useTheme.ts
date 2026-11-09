@@ -24,9 +24,9 @@ export const THEME_OPTIONS: ThemeOption[] = [
   {
     key: 'eye-care',
     label: '护眼',
-    hint: '豆沙绿底色，长时间阅读更柔和',
+    hint: '柔和纸色，适合长时间阅读',
     icon: 'leaf',
-    color: '#e9eee2'
+    color: '#eee8dc'
   }
 ]
 

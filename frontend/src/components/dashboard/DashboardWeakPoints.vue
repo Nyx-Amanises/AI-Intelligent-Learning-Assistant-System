@@ -25,6 +25,9 @@
         </span>
         <p class="weak-points__meta">错 {{ item.wrongCount }} 次 · 共作答 {{ item.attemptCount }} 次</p>
         <div class="weak-points__actions">
+          <el-button size="small" @click="router.push(knowledgeResourceRoute(item.knowledgePoint, item.materialId))"
+            >补充学习</el-button
+          >
           <el-button
             size="small"
             type="primary"
@@ -49,6 +52,7 @@ import type { KnowledgeMasteryItem } from '@/api/modules/knowledgeMastery'
 import { knowledgePointPracticeReason } from '@/utils/knowledgePractice'
 import { MASTERY_REVIEW_THRESHOLD, masteryColorByPercent } from '@/utils/mastery'
 import { knowledgePracticeRoute, wrongQuestionsRoute } from './routes'
+import { knowledgeResourceRoute } from '@/utils/resourceNavigation'
 
 /** 首页“需要巩固的知识点”：最多三条，可直接生成专项练习或查看相关错题。 */
 defineProps<{ points: KnowledgeMasteryItem[] }>()
@@ -127,6 +131,7 @@ const canPractice = (item: KnowledgeMasteryItem) =>
 }
 .weak-points__actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin-top: 12px;
 }

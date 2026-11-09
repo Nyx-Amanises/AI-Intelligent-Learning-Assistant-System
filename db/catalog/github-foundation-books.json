@@ -1,0 +1,1140 @@
+{
+  "schemaVersion": 1,
+  "verifiedAt": "2026-11-07",
+  "records": [
+    {
+      "slug": "clp-1-differential-calculus",
+      "title": "CLP 微积分 1：微分学",
+      "subtitle": "CLP-1 Differential Calculus · 2024 年修订版",
+      "author": "Joel Feldman、Andrew Rechnitzer、Elyse Yeager",
+      "publisher": "UBC 数学系开放教材项目",
+      "publisherNote": "作者为不列颠哥伦比亚大学数学系教师，PDF 由作者所在大学的 CLP 开放教材项目发布；此字段不代表商业出版社。",
+      "languageCode": "en",
+      "subject": "高等数学",
+      "licenseCode": "CC-BY-NC-SA-4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-nc-sa/4.0/",
+      "sourceUrl": "https://github.com/arechnitzer/CLP1",
+      "originalSourceUrl": "https://personal.math.ubc.ca/~CLP/CLP1/",
+      "licenseEvidence": "作者大学官网 https://personal.math.ubc.ca/~CLP/src/ 直接链接 https://github.com/arechnitzer/CLP1，并明确各卷教材及源文件为 CC BY-NC-SA 4.0；所下载完整 PDF 的物理第 3 页（Legal stuff）明确“This work is licensed under the Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License”。保留该版权页及所有正文附录。",
+      "licenseEvidencePages": [
+        3
+      ],
+      "licenseEvidenceUrls": [
+        "https://github.com/arechnitzer/CLP1/blob/master/README.md",
+        "https://personal.math.ubc.ca/~CLP/src/"
+      ],
+      "attribution": "Joel Feldman、Andrew Rechnitzer、Elyse Yeager。《CLP-1 Differential Calculus》，2024-08-16 排版版。CC BY-NC-SA 4.0。封面设计 Nick Loewen。原项目 https://github.com/arechnitzer/CLP1；作者网站 https://personal.math.ubc.ca/~CLP/CLP1/。本站保留完整原始 PDF；阅读文本为自动提取，可能存在排版差异。",
+      "licenseNote": "Joel Feldman、Andrew Rechnitzer、Elyse Yeager。《CLP-1 Differential Calculus》，2024-08-16 排版版。CC BY-NC-SA 4.0。封面设计 Nick Loewen。原项目 https://github.com/arechnitzer/CLP1；作者网站 https://personal.math.ubc.ca/~CLP/CLP1/。本站保留完整原始 PDF；阅读文本为自动提取，可能存在排版差异。",
+      "knowledgePoints": [
+        "函数与极限",
+        "连续性",
+        "导数与微分",
+        "中值定理",
+        "洛必达法则",
+        "优化问题",
+        "曲线描绘",
+        "数值求根"
+      ],
+      "summary": "覆盖大学一年级微分学完整课程，从函数与极限、连续性到导数及其应用，并附高中知识、三角与面积公式、数值求根。",
+      "sourceName": "GitHub · arechnitzer/CLP1",
+      "coverAttribution": "原始 PDF 封面，Nick Loewen 设计；作者官网 source 页面注明设计者。",
+      "completenessEvidence": "作者网站“textbook”完整单卷 PDF，非课件、习题单册或章节节选。目录覆盖整卷课程并保留全部附录；末页与目录最后部分对应。",
+      "readerQualityNote": "原版 PDF 渲染正常；数学字体的自动文本提取可能存在符号映射差异，公式宜查看原版。",
+      "downloadUrl": "https://personal.math.ubc.ca/~CLP/CLP1/clp_1_dc_text.pdf",
+      "coverageNote": "完整 426 页 · CLP-1 Differential Calculus · 2024 年修订版。覆盖大学一年级微分学完整课程，从函数与极限、连续性到导数及其应用，并附高中知识、三角与面积公式、数值求根。",
+      "coverPolicy": "pdf-first-page",
+      "verifiedAt": "2026-11-07",
+      "sha256": "9bf060b8972faea56cf32a6913207770de6b814be18eef874e4a289cb29fb4f8",
+      "fileSize": 3671038,
+      "documentUrl": "/open-books/clp-1-differential-calculus/book.pdf",
+      "licenseTextUrl": "/open-books/clp-1-differential-calculus/LICENSE.txt",
+      "preferOriginal": true,
+      "coverUrl": "/open-books/clp-1-differential-calculus/cover.webp",
+      "pageCount": 426,
+      "pdfRepaired": false,
+      "textLength": 947835,
+      "textSha256": "067b7f6e5063bee784144ca598db6760dcef81328d980cf10a3083edc834b17c",
+      "textExtractionNote": "完整逐页提取，页内 sort=True，以换页符分隔；未截断。原始 PDF 未修改。"
+    },
+    {
+      "slug": "clp-2-integral-calculus",
+      "title": "CLP 微积分 2：积分学",
+      "subtitle": "CLP-2 Integral Calculus · 2024 年修订版",
+      "author": "Joel Feldman、Andrew Rechnitzer、Elyse Yeager",
+      "publisher": "UBC 数学系开放教材项目",
+      "publisherNote": "作者为不列颠哥伦比亚大学数学系教师，PDF 由作者所在大学的 CLP 开放教材项目发布；此字段不代表商业出版社。",
+      "languageCode": "en",
+      "subject": "高等数学",
+      "licenseCode": "CC-BY-NC-SA-4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-nc-sa/4.0/",
+      "sourceUrl": "https://github.com/arechnitzer/CLP2",
+      "originalSourceUrl": "https://personal.math.ubc.ca/~CLP/CLP2/",
+      "licenseEvidence": "作者大学官网 https://personal.math.ubc.ca/~CLP/src/ 直接链接 https://github.com/arechnitzer/CLP2，并明确各卷教材及源文件为 CC BY-NC-SA 4.0；所下载完整 PDF 的物理第 3 页（Legal stuff）明确“This work is licensed under the Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License”。保留该版权页及所有正文附录。",
+      "licenseEvidencePages": [
+        3
+      ],
+      "licenseEvidenceUrls": [
+        "https://github.com/arechnitzer/CLP2/blob/master/README.md",
+        "https://personal.math.ubc.ca/~CLP/src/"
+      ],
+      "attribution": "Joel Feldman、Andrew Rechnitzer、Elyse Yeager。《CLP-2 Integral Calculus》，2024-08-16 排版版。CC BY-NC-SA 4.0。封面设计 Nick Loewen。原项目 https://github.com/arechnitzer/CLP2；作者网站 https://personal.math.ubc.ca/~CLP/CLP2/。本站保留完整原始 PDF；阅读文本为自动提取，可能存在排版差异。",
+      "licenseNote": "Joel Feldman、Andrew Rechnitzer、Elyse Yeager。《CLP-2 Integral Calculus》，2024-08-16 排版版。CC BY-NC-SA 4.0。封面设计 Nick Loewen。原项目 https://github.com/arechnitzer/CLP2；作者网站 https://personal.math.ubc.ca/~CLP/CLP2/。本站保留完整原始 PDF；阅读文本为自动提取，可能存在排版差异。",
+      "knowledgePoints": [
+        "定积分",
+        "微积分基本定理",
+        "积分技巧",
+        "积分应用",
+        "反常积分",
+        "数列与级数",
+        "幂级数",
+        "泰勒展开"
+      ],
+      "summary": "覆盖大学一年级积分学完整课程，包括定积分与积分技巧、积分应用、反常积分、数列级数、幂级数与泰勒展开，并附数值积分和常微分方程。",
+      "sourceName": "GitHub · arechnitzer/CLP2",
+      "coverAttribution": "原始 PDF 封面，Nick Loewen 设计；作者官网 source 页面注明设计者。",
+      "completenessEvidence": "作者网站“textbook”完整单卷 PDF，非课件、习题单册或章节节选。目录覆盖整卷课程并保留全部附录；末页与目录最后部分对应。",
+      "readerQualityNote": "原版 PDF 渲染正常；数学字体的自动文本提取可能存在符号映射差异，公式宜查看原版。",
+      "downloadUrl": "https://personal.math.ubc.ca/~CLP/CLP2/clp_2_ic_text.pdf",
+      "coverageNote": "完整 468 页 · CLP-2 Integral Calculus · 2024 年修订版。覆盖大学一年级积分学完整课程，包括定积分与积分技巧、积分应用、反常积分、数列级数、幂级数与泰勒展开，并附数值积分和常微分方程。",
+      "coverPolicy": "pdf-first-page",
+      "verifiedAt": "2026-11-07",
+      "sha256": "c1b645fb8e7ec685b0c5e7461113cf1fbb6ef8ba64de4b7c29f08e95f3c6e08c",
+      "fileSize": 2517546,
+      "documentUrl": "/open-books/clp-2-integral-calculus/book.pdf",
+      "licenseTextUrl": "/open-books/clp-2-integral-calculus/LICENSE.txt",
+      "preferOriginal": true,
+      "coverUrl": "/open-books/clp-2-integral-calculus/cover.webp",
+      "pageCount": 468,
+      "pdfRepaired": false,
+      "textLength": 1312417,
+      "textSha256": "7c8475cc1a3105fd46906f201a222cc33093753d604af78df6a63ee57eb289c5",
+      "textExtractionNote": "完整逐页提取，页内 sort=True，以换页符分隔；未截断。原始 PDF 未修改。"
+    },
+    {
+      "slug": "clp-3-multivariable-calculus",
+      "title": "CLP 微积分 3：多元微积分",
+      "subtitle": "CLP-3 Multivariable Calculus · 2024 年修订版",
+      "author": "Joel Feldman、Andrew Rechnitzer、Elyse Yeager",
+      "publisher": "UBC 数学系开放教材项目",
+      "publisherNote": "作者为不列颠哥伦比亚大学数学系教师，PDF 由作者所在大学的 CLP 开放教材项目发布；此字段不代表商业出版社。",
+      "languageCode": "en",
+      "subject": "高等数学",
+      "licenseCode": "CC-BY-NC-SA-4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-nc-sa/4.0/",
+      "sourceUrl": "https://github.com/arechnitzer/CLP3",
+      "originalSourceUrl": "https://personal.math.ubc.ca/~CLP/CLP3/",
+      "licenseEvidence": "作者大学官网 https://personal.math.ubc.ca/~CLP/src/ 直接链接 https://github.com/arechnitzer/CLP3，并明确各卷教材及源文件为 CC BY-NC-SA 4.0；所下载完整 PDF 的物理第 3 页（Legal stuff）明确“This work is licensed under the Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License”。保留该版权页及所有正文附录。",
+      "licenseEvidencePages": [
+        3
+      ],
+      "licenseEvidenceUrls": [
+        "https://github.com/arechnitzer/CLP3/blob/master/README.md",
+        "https://personal.math.ubc.ca/~CLP/src/"
+      ],
+      "attribution": "Joel Feldman、Andrew Rechnitzer、Elyse Yeager。《CLP-3 Multivariable Calculus》，2024-08-16 排版版。CC BY-NC-SA 4.0。封面设计 Nick Loewen。原项目 https://github.com/arechnitzer/CLP3；作者网站 https://personal.math.ubc.ca/~CLP/CLP3/。本站保留完整原始 PDF；阅读文本为自动提取，可能存在排版差异。",
+      "licenseNote": "Joel Feldman、Andrew Rechnitzer、Elyse Yeager。《CLP-3 Multivariable Calculus》，2024-08-16 排版版。CC BY-NC-SA 4.0。封面设计 Nick Loewen。原项目 https://github.com/arechnitzer/CLP3；作者网站 https://personal.math.ubc.ca/~CLP/CLP3/。本站保留完整原始 PDF；阅读文本为自动提取，可能存在排版差异。",
+      "knowledgePoints": [
+        "空间向量与几何",
+        "偏导数",
+        "全微分",
+        "梯度与方向导数",
+        "多元函数极值",
+        "二重积分",
+        "三重积分",
+        "变量替换"
+      ],
+      "summary": "覆盖多元微积分完整课程，包括二维与三维向量几何、偏导数、梯度与方向导数、多元函数极值、二重与三重积分及变量替换。",
+      "sourceName": "GitHub · arechnitzer/CLP3",
+      "coverAttribution": "原始 PDF 封面，Nick Loewen 设计；作者官网 source 页面注明设计者。",
+      "completenessEvidence": "作者网站“textbook”完整单卷 PDF，非课件、习题单册或章节节选。目录覆盖整卷课程并保留全部附录；末页与目录最后部分对应。",
+      "readerQualityNote": "原版 PDF 渲染正常；数学字体的自动文本提取可能存在符号映射差异，公式宜查看原版。",
+      "downloadUrl": "https://personal.math.ubc.ca/~CLP/CLP3/clp_3_mc_text.pdf",
+      "coverageNote": "完整 397 页 · CLP-3 Multivariable Calculus · 2024 年修订版。覆盖多元微积分完整课程，包括二维与三维向量几何、偏导数、梯度与方向导数、多元函数极值、二重与三重积分及变量替换。",
+      "coverPolicy": "pdf-first-page",
+      "verifiedAt": "2026-11-07",
+      "sha256": "8ea6e78da77fd5d6c1a339bf1dac688f581fd26e5bf3c95ba853d7fd32f871f8",
+      "fileSize": 3310254,
+      "documentUrl": "/open-books/clp-3-multivariable-calculus/book.pdf",
+      "licenseTextUrl": "/open-books/clp-3-multivariable-calculus/LICENSE.txt",
+      "preferOriginal": true,
+      "coverUrl": "/open-books/clp-3-multivariable-calculus/cover.webp",
+      "pageCount": 397,
+      "pdfRepaired": false,
+      "textLength": 992605,
+      "textSha256": "489de99c209c3c2b7c7d31e1223765f154dc033c674e5f6af7c9749a3cd4ff35",
+      "textExtractionNote": "完整逐页提取，页内 sort=True，以换页符分隔；未截断。原始 PDF 未修改。"
+    },
+    {
+      "slug": "clp-4-vector-calculus",
+      "title": "CLP 微积分 4：向量微积分",
+      "subtitle": "CLP-4 Vector Calculus · 2024 年修订版",
+      "author": "Joel Feldman、Andrew Rechnitzer、Elyse Yeager",
+      "publisher": "UBC 数学系开放教材项目",
+      "publisherNote": "作者为不列颠哥伦比亚大学数学系教师，PDF 由作者所在大学的 CLP 开放教材项目发布；此字段不代表商业出版社。",
+      "languageCode": "en",
+      "subject": "高等数学",
+      "licenseCode": "CC-BY-NC-SA-4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-nc-sa/4.0/",
+      "sourceUrl": "https://github.com/arechnitzer/CLP4",
+      "originalSourceUrl": "https://personal.math.ubc.ca/~CLP/CLP4/",
+      "licenseEvidence": "作者大学官网 https://personal.math.ubc.ca/~CLP/src/ 直接链接 https://github.com/arechnitzer/CLP4，并明确各卷教材及源文件为 CC BY-NC-SA 4.0；所下载完整 PDF 的物理第 3 页（Legal stuff）明确“This work is licensed under the Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License”。保留该版权页及所有正文附录。",
+      "licenseEvidencePages": [
+        3
+      ],
+      "licenseEvidenceUrls": [
+        "https://github.com/arechnitzer/CLP4/blob/master/README.md",
+        "https://personal.math.ubc.ca/~CLP/src/"
+      ],
+      "attribution": "Joel Feldman、Andrew Rechnitzer、Elyse Yeager。《CLP-4 Vector Calculus》，2024-08-16 排版版。CC BY-NC-SA 4.0。封面设计 Nick Loewen。原项目 https://github.com/arechnitzer/CLP4；作者网站 https://personal.math.ubc.ca/~CLP/CLP4/。本站保留完整原始 PDF；阅读文本为自动提取，可能存在排版差异。",
+      "licenseNote": "Joel Feldman、Andrew Rechnitzer、Elyse Yeager。《CLP-4 Vector Calculus》，2024-08-16 排版版。CC BY-NC-SA 4.0。封面设计 Nick Loewen。原项目 https://github.com/arechnitzer/CLP4；作者网站 https://personal.math.ubc.ca/~CLP/CLP4/。本站保留完整原始 PDF；阅读文本为自动提取，可能存在排版差异。",
+      "knowledgePoints": [
+        "空间曲线",
+        "向量场",
+        "线积分",
+        "曲面积分",
+        "格林公式",
+        "斯托克斯定理",
+        "散度定理",
+        "线性微分方程"
+      ],
+      "summary": "覆盖向量微积分完整课程，包括空间曲线、向量场、线积分、曲面积分、格林公式、斯托克斯定理与散度定理，附基础公式与线性常微分方程复习。",
+      "sourceName": "GitHub · arechnitzer/CLP4",
+      "coverAttribution": "原始 PDF 封面，Nick Loewen 设计；作者官网 source 页面注明设计者。",
+      "completenessEvidence": "作者网站“textbook”完整单卷 PDF，非课件、习题单册或章节节选。目录覆盖整卷课程并保留全部附录；末页与目录最后部分对应。",
+      "readerQualityNote": "原版 PDF 渲染正常；数学字体的自动文本提取可能存在符号映射差异，公式宜查看原版。",
+      "downloadUrl": "https://personal.math.ubc.ca/~CLP/CLP4/clp_4_vc_text.pdf",
+      "coverageNote": "完整 305 页 · CLP-4 Vector Calculus · 2024 年修订版。覆盖向量微积分完整课程，包括空间曲线、向量场、线积分、曲面积分、格林公式、斯托克斯定理与散度定理，附基础公式与线性常微分方程复习。",
+      "coverPolicy": "pdf-first-page",
+      "verifiedAt": "2026-11-07",
+      "sha256": "4b7100bb4a116d359b58b7b5b8b42c8946e8127636a5e82fbd10845d2c89dc2a",
+      "fileSize": 2025386,
+      "documentUrl": "/open-books/clp-4-vector-calculus/book.pdf",
+      "licenseTextUrl": "/open-books/clp-4-vector-calculus/LICENSE.txt",
+      "preferOriginal": true,
+      "coverUrl": "/open-books/clp-4-vector-calculus/cover.webp",
+      "pageCount": 305,
+      "pdfRepaired": false,
+      "textLength": 759969,
+      "textSha256": "45bab9e2145aeaa635774c7b1fc4d6c64465404f9362deb5c3e10713fd84f64a",
+      "textExtractionNote": "完整逐页提取，页内 sort=True，以换页符分隔；未截断。原始 PDF 未修改。"
+    },
+    {
+      "slug": "interactive-linear-algebra",
+      "title": "Interactive Linear Algebra（交互式线性代数）",
+      "subtitle": "Georgia Tech 完整教材 · 2019-06-03 版",
+      "author": "Dan Margalit、Joseph Rabinoff",
+      "publisher": "Georgia Tech 开放教材项目",
+      "publisherNote": "PDF 版权页为 Georgia Institute of Technology；这里标注学校开放教材发布项目，不编造商业出版社。",
+      "languageCode": "en",
+      "subject": "线性代数",
+      "licenseCode": "GFDL-1.2-or-later",
+      "licenseUrl": "https://www.gnu.org/licenses/old-licenses/fdl-1.2.html",
+      "sourceUrl": "https://github.com/QBobWatson/gt-linalg",
+      "originalSourceUrl": "https://textbooks.math.gatech.edu/ila/",
+      "licenseEvidence": "Georgia Tech 官方教材站目录/反馈直接链接 QBobWatson/gt-linalg。官方 Colophon 页面及完整 PDF 物理第 4 页明确允许复制、分发和修改本文，采用 GNU Free Documentation License 1.2 或以后版本，无 Invariant Sections、Front-Cover Texts 或 Back-Cover Texts。PDF 物理第 435–443 页附录 D 保留完整 GFDL 1.2 许可；不是仅采用代码许可。",
+      "licenseEvidencePages": [
+        4,
+        435
+      ],
+      "licenseEvidenceUrls": [
+        "https://textbooks.math.gatech.edu/ila/colophon-1.html",
+        "https://textbooks.math.gatech.edu/ila/appendix-gfdl.html"
+      ],
+      "attribution": "Dan Margalit、Joseph Rabinoff。《Interactive Linear Algebra》，2019-06-03。© 2017 Georgia Institute of Technology。GFDL 1.2 或以后版本，无固定章节或封面文字。原始教材 https://textbooks.math.gatech.edu/ila/；源码 https://github.com/QBobWatson/gt-linalg 。本站保留完整原始 PDF、版权页和许可附录；阅读文本为自动提取，可能存在排版差异。",
+      "knowledgePoints": [
+        "线性方程组",
+        "高斯消元",
+        "向量空间",
+        "线性变换",
+        "矩阵运算",
+        "行列式",
+        "特征值与特征向量",
+        "正交投影",
+        "最小二乘"
+      ],
+      "summary": "完整大学线性代数教材，以代数和几何两条路线讲解方程组、线性变换、行列式、特征值、正交性及最小二乘，含图解、习题提示与答案。",
+      "sourceName": "GitHub · QBobWatson/gt-linalg",
+      "completenessEvidence": "完整 6 大章，含概述、复数/符号附录、习题提示与答案、完整 GFDL 许可及索引；官方页面直接提供 ila.pdf 全本。PDF 不包含 HTML 交互演示的可运行功能。",
+      "downloadUrl": "https://textbooks.math.gatech.edu/ila/ila.pdf",
+      "coverageNote": "完整 455 页 · Georgia Tech 完整教材 · 2019-06-03 版。完整大学线性代数教材，以代数和几何两条路线讲解方程组、线性变换、行列式、特征值、正交性及最小二乘，含图解、习题提示与答案。",
+      "licenseNote": "Dan Margalit、Joseph Rabinoff。《Interactive Linear Algebra》，2019-06-03。© 2017 Georgia Institute of Technology。GFDL 1.2 或以后版本，无固定章节或封面文字。原始教材 https://textbooks.math.gatech.edu/ila/；源码 https://github.com/QBobWatson/gt-linalg 。本站保留完整原始 PDF、版权页和许可附录；阅读文本为自动提取，可能存在排版差异。",
+      "coverPolicy": "pdf-first-page",
+      "verifiedAt": "2026-11-07",
+      "sha256": "680af496db34b9685011de86f66def4cf475812aed22df15e74677b5abf5eea1",
+      "fileSize": 4515699,
+      "documentUrl": "/open-books/interactive-linear-algebra/book.pdf",
+      "licenseTextUrl": "/open-books/interactive-linear-algebra/LICENSE.txt",
+      "preferOriginal": true,
+      "coverUrl": "/open-books/interactive-linear-algebra/cover.webp",
+      "pageCount": 455,
+      "pdfRepaired": false,
+      "textLength": 887891,
+      "textSha256": "0aad61d2caeb83bac3d8327c68998609586b915ed326627df476701a216f2857",
+      "textExtractionNote": "完整逐页提取，页内 sort=True，以换页符分隔；未截断。原始 PDF 未修改。"
+    },
+    {
+      "slug": "ipsur-probability-statistics-r",
+      "title": "IPSUR：概率与统计（R 语言实践）",
+      "subtitle": "Introduction to Probability and Statistics Using R · 第 4 版",
+      "author": "G. Jay Kerns",
+      "publisher": "作者开放出版",
+      "publisherNote": "作者官方 GitHub 及 ipsur.org 发布的完整开放电子版，PDF 未单独声明商业出版方。",
+      "languageCode": "en",
+      "subject": "概率论与数理统计",
+      "licenseCode": "GFDL-1.3-or-later",
+      "licenseUrl": "https://www.gnu.org/licenses/fdl-1.3.html",
+      "sourceUrl": "https://github.com/gjkerns/IPSUR",
+      "originalSourceUrl": "https://ipsur.org/",
+      "licenseEvidence": "作者官网 ipsur.org 直接链接 gjkerns/IPSUR。作者仓库 vignettes/IPSUR.Rnw 的正文版权页明确本文为 GNU Free Documentation License 1.3 或以后版本；完整 PDF 第 2 页同样明确允许复制、分发和修改，无固定章节、封面文字，附录 B 第 343–348 物理页保留完整许可证。仓库代码是 GPL 3，本条采用单独明确的教材 GFDL 1.3 许可，不混同代码许可。",
+      "licenseEvidencePages": [
+        2,
+        343
+      ],
+      "licenseEvidenceUrls": [
+        "https://github.com/gjkerns/IPSUR/blob/master/vignettes/IPSUR.Rnw",
+        "https://ipsur.org/"
+      ],
+      "attribution": "G. Jay Kerns。《Introduction to Probability and Statistics Using R》，第 4 版，PDF 日期 2022-12-15，© 2021 G. Jay Kerns。GFDL 1.3 或以后版本，无固定章节或封面文字。ISBN 978-1726343909。原始教材及源码 https://github.com/gjkerns/IPSUR 。本站保留完整原始 PDF、版权页和许可附录；阅读文本为自动提取，可能存在排版差异。",
+      "knowledgePoints": [
+        "概率与条件概率",
+        "随机变量",
+        "离散分布",
+        "连续分布",
+        "多元分布",
+        "抽样分布",
+        "参数估计",
+        "假设检验",
+        "线性回归",
+        "非参数统计",
+        "重抽样"
+      ],
+      "summary": "完整本科概率论与统计教材，以 R 示例贯穿概率、随机变量与分布、估计、假设检验、回归、非参数方法、重抽样及分类数据分析。含 15 章及数学工具、参考文献和索引。",
+      "sourceName": "GitHub · gjkerns/IPSUR",
+      "isbn": "9781726343909",
+      "completenessEvidence": "第 4 版全本，目录第 3–6 页列出完整 15 章与附录 A–E；最后一页为索引末页（印刷页 372），含完整许可和参考文献。",
+      "downloadUrl": "https://raw.githubusercontent.com/gjkerns/IPSUR/master/inst/doc/IPSUR.pdf",
+      "coverageNote": "完整 384 页 · Introduction to Probability and Statistics Using R · 第 4 版。完整本科概率论与统计教材，以 R 示例贯穿概率、随机变量与分布、估计、假设检验、回归、非参数方法、重抽样及分类数据分析。含 15 章及数学工具、参考文献和索引。",
+      "licenseNote": "G. Jay Kerns。《Introduction to Probability and Statistics Using R》，第 4 版，PDF 日期 2022-12-15，© 2021 G. Jay Kerns。GFDL 1.3 或以后版本，无固定章节或封面文字。ISBN 978-1726343909。原始教材及源码 https://github.com/gjkerns/IPSUR 。本站保留完整原始 PDF、版权页和许可附录；阅读文本为自动提取，可能存在排版差异。",
+      "coverPolicy": "pdf-first-page",
+      "verifiedAt": "2026-11-07",
+      "sha256": "784397b5983462b4f1def04460aaf3291b75587863c977b58c3c1d0e666b98d6",
+      "fileSize": 1854755,
+      "documentUrl": "/open-books/ipsur-probability-statistics-r/book.pdf",
+      "licenseTextUrl": "/open-books/ipsur-probability-statistics-r/LICENSE.txt",
+      "preferOriginal": true,
+      "coverUrl": "/open-books/ipsur-probability-statistics-r/cover.webp",
+      "pageCount": 384,
+      "pdfRepaired": false,
+      "textLength": 961812,
+      "textSha256": "a62bb4b775468b6c8deaa8d4efa7a40dcb4280c0f1e69b1fb087268e40de7050",
+      "textExtractionNote": "完整逐页提取，页内 sort=True，以换页符分隔；未截断。原始 PDF 未修改。"
+    },
+    {
+      "slug": "university-physics-volume-1",
+      "title": "大学物理（第 1 卷）",
+      "summary": "以微积分为基础的大学物理完整第一卷，涵盖测量与向量、运动学、牛顿定律、能量与动量、转动、引力、流体、振动、机械波和声学，含例题、章末练习、附录与答案。正文为英文原版。",
+      "knowledgePoints": [
+        "单位与测量",
+        "向量",
+        "运动学",
+        "牛顿运动定律",
+        "功与能量",
+        "动量守恒",
+        "刚体转动",
+        "万有引力",
+        "流体力学",
+        "简谐振动",
+        "机械波与声学"
+      ],
+      "subtitle": "University Physics Volume 1 · 英文原版",
+      "author": "Samuel J. Ling、Jeff Sanny、William Moebs",
+      "publisher": "OpenStax（莱斯大学）",
+      "publisherNote": "OpenStax 是莱斯大学旗下的非营利开放教材出版项目；采用官网2026年版权页的完整电子文件，原版出版于2016年。",
+      "languageCode": "en",
+      "subject": "大学物理",
+      "licenseCode": "CC-BY-NC-SA-4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-nc-sa/4.0/",
+      "sourceUrl": "https://github.com/openstax/osbooks-university-physics-bundle",
+      "originalSourceUrl": "https://openstax.org/details/books/university-physics-volume-1",
+      "downloadUrl": "https://assets.openstax.org/oscms-prodcms/media/documents/university-physics-volume-1_-_WEB.pdf",
+      "attribution": "Samuel J. Ling、Jeff Sanny、William Moebs. University Physics Volume 1. OpenStax, Rice University. 官方 PDF 版权页 ©2026 Rice University，原版出版于2016年。CC BY-NC-SA 4.0。Access for free at openstax.org. 原始教材 https://openstax.org/details/books/university-physics-volume-1 。本站保留完整原始PDF；文字为自动提取，可能存在排版差异。",
+      "licenseNote": "Samuel J. Ling、Jeff Sanny、William Moebs. University Physics Volume 1. OpenStax, Rice University. 官方 PDF 版权页 ©2026 Rice University，原版出版于2016年。CC BY-NC-SA 4.0。Access for free at openstax.org. 原始教材 https://openstax.org/details/books/university-physics-volume-1 。本站保留完整原始PDF；文字为自动提取，可能存在排版差异。",
+      "licenseEvidence": "官方 GitHub README 明确 University Physics 三卷教材正文采用 CC BY-NC-SA，根 LICENSE 为4.0全文；官网CMS页同样标为CC BY-NC-SA 4.0。下载的完整PDF第4页明确 ©2026 Rice University、CC BY-NC-SA 4.0，并要求数字每页及部分转载每页保留“Access for free at openstax.org.”（PDF链接目标 https://openstax.org）。此处采用的是教材正文许可，不是程序代码许可。封面、徽标等品牌内容另行保留权利，因此列表暂用学科默认封面；PDF原书完整保留。",
+      "sourceName": "GitHub · openstax/osbooks-university-physics-bundle",
+      "coverageNote": "完整 959 页 · 17章 · 含附录、习题与答案。以微积分为基础的大学物理完整第一卷，涵盖测量与向量、运动学、牛顿定律、能量与动量、转动、引力、流体、振动、机械波和声学，含例题、章末练习、附录与答案。正文为英文原版。",
+      "tableOfContents": [
+        {
+          "title": "Chapter 1 Units and Measurement",
+          "pdfPage": 17
+        },
+        {
+          "title": "Chapter 2 Vectors",
+          "pdfPage": 53
+        },
+        {
+          "title": "Chapter 3 Motion Along a Straight Line",
+          "pdfPage": 109
+        },
+        {
+          "title": "Chapter 4 Motion in Two and Three Dimensions",
+          "pdfPage": 159
+        },
+        {
+          "title": "Chapter 5 Newton's Laws of Motion",
+          "pdfPage": 205
+        },
+        {
+          "title": "Chapter 6 Applications of Newton's Laws",
+          "pdfPage": 261
+        },
+        {
+          "title": "Chapter 7 Work and Kinetic Energy",
+          "pdfPage": 323
+        },
+        {
+          "title": "Chapter 8 Potential Energy and Conservation of Energy",
+          "pdfPage": 353
+        },
+        {
+          "title": "Chapter 9 Linear Momentum and Collisions",
+          "pdfPage": 391
+        },
+        {
+          "title": "Chapter 10 Fixed-Axis Rotation",
+          "pdfPage": 463
+        },
+        {
+          "title": "Chapter 11 Angular Momentum",
+          "pdfPage": 527
+        },
+        {
+          "title": "Chapter 12 Static Equilibrium and Elasticity",
+          "pdfPage": 565
+        },
+        {
+          "title": "Chapter 13 Gravitation",
+          "pdfPage": 611
+        },
+        {
+          "title": "Chapter 14 Fluid Mechanics",
+          "pdfPage": 665
+        },
+        {
+          "title": "Chapter 15 Oscillations",
+          "pdfPage": 721
+        },
+        {
+          "title": "Chapter 16 Waves",
+          "pdfPage": 763
+        },
+        {
+          "title": "Chapter 17 Sound",
+          "pdfPage": 819
+        }
+      ],
+      "contentsPageNumbers": [
+        7,
+        8,
+        9,
+        10,
+        11,
+        12
+      ],
+      "licensePageNumbers": [
+        4
+      ],
+      "requiredPageAttributionText": "Access for free at openstax.org.",
+      "requiredPageAttributionUrl": "https://openstax.org",
+      "coverPolicy": "subject-default",
+      "officialCoverUrl": "https://assets.openstax.org/oscms-prodcms/media/documents/university_physics_volume_1_web_card.svg",
+      "officialCoverSourceUrl": "https://openstax.org/apps/cms/api/v2/pages/82/",
+      "coverLicenseEvidence": "PDF第4页Trademarks段落排除OpenStax书封的CC许可；官网 https://openstax.org/tos/ 第5段将book covers列为Rice University All Rights Reserved。未找到明确允许本站独立封面缩略图使用的官方条款，故不将封面作为已授权资产交付。",
+      "verifiedAt": "2026-11-07",
+      "sha256": "93652b69c43197d10dc83438b813b5f7515e61e7ea4336da8636ff902cb4aba8",
+      "fileSize": 81497906,
+      "documentUrl": "/open-books/university-physics-volume-1/book.pdf",
+      "licenseTextUrl": "/open-books/university-physics-volume-1/LICENSE.txt",
+      "preferOriginal": true,
+      "coverUrl": null,
+      "pageCount": 959,
+      "pdfRepaired": false,
+      "textLength": 2756045,
+      "textSha256": "2e0ad7e396c8192eba71fb99f65d609ba7f012f4d943746edf5a05bf6af78d3c",
+      "textExtractionNote": "完整逐页提取，页内 sort=True，以换页符分隔；未截断。原始 PDF 未修改。"
+    },
+    {
+      "slug": "university-physics-volume-2",
+      "title": "大学物理（第 2 卷）",
+      "summary": "以微积分为基础的大学物理完整第二卷，涵盖温度与热、气体动理论、热力学定律、静电场、电势、电容、电流与电路、磁场、电磁感应、交流电路和电磁波，含例题、章末练习、附录与答案。正文为英文原版。",
+      "knowledgePoints": [
+        "温度与热",
+        "气体动理论",
+        "热力学定律",
+        "静电场",
+        "高斯定律",
+        "电势与电容",
+        "电流与电路",
+        "磁场",
+        "电磁感应",
+        "交流电路",
+        "电磁波"
+      ],
+      "subtitle": "University Physics Volume 2 · 英文原版",
+      "author": "Samuel J. Ling、Jeff Sanny、William Moebs",
+      "publisher": "OpenStax（莱斯大学）",
+      "publisherNote": "OpenStax 是莱斯大学旗下的非营利开放教材出版项目；采用官网2026年版权页的完整电子文件，原版出版于2016年。",
+      "languageCode": "en",
+      "subject": "大学物理",
+      "licenseCode": "CC-BY-NC-SA-4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-nc-sa/4.0/",
+      "sourceUrl": "https://github.com/openstax/osbooks-university-physics-bundle",
+      "originalSourceUrl": "https://openstax.org/details/books/university-physics-volume-2",
+      "downloadUrl": "https://assets.openstax.org/oscms-prodcms/media/documents/university-physics-volume-2_-_WEB.pdf",
+      "attribution": "Samuel J. Ling、Jeff Sanny、William Moebs. University Physics Volume 2. OpenStax, Rice University. 官方 PDF 版权页 ©2026 Rice University，原版出版于2016年。CC BY-NC-SA 4.0。Access for free at openstax.org. 原始教材 https://openstax.org/details/books/university-physics-volume-2 。本站保留完整原始PDF；文字为自动提取，可能存在排版差异。",
+      "licenseNote": "Samuel J. Ling、Jeff Sanny、William Moebs. University Physics Volume 2. OpenStax, Rice University. 官方 PDF 版权页 ©2026 Rice University，原版出版于2016年。CC BY-NC-SA 4.0。Access for free at openstax.org. 原始教材 https://openstax.org/details/books/university-physics-volume-2 。本站保留完整原始PDF；文字为自动提取，可能存在排版差异。",
+      "licenseEvidence": "官方 GitHub README 明确 University Physics 三卷教材正文采用 CC BY-NC-SA，根 LICENSE 为4.0全文；官网CMS页同样标为CC BY-NC-SA 4.0。下载的完整PDF第4页明确 ©2026 Rice University、CC BY-NC-SA 4.0，并要求数字每页及部分转载每页保留“Access for free at openstax.org.”（PDF链接目标 https://openstax.org）。此处采用的是教材正文许可，不是程序代码许可。封面、徽标等品牌内容另行保留权利，因此列表暂用学科默认封面；PDF原书完整保留。",
+      "sourceName": "GitHub · openstax/osbooks-university-physics-bundle",
+      "coverageNote": "完整 781 页 · 16章 · 含附录、习题与答案。以微积分为基础的大学物理完整第二卷，涵盖温度与热、气体动理论、热力学定律、静电场、电势、电容、电流与电路、磁场、电磁感应、交流电路和电磁波，含例题、章末练习、附录与答案。正文为英文原版。",
+      "tableOfContents": [
+        {
+          "title": "Chapter 1 Temperature and Heat",
+          "pdfPage": 17
+        },
+        {
+          "title": "Chapter 2 The Kinetic Theory of Gases",
+          "pdfPage": 75
+        },
+        {
+          "title": "Chapter 3 The First Law of Thermodynamics",
+          "pdfPage": 115
+        },
+        {
+          "title": "Chapter 4 The Second Law of Thermodynamics",
+          "pdfPage": 147
+        },
+        {
+          "title": "Chapter 5 Electric Charges and Fields",
+          "pdfPage": 181
+        },
+        {
+          "title": "Chapter 6 Gauss's Law",
+          "pdfPage": 231
+        },
+        {
+          "title": "Chapter 7 Electric Potential",
+          "pdfPage": 279
+        },
+        {
+          "title": "Chapter 8 Capacitance",
+          "pdfPage": 335
+        },
+        {
+          "title": "Chapter 9 Current and Resistance",
+          "pdfPage": 373
+        },
+        {
+          "title": "Chapter 10 Direct-Current Circuits",
+          "pdfPage": 417
+        },
+        {
+          "title": "Chapter 11 Magnetic Forces and Fields",
+          "pdfPage": 475
+        },
+        {
+          "title": "Chapter 12 Sources of Magnetic Fields",
+          "pdfPage": 513
+        },
+        {
+          "title": "Chapter 13 Electromagnetic Induction",
+          "pdfPage": 557
+        },
+        {
+          "title": "Chapter 14 Inductance",
+          "pdfPage": 603
+        },
+        {
+          "title": "Chapter 15 Alternating-Current Circuits",
+          "pdfPage": 635
+        },
+        {
+          "title": "Chapter 16 Electromagnetic Waves",
+          "pdfPage": 669
+        }
+      ],
+      "contentsPageNumbers": [
+        7,
+        8,
+        9,
+        10,
+        11,
+        12
+      ],
+      "licensePageNumbers": [
+        4
+      ],
+      "requiredPageAttributionText": "Access for free at openstax.org.",
+      "requiredPageAttributionUrl": "https://openstax.org",
+      "coverPolicy": "subject-default",
+      "officialCoverUrl": "https://assets.openstax.org/oscms-prodcms/media/documents/university_physics_volume_2_web_card.svg",
+      "officialCoverSourceUrl": "https://openstax.org/apps/cms/api/v2/pages/94/",
+      "coverLicenseEvidence": "PDF第4页Trademarks段落排除OpenStax书封的CC许可；官网 https://openstax.org/tos/ 第5段将book covers列为Rice University All Rights Reserved。未找到明确允许本站独立封面缩略图使用的官方条款，故不将封面作为已授权资产交付。",
+      "verifiedAt": "2026-11-07",
+      "sha256": "3f5d8d0e38ba663c84a036b54cf6087bc2836adca553cb7849f2c0e85e97a445",
+      "fileSize": 63815745,
+      "documentUrl": "/open-books/university-physics-volume-2/book.pdf",
+      "licenseTextUrl": "/open-books/university-physics-volume-2/LICENSE.txt",
+      "preferOriginal": true,
+      "coverUrl": null,
+      "pageCount": 781,
+      "pdfRepaired": false,
+      "textLength": 2237609,
+      "textSha256": "ac18652bbf7418faa24ab31ab19d446a9e135407adc9b7354e4c433aa159d694",
+      "textExtractionNote": "完整逐页提取，页内 sort=True，以换页符分隔；未截断。原始 PDF 未修改。"
+    },
+    {
+      "slug": "university-physics-volume-3",
+      "title": "大学物理（第 3 卷）",
+      "summary": "以微积分为基础的大学物理完整第三卷，涵盖光的性质、几何光学、干涉与衍射、相对论、光子与物质波、量子力学、原子与分子、凝聚态、核物理、粒子物理与宇宙学，含例题、章末练习、附录与答案。正文为英文原版。",
+      "knowledgePoints": [
+        "几何光学",
+        "干涉与衍射",
+        "狭义相对论",
+        "光子与物质波",
+        "量子力学",
+        "原子结构",
+        "分子与凝聚态",
+        "核物理",
+        "粒子物理",
+        "宇宙学"
+      ],
+      "subtitle": "University Physics Volume 3 · 英文原版",
+      "author": "Samuel J. Ling、Jeff Sanny、William Moebs",
+      "publisher": "OpenStax（莱斯大学）",
+      "publisherNote": "OpenStax 是莱斯大学旗下的非营利开放教材出版项目；采用官网2026年版权页的完整电子文件，原版出版于2016年。",
+      "languageCode": "en",
+      "subject": "大学物理",
+      "licenseCode": "CC-BY-NC-SA-4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-nc-sa/4.0/",
+      "sourceUrl": "https://github.com/openstax/osbooks-university-physics-bundle",
+      "originalSourceUrl": "https://openstax.org/details/books/university-physics-volume-3",
+      "downloadUrl": "https://assets.openstax.org/oscms-prodcms/media/documents/university-physics-volume-3_-_WEB.pdf",
+      "attribution": "Samuel J. Ling、Jeff Sanny、William Moebs. University Physics Volume 3. OpenStax, Rice University. 官方 PDF 版权页 ©2026 Rice University，原版出版于2016年。CC BY-NC-SA 4.0。Access for free at openstax.org. 原始教材 https://openstax.org/details/books/university-physics-volume-3 。本站保留完整原始PDF；文字为自动提取，可能存在排版差异。",
+      "licenseNote": "Samuel J. Ling、Jeff Sanny、William Moebs. University Physics Volume 3. OpenStax, Rice University. 官方 PDF 版权页 ©2026 Rice University，原版出版于2016年。CC BY-NC-SA 4.0。Access for free at openstax.org. 原始教材 https://openstax.org/details/books/university-physics-volume-3 。本站保留完整原始PDF；文字为自动提取，可能存在排版差异。",
+      "licenseEvidence": "官方 GitHub README 明确 University Physics 三卷教材正文采用 CC BY-NC-SA，根 LICENSE 为4.0全文；官网CMS页同样标为CC BY-NC-SA 4.0。下载的完整PDF第4页明确 ©2026 Rice University、CC BY-NC-SA 4.0，并要求数字每页及部分转载每页保留“Access for free at openstax.org.”（PDF链接目标 https://openstax.org）。此处采用的是教材正文许可，不是程序代码许可。封面、徽标等品牌内容另行保留权利，因此列表暂用学科默认封面；PDF原书完整保留。",
+      "sourceName": "GitHub · openstax/osbooks-university-physics-bundle",
+      "coverageNote": "完整 597 页 · 11章 · 含附录、习题与答案。以微积分为基础的大学物理完整第三卷，涵盖光的性质、几何光学、干涉与衍射、相对论、光子与物质波、量子力学、原子与分子、凝聚态、核物理、粒子物理与宇宙学，含例题、章末练习、附录与答案。正文为英文原版。",
+      "tableOfContents": [
+        {
+          "title": "Chapter 1 The Nature of Light",
+          "pdfPage": 15
+        },
+        {
+          "title": "Chapter 2 Geometric Optics and Image Formation",
+          "pdfPage": 59
+        },
+        {
+          "title": "Chapter 3 Interference",
+          "pdfPage": 119
+        },
+        {
+          "title": "Chapter 4 Diffraction",
+          "pdfPage": 145
+        },
+        {
+          "title": "Chapter 5 Relativity",
+          "pdfPage": 183
+        },
+        {
+          "title": "Chapter 6 Photons and Matter Waves",
+          "pdfPage": 241
+        },
+        {
+          "title": "Chapter 7 Quantum Mechanics",
+          "pdfPage": 295
+        },
+        {
+          "title": "Chapter 8 Atomic Structure",
+          "pdfPage": 347
+        },
+        {
+          "title": "Chapter 9 Condensed Matter Physics",
+          "pdfPage": 393
+        },
+        {
+          "title": "Chapter 10 Nuclear Physics",
+          "pdfPage": 441
+        },
+        {
+          "title": "Chapter 11 Particle Physics and Cosmology",
+          "pdfPage": 493
+        }
+      ],
+      "contentsPageNumbers": [
+        7,
+        8,
+        9,
+        10
+      ],
+      "licensePageNumbers": [
+        4
+      ],
+      "requiredPageAttributionText": "Access for free at openstax.org.",
+      "requiredPageAttributionUrl": "https://openstax.org",
+      "coverPolicy": "subject-default",
+      "officialCoverUrl": "https://assets.openstax.org/oscms-prodcms/media/documents/university_physics_volume_3_web_card.svg",
+      "officialCoverSourceUrl": "https://openstax.org/apps/cms/api/v2/pages/95/",
+      "coverLicenseEvidence": "PDF第4页Trademarks段落排除OpenStax书封的CC许可；官网 https://openstax.org/tos/ 第5段将book covers列为Rice University All Rights Reserved。未找到明确允许本站独立封面缩略图使用的官方条款，故不将封面作为已授权资产交付。",
+      "verifiedAt": "2026-11-07",
+      "sha256": "311c6beb70bb9cc6073d40a6085d290a82afde2b38e9aaf672ccb6de0542541b",
+      "fileSize": 53457236,
+      "documentUrl": "/open-books/university-physics-volume-3/book.pdf",
+      "licenseTextUrl": "/open-books/university-physics-volume-3/LICENSE.txt",
+      "preferOriginal": true,
+      "coverUrl": null,
+      "pageCount": 597,
+      "pdfRepaired": false,
+      "textLength": 1739350,
+      "textSha256": "68a04c8930cd0f52e7977fc4165ec7bb6a4417622104fb04b052b62b8d274f3d",
+      "textExtractionNote": "完整逐页提取，页内 sort=True，以换页符分隔；未截断。原始 PDF 未修改。"
+    },
+    {
+      "slug": "openstax-writing-guide",
+      "downloadUrl": "https://assets.openstax.org/oscms-prodcms/media/documents/WritingGuide-WEB.pdf",
+      "originalSourceUrl": "https://openstax.org/details/books/writing-guide",
+      "sourceUrl": "https://github.com/openstax/osbooks-writing-guide",
+      "officialCoverUrl": "https://assets.openstax.org/oscms-prodcms/media/documents/writing_guide_with_handbook.svg",
+      "licenseCode": "CC-BY-NC-SA-4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-nc-sa/4.0/",
+      "title": "Writing Guide with Handbook（大学英语写作）",
+      "officialTitle": "Writing Guide with Handbook",
+      "subtitle": "大学一年级英语写作与学术写作 · 完整教材及写作手册",
+      "author": "Michelle Bachelor Robinson · Maria Jerskey · Toby Fulwiler",
+      "publisher": "OpenStax / Rice University",
+      "publisherNote": "OpenStax（莱斯大学）官方开放教材；本条目为官方英文电子版。",
+      "languageCode": "en",
+      "subject": "大学英语",
+      "sourceName": "GitHub · openstax/osbooks-writing-guide",
+      "summary": "大学一年级英语写作完整教材，20章覆盖阅读回应、叙事、说明、论证、研究写作及多模态表达，附语法、修订和MLA/APA引文手册。英文原版，适合大学英语写作与学术写作，非四六级应试教材。",
+      "knowledgePoints": [
+        "批判性阅读",
+        "英语叙事写作",
+        "说明与论证",
+        "修辞分析",
+        "研究与文献检索",
+        "学术论文",
+        "MLA与APA引用",
+        "语法与写作手册"
+      ],
+      "coverageNote": "完整 773 页 · 大学一年级英语写作与学术写作 · 完整教材及写作手册。大学一年级英语写作完整教材，20章覆盖阅读回应、叙事、说明、论证、研究写作及多模态表达，附语法、修订和MLA/APA引文手册。英文原版，适合大学英语写作与学术写作，非四六级应试教材。",
+      "attribution": "Michelle Bachelor Robinson · Maria Jerskey · Toby Fulwiler. Writing Guide with Handbook. OpenStax / Rice University. 2021 年初版，2026 年官方 PDF。CC BY-NC-SA 4.0。原始教材 https://openstax.org/details/books/writing-guide 。Access for free at openstax.org. 本站保留原版完整 PDF；正文为自动提取，可能存在排版差异。",
+      "licenseNote": "Michelle Bachelor Robinson · Maria Jerskey · Toby Fulwiler. Writing Guide with Handbook. OpenStax / Rice University. 2021 年初版，2026 年官方 PDF。CC BY-NC-SA 4.0。原始教材 https://openstax.org/details/books/writing-guide 。Access for free at openstax.org. 本站保留原版完整 PDF；正文为自动提取，可能存在排版差异。仅限非商业使用，改编须使用相同许可；每个数字阅读页面需保留原站署名与链接。",
+      "licenseEvidence": "原 PDF 第4页明确：©2026 Rice University，教材正文为 CC BY-NC-SA 4.0。官方 GitHub https://github.com/openstax/osbooks-writing-guide 的 README 与 LICENSE 同样明确教材正文许可。完整正文共享和改编限非商业用途、须同许可及署名。书封与商标明确不纳入本 CC 许可。",
+      "licensePdfPage": 4,
+      "pageAttributionText": "Access for free at openstax.org.",
+      "pageAttributionUrl": "https://openstax.org",
+      "completenessEvidence": "包含第1章至第20章、完整Handbook及索引；PDF 773页，印刷页码至759。",
+      "coverPolicy": "subject-default",
+      "coverLicenseNote": "书封、OpenStax和Rice商标被版权页明确排除在CC许可外，未确认独立缩略图使用授权。officialCoverUrl仅记录官方原站图片地址，未复制独立封面到公共资源。qa-cover.png仅用于本地核验；目录应使用本项目默认封面。完整原PDF保持原样。",
+      "chapters": [
+        {
+          "title": "Chapter 1 The Digital World: Building on What You Already Know to Respond Critically",
+          "pdfPage": 23
+        },
+        {
+          "title": "Chapter 2 Language, Identity, and Culture: Exploring, Employing, Embracing",
+          "pdfPage": 53
+        },
+        {
+          "title": "Chapter 3 Literacy Narrative: Building Bridges, Bridging Gaps",
+          "pdfPage": 79
+        },
+        {
+          "title": "Chapter 4 Memoir or Personal Narrative: Learning Lessons from the Personal",
+          "pdfPage": 121
+        },
+        {
+          "title": "Chapter 5 Profile: Telling a Rich and Compelling Story",
+          "pdfPage": 151
+        },
+        {
+          "title": "Chapter 6 Proposal: Writing About Problems and Solutions",
+          "pdfPage": 187
+        },
+        {
+          "title": "Chapter 7 Evaluation or Review: Would You Recommend It?",
+          "pdfPage": 225
+        },
+        {
+          "title": "Chapter 8 Analytical Report: Writing from Facts",
+          "pdfPage": 255
+        },
+        {
+          "title": "Chapter 9 Rhetorical Analysis: Interpreting the Art of Rhetoric",
+          "pdfPage": 291
+        },
+        {
+          "title": "Chapter 10 Position Argument: Practicing the Art of Rhetoric",
+          "pdfPage": 327
+        },
+        {
+          "title": "Chapter 11 Reasoning Strategies: Improving Critical Thinking",
+          "pdfPage": 365
+        },
+        {
+          "title": "Chapter 12 Argumentative Research: Enhancing the Art of Rhetoric with Evidence",
+          "pdfPage": 403
+        },
+        {
+          "title": "Chapter 13 Research Process: Accessing and Recording Information",
+          "pdfPage": 437
+        },
+        {
+          "title": "Chapter 14 Annotated Bibliography: Gathering, Evaluating, and Documenting Sources",
+          "pdfPage": 463
+        },
+        {
+          "title": "Chapter 15 Case Study Profile: What One Person Says About All",
+          "pdfPage": 493
+        },
+        {
+          "title": "Chapter 16 Print or Textual Analysis: What You Read",
+          "pdfPage": 527
+        },
+        {
+          "title": "Chapter 17 Image Analysis: What You See",
+          "pdfPage": 563
+        },
+        {
+          "title": "Chapter 18 Multimodal and Online Writing: Creative Interaction between Text and Image",
+          "pdfPage": 603
+        },
+        {
+          "title": "Chapter 19 Scripting for the Public Forum: Writing to Speak",
+          "pdfPage": 643
+        },
+        {
+          "title": "Chapter 20 Portfolio Reflection: Your Growth as a Writer",
+          "pdfPage": 677
+        }
+      ],
+      "verifiedAt": "2026-11-07",
+      "sha256": "86ef566965110032b651122c8e466a607157613302a5a283bd1f221727e590ab",
+      "fileSize": 63546834,
+      "documentUrl": "/open-books/openstax-writing-guide/book.pdf",
+      "licenseTextUrl": "/open-books/openstax-writing-guide/LICENSE.txt",
+      "preferOriginal": true,
+      "coverUrl": null,
+      "pageCount": 773,
+      "pdfRepaired": false,
+      "textLength": 2405563,
+      "textSha256": "dbeb8408d63c193733f82908acfe26e7306bb8369da1c9fc75149e7eea58b86d",
+      "textExtractionNote": "完整逐页提取，页内 sort=True，以换页符分隔；未截断。原始 PDF 未修改。"
+    },
+    {
+      "slug": "openstax-psychology-2e",
+      "downloadUrl": "https://assets.openstax.org/oscms-prodcms/media/documents/Psychology2e_WEB.pdf",
+      "originalSourceUrl": "https://openstax.org/details/books/psychology-2e",
+      "sourceUrl": "https://github.com/openstax/osbooks-psychology",
+      "officialCoverUrl": "https://assets.openstax.org/oscms-prodcms/media/documents/psychology_2e_EGVEQSI.svg",
+      "licenseCode": "CC-BY-NC-SA-4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-nc-sa/4.0/",
+      "title": "Psychology 2e（心理学）",
+      "officialTitle": "Psychology 2e",
+      "subtitle": "第 2 版 · 大学心理学导论完整教材",
+      "author": "Rose M. Spielman · William J. Jenkins · Marilyn D. Lovett",
+      "publisher": "OpenStax / Rice University",
+      "publisherNote": "OpenStax（莱斯大学）官方开放教材；本条目为官方英文电子版。",
+      "languageCode": "en",
+      "subject": "心理学",
+      "sourceName": "GitHub · openstax/osbooks-psychology",
+      "summary": "大学心理学导论完整教材，16章覆盖研究方法、生物心理学、意识、知觉、学习、记忆、人格与社会心理学，含章末复习题、批判思考题及参考文献。英文原版。",
+      "knowledgePoints": [
+        "心理学研究方法",
+        "生物心理学",
+        "感觉与知觉",
+        "学习与记忆",
+        "发展心理学",
+        "人格与社会心理学",
+        "压力与心理健康",
+        "心理障碍与治疗"
+      ],
+      "coverageNote": "完整 755 页 · 第 2 版 · 大学心理学导论完整教材。大学心理学导论完整教材，16章覆盖研究方法、生物心理学、意识、知觉、学习、记忆、人格与社会心理学，含章末复习题、批判思考题及参考文献。英文原版。",
+      "attribution": "Rose M. Spielman · William J. Jenkins · Marilyn D. Lovett. Psychology 2e. OpenStax / Rice University. 第 2 版，2020 年初版，2026 年官方 PDF。CC BY-NC-SA 4.0。原始教材 https://openstax.org/details/books/psychology-2e 。Access for free at openstax.org. 本站保留原版完整 PDF；正文为自动提取，可能存在排版差异。",
+      "licenseNote": "Rose M. Spielman · William J. Jenkins · Marilyn D. Lovett. Psychology 2e. OpenStax / Rice University. 第 2 版，2020 年初版，2026 年官方 PDF。CC BY-NC-SA 4.0。原始教材 https://openstax.org/details/books/psychology-2e 。Access for free at openstax.org. 本站保留原版完整 PDF；正文为自动提取，可能存在排版差异。仅限非商业使用，改编须使用相同许可；每个数字阅读页面需保留原站署名与链接。",
+      "licenseEvidence": "原 PDF 第4页明确：©2026 Rice University，教材正文为 CC BY-NC-SA 4.0。官方 GitHub https://github.com/openstax/osbooks-psychology 的 README 与 LICENSE 同样明确教材正文许可。完整正文共享和改编限非商业用途、须同许可及署名。书封与商标明确不纳入本 CC 许可。",
+      "licensePdfPage": 4,
+      "pageAttributionText": "Access for free at openstax.org.",
+      "pageAttributionUrl": "https://openstax.org",
+      "completenessEvidence": "包含第1章至第16章、参考文献及索引；PDF 755页，印刷页码至743。",
+      "coverPolicy": "subject-default",
+      "coverLicenseNote": "书封、OpenStax和Rice商标被版权页明确排除在CC许可外，未确认独立缩略图使用授权。officialCoverUrl仅记录官方原站图片地址，未复制独立封面到公共资源。qa-cover.png仅用于本地核验；目录应使用本项目默认封面。完整原PDF保持原样。",
+      "chapters": [
+        {
+          "title": "Chapter 1 Introduction to Psychology",
+          "pdfPage": 19
+        },
+        {
+          "title": "Chapter 2 Psychological Research",
+          "pdfPage": 47
+        },
+        {
+          "title": "Chapter 3 Biopsychology",
+          "pdfPage": 83
+        },
+        {
+          "title": "Chapter 4 States of Consciousness",
+          "pdfPage": 121
+        },
+        {
+          "title": "Chapter 5 Sensation and Perception",
+          "pdfPage": 157
+        },
+        {
+          "title": "Chapter 6 Learning",
+          "pdfPage": 193
+        },
+        {
+          "title": "Chapter 7 Thinking and Intelligence",
+          "pdfPage": 225
+        },
+        {
+          "title": "Chapter 8 Memory",
+          "pdfPage": 259
+        },
+        {
+          "title": "Chapter 9 Lifespan Development",
+          "pdfPage": 291
+        },
+        {
+          "title": "Chapter 10 Emotion and Motivation",
+          "pdfPage": 333
+        },
+        {
+          "title": "Chapter 11 Personality",
+          "pdfPage": 371
+        },
+        {
+          "title": "Chapter 12 Social Psychology",
+          "pdfPage": 411
+        },
+        {
+          "title": "Chapter 13 Industrial-Organizational Psychology",
+          "pdfPage": 457
+        },
+        {
+          "title": "Chapter 14 Stress, Lifestyle, and Health",
+          "pdfPage": 495
+        },
+        {
+          "title": "Chapter 15 Psychological Disorders",
+          "pdfPage": 547
+        },
+        {
+          "title": "Chapter 16 Therapy and Treatment",
+          "pdfPage": 609
+        }
+      ],
+      "verifiedAt": "2026-11-07",
+      "sha256": "2f08113c78127bc684922ad6a819db22bd4705ce9fcf28a07f36a2041b1474e2",
+      "fileSize": 57739919,
+      "documentUrl": "/open-books/openstax-psychology-2e/book.pdf",
+      "licenseTextUrl": "/open-books/openstax-psychology-2e/LICENSE.txt",
+      "preferOriginal": true,
+      "coverUrl": null,
+      "pageCount": 755,
+      "pdfRepaired": false,
+      "textLength": 2429710,
+      "textSha256": "fb2932772b4526ba16d3d6c47d4148f2e20538f7a10cdb1647d10c9ead7eac78",
+      "textExtractionNote": "完整逐页提取，页内 sort=True，以换页符分隔；未截断。原始 PDF 未修改。"
+    },
+    {
+      "slug": "openstax-economics-3e",
+      "downloadUrl": "https://assets.openstax.org/oscms-prodcms/media/documents/principles-economics-3e_-_WEB.pdf",
+      "originalSourceUrl": "https://openstax.org/details/books/principles-economics-3e",
+      "sourceUrl": "https://github.com/openstax/osbooks-principles-economics-bundle",
+      "officialCoverUrl": "https://assets.openstax.org/oscms-prodcms/media/documents/Economics3e_titlecard.svg",
+      "licenseCode": "CC-BY-NC-SA-4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-nc-sa/4.0/",
+      "title": "Principles of Economics 3e（经济学原理）",
+      "officialTitle": "Principles of Economics 3e",
+      "subtitle": "第 3 版 · 微观与宏观经济学完整教材",
+      "author": "Steven A. Greenlaw · David Shapiro · Daniel MacDonald",
+      "publisher": "OpenStax / Rice University",
+      "publisherNote": "OpenStax（莱斯大学）官方开放教材；本条目为官方英文电子版。",
+      "languageCode": "en",
+      "subject": "经济学",
+      "sourceName": "GitHub · openstax/osbooks-principles-economics-bundle",
+      "summary": "大学经济学原理完整教材，34章同时覆盖微观与宏观经济学，包含供需、市场结构、公共政策、经济增长、货币银行与国际贸易，附习题、答案、参考文献及索引。英文原版。",
+      "knowledgePoints": [
+        "供给与需求",
+        "消费者与企业行为",
+        "市场结构",
+        "公共经济学",
+        "经济增长与失业",
+        "通货膨胀",
+        "货币与财政政策",
+        "国际贸易与全球化"
+      ],
+      "coverageNote": "完整 995 页 · 第 3 版 · 微观与宏观经济学完整教材。大学经济学原理完整教材，34章同时覆盖微观与宏观经济学，包含供需、市场结构、公共政策、经济增长、货币银行与国际贸易，附习题、答案、参考文献及索引。英文原版。",
+      "attribution": "Steven A. Greenlaw · David Shapiro · Daniel MacDonald. Principles of Economics 3e. OpenStax / Rice University. 第 3 版，2022 年初版，2026 年官方 PDF。CC BY-NC-SA 4.0。原始教材 https://openstax.org/details/books/principles-economics-3e 。Access for free at openstax.org. 本站保留原版完整 PDF；正文为自动提取，可能存在排版差异。",
+      "licenseNote": "Steven A. Greenlaw · David Shapiro · Daniel MacDonald. Principles of Economics 3e. OpenStax / Rice University. 第 3 版，2022 年初版，2026 年官方 PDF。CC BY-NC-SA 4.0。原始教材 https://openstax.org/details/books/principles-economics-3e 。Access for free at openstax.org. 本站保留原版完整 PDF；正文为自动提取，可能存在排版差异。仅限非商业使用，改编须使用相同许可；每个数字阅读页面需保留原站署名与链接。",
+      "licenseEvidence": "原 PDF 第4页明确：©2026 Rice University，教材正文为 CC BY-NC-SA 4.0。官方 GitHub https://github.com/openstax/osbooks-principles-economics-bundle 的 README 与 LICENSE 同样明确教材正文许可。完整正文共享和改编限非商业用途、须同许可及署名。书封与商标明确不纳入本 CC 许可。",
+      "licensePdfPage": 4,
+      "pageAttributionText": "Access for free at openstax.org.",
+      "pageAttributionUrl": "https://openstax.org",
+      "completenessEvidence": "包含第1章至第34章、附录、答案、参考文献及索引；PDF 995页，印刷页码至979。",
+      "coverPolicy": "subject-default",
+      "coverLicenseNote": "书封、OpenStax和Rice商标被版权页明确排除在CC许可外，未确认独立缩略图使用授权。officialCoverUrl仅记录官方原站图片地址，未复制独立封面到公共资源。qa-cover.png仅用于本地核验；目录应使用本项目默认封面。完整原PDF保持原样。",
+      "chapters": [
+        {
+          "title": "Chapter 1 Welcome to Economics!",
+          "pdfPage": 25
+        },
+        {
+          "title": "Chapter 2 Choice in a World of Scarcity",
+          "pdfPage": 43
+        },
+        {
+          "title": "Chapter 3 Demand and Supply",
+          "pdfPage": 63
+        },
+        {
+          "title": "Chapter 4 Labor and Financial Markets",
+          "pdfPage": 101
+        },
+        {
+          "title": "Chapter 5 Elasticity",
+          "pdfPage": 125
+        },
+        {
+          "title": "Chapter 6 Consumer Choices",
+          "pdfPage": 151
+        },
+        {
+          "title": "Chapter 7 Production, Costs, and Industry Structure",
+          "pdfPage": 171
+        },
+        {
+          "title": "Chapter 8 Perfect Competition",
+          "pdfPage": 203
+        },
+        {
+          "title": "Chapter 9 Monopoly",
+          "pdfPage": 231
+        },
+        {
+          "title": "Chapter 10 Monopolistic Competition and Oligopoly",
+          "pdfPage": 253
+        },
+        {
+          "title": "Chapter 11 Monopoly and Antitrust Policy",
+          "pdfPage": 275
+        },
+        {
+          "title": "Chapter 12 Environmental Protection and Negative Externalities",
+          "pdfPage": 295
+        },
+        {
+          "title": "Chapter 13 Positive Externalities and Public Goods",
+          "pdfPage": 321
+        },
+        {
+          "title": "Chapter 14 Labor Markets and Income",
+          "pdfPage": 339
+        },
+        {
+          "title": "Chapter 15 Poverty and Economic Inequality",
+          "pdfPage": 373
+        },
+        {
+          "title": "Chapter 16 Information, Risk, and Insurance",
+          "pdfPage": 401
+        },
+        {
+          "title": "Chapter 17 Financial Markets",
+          "pdfPage": 421
+        },
+        {
+          "title": "Chapter 18 Public Economy",
+          "pdfPage": 449
+        },
+        {
+          "title": "Chapter 19 The Macroeconomic Perspective",
+          "pdfPage": 463
+        },
+        {
+          "title": "Chapter 20 Economic Growth",
+          "pdfPage": 493
+        },
+        {
+          "title": "Chapter 21 Unemployment",
+          "pdfPage": 517
+        },
+        {
+          "title": "Chapter 22 Inflation",
+          "pdfPage": 545
+        },
+        {
+          "title": "Chapter 23 The International Trade and Capital Flows",
+          "pdfPage": 573
+        },
+        {
+          "title": "Chapter 24 The Aggregate Demand/Aggregate Supply Model",
+          "pdfPage": 597
+        },
+        {
+          "title": "Chapter 25 The Keynesian Perspective",
+          "pdfPage": 625
+        },
+        {
+          "title": "Chapter 26 The Neoclassical Perspective",
+          "pdfPage": 643
+        },
+        {
+          "title": "Chapter 27 Money and Banking",
+          "pdfPage": 663
+        },
+        {
+          "title": "Chapter 28 Monetary Policy and Bank Regulation",
+          "pdfPage": 683
+        },
+        {
+          "title": "Chapter 29 Exchange Rates and International Capital Flows",
+          "pdfPage": 711
+        },
+        {
+          "title": "Chapter 30 Government Budgets and Fiscal Policy",
+          "pdfPage": 739
+        },
+        {
+          "title": "Chapter 31 The Impacts of Government Borrowing",
+          "pdfPage": 765
+        },
+        {
+          "title": "Chapter 32 Macroeconomic Policy Around the World",
+          "pdfPage": 783
+        },
+        {
+          "title": "Chapter 33 International Trade",
+          "pdfPage": 805
+        },
+        {
+          "title": "Chapter 34 Globalization and Protectionism",
+          "pdfPage": 827
+        }
+      ],
+      "verifiedAt": "2026-11-07",
+      "sha256": "2d2e7549e13a1975965bfb14a577a3d7935173ff10ca2e1d953815560590a4eb",
+      "fileSize": 49444584,
+      "documentUrl": "/open-books/openstax-economics-3e/book.pdf",
+      "licenseTextUrl": "/open-books/openstax-economics-3e/LICENSE.txt",
+      "preferOriginal": true,
+      "coverUrl": null,
+      "pageCount": 995,
+      "pdfRepaired": false,
+      "textLength": 3138974,
+      "textSha256": "18f999f84816bcdd866ca4bed6ab8fd38e20b5dac8c695ee9e0af15404283043",
+      "textExtractionNote": "完整逐页提取，页内 sort=True，以换页符分隔；未截断。原始 PDF 未修改。"
+    }
+  ]
+}

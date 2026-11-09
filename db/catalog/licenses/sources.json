@@ -1,0 +1,26 @@
+{
+  "verifiedAt": "2026-11-07",
+  "records": [
+    {
+      "licenseCode": "CC-BY-NC-SA-4.0",
+      "sourceUrl": "https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode.txt",
+      "file": "CC-BY-NC-SA-4.0.txt",
+      "sha256": "1349a4b6148492b44f629e64eed676612e234fe9a839e4f3b277c1482c8849f1",
+      "bytes": 20849
+    },
+    {
+      "licenseCode": "GFDL-1.2-or-later",
+      "sourceUrl": "https://raw.githubusercontent.com/spdx/license-list-data/main/text/GFDL-1.2-or-later.txt",
+      "file": "GFDL-1.2-or-later.txt",
+      "sha256": "1118a91a3290bc8981f922dfcffc1a619592c007aa31b7a98cee694d933c86ce",
+      "bytes": 20272
+    },
+    {
+      "licenseCode": "GFDL-1.3-or-later",
+      "sourceUrl": "https://raw.githubusercontent.com/spdx/license-list-data/main/text/GFDL-1.3-or-later.txt",
+      "file": "GFDL-1.3-or-later.txt",
+      "sha256": "d024962f1f4966c102b40d9fd9cc834a3f0b3c1397b41444b7cd7925640dc929",
+      "bytes": 22791
+    }
+  ]
+}

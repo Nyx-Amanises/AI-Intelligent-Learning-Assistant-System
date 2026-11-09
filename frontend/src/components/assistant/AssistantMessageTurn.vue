@@ -14,9 +14,10 @@
           'assistant-turn__avatar--assistant': !isUser
         }"
       >
-        <AppIcon :name="isUser ? 'user' : 'assistant'" :size="16" />
+        <AppIcon v-if="isUser" name="user" :size="16" />
+        <AssistantMark v-else :size="21" />
       </span>
-      <span class="assistant-turn__name">{{ isUser ? '你' : '学习助手' }}</span>
+      <span class="assistant-turn__name">{{ isUser ? '你' : ASSISTANT_NAME }}</span>
       <span class="assistant-turn__time">{{ formatDateTime(message.createdAt) }}</span>
     </div>
 
@@ -70,7 +71,9 @@ import type { AssistantMessage, AssistantRelevantMemory, AssistantToolCall } fro
 import AppIcon from '@/components/AppIcon.vue'
 import LearningNoteContent from '@/components/LearningNoteContent.vue'
 import AssistantCitations from '@/components/assistant/AssistantCitations.vue'
+import AssistantMark from '@/components/assistant/AssistantMark.vue'
 import AssistantToolActivity from '@/components/assistant/AssistantToolActivity.vue'
+import { ASSISTANT_NAME } from '@/config/brand'
 import { formatDateTime, isUserMessage, parseRagEvidence } from '@/utils/assistantFormat'
 
 const props = defineProps<{
@@ -127,6 +130,7 @@ const evidence = computed(() => (isUser.value ? null : parseRagEvidence(props.to
 }
 
 .assistant-turn__avatar--assistant {
+  border-radius: 10px;
   background: var(--brand-soft);
   color: var(--brand);
 }

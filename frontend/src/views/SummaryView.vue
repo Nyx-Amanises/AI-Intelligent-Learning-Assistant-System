@@ -907,4 +907,109 @@ onUnmounted(() => {
     line-height: 1.6;
   }
 }
+@media (min-width: 761px) {
+  .summary-view {
+    max-width: 1120px;
+  }
+  .summary-view > .page-header .page-desc {
+    display: none;
+  }
+  .summary-view > .workspace-panel {
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+  .summary-view .workspace-toolbar {
+    margin-bottom: 16px;
+    padding: 12px 16px;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: var(--panel);
+  }
+  .summary-view .record-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+  }
+  .summary-view .record-row {
+    --record-lead: 40px;
+    display: grid;
+    grid-template-columns: var(--record-lead) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+    gap: 14px;
+    min-width: 0;
+    padding: 18px;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    background: var(--panel);
+  }
+  .summary-view .record-row:hover {
+    border-color: var(--line-strong);
+  }
+  .summary-view .record-row__main {
+    grid-column: 2;
+  }
+  .summary-view .record-row__title {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 6px;
+    font-size: 16px;
+  }
+  .summary-view .record-row__title > :first-child {
+    display: -webkit-box;
+    flex: 1 1 100%;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .summary-view .record-row__meta {
+    margin-top: 8px;
+    row-gap: 6px;
+  }
+  .summary-view .record-row__actions {
+    grid-column: 1 / -1;
+    align-self: end;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-width: 0;
+    padding: 12px 0 0;
+    border-top: 1px solid var(--line);
+  }
+  .summary-view .record-row__actions > .el-dropdown {
+    margin-left: auto;
+  }
+  .summary-view .record-row__actions > .el-button,
+  .summary-view .record-row__actions :deep(.icon-menu-button) {
+    min-height: 44px;
+    border-radius: 11px;
+  }
+  .summary-view .record-row__sk-actions {
+    grid-column: 1 / -1;
+    width: 160px;
+    margin-top: 12px;
+  }
+  .summary-view .workspace-pagination {
+    padding: 18px 0 0;
+    border: 0;
+  }
+  .summary-view .workspace-progress {
+    margin-bottom: 16px;
+    border: 0;
+    border-radius: 12px;
+  }
+
+  .summary-row__excerpt {
+    margin-top: 8px;
+    -webkit-line-clamp: 2;
+    line-height: 1.7;
+  }
+}
+@media (min-width: 761px) and (max-width: 980px) {
+  .summary-view .record-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 </style>

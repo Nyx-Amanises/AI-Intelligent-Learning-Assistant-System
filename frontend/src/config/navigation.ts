@@ -4,6 +4,8 @@
  */
 export interface NavigationItem {
   path: string
+  /** 汇总页内的子视图；主导航仍使用分区的 path。 */
+  query?: Record<string, string>
   label: string
   icon: string
   /** 搜索面板里用来匹配的别名，空格分隔。 */
@@ -32,8 +34,21 @@ export const navigationSections: NavigationSection[] = [
     icon: 'book-open',
     path: '/materials',
     items: [
-      { path: '/materials', label: '资料库', icon: 'folder', keywords: '资料 文档 上传 pdf word 文本' },
-      { path: '/summary', label: '学习总结', icon: 'summary', keywords: '总结 摘要 笔记 提纲 考试重点' }
+      {
+        path: '/resources',
+        label: '找资料',
+        icon: 'search',
+        keywords: '搜索 课程 教材 课本 讲义 期末 复习 收藏 学习资源'
+      },
+      {
+        path: '/materials',
+        query: { view: 'library' },
+        label: '资料库',
+        icon: 'folder',
+        keywords: '资料 文档 上传 pdf word 文本'
+      },
+      { path: '/summary', label: '学习总结', icon: 'summary', keywords: '总结 摘要 提纲 考试重点' },
+      { path: '/notes', label: '我的笔记', icon: 'edit', keywords: '笔记 随手记 小记 笔记本 摘录 错因 思路' }
     ]
   },
   {
@@ -53,7 +68,13 @@ export const navigationSections: NavigationSection[] = [
     icon: 'analytics',
     path: '/analytics',
     items: [
-      { path: '/analytics', label: '学习统计', icon: 'analytics', keywords: '统计 趋势 正确率 时长' },
+      {
+        path: '/analytics',
+        query: { view: 'overview' },
+        label: '学习统计',
+        icon: 'analytics',
+        keywords: '统计 趋势 正确率 时长'
+      },
       { path: '/mastery', label: '知识掌握', icon: 'mastery', keywords: '知识点 掌握度 薄弱' }
     ]
   },
@@ -64,7 +85,13 @@ export const navigationSections: NavigationSection[] = [
     path: '/profile',
     accountOnly: true,
     items: [
-      { path: '/profile', label: '个人信息', icon: 'user', keywords: '账号 头像 昵称 密码' },
+      {
+        path: '/profile',
+        query: { view: 'account' },
+        label: '个人信息',
+        icon: 'user',
+        keywords: '账号 头像 昵称 密码'
+      },
       { path: '/ai-config', label: 'AI 配置', icon: 'config', keywords: '模型 api key 向量 设置' },
       { path: '/ai-tasks', label: '任务中心', icon: 'tasks', keywords: '任务 进度 重试' },
       { path: '/rag-eval', label: '检索评测', icon: 'eval', keywords: 'rag 评测 召回', adminOnly: true }

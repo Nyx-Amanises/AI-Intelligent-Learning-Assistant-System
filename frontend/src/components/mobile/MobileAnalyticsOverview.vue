@@ -777,4 +777,92 @@ void loadAnalytics()
   outline: 2px solid #df6411;
   outline-offset: 2px;
 }
+@media (min-width: 761px) {
+  .mobile-analytics-overview {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+    gap: 20px 24px;
+  }
+  .mobile-analytics-overview__toolbar,
+  .mobile-analytics-overview__filters,
+  .mobile-analytics-overview__range-note,
+  .mobile-analytics-overview__error,
+  .mobile-analytics-overview__mastery-link {
+    grid-column: 1 / -1;
+    margin: 0;
+  }
+  .mobile-analytics-overview__toolbar > span,
+  .mobile-analytics-overview__toolbar button {
+    font-size: 13px;
+  }
+  .mobile-analytics-overview__toolbar button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .mobile-analytics-overview__filters {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 16px 24px;
+    padding: 22px 24px;
+  }
+  .mobile-analytics-overview__filters label,
+  .mobile-analytics-overview__filters select,
+  .mobile-analytics-overview__filters input {
+    font-size: 13px;
+  }
+  .mobile-analytics-overview__filter-actions,
+  .mobile-analytics-overview__filter-error {
+    grid-column: 1 / -1;
+  }
+  .mobile-analytics-overview > section {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .mobile-analytics-overview__section-title {
+    margin: 0 0 14px;
+    font-size: 16px;
+  }
+  .mobile-analytics-overview__card {
+    flex: 1;
+    padding: 20px 24px 24px;
+    border-radius: 16px;
+  }
+  .mobile-analytics-overview__periods {
+    gap: 36px;
+  }
+  .mobile-analytics-overview__periods button {
+    min-height: 44px;
+  }
+  .mobile-analytics-overview__bar-chart {
+    height: 240px;
+  }
+  .mobile-analytics-overview__bar-track {
+    height: 212px;
+  }
+  .mobile-analytics-overview__line-chart svg {
+    height: 240px;
+  }
+  .mobile-analytics-overview__chart-status {
+    min-height: 265px;
+    font-size: 13px;
+  }
+  .mobile-analytics-overview__metrics {
+    margin-inline: 0;
+  }
+  .mobile-analytics-overview__metrics dd {
+    font-size: 28px;
+  }
+  .mobile-analytics-overview__chart-caption,
+  .mobile-analytics-overview__bar-date,
+  .mobile-analytics-overview__note,
+  .mobile-analytics-overview__metrics small {
+    font-size: 11px;
+  }
+  .mobile-analytics-overview__mastery-link {
+    min-height: 64px;
+    padding-inline: 24px;
+    font-size: 14px;
+  }
+}
 </style>

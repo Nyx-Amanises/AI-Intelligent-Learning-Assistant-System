@@ -1,7 +1,10 @@
 <template>
   <section class="assistant-home">
     <div class="assistant-home__hero">
-      <div class="assistant-home__greeting">你好，{{ greetingName }}</div>
+      <div class="assistant-home__greeting">
+        <AssistantMark :size="28" />
+        <span>你好，{{ greetingName }}</span>
+      </div>
       <h2>今天想弄懂什么？</h2>
       <p>问知识点、查资料，也可以一起复盘错题。</p>
     </div>
@@ -31,6 +34,7 @@
 
 <script setup lang="ts">
 import AssistantComposer from '@/components/assistant/AssistantComposer.vue'
+import AssistantMark from '@/components/assistant/AssistantMark.vue'
 
 defineProps<{
   greetingName: string
@@ -71,9 +75,17 @@ const emit = defineEmits<{
 }
 
 .assistant-home__greeting {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
   color: var(--brand);
   font-size: 15px;
   overflow-wrap: anywhere;
+}
+
+.assistant-home__greeting span {
+  min-width: 0;
 }
 
 .assistant-home__hero h2 {

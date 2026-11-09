@@ -1,7 +1,7 @@
 <template>
   <section class="recent-card surface" aria-labelledby="recent-card-title" :aria-busy="loading">
     <header class="recent-card__head">
-      <h2 id="recent-card-title">最近添加的资料</h2>
+      <h2 id="recent-card-title">最近资料</h2>
       <RouterLink to="/materials" class="text-link"
         >全部 {{ total || '' }}<AppIcon name="arrow-right" :size="15"
       /></RouterLink>
@@ -55,7 +55,7 @@ import AppIcon from '@/components/AppIcon.vue'
 import MaterialTypeBadge from '@/components/MaterialTypeBadge.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import type { MaterialPageItem } from '@/api/modules/material'
-import { formatCharacters, formatRelativeDay } from '@/utils/format'
+import { formatRelativeDay } from '@/utils/format'
 import { formatMaterialType, formatParseStatus, statusTone } from '@/utils/labels'
 import { materialRoute, uploadRoute } from './routes'
 
@@ -64,17 +64,14 @@ defineProps<{ loading: boolean; error: boolean; materials: MaterialPageItem[]; t
 const emit = defineEmits<{ reload: [] }>()
 
 const rowMeta = (item: MaterialPageItem) =>
-  [
-    formatMaterialType(item.materialType, '文档'),
-    item.parseStatus === 'SUCCESS' ? formatCharacters(item.totalCharacters) : '',
-    `${formatRelativeDay(item.createdAt)}添加`
-  ]
+  [formatMaterialType(item.materialType, '文档'), `${formatRelativeDay(item.createdAt)}添加`]
     .filter(Boolean)
     .join(' · ')
 </script>
 <style scoped>
 .recent-card {
   padding: 20px 8px 10px;
+  border-radius: 18px;
 }
 .recent-card__head {
   display: flex;
@@ -91,6 +88,9 @@ const rowMeta = (item: MaterialPageItem) =>
   font-weight: 600;
 }
 .recent-card__head .text-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
   font-size: 13px;
 }
 .recent-card__add-icon {

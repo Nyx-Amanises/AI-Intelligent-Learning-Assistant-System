@@ -2,6 +2,11 @@
   <section class="shortcuts surface" aria-labelledby="shortcuts-title">
     <h2 id="shortcuts-title">常用</h2>
     <nav class="shortcuts__list" aria-label="常用功能">
+      <RouterLink to="/resources" class="shortcuts__item">
+        <span class="shortcuts__icon"><AppIcon name="search" :size="18" /></span>
+        <span class="shortcuts__text"><strong>找资料</strong><small>搜索课程与知识点，开始学习</small></span>
+        <AppIcon class="shortcuts__go" name="chevron-right" :size="16" />
+      </RouterLink>
       <RouterLink to="/summary" class="shortcuts__item">
         <span class="shortcuts__icon"><AppIcon name="summary" :size="18" /></span>
         <span class="shortcuts__text"><strong>学习总结</strong><small>整理重点，对照原文回看</small></span>
@@ -19,8 +24,11 @@
         <AppIcon class="shortcuts__go" name="chevron-right" :size="16" />
       </RouterLink>
       <button type="button" class="shortcuts__item" @click="emit('openAssistant')">
-        <span class="shortcuts__icon"><AppIcon name="spark" :size="18" /></span>
-        <span class="shortcuts__text"><strong>学习助手</strong><small>问概念、找出处、分析错题</small></span>
+        <span class="shortcuts__icon"><AssistantMark :size="20" /></span>
+        <span class="shortcuts__text"
+          ><strong>{{ ASSISTANT_NAME }}</strong
+          ><small>问概念、找出处、分析错题</small></span
+        >
         <AppIcon class="shortcuts__go" name="chevron-right" :size="16" />
       </button>
     </nav>
@@ -30,6 +38,8 @@
 <script setup lang="ts">
 import { RouterLink } from 'vue-router'
 import AppIcon from '@/components/AppIcon.vue'
+import AssistantMark from '@/components/assistant/AssistantMark.vue'
+import { ASSISTANT_NAME } from '@/config/brand'
 
 /** 首页右侧的常用入口。错题本显示待复习数量。 */
 defineProps<{ wrongCount: number }>()

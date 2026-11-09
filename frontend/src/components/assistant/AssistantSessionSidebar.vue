@@ -4,12 +4,12 @@
     class="assistant-sidebar"
     :class="{ 'assistant-sidebar--mobile-open': mobileOpen }"
     :inert="sidebarInert"
-    aria-label="学习助手会话"
+    :aria-label="`${ASSISTANT_NAME}会话`"
   >
     <div class="assistant-sidebar__brand">
       <div class="assistant-sidebar__brand-row">
         <span class="assistant-sidebar__logo">
-          <AppIcon name="copilot" :size="25" />
+          <AssistantMark :size="28" />
         </span>
         <div>
           <h2>{{ ASSISTANT_NAME }}</h2>
@@ -119,6 +119,7 @@ import { ref } from 'vue'
 import type { AssistantSessionPageItem } from '@/api/modules/assistant'
 import type { AssistantSessionCommand } from '@/composables/useAssistantSessions'
 import AppIcon from '@/components/AppIcon.vue'
+import AssistantMark from '@/components/assistant/AssistantMark.vue'
 import { ASSISTANT_NAME } from '@/config/brand'
 import { isSessionPinned } from '@/utils/assistantFormat'
 

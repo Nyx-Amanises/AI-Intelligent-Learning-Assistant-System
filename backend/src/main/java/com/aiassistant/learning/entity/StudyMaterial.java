@@ -2,6 +2,7 @@ package com.aiassistant.learning.entity;
 
 import com.aiassistant.learning.common.entity.BaseLogicEntity;
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -27,7 +28,7 @@ public class StudyMaterial extends BaseLogicEntity {
     private Integer chunkOverlap;
     private String contentHash;
 
-    /** 手工文本的完整原文；普通查询不加载，也不作为页面响应字段。 */
+    /** 完整纯文本原文；普通查询不加载，仅在已鉴权的详情或重新解析时按需读取。 */
     @TableField(select = false)
     private String sourceText;
 
@@ -79,8 +80,9 @@ public class StudyMaterial extends BaseLogicEntity {
     private Long fileSize;
 
     /**
-     * 封面图地址，当前可用于后续扩展资料封面展示。
+     * 私有封面存储键，由封面服务生成；页面响应转换为需鉴权的版本化读取地址。
      */
+    @TableField(updateStrategy = FieldStrategy.NEVER)
     private String coverUrl;
 
     /**

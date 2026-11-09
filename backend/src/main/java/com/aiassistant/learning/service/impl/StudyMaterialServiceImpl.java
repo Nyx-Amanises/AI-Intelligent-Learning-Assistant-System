@@ -3,6 +3,7 @@ package com.aiassistant.learning.service.impl;
 import com.aiassistant.learning.common.exception.BusinessException;
 import com.aiassistant.learning.common.util.GenerationModes;
 import com.aiassistant.learning.common.util.MaterialFileParser;
+import com.aiassistant.learning.common.util.MaterialCoverFiles;
 import com.aiassistant.learning.common.util.MaterialTextChunker;
 import com.aiassistant.learning.common.util.MaterialTextChunker.Options;
 import com.aiassistant.learning.config.FileStorageProperties;
@@ -12,6 +13,7 @@ import com.aiassistant.learning.dto.material.MaterialParseRequest;
 import com.aiassistant.learning.dto.material.MaterialUpdateRequest;
 import com.aiassistant.learning.entity.MaterialSegment;
 import com.aiassistant.learning.entity.StudyMaterial;
+import com.aiassistant.learning.entity.StudyResource;
 import com.aiassistant.learning.mapper.MaterialSegmentMapper;
 import com.aiassistant.learning.service.StudyMaterialService;
 import com.aiassistant.learning.service.VectorStoreService;
@@ -328,7 +330,7 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
     /**
      * 查询资料详情。
      *
-     * <p>会校验资料归属，防止用户读取别人的资料；同时组装分段列表和向量化统计信息。</p>
+     * <p>会校验资料归属，优先提供已发布教材原文，并保留分段列表供总结等页面预览。</p>
      *
      * @param userId 当前登录用户 ID
      * @param materialId 资料 ID
@@ -337,6 +339,8 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
     @Override
     public MaterialDetailVO getMaterialDetail(Long userId, Long materialId) {
         StudyMaterial material = getUserOwnedMaterial(userId, materialId);
+        StudyResource sourceDocument = getBaseMapper().findPublishedSourceDocument(userId, materialId);
+        String contentText = sourceDocument == null ? getBaseMapper().findOwnedSourceText(userId, materialId) : null;
         EmbeddingStats embeddingStats = buildEmbeddingStatsMap(List.of(materialId))
                 .getOrDefault(materialId, EmbeddingStats.empty());
         List<MaterialSegmentVO> segments = materialSegmentMapper.selectList(
@@ -354,6 +358,10 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
                 .toList();
         return MaterialDetailVO.builder()
                 .id(material.getId())
+                .coverUrl(MaterialCoverFiles.publicUrl(material.getId(), material.getCoverUrl()))
+                .resourceId(sourceDocument == null ? null : sourceDocument.getId())
+                .documentUrl(sourceDocument == null ? null : sourceDocument.getDocumentUrl())
+                .contentText(contentText)
                 .title(material.getTitle())
                 .materialType(material.getMaterialType())
                 .sourceType(material.getSourceType())
@@ -601,6 +609,7 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
                 .eq(MaterialSegment::getMaterialId, material.getId()));
         this.removeById(material.getId());
         deleteStoredFileAfterCommit(material.getFileUrl());
+        new MaterialCoverFiles(fileStorageProperties).deleteAfterCommit(material.getCoverUrl());
     }
 
     /**
@@ -673,6 +682,7 @@ public class StudyMaterialServiceImpl extends ServiceImpl<com.aiassistant.learni
                     EmbeddingStats stats = embeddingStatsMap.getOrDefault(item.getId(), EmbeddingStats.empty());
                     return MaterialPageVO.builder()
                             .id(item.getId())
+                            .coverUrl(MaterialCoverFiles.publicUrl(item.getId(), item.getCoverUrl()))
                             .title(item.getTitle())
                             .materialType(item.getMaterialType())
                             .parseStatus(item.getParseStatus())

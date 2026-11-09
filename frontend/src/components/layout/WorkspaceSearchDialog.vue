@@ -29,7 +29,7 @@
         @keydown.down.prevent="move(1)"
         @keydown.up.prevent="move(-1)"
       />
-      <kbd>Esc</kbd>
+      <button type="button" class="search-palette__cancel" @click="emit('update:modelValue', false)">取消</button>
     </form>
     <p class="search-palette__group">{{ keyword.trim() ? '搜索结果' : '常用页面' }}</p>
     <ul id="search-palette-results" class="search-palette__results" role="listbox" aria-label="搜索结果">
@@ -60,7 +60,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import AppIcon from '@/components/AppIcon.vue'
 import { allNavigationItems, findSection, type NavigationItem } from '@/config/navigation'
 import { useUserStore } from '@/stores/user'
@@ -78,19 +78,20 @@ defineProps<{ modelValue: boolean }>()
 const emit = defineEmits<{ 'update:modelValue': [value: boolean] }>()
 
 const router = useRouter()
+const route = useRoute()
 const userStore = useUserStore()
 const inputRef = ref<HTMLInputElement | null>(null)
 const keyword = ref('')
 const activeIndex = ref(0)
 
-const QUICK_PATHS = ['/materials', '/summary', '/quiz', '/wrong-questions', '/analytics']
+const QUICK_PATHS = ['/resources', '/materials', '/quiz', '/wrong-questions', '/analytics']
 
 const pageResult = (item: NavigationItem): SearchResult => ({
   id: item.path,
   label: item.label,
   hint: findSection(item.path)?.label ?? '页面',
   icon: item.icon,
-  to: { path: item.path }
+  to: { path: item.path, query: item.query }
 })
 
 const pages = computed(() => allNavigationItems.filter((item) => !item.adminOnly || userStore.isAdmin))
@@ -109,9 +110,16 @@ const results = computed<SearchResult[]>(() => {
     .map(pageResult)
   return [
     {
+      id: 'resources-search',
+      label: `找“${text}”的学习资料`,
+      hint: '搜索完整教材、课程和复习资料',
+      icon: 'search',
+      to: { path: '/resources', query: { keyword: text } }
+    },
+    {
       id: 'materials-search',
-      label: `在资料库中搜索“${text}”`,
-      hint: '按资料名称、标签和说明查找',
+      label: `在我的资料中搜索“${text}”`,
+      hint: '查找自己上传或加入的资料',
       icon: 'search',
       to: { path: '/materials', query: { keyword: text } }
     },
@@ -135,7 +143,12 @@ const move = (step: number) => {
 
 const run = (item: SearchResult) => {
   emit('update:modelValue', false)
-  void router.push(item.to)
+  const origin = route.path === '/dashboard' ? 'home' : route.path === '/mastery' ? 'mastery' : route.query.from
+  const target =
+    item.to.path === '/resources' && (origin === 'home' || origin === 'mastery')
+      ? { ...item.to, query: { ...item.to.query, from: origin } }
+      : item.to
+  void router.push(target)
 }
 
 const runActive = () => {
@@ -171,6 +184,25 @@ const runActive = () => {
 }
 .search-palette__field input::placeholder {
   color: var(--muted);
+}
+.search-palette__cancel {
+  flex: 0 0 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.search-palette__cancel:hover {
+  background: var(--bg-secondary);
+}
+.search-palette__cancel:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
 }
 .search-palette kbd {
   padding: 1px 6px;
@@ -231,6 +263,7 @@ const runActive = () => {
   white-space: nowrap;
 }
 .search-palette__text small {
+  overflow-wrap: anywhere;
   color: var(--muted);
   font-size: 12px;
 }
@@ -262,8 +295,38 @@ const runActive = () => {
   align-items: center;
   gap: 4px;
 }
+@media (max-width: 760px) {
+  :global(:root .el-dialog.search-palette) {
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    margin-top: max(12px, env(safe-area-inset-top));
+    margin-bottom: 12px;
+  }
+  :global(:root .el-dialog.search-palette .el-dialog__body) {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .search-palette__field {
+    flex-shrink: 0;
+    gap: 8px;
+    padding: 0 12px;
+  }
+  .search-palette__group {
+    flex-shrink: 0;
+  }
+  .search-palette__results {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .search-palette__help {
+    display: none;
+  }
+}
 @media (pointer: coarse) {
-  .search-palette__field kbd,
   .search-palette__help {
     display: none;
   }

@@ -13,6 +13,8 @@ export interface ModalShellOptions {
   mobileMenuRef: Ref<HTMLElement | null>
   /** 判定紧凑布局（移动端）的媒体查询。 */
   compactMediaQuery?: string
+  /** 使用组件库的焦点栈，允许与已有弹层和确认框正确嵌套。 */
+  externalFocusTrap?: boolean
   /** 面板打开时（锁定滚动之后、聚焦之前）执行的业务逻辑。 */
   onOpen?: () => void
 }
@@ -51,7 +53,7 @@ export const useModalShell = (options: ModalShellOptions) => {
       lockBodyScroll()
       options.onOpen?.()
       await nextTick()
-      if (visible.value) panelRef.value?.focus({ preventScroll: true })
+      if (visible.value && !options.externalFocusTrap) panelRef.value?.focus({ preventScroll: true })
     } else {
       restoreBodyScroll()
       await nextTick()
@@ -99,7 +101,7 @@ export const useModalShell = (options: ModalShellOptions) => {
       else closePanel()
       return
     }
-    if (event.key !== 'Tab') return
+    if (event.key !== 'Tab' || options.externalFocusTrap) return
     const scope = isCompactLayout.value && mobileSidebarOpen.value ? sidebarRef.value : panelRef.value
     if (!scope) return
     const focusable = Array.from(scope.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(

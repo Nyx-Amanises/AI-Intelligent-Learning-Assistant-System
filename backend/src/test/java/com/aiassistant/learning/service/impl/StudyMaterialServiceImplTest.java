@@ -31,7 +31,9 @@ import com.aiassistant.learning.dto.material.MaterialParseRequest;
 import com.aiassistant.learning.dto.material.MaterialUpdateRequest;
 import com.aiassistant.learning.entity.MaterialSegment;
 import com.aiassistant.learning.entity.StudyMaterial;
+import com.aiassistant.learning.entity.StudyResource;
 import com.aiassistant.learning.mapper.MaterialSegmentMapper;
+import com.aiassistant.learning.mapper.StudyMaterialMapper;
 import com.aiassistant.learning.service.AiConfigService;
 import com.aiassistant.learning.service.AiTaskService;
 import com.aiassistant.learning.service.VectorStoreService;
@@ -81,6 +83,7 @@ class StudyMaterialServiceImplTest {
     private static final long MATERIAL_ID = 42L;
 
     private final MaterialSegmentMapper segments = mock(MaterialSegmentMapper.class);
+    private final StudyMaterialMapper materials = mock(StudyMaterialMapper.class);
     private final FileStorageProperties storage = new FileStorageProperties();
     private final VectorStoreService vectorStore = mock(VectorStoreService.class);
     private final AiTaskService aiTaskService = mock(AiTaskService.class);
@@ -106,6 +109,7 @@ class StudyMaterialServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        doReturn(materials).when(service).getBaseMapper();
         storage.setUploadDir(temporaryDirectory.toString());
         when(transactionManager.getTransaction(any(TransactionDefinition.class))).thenReturn(transactionStatus);
         when(transactionStatus.createSavepoint()).thenReturn(parseSavepoint);
@@ -693,6 +697,91 @@ class StudyMaterialServiceImplTest {
         assertTrue(sql.contains("tags LIKE"));
         assertTrue(sql.contains("description LIKE"));
         assertTrue(((LambdaQueryWrapper<StudyMaterial>) wrapper.getValue()).getParamNameValuePairs().containsValue("%期末%"));
+    }
+
+    @Test
+    void listAndDetailExposeVersionedCoverMetadataWithoutStoragePath() {
+        StudyMaterial material = material(MATERIAL_ID, "资料封面", "SUCCESS");
+        material.setCoverUrl("material-covers/" + "a".repeat(32) + ".jpg");
+        doReturn(material).when(service).getOne(any());
+        Page<StudyMaterial> page = new Page<>(1, 10);
+        page.setRecords(List.of(material));
+        page.setTotal(1);
+        doReturn(page).when(service).page(any(), any(Wrapper.class));
+        String expected = "/api/material/42/cover?v=" + "a".repeat(32);
+        assertEquals(expected, service.getMaterialDetail(USER_ID, MATERIAL_ID).getCoverUrl());
+        assertEquals(expected, service.pageMaterials(USER_ID, new MaterialPageQuery()).getRecords().get(0).getCoverUrl());
+        material.setCoverUrl(null);
+        assertEquals(null, service.getMaterialDetail(USER_ID, MATERIAL_ID).getCoverUrl());
+    }
+
+    @Test
+    void detailReturnsPublishedDocumentWithoutLoadingTheFullText() {
+        doReturn(material(MATERIAL_ID, "完整教材", "SUCCESS")).when(service).getOne(any());
+        StudyResource source = new StudyResource();
+        source.setId(15L);
+        source.setDocumentUrl("/open-books/example/book.pdf");
+        when(materials.findPublishedSourceDocument(USER_ID, MATERIAL_ID)).thenReturn(source);
+        MaterialSegment segment = new MaterialSegment();
+        segment.setId(101L);
+        segment.setSegmentNo(1);
+        segment.setContentText("总结页仍可读取的资料片段");
+        when(segments.selectList(any())).thenReturn(List.of(segment));
+
+        var result = service.getMaterialDetail(USER_ID, MATERIAL_ID);
+
+        assertEquals(15L, result.getResourceId());
+        assertEquals("/open-books/example/book.pdf", result.getDocumentUrl());
+        assertEquals(null, result.getContentText());
+        assertEquals(1, result.getSegments().size());
+        assertEquals("总结页仍可读取的资料片段", result.getSegments().get(0).getContentText());
+        verify(materials, never()).findOwnedSourceText(any(), any());
+        verify(segments).selectList(any());
+    }
+
+    @Test
+    void detailLoadsCompleteTextOnlyWhenNoPublishedDocumentIsAvailable() {
+        doReturn(material(MATERIAL_ID, "课堂笔记", "SUCCESS")).when(service).getOne(any());
+        when(materials.findOwnedSourceText(USER_ID, MATERIAL_ID)).thenReturn("第一行\n\n完整的正文。");
+
+        var result = service.getMaterialDetail(USER_ID, MATERIAL_ID);
+
+        assertEquals(null, result.getResourceId());
+        assertEquals(null, result.getDocumentUrl());
+        assertEquals("第一行\n\n完整的正文。", result.getContentText());
+        verify(materials).findPublishedSourceDocument(USER_ID, MATERIAL_ID);
+    }
+
+    @Test
+    void detailRejectsUnownedMaterialBeforeLookingUpItsSource() {
+        doReturn(null).when(service).getOne(any());
+
+        assertThrows(BusinessException.class, () -> service.getMaterialDetail(USER_ID, MATERIAL_ID));
+
+        verify(materials, never()).findPublishedSourceDocument(any(), any());
+        verify(materials, never()).findOwnedSourceText(any(), any());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void deletingMaterialCleansCoverOnlyAfterSuccessfulCommit(boolean commit) throws Exception {
+        String key = "material-covers/" + "b".repeat(32) + ".jpg";
+        Files.createDirectories(temporaryDirectory.resolve("material-covers"));
+        Path cover = Files.write(temporaryDirectory.resolve(key), new byte[]{1, 2});
+        StudyMaterial material = material(MATERIAL_ID, "资料封面", "SUCCESS");
+        material.setCoverUrl(key);
+        doReturn(material).when(service).getOne(any());
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            service.deleteMaterial(USER_ID, MATERIAL_ID);
+            assertTrue(Files.exists(cover));
+            if (commit) TransactionSynchronizationManager.getSynchronizations().forEach(TransactionSynchronization::afterCommit);
+            TransactionSynchronizationManager.getSynchronizations().forEach(sync -> sync.afterCompletion(
+                    commit ? TransactionSynchronization.STATUS_COMMITTED : TransactionSynchronization.STATUS_ROLLED_BACK));
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+        assertEquals(!commit, Files.exists(cover));
     }
 
     @Test

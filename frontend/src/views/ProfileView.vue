@@ -1,18 +1,23 @@
 <template>
   <section
     class="learning-page profile-page"
-    :aria-labelledby="showMobilePreferences ? undefined : 'profile-title'"
-    :aria-label="showMobilePreferences ? '学习偏好' : undefined"
+    :aria-labelledby="showPreferences ? undefined : 'profile-title'"
+    :aria-label="showPreferences ? '学习偏好' : undefined"
   >
-    <MobileLearningPreferences v-if="showMobilePreferences" />
-    <header v-show="!showMobilePreferences" class="page-header">
-      <div>
-        <h1 id="profile-title" class="page-title">个人信息</h1>
-        <p class="page-desc">管理你的头像、昵称、联系邮箱和登录密码。</p>
+    <MobileLearningPreferences v-if="showPreferences" />
+    <header v-show="!showPreferences" class="page-header">
+      <div class="profile-account-heading">
+        <RouterLink to="/profile" class="profile-account-back" aria-label="返回学习偏好">
+          <AppIcon name="arrow-left" :size="22" />
+        </RouterLink>
+        <div>
+          <h1 id="profile-title" class="page-title">个人信息</h1>
+          <p class="page-desc">管理你的头像、昵称、联系邮箱和登录密码。</p>
+        </div>
       </div>
     </header>
 
-    <div v-show="!showMobilePreferences" class="page-card profile-card">
+    <div v-show="!showPreferences" class="page-card profile-card">
       <div v-if="loading" class="profile-state" role="status" aria-live="polite">
         <AppIcon name="user" :size="28" />
         <p>正在加载个人信息…</p>
@@ -240,7 +245,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 import { changePasswordApi, getProfileApi, updateProfileApi, uploadAvatarApi } from '@/api/modules/auth'
 import AppIcon from '@/components/AppIcon.vue'
 import MobileLearningPreferences from '@/components/mobile/MobileLearningPreferences.vue'
@@ -272,12 +277,7 @@ const passwordFields: {
 
 const userStore = useUserStore()
 const route = useRoute()
-const mobileViewport = window.matchMedia('(max-width: 760px)')
-const isMobileViewport = ref(mobileViewport.matches)
-const updateMobileViewport = (event: MediaQueryListEvent) => {
-  isMobileViewport.value = event.matches
-}
-const showMobilePreferences = computed(() => isMobileViewport.value && route.query.view !== 'account')
+const showPreferences = computed(() => route.query.view !== 'account')
 const form = reactive({ nickname: '', email: '' })
 const savedForm = reactive({ nickname: '', email: '' })
 const fieldErrors = reactive({ nickname: '', email: '' })
@@ -498,16 +498,17 @@ watch(avatarSrc, () => {
   avatarLoadFailed.value = false
 })
 onMounted(() => {
-  mobileViewport.addEventListener('change', updateMobileViewport)
   void loadProfile()
 })
 onUnmounted(() => {
-  mobileViewport.removeEventListener('change', updateMobileViewport)
   active = false
 })
 </script>
 
 <style scoped>
+.profile-account-back {
+  display: none;
+}
 .profile-page {
   max-width: 980px;
 }
@@ -723,6 +724,58 @@ onUnmounted(() => {
 }
 .profile-form-buttons :deep(.el-button + .el-button) {
   margin-left: 0;
+}
+@media (min-width: 761px) {
+  .profile-page {
+    max-width: none;
+  }
+  .profile-account-heading {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .profile-account-heading .page-desc {
+    display: none;
+  }
+  .profile-account-back {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--panel);
+    color: var(--text-secondary);
+  }
+  .profile-account-back:focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: 3px;
+  }
+  .profile-card {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+  .profile-avatar-row {
+    align-items: center;
+    padding: 24px;
+    border: 0;
+    border-radius: 16px;
+    background: var(--panel);
+  }
+  .profile-forms {
+    gap: 24px;
+  }
+  .profile-form {
+    padding: 24px;
+    border: 0;
+    border-radius: 16px;
+    background: var(--panel);
+  }
+  .profile-field input {
+    min-height: 44px;
+    border-radius: 9px;
+  }
 }
 @media (max-width: 760px) {
   .profile-forms {

@@ -26,6 +26,9 @@ public class MaterialPageVO {
      */
     private Long id;
 
+    /** 需鉴权的版本化封面地址；null 表示使用前端默认封面。 */
+    private String coverUrl;
+
     /**
      * 资料标题。
      */

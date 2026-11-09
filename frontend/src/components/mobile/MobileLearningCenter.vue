@@ -1,5 +1,24 @@
 <template>
-  <div class="mobile-learning-center">
+  <div class="mobile-learning-center" :class="{ 'mobile-learning-center--detail': view !== 'learning' }">
+    <header class="learning-desktop-heading">
+      <div>
+        <RouterLink v-if="view !== 'learning'" to="/analytics" aria-label="返回我的学习" class="learning-desktop-back">
+          <MobileIcon name="back" :size="22" />
+        </RouterLink>
+        <h1>{{ view === 'overview' ? '学习概览' : view === 'calendar' ? '学习日历' : '我的学习' }}</h1>
+      </div>
+      <nav v-if="view === 'learning'" class="learning-desktop-tabs" aria-label="我的学习与偏好">
+        <RouterLink to="/analytics" aria-current="page">我的学习</RouterLink>
+        <RouterLink to="/profile">学习偏好</RouterLink>
+      </nav>
+      <RouterLink
+        v-else-if="view === 'overview'"
+        :to="{ path: '/analytics', query: { view: 'details' } }"
+        class="learning-desktop-detail-link"
+      >
+        详细统计<MobileIcon name="next" :size="16" />
+      </RouterLink>
+    </header>
     <MobileAnalyticsOverview
       v-if="view === 'overview'"
       :materials="materials"
@@ -9,7 +28,7 @@
     />
     <MobileStudyCalendar v-else-if="view === 'calendar'" />
     <template v-else>
-      <section aria-labelledby="mobile-learning-content-title">
+      <section class="mobile-learning-center__content" aria-labelledby="mobile-learning-content-title">
         <div class="mobile-learning-center__section-heading">
           <h2 id="mobile-learning-content-title">学习内容</h2>
           <RouterLink class="mobile-learning-center__pill" to="/materials">换份资料</RouterLink>
@@ -34,11 +53,6 @@
                 <h3>{{ draft?.sessionName || material?.title }}</h3>
                 <p v-if="draft">{{ draft.answeredCount }} / {{ draft.total }} 道题已作答</p>
                 <p v-else-if="materialPerformance">已完成 {{ materialPerformance.practiceCount }} 次练习</p>
-                <p v-else>
-                  {{
-                    material?.totalCharacters ? `${formatNumber(material.totalCharacters)} 字` : '从阅读这份资料开始'
-                  }}
-                </p>
                 <RouterLink v-if="material" :to="summaryRoute(material.id)" class="mobile-learning-content__summary">
                   <MobileIcon name="book" :size="15" />知识总结<MobileIcon name="next" :size="13" />
                 </RouterLink>
@@ -90,7 +104,7 @@
         </div>
       </section>
 
-      <section aria-labelledby="mobile-learning-statistics-title">
+      <section class="mobile-learning-center__statistics" aria-labelledby="mobile-learning-statistics-title">
         <div class="mobile-learning-center__section-heading mobile-learning-center__section-heading--statistics">
           <h2 id="mobile-learning-statistics-title">统计</h2>
           <button
@@ -269,6 +283,9 @@ const metrics = computed(() => {
 </script>
 
 <style scoped>
+.learning-desktop-heading {
+  display: none;
+}
 .mobile-learning-center {
   color: var(--text);
   font-size: 14px;
@@ -532,5 +549,134 @@ const metrics = computed(() => {
 .mobile-learning-center button:focus-visible {
   outline: 2px solid #df6411;
   outline-offset: 3px;
+}
+@media (min-width: 761px) {
+  .mobile-learning-center {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    gap: 24px;
+  }
+  .mobile-learning-center--detail {
+    display: block;
+  }
+  .learning-desktop-heading {
+    display: flex;
+    grid-column: 1 / -1;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    margin-bottom: 8px;
+  }
+  .mobile-learning-center--detail .learning-desktop-heading {
+    margin-bottom: 28px;
+  }
+  .learning-desktop-heading > div,
+  .learning-desktop-tabs,
+  .learning-desktop-detail-link {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .learning-desktop-heading h1 {
+    margin: 0;
+    font-size: 26px;
+    font-weight: 600;
+  }
+  .learning-desktop-tabs {
+    gap: 4px;
+    padding: 4px;
+    border-radius: 26px;
+    background: var(--panel);
+  }
+  .learning-desktop-tabs a {
+    min-height: 44px;
+    padding: 12px 20px;
+    border-radius: 22px;
+    color: var(--text-secondary);
+    text-decoration: none;
+  }
+  .learning-desktop-tabs a[aria-current='page'] {
+    background: var(--brand-soft);
+    color: var(--brand);
+  }
+  .learning-desktop-back {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--panel);
+    color: var(--text-secondary);
+  }
+  .learning-desktop-detail-link {
+    min-height: 44px;
+    color: var(--text-secondary);
+    text-decoration: none;
+  }
+  .mobile-learning-center__content {
+    min-width: 0;
+    overflow: hidden;
+    border-radius: 16px;
+    background: var(--panel);
+  }
+  .mobile-learning-center__section-heading {
+    min-height: 58px;
+    margin: 0;
+    padding: 8px 20px 0;
+  }
+  .mobile-learning-center__statistics {
+    display: contents;
+  }
+  .mobile-learning-center__section-heading--statistics {
+    display: none;
+  }
+  .mobile-learning-center__card {
+    border-radius: 16px;
+  }
+  .mobile-learning-content__main {
+    padding: 16px 20px 22px;
+  }
+  .mobile-learning-content__description h3 {
+    font-size: 16px;
+  }
+  .mobile-learning-content__description p,
+  .mobile-learning-content__summary,
+  .mobile-learning-content__progress p {
+    font-size: 12px;
+  }
+  .mobile-learning-content__footer {
+    padding-inline: 20px;
+  }
+  .mobile-learning-overview {
+    margin: 0;
+    padding: 12px 20px 24px;
+  }
+  .mobile-learning-overview__metrics {
+    row-gap: 28px;
+    margin-top: 16px;
+  }
+  .mobile-learning-overview__metrics dt,
+  .mobile-learning-overview__metrics dd small {
+    font-size: 12px;
+  }
+  .mobile-learning-overview__metrics dd {
+    font-size: 28px;
+  }
+  .mobile-learning-center :deep(.mobile-study-calendar--compact) {
+    grid-column: 1 / -1;
+  }
+  .mobile-learning-center--detail :deep(.mobile-study-calendar) {
+    max-width: 820px;
+    margin-inline: auto;
+  }
+}
+@media (min-width: 1100px) {
+  .mobile-learning-center:not(.mobile-learning-center--detail) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .mobile-learning-center :deep(.mobile-study-calendar--compact) {
+    grid-column: auto;
+  }
 }
 </style>

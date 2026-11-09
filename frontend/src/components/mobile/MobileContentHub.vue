@@ -34,6 +34,11 @@
     </div>
 
     <div class="content-group">
+      <RouterLink to="/resources" class="content-row">
+        <span class="content-row__icon content-row__icon--blue"><MobileIcon name="search" :size="23" /></span>
+        <span class="content-row__label">找资料</span>
+        <MobileIcon class="content-row__arrow" name="next" :size="16" />
+      </RouterLink>
       <RouterLink :to="libraryRoute" class="content-row">
         <span class="content-row__icon content-row__icon--mint"><MobileIcon name="book" :size="23" /></span>
         <span class="content-row__label">所有资料</span>
@@ -56,6 +61,11 @@
       </RouterLink>
     </div>
     <div class="content-group">
+      <RouterLink to="/notes" class="content-row">
+        <span class="content-row__icon content-row__icon--blue"><MobileIcon name="pencil" :size="23" /></span>
+        <span class="content-row__label">我的笔记</span>
+        <MobileIcon class="content-row__arrow" name="next" :size="16" />
+      </RouterLink>
       <RouterLink to="/summary" class="content-row">
         <span class="content-row__icon content-row__icon--blue"><MobileIcon name="pencil" :size="23" /></span>
         <span class="content-row__label">学习总结</span>
@@ -295,6 +305,81 @@ onBeforeUnmount(() => {
   }
   .content-row {
     gap: 8px;
+  }
+}
+@media (min-width: 761px) {
+  .mobile-content-hub {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 20px;
+    padding: 0 0 24px;
+  }
+  .content-feature-rail {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px;
+    margin: 0;
+    padding: 0;
+    overflow: visible;
+    scroll-snap-type: none;
+  }
+  .content-feature {
+    padding: 20px;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    background: var(--panel);
+    box-shadow: none;
+  }
+  .content-feature h2 {
+    margin-bottom: 16px;
+    font-size: 16px;
+  }
+  .content-feature__tiles {
+    gap: 12px;
+  }
+  .content-feature__tiles a {
+    min-height: 94px;
+    padding: 16px;
+    border: 0;
+    border-radius: 14px;
+    background: color-mix(in srgb, var(--feature-color) 7%, var(--panel));
+  }
+  .content-feature__tiles a:hover {
+    background: color-mix(in srgb, var(--feature-color) 12%, var(--panel));
+  }
+  .content-feature__tiles strong {
+    font-size: 15px;
+  }
+  .content-feature__tiles span {
+    margin-top: 8px;
+    font-size: 13px;
+  }
+  .content-group {
+    padding: 4px 18px;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+  }
+  .content-row {
+    min-height: 68px;
+  }
+  .content-row + .content-row {
+    border-top: 1px solid var(--line);
+  }
+  .content-row:hover .content-row__label {
+    color: var(--brand);
+  }
+  .mobile-content-hub a:focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: 4px;
+    border-radius: 12px;
+  }
+  .content-count-error {
+    grid-column: 1 / -1;
+  }
+}
+@media (min-width: 761px) and (max-width: 980px) {
+  .mobile-content-hub {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 </style>

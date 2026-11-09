@@ -9,11 +9,11 @@
       class="practice-navigation"
       aria-label="练习导航"
     >
-      <RouterLink to="/quiz" class="practice-back-link" @click="savePracticeDraft">
+      <RouterLink :to="practiceBack.path" class="practice-back-link" @click="savePracticeDraft">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
           <path d="m10 5-7 7 7 7M3 12h18" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
-        <span>返回题集</span>
+        <span>{{ practiceBack.label }}</span>
       </RouterLink>
       <RouterLink
         v-if="practiceDetail?.questionIds?.length"
@@ -62,6 +62,7 @@
         </div>
         <StatusPill
           v-if="practiceDetail && activeTab === 'current'"
+          class="practice-current-status"
           :tone="statusTone(practiceDetail.sessionStatus)"
           :label="formatPracticeStatus(practiceDetail.sessionStatus)"
         />
@@ -113,8 +114,9 @@
             :completion-percentage="completionPercentage"
             :submitting="submitting"
             :restarting="restarting"
+            :back-label="practiceBack.label"
             @submit="submitPractice"
-            @back="returnToQuiz"
+            @back="leavePractice"
             @restart="restartPractice(practiceDetail.questionSetId, practiceDetail.questionIds)"
             @rename="openRenameDialog({ id: practiceDetail.sessionId, sessionName: practiceDetail.sessionName })"
           />
@@ -167,9 +169,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { useRoute, useRouter } from 'vue-router'
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { submitPracticeReviewTaskApi, type AiTaskDetail } from '@/api/modules/ai'
 import AppIcon from '@/components/AppIcon.vue'
 import {
@@ -210,6 +212,9 @@ const DRAFT_SAVE_INTERVAL = 800
 
 const route = useRoute()
 const router = useRouter()
+const practiceBack = computed(() =>
+  route.query.from === 'home' ? { path: '/dashboard', label: '返回首页' } : { path: '/quiz', label: '返回题集' }
+)
 const initialSessionId = Number(route.query.sessionId)
 const assistantContext = useAssistantContext()
 const emit = defineEmits<{ openAssistant: [request: { practiceSessionId: number }] }>()
@@ -358,10 +363,15 @@ const syncAnswerForm = () => {
   answerForm.value = form
 }
 
-const returnToQuiz = () => {
+const leavePractice = () => {
   savePracticeDraft()
-  void router.push('/quiz')
+  void router.push(practiceBack.value.path)
 }
+
+// 顶栏或浏览器返回也先保存，让首页挂载时就能读到最后一次作答。
+onBeforeRouteLeave(() => {
+  savePracticeDraft()
+})
 
 // ---------- 简答题 AI 评分等待 ----------
 
@@ -412,6 +422,40 @@ const scrollToQuestion = (questionId: number) => {
     block: 'start'
   })
 }
+let focusedQuestionLink = ''
+const focusLinkedQuestion = async () => {
+  const hash = route.hash
+  const match = /^#question-([1-9]\d*)$/.exec(hash)
+  if (!match) {
+    focusedQuestionLink = ''
+    return
+  }
+  const questionId = match ? positiveId(Number(match[1])) : undefined
+  const sessionId = positiveId(Number(route.query.sessionId))
+  const link = `${sessionId}:${hash}`
+  if (
+    !questionId ||
+    focusedQuestionLink === link ||
+    detailLoading.value ||
+    !sessionId ||
+    practiceDetail.value?.sessionId !== sessionId ||
+    !practiceDetail.value.answers?.some((answer) => answer.questionId === questionId)
+  )
+    return
+  activeTab.value = 'current'
+  await nextTick()
+  if (isViewActive && route.hash === hash && practiceDetail.value?.sessionId === sessionId) {
+    focusedQuestionLink = link
+    scrollToQuestion(questionId)
+  }
+}
+watch(
+  [() => route.hash, () => practiceDetail.value?.sessionId, detailLoading],
+  () => {
+    void focusLinkedQuestion()
+  },
+  { flush: 'post' }
+)
 
 const loadHistory = async () => {
   historyLoading.value = true
@@ -465,7 +509,10 @@ const syncSessionQuery = (sessionId?: number | null) => {
   const current = typeof route.query.sessionId === 'string' ? route.query.sessionId : ''
   const next = sessionId ? String(sessionId) : ''
   if (current === next) return
-  void router.replace({ path: '/practice', query: next ? { sessionId: next } : {} })
+  const query = { ...route.query }
+  if (next) query.sessionId = next
+  else delete query.sessionId
+  void router.replace({ path: '/practice', query })
 }
 
 const openPracticeFromHistory = async (sessionId: number) => {
@@ -745,36 +792,159 @@ onUnmounted(() => {
   .practice-navigation {
     margin-bottom: 8px;
   }
-  .practice-view--current .page-header {
-    align-items: center;
-    gap: 10px 12px;
-    margin-bottom: 20px;
-  }
-  .practice-view--current .page-title {
-    font-size: 22px;
-  }
-  .practice-view--current .page-desc {
+  .practice-view--current > .practice-navigation,
+  .practice-view--current > .page-header,
+  .practice-view--current .practice-current-status {
     display: none;
   }
-  .practice-view--current .toolbar--flush {
-    width: auto;
+  .practice-view--current > .workspace-panel > .workspace-toolbar {
+    gap: 8px;
+    padding-bottom: 10px;
   }
-  .practice-view--current .toolbar--flush :deep(.el-button) {
+  .practice-view--current .workspace-tab {
     min-height: 44px;
-    padding-inline: 14px;
-    border-color: var(--line);
-    background: var(--panel);
-    color: var(--text);
-    box-shadow: none;
+    padding: 8px 12px;
+    border-radius: 12px;
+    font-size: 14px;
   }
   .practice-paper-layout {
-    gap: 28px;
+    gap: 16px;
   }
   .practice-paper-layout > .practice-paper-sidebar {
     grid-row: 2;
   }
   .practice-loading {
     padding: 24px 0;
+  }
+}
+@media (min-width: 761px) {
+  .practice-view {
+    max-width: 1120px;
+  }
+  .practice-view > .page-header .page-desc {
+    display: none;
+  }
+  .practice-view > .workspace-panel {
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+  .practice-view > .workspace-panel > .workspace-toolbar {
+    gap: 12px;
+    margin-bottom: 18px;
+    padding: 10px 16px;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: var(--panel);
+  }
+  .practice-view > .workspace-panel > .workspace-body {
+    padding: 0;
+  }
+  .practice-view .workspace-tabs {
+    gap: 6px;
+    padding: 0;
+    background: transparent;
+  }
+  .practice-view .workspace-tab {
+    min-height: 44px;
+    padding: 10px 16px;
+    border-radius: 12px;
+  }
+  .practice-view .workspace-tab--active {
+    background: var(--bg-secondary);
+    color: var(--text);
+    box-shadow: none;
+  }
+  .practice-view :deep(.practice-history .record-list) {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+  }
+  .practice-view :deep(.practice-history .record-row) {
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+    gap: 14px;
+    min-width: 0;
+    padding: 18px;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    background: var(--panel);
+  }
+  .practice-view :deep(.practice-history .record-row:hover) {
+    border-color: var(--line-strong);
+  }
+  .practice-view :deep(.practice-history .record-row__title) {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 6px;
+    font-size: 16px;
+  }
+  .practice-view :deep(.practice-history .record-row__title > :first-child) {
+    display: -webkit-box;
+    flex: 1 1 100%;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .practice-view :deep(.practice-history .practice-record__result) {
+    gap: 6px 14px;
+    margin-top: 12px;
+  }
+  .practice-view :deep(.practice-history .record-row__actions) {
+    grid-column: 1 / -1;
+    align-self: end;
+    justify-content: space-between;
+    min-width: 0;
+    padding: 12px 0 0;
+    border-top: 1px solid var(--line);
+  }
+  .practice-view :deep(.practice-history .record-row__actions > .el-button),
+  .practice-view :deep(.practice-history .icon-menu-button) {
+    min-height: 44px;
+    border-radius: 11px;
+  }
+  .practice-view :deep(.practice-history .record-row__sk-actions) {
+    grid-column: 1 / -1;
+    width: 160px;
+    margin-top: 12px;
+  }
+  .practice-view :deep(.practice-history .workspace-pagination) {
+    padding: 18px 0 0;
+    border: 0;
+  }
+}
+@media (min-width: 761px) and (max-width: 980px) {
+  .practice-view :deep(.practice-history .record-list) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (min-width: 1100px) {
+  :global(body.note-split-open .practice-paper-layout) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  :global(body.note-split-open .practice-paper-layout > .practice-paper-sidebar) {
+    grid-row: 1;
+    position: static;
+    max-height: none;
+  }
+  :global(body.note-split-open .practice-paper-layout .practice-paper-sidebar__groups) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px 22px;
+  }
+  :global(body.note-split-open .practice-paper-layout .practice-paper-sidebar__group) {
+    min-width: 0;
+    margin: 0;
+  }
+  :global(body.note-split-open .practice-paper-layout .practice-paper-sidebar__grid) {
+    display: flex;
+    flex-wrap: wrap;
+  }
+  :global(body.note-split-open .practice-paper-layout .practice-paper-sidebar__item) {
+    width: 44px;
   }
 }
 </style>

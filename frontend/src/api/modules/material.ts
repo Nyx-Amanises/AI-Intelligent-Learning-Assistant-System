@@ -5,6 +5,7 @@ export interface MaterialPageItem {
   id: number
   title: string
   materialType: string
+  coverUrl?: string | null
   parseStatus: string
   parseErrorMessage?: string
   summaryStatus: string
@@ -48,6 +49,22 @@ export const updateMaterialApi = (id: number, data: MaterialUpdatePayload) => ht
 export const getMaterialPageApi = (params: Record<string, unknown>) => http.get('/material/page', { params })
 
 export const getMaterialDetailApi = (id: number) => http.get(`/material/${id}`)
+
+export const getMaterialCoverApi = (id: number, signal?: AbortSignal) =>
+  http.get<Blob>(`/material/${id}/cover`, { responseType: 'blob', signal })
+
+interface MaterialCoverResponse {
+  code: number
+  data: { coverUrl: string | null }
+}
+
+export const uploadMaterialCoverApi = (id: number, file: File) => {
+  const data = new FormData()
+  data.append('file', file)
+  return http.post<MaterialCoverResponse>(`/material/${id}/cover`, data)
+}
+
+export const resetMaterialCoverApi = (id: number) => http.delete<MaterialCoverResponse>(`/material/${id}/cover`)
 
 export const parseMaterialApi = (id: number, data?: { chunkSize: number; chunkOverlap: number }) =>
   http.post(`/material/${id}/parse`, data)

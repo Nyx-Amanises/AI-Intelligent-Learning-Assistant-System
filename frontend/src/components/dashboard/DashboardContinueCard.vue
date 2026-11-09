@@ -83,16 +83,17 @@
     <template v-else>
       <div class="continue-card__main">
         <p class="continue-card__label"><AppIcon name="spark" :size="16" />从第一份资料开始</p>
-        <h2 id="continue-card-title" class="continue-card__title">上传一份讲义或笔记</h2>
-        <p class="continue-card__meta">支持 PDF、Word 和 TXT，也可以直接粘贴一段文字。</p>
+        <h2 id="continue-card-title" class="continue-card__title">找一份资料，开始学习</h2>
+        <p class="continue-card__meta">搜索想学的课程或知识点，也可以上传自己的讲义和笔记。</p>
         <div class="continue-card__actions">
-          <el-button type="primary" @click="router.push(uploadRoute)">
-            <AppIcon name="upload" :size="16" />上传资料
+          <el-button type="primary" @click="router.push({ path: '/resources', query: { from: 'home' } })">
+            <AppIcon name="search" :size="16" />找资料
           </el-button>
+          <el-button @click="router.push(uploadRoute)"> <AppIcon name="upload" :size="16" />上传资料 </el-button>
         </div>
       </div>
       <div class="continue-card__aside">
-        <p class="continue-card__aside-title">上传之后</p>
+        <p class="continue-card__aside-title">接下来</p>
         <ol class="continue-card__steps">
           <li><b>1</b>生成总结，把重点理一遍</li>
           <li><b>2</b>出一套题，检验有没有读懂</li>
@@ -122,7 +123,7 @@ import { materialRoute, practiceRoute, quizRoute, summaryRoute, uploadRoute } fr
 
 type CheckState = 'done' | 'running' | 'failed' | 'pending'
 
-/** 首页最显眼的卡片：有未交的练习就接着练，否则打开最近的资料，都没有时引导上传。 */
+/** 首页继续入口：优先练习草稿与最近资料，新用户可查找资料或自行上传。 */
 const props = defineProps<{
   loading: boolean
   error: boolean

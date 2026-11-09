@@ -7,27 +7,30 @@
   color-scheme: light;
 
   /* 背景与线条 */
-  --bg: #f6f7f4;
-  --bg-secondary: #edf0ea;
+  --bg: #f5f5f5;
+  --bg-secondary: #eeeeee;
   --panel: #ffffff;
-  --panel-hover: #f8faf6;
-  --line: #e3e7df;
-  --line-strong: #d3d9cf;
+  --panel-hover: #fafafa;
+  --line: #f0f0f0;
+  --line-strong: #dedede;
 
   /* 文字：正文、次要、辅助 */
-  --text: #1d2a24;
-  --text-secondary: #4a5850;
-  --muted: #646f68;
+  --text: #292b2d;
+  --text-secondary: #66686a;
+  --muted: #737577;
 
-  /* 品牌：墨绿与印章朱砂 */
-  --brand: #2b6150;
-  --brand-hover: #234f41;
-  --brand-ink: #1b3d32;
-  --brand-soft: #e3ece6;
-  --brand-light: #f0f5f1;
+  /* 与手机共用的橙色点缀；正文链接使用更深的橙色以保证对比度。 */
+  --mobile-accent: #ff7621;
+  --mobile-accent-hover: #ff8b3d;
+  --mobile-on-accent: #25262b;
+  --brand: #b94700;
+  --brand-hover: #9e3c00;
+  --brand-ink: #792e00;
+  --brand-soft: #ffe9da;
+  --brand-light: #fff3e9;
   --on-brand: #ffffff;
   --cinnabar: #a64b38;
-  --topbar-bg: rgb(246 247 244 / 88%);
+  --topbar-bg: rgb(245 245 245 / 94%);
 
   /* 状态色 */
   --accent: #8f611c;
@@ -69,9 +72,9 @@
 
   /* Element Plus：主色及其深浅 */
   --el-color-primary: var(--brand);
-  --el-color-primary-light-3: #6b9081;
-  --el-color-primary-light-5: #95b0a5;
-  --el-color-primary-light-7: #bfd0c9;
+  --el-color-primary-light-3: #ce7e4d;
+  --el-color-primary-light-5: #dca380;
+  --el-color-primary-light-7: #eac8b3;
   --el-color-primary-light-8: var(--brand-soft);
   --el-color-primary-light-9: var(--brand-light);
   --el-color-primary-dark-2: var(--brand-hover);
@@ -107,7 +110,7 @@
   --el-text-color-secondary: var(--muted);
   --el-text-color-placeholder: var(--muted);
   --el-border-color: var(--line-strong);
-  --el-border-color-hover: #b9c3b8;
+  --el-border-color-hover: #c6c1ba;
   --el-border-color-light: var(--line);
   --el-border-color-lighter: var(--line);
   --el-border-color-extra-light: var(--bg-secondary);
@@ -119,9 +122,9 @@
   --el-bg-color-overlay: var(--panel);
   --el-bg-color-page: var(--bg);
   --el-disabled-bg-color: var(--bg-secondary);
-  --el-disabled-text-color: #9aa39b;
+  --el-disabled-text-color: #98969a;
   --el-disabled-border-color: var(--line);
-  --el-overlay-color-lighter: rgb(18 32 26 / 42%);
+  --el-overlay-color-lighter: rgb(24 24 28 / 38%);
   --el-border-radius-base: 10px;
   --el-border-radius-small: 6px;
   --el-component-size: 40px;
@@ -133,23 +136,19 @@
   --el-box-shadow-dark: var(--shadow-xl);
 }
 
-/* 护眼：豆沙绿底、降低白色面板亮度，文字对比度仍保持在 4.5:1 以上。 */
+/* 护眼主题与手机一致，使用柔和的纸张底色。 */
 [data-theme='eye-care'] {
-  --bg: #e9eee2;
-  --bg-secondary: #dfe6d7;
-  --panel: #f4f7ee;
-  --panel-hover: #eef2e7;
-  --line: #d6ddcd;
-  --line-strong: #c6cfbc;
-  --text: #1f2a22;
-  --text-secondary: #4b574d;
-  --muted: #5a6559;
-  --brand: #335f4b;
-  --brand-hover: #294d3d;
-  --brand-ink: #1f3b2f;
-  --brand-soft: #dbe5d8;
-  --brand-light: #e8eee3;
-  --topbar-bg: rgb(233 238 226 / 90%);
+  --bg: #eee8dc;
+  --bg-secondary: #e5ddce;
+  --panel: #f7f2e8;
+  --panel-hover: #f0eade;
+  --line: #dfd6c7;
+  --line-strong: #cfc4b2;
+  --text-secondary: #565149;
+  --muted: #696357;
+  --brand-soft: #efdbc6;
+  --brand-light: #f4e5d4;
+  --topbar-bg: rgb(238 232 220 / 94%);
   --accent: #835a1b;
   --accent-soft: #f1e8d6;
   --green: #2a6e4a;
@@ -161,9 +160,6 @@
   --shadow: 0 1px 2px rgb(31 42 34 / 4%), 0 4px 12px rgb(31 42 34 / 6%);
   --shadow-md: 0 2px 4px rgb(31 42 34 / 4%), 0 10px 24px -6px rgb(31 42 34 / 11%);
   --shadow-lg: 0 4px 8px rgb(31 42 34 / 4%), 0 20px 40px -12px rgb(31 42 34 / 17%);
-  --el-color-primary-light-3: #70907f;
-  --el-color-primary-light-5: #99af9f;
-  --el-color-primary-light-7: #c2cfc2;
-  --el-border-color-hover: #b3bea9;
-  --el-disabled-text-color: #949d91;
+  --el-border-color-hover: #bfb3a0;
+  --el-disabled-text-color: #969084;
 }

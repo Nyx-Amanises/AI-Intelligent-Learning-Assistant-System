@@ -45,13 +45,19 @@
   font-size: 13px;
 }
 :root .el-button--primary:not(.is-plain, .is-text, .is-link) {
-  --el-button-hover-bg-color: var(--brand-hover);
-  --el-button-hover-border-color: var(--brand-hover);
-  --el-button-active-bg-color: var(--brand-ink);
-  --el-button-active-border-color: var(--brand-ink);
-  box-shadow:
-    0 1px 2px rgb(27 61 50 / 18%),
-    inset 0 1px 0 rgb(255 255 255 / 8%);
+  --el-button-text-color: var(--mobile-on-accent);
+  --el-button-bg-color: var(--mobile-accent);
+  --el-button-border-color: var(--mobile-accent);
+  --el-button-hover-text-color: var(--mobile-on-accent);
+  --el-button-hover-bg-color: var(--mobile-accent-hover);
+  --el-button-hover-border-color: var(--mobile-accent-hover);
+  --el-button-active-text-color: var(--mobile-on-accent);
+  --el-button-active-bg-color: var(--mobile-accent);
+  --el-button-active-border-color: var(--mobile-accent);
+  --el-button-disabled-text-color: #74675c;
+  --el-button-disabled-bg-color: #f4d7be;
+  --el-button-disabled-border-color: #f4d7be;
+  box-shadow: none;
 }
 :root .el-button--primary.is-disabled:not(.is-plain, .is-text, .is-link) {
   box-shadow: none;

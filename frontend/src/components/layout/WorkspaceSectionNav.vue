@@ -3,7 +3,7 @@
     <RouterLink
       v-for="item in visibleItems"
       :key="item.path"
-      :to="item.path"
+      :to="{ path: item.path, query: item.query }"
       class="section-nav__item"
       :class="{ 'is-active': route.path === item.path }"
       :aria-current="route.path === item.path ? 'page' : undefined"
@@ -20,7 +20,7 @@ import type { NavigationSection } from '@/config/navigation'
 import { useSlidingIndicator } from '@/composables/useSlidingIndicator'
 import { useUserStore } from '@/stores/user'
 
-/** 页面上方的分区标签，例如“资料库 / 学习总结”。下划线随当前页滑动。 */
+/** 子页面的紧凑分区导航，例如“资料库 / 学习总结”。 */
 const props = defineProps<{ section: NavigationSection }>()
 
 const route = useRoute()
@@ -53,9 +53,13 @@ onMounted(revealActive)
   display: flex;
   align-items: stretch;
   gap: 4px;
-  margin: -4px 0 24px -12px;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 0 24px;
+  padding: 4px;
+  border-radius: 16px;
+  background: var(--bg-secondary);
   overflow-x: auto;
-  box-shadow: inset 0 -1px 0 var(--line);
   scrollbar-width: none;
 }
 .section-nav::-webkit-scrollbar {
@@ -67,10 +71,10 @@ onMounted(revealActive)
   display: flex;
   align-items: center;
   flex: 0 0 auto;
-  min-height: 44px;
-  padding: 0 12px;
+  min-height: 36px;
+  padding: 0 16px;
   color: var(--muted);
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 500;
   white-space: nowrap;
   transition: color var(--duration-fast) ease;
@@ -83,21 +87,14 @@ onMounted(revealActive)
   position: absolute;
   top: 0;
   left: 0;
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: 0 1px 3px rgb(37 38 43 / 4%);
   pointer-events: none;
   transition:
     transform var(--duration) var(--ease-out),
     width var(--duration) var(--ease-out),
     opacity var(--duration-fast) ease;
-}
-.section-nav__indicator::after {
-  position: absolute;
-  right: 12px;
-  bottom: 0;
-  left: 12px;
-  height: 2px;
-  border-radius: 2px 2px 0 0;
-  background: var(--brand);
-  content: '';
 }
 .section-nav-enter-active {
   animation: zx-fade var(--duration) var(--ease-out);

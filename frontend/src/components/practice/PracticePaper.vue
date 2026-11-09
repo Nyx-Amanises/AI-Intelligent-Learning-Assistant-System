@@ -1,6 +1,44 @@
 <template>
   <div class="practice-paper-main">
     <div class="page-card practice-paper-hero">
+      <div class="practice-paper-mobile-overview">
+        <h2>{{ practiceDetail.sessionName }}</h2>
+        <div class="practice-paper-mobile-overview__status">
+          <span v-if="submitted">
+            {{ hasPendingAiReview ? '当前得分' : '本次得分' }}
+            <strong>{{ practiceDetail.obtainedScore || 0 }}</strong> 分
+          </span>
+          <span v-else
+            >已答 <strong>{{ answeredCount }}</strong> / {{ practiceDetail.totalQuestions }} 道</span
+          >
+          <GenerationModeBadge :mode="practiceDetail.generationMode" />
+        </div>
+        <el-progress v-if="!submitted" :percentage="completionPercentage" :show-text="false" :stroke-width="4" />
+        <details class="practice-paper-mobile-info">
+          <summary>
+            <span>{{
+              submitted ? (hasPendingAiReview ? '简答题评分中' : '查看下方答案解析') : '答案自动保存在本机'
+            }}</span>
+            <span class="practice-paper-mobile-info__toggle">详情</span>
+          </summary>
+          <div class="practice-paper-mobile-info__body">
+            <p>
+              {{ practiceDetail.totalQuestions }} 道题 · 满分 {{ practiceDetail.totalScore || 0 }} 分
+              <span v-if="practiceDetail.questionIds?.length"> · 专项复习</span>
+            </p>
+            <p>
+              {{
+                submitted
+                  ? '提交于 ' + formatDateTime(practiceDetail.submitTime)
+                  : '开始于 ' + formatDateTime(practiceDetail.startTime)
+              }}
+            </p>
+            <p v-if="practiceDetail.generationMode === 'MOCK'">本次为模拟题目，仅用于体验作答与复盘。</p>
+            <p v-if="practiceDetail.questionIds?.length">专项复习单独记录成绩，原练习记录仍会保留。</p>
+            <el-button link @click="emit('rename')">修改名称</el-button>
+          </div>
+        </details>
+      </div>
       <div class="practice-paper-hero__head">
         <div class="practice-paper-hero__intro">
           <h2 class="practice-paper-hero__title">{{ practiceDetail.sessionName }}</h2>
@@ -48,6 +86,7 @@
     <el-alert v-if="hasPendingAiReview" :title="pendingReviewText" type="info" :closable="false" show-icon />
     <el-alert
       v-if="practiceDetail.questionIds?.length"
+      class="practice-paper-special-review-note"
       title="本次专项复习单独记录成绩，原练习记录仍会保留。"
       type="info"
       :closable="false"
@@ -68,10 +107,20 @@
         <div class="practice-paper-question__head">
           <div class="practice-paper-question__index">第 {{ answer.globalIndex }} 题</div>
           <span class="practice-paper-question__type">{{ formatQuestionType(answer.questionType) }}</span>
+          <button
+            type="button"
+            class="practice-paper-question__note"
+            :aria-label="`记录第 ${answer.globalIndex} 题笔记`"
+            title="记笔记"
+            @mousedown.prevent
+            @click="recordQuestionNote(answer)"
+          >
+            <MobileIcon name="pencil" :size="19" />
+          </button>
         </div>
         <h3 :id="'stem-' + answer.questionId" class="practice-paper-question__stem">{{ answer.stemText }}</h3>
         <p v-if="isMultiQuestion(answer)" class="practice-paper-question__hint">
-          请选择所有符合题意的选项。全部选对得分，少选、多选或错选不得分。
+          请选择所有正确选项。全部选对得分，少选、多选或错选不得分。
         </p>
 
         <el-checkbox-group
@@ -188,9 +237,9 @@
     </div>
 
     <div class="page-card practice-paper-submit" :class="{ 'practice-paper-submit--pending': !submitted }">
-      <div>
+      <div class="practice-paper-submit__intro">
         <h3>{{ submitted ? '接着复习' : '提交练习' }}</h3>
-        <p>
+        <p class="practice-paper-submit__description">
           {{
             submitted
               ? '去错题本回顾薄弱点，也可以重新练习这套题。'
@@ -199,9 +248,12 @@
                 : '所有题目已作答，提交后即可查看成绩与解析。'
           }}
         </p>
+        <p v-if="!submitted" class="practice-paper-submit__mobile-status">
+          {{ unansweredCount ? '还有 ' + unansweredCount + ' 道题未答' : '全部题目已作答' }}
+        </p>
       </div>
       <div class="practice-paper-submit__actions">
-        <el-button @click="emit('back')">返回题集</el-button>
+        <el-button @click="emit('back')">{{ backLabel }}</el-button>
         <el-button v-if="!submitted" type="primary" :loading="submitting" @click="emit('submit')">提交练习</el-button>
         <template v-else>
           <el-button @click="router.push('/wrong-questions')">查看错题本</el-button>
@@ -216,6 +268,8 @@
 import { useRouter } from 'vue-router'
 import SourceSegmentList from '@/components/SourceSegmentList.vue'
 import GenerationModeBadge from '@/components/GenerationModeBadge.vue'
+import MobileIcon from '@/components/MobileIcon.vue'
+import { useNoteWorkspace } from '@/composables/useNoteWorkspace'
 import { formatDateTime } from '@/utils/format'
 import { formatQuestionType } from '@/utils/labels'
 import {
@@ -240,7 +294,7 @@ import {
  * 试卷主体：概览、逐题作答（单选/判断用单选框，多选用复选框，简答用文本域）、提交后的判分与解析。
  * 答案通过 v-model:answer-form 回传，组件内部不直接改 props。
  */
-withDefaults(
+const props = withDefaults(
   defineProps<{
     practiceDetail: PracticeDetail
     sections: PracticeSection[]
@@ -252,12 +306,14 @@ withDefaults(
     completionPercentage: number
     submitting?: boolean
     restarting?: boolean
+    backLabel?: string
   }>(),
   {
     hasPendingAiReview: false,
     pendingReviewText: '',
     submitting: false,
-    restarting: false
+    restarting: false,
+    backLabel: '返回题集'
   }
 )
 
@@ -271,6 +327,16 @@ const emit = defineEmits<{
 }>()
 
 const router = useRouter()
+const { createNote } = useNoteWorkspace()
+const recordQuestionNote = (answer: PracticeSection['items'][number]) => {
+  createNote({
+    sourceType: 'QUESTION',
+    sourceId: answer.questionId,
+    practiceSessionId: props.practiceDetail.sessionId,
+    sourceTitle: `${props.practiceDetail.sessionName} · 第 ${answer.globalIndex} 题`,
+    sourceExcerpt: (answer.stemText || '').trim().slice(0, 2000)
+  })
+}
 
 const setAnswer = (questionId: number, value: string) => {
   answerForm.value = { ...answerForm.value, [questionId]: value }
@@ -282,6 +348,10 @@ const isAnswerTooLong = (questionId: number) => (answerForm.value[questionId] ||
 <style scoped>
 .practice-paper-main {
   min-width: 0;
+}
+.practice-paper-mobile-overview,
+.practice-paper-submit__mobile-status {
+  display: none;
 }
 .practice-short-answer__length {
   margin: 8px 0 0;
@@ -408,7 +478,31 @@ const isAnswerTooLong = (questionId: number) => (answerForm.value[questionId] ||
   border-top: 1px solid var(--line);
 }
 .practice-paper-question__head {
+  display: flex;
   align-items: center;
+  gap: 10px;
+}
+.practice-paper-question__note {
+  display: grid;
+  place-items: center;
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.practice-paper-question__note:hover {
+  color: var(--brand);
+  background: var(--brand-light);
+}
+.practice-paper-question__note:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
 }
 .practice-paper-question__index {
   color: var(--brand);
@@ -641,88 +735,124 @@ const isAnswerTooLong = (questionId: number) => (answerForm.value[questionId] ||
     border-radius: 0;
     background: transparent;
   }
-  .practice-paper-hero__head {
-    align-items: flex-start;
-    gap: 16px;
-    padding: 0 0 18px;
+  .practice-paper-hero__head,
+  .practice-paper-hero > .practice-paper-note,
+  .practice-paper-progress,
+  .practice-paper-special-review-note,
+  .practice-paper-section__title {
+    display: none;
   }
-  .practice-paper-hero__title {
-    font-size: 23px;
+  .practice-paper-mobile-overview {
+    display: block;
+  }
+  .practice-paper-mobile-overview h2 {
+    margin: 0;
+    color: var(--text);
+    font-size: 21px;
     font-weight: 650;
     line-height: 1.45;
+    overflow-wrap: anywhere;
   }
-  .practice-paper-hero__meta {
-    gap: 4px 12px;
-    margin-top: 10px;
+  .practice-paper-mobile-overview__status {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    margin: 14px 0 12px;
+    color: var(--muted);
     font-size: 13px;
   }
-  .practice-paper-hero__meta :deep(.el-button) {
-    min-height: 44px;
-    padding-inline: 2px;
-    font-size: 13px;
-  }
-  .practice-paper-hero__time {
-    margin-top: 2px;
-    font-size: 12px;
-  }
-  .practice-paper-hero__score {
-    min-width: 54px;
+  .practice-paper-mobile-overview__status strong {
     color: var(--text);
-  }
-  .practice-paper-hero__score strong {
-    font-size: 34px;
-    font-weight: 650;
-  }
-  .practice-paper-hero__score span {
-    margin-top: 6px;
-  }
-  .practice-paper-progress {
-    padding: 16px 0 0;
-  }
-  .practice-paper-progress p {
-    margin-top: 12px;
-    font-size: 13px;
-  }
-  .practice-paper-note {
-    padding: 14px 16px;
-    border-radius: 14px;
-    background: var(--panel);
-    color: var(--text-secondary);
-    font-size: 13px;
-  }
-  .practice-paper-section__title {
-    margin-bottom: 26px;
-    padding-bottom: 14px;
-    font-size: 17px;
+    font-size: 16px;
     font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .practice-paper-mobile-info {
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.7;
+  }
+  .practice-paper-mobile-info summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 44px;
+    list-style: none;
+    cursor: pointer;
+  }
+  .practice-paper-mobile-info summary::-webkit-details-marker {
+    display: none;
+  }
+  .practice-paper-mobile-info summary:focus-visible {
+    border-radius: 6px;
+    outline: 2px solid var(--brand);
+    outline-offset: 2px;
+  }
+  .practice-paper-mobile-info__toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    flex-shrink: 0;
+    padding-inline: 4px;
+    color: var(--text-secondary);
+  }
+  .practice-paper-mobile-info__toggle::after {
+    width: 6px;
+    height: 6px;
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    content: '';
+    transform: translateY(-2px) rotate(45deg);
+  }
+  .practice-paper-mobile-info[open] .practice-paper-mobile-info__toggle::after {
+    transform: translateY(2px) rotate(225deg);
+  }
+  .practice-paper-mobile-info__body {
+    margin-top: 4px;
+    padding: 12px 14px 4px;
+    border-radius: 12px;
+    background: var(--panel);
+  }
+  .practice-paper-mobile-info__body p {
+    margin: 0 0 6px;
+  }
+  .practice-paper-mobile-info__body :deep(.el-button) {
+    min-height: 44px;
+    margin: 0;
+    padding-inline: 0;
+    font-size: 13px;
   }
   .practice-paper-question + .practice-paper-question {
-    margin-top: 36px;
-    padding-top: 32px;
+    margin-top: 28px;
+    padding-top: 24px;
   }
   .practice-paper-question__index,
   .practice-paper-question__type {
     font-size: 13px;
   }
   .practice-paper-question__stem {
-    margin: 16px 0 24px;
-    font-size: 20px;
-    line-height: 1.75;
+    margin: 12px 0 18px;
+    font-size: 18px;
+    line-height: 1.7;
     font-weight: 600;
   }
   .practice-paper-question__hint {
-    margin: -8px 0 20px;
+    margin: -6px 0 16px;
     font-size: 13px;
   }
   .practice-paper-choice-group {
-    gap: 12px;
+    gap: 10px;
   }
   .practice-paper-choice-group :deep(.el-radio.is-bordered),
   .practice-paper-choice-group :deep(.el-checkbox.is-bordered) {
-    min-height: 58px;
-    padding: 17px 16px;
+    min-height: 54px;
+    padding: 15px 14px;
     border-color: transparent;
-    border-radius: 16px;
+    border-radius: 12px;
     background: var(--panel);
   }
   .practice-paper-choice-group :deep(.el-radio__label),
@@ -751,9 +881,9 @@ const isAnswerTooLong = (questionId: number) => (answerForm.value[questionId] ||
     background: var(--red-soft);
   }
   .practice-short-answer :deep(.el-textarea__inner) {
-    min-height: 180px;
-    padding: 18px;
-    border-radius: 16px;
+    min-height: 160px;
+    padding: 16px;
+    border-radius: 12px;
     font-size: 16px;
     line-height: 1.8;
   }
@@ -790,15 +920,21 @@ const isAnswerTooLong = (questionId: number) => (answerForm.value[questionId] ||
     min-height: 48px;
   }
   .practice-paper-submit {
-    gap: 18px;
-    padding-top: 24px;
+    gap: 12px;
+    padding-top: 18px;
     border-top: 1px solid var(--line);
   }
-  .practice-paper-submit h3 {
-    font-size: 18px;
+  .practice-paper-submit h3,
+  .practice-paper-submit__description {
+    display: none;
   }
-  .practice-paper-submit p {
-    font-size: 14px;
+  .practice-paper-submit:not(.practice-paper-submit--pending) .practice-paper-submit__intro {
+    display: none;
+  }
+  .practice-paper-submit .practice-paper-submit__mobile-status {
+    display: block;
+    margin: 0;
+    font-size: 13px;
   }
   .practice-paper-submit__actions {
     width: 100%;
@@ -807,15 +943,13 @@ const isAnswerTooLong = (questionId: number) => (answerForm.value[questionId] ||
   .practice-paper-submit__actions :deep(.el-button) {
     flex: 1 1 auto;
     min-height: 52px;
-    border-radius: 16px;
+    border-radius: 12px;
     font-size: 16px;
   }
   .practice-paper-submit--pending {
     padding-bottom: 12px;
   }
   .practice-paper-submit--pending .practice-paper-submit__actions :deep(.el-button--primary) {
-    flex-basis: 100%;
-    min-height: 56px;
     border: 0;
     background: var(--mobile-accent, var(--brand));
     color: var(--text);

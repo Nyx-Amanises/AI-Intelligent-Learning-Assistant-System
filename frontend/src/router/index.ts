@@ -8,14 +8,14 @@ const router = createRouter({
     if (savedPosition) {
       return savedPosition
     }
+    // PracticeView positions question anchors after the asynchronous paper has loaded.
+    if (to.path === '/practice' && /^#question-[1-9]\d*$/.test(to.hash)) return
     if (to.hash) {
       return { el: to.hash, behavior: 'smooth' }
     }
     if (
       to.path !== from.path ||
-      (window.matchMedia('(max-width: 760px)').matches &&
-        ['/materials', '/analytics', '/profile'].includes(to.path) &&
-        to.query.view !== from.query.view)
+      (['/materials', '/analytics', '/profile'].includes(to.path) && to.query.view !== from.query.view)
     ) {
       return { top: 0, left: 0 }
     }
@@ -29,6 +29,8 @@ const router = createRouter({
         { path: '', redirect: '/dashboard' },
         { path: '/dashboard', name: 'dashboard', component: () => import('@/views/DashboardView.vue') },
         { path: '/materials', name: 'materials', component: () => import('@/views/MaterialView.vue') },
+        { path: '/resources', name: 'resources', component: () => import('@/views/ResourceDiscoveryView.vue') },
+        { path: '/notes', name: 'notes', component: () => import('@/views/NotesView.vue') },
         { path: '/ai-tasks', name: 'ai-tasks', component: () => import('@/views/AiTaskCenterView.vue') },
         {
           path: '/rag-eval',

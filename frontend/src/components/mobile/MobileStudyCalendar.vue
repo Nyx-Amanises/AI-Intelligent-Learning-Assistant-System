@@ -390,4 +390,46 @@ onUnmounted(() => {
   outline: 2px solid #df6411;
   outline-offset: 2px;
 }
+@media (min-width: 761px) {
+  .mobile-study-calendar {
+    padding: 20px 28px 24px;
+    border-radius: 16px;
+  }
+  .mobile-study-calendar__heading {
+    min-height: 40px;
+  }
+  .mobile-study-calendar__heading h3 {
+    font-size: 16px;
+  }
+  .mobile-study-calendar__heading > span,
+  .mobile-study-calendar__weekdays,
+  .mobile-study-calendar__selection,
+  .mobile-study-calendar__note {
+    font-size: 12px;
+  }
+  .mobile-study-calendar__month button {
+    width: 44px;
+    height: 44px;
+  }
+  .mobile-study-calendar__dates {
+    grid-auto-rows: 66px;
+  }
+  .mobile-study-calendar__dates button > span {
+    width: 38px;
+    height: 38px;
+  }
+  .mobile-study-calendar--compact {
+    padding: 12px 20px 20px;
+  }
+  .mobile-study-calendar--compact .mobile-study-calendar__dates {
+    grid-auto-rows: 52px;
+  }
+  .mobile-study-calendar--compact .mobile-study-calendar__dates button {
+    font-size: 14px;
+  }
+  .mobile-study-calendar--compact .mobile-study-calendar__dates button > span {
+    width: 32px;
+    height: 32px;
+  }
+}
 </style>

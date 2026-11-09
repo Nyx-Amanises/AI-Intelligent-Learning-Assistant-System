@@ -2,20 +2,23 @@
   <header class="topbar" :class="{ 'is-scrolled': scrolled, 'topbar--home': isHome }">
     <div class="topbar__inner">
       <RouterLink to="/dashboard" class="topbar__brand" :aria-label="APP_NAME + '，返回首页'">
-        <BrandLogo aria-hidden="true" />
+        <span class="topbar__brand-mark"><MobileIcon name="mark" :size="23" /></span>
         <span class="topbar__brand-text" aria-hidden="true">知序</span>
       </RouterLink>
 
       <nav ref="navRef" class="topbar__nav" aria-label="主要导航">
         <RouterLink
-          v-for="item in primaryLinks"
+          v-for="item in desktopLinks"
           :key="item.key"
           :to="item.path"
           class="topbar__nav-item"
           :class="{ 'is-active': activeKey === item.key }"
           :aria-current="activeKey === item.key ? 'page' : undefined"
-          >{{ item.label }}</RouterLink
         >
+          <AppIcon v-if="item.key === 'home'" name="home" :size="18" />
+          <MobileIcon v-else :name="item.icon" :size="18" />
+          <span>{{ item.label }}</span>
+        </RouterLink>
         <span class="topbar__nav-indicator" :style="indicatorStyle" aria-hidden="true" />
       </nav>
 
@@ -24,15 +27,6 @@
           <AppIcon name="search" :size="18" />
           <span>搜索</span>
           <kbd>Ctrl K</kbd>
-        </button>
-        <button
-          type="button"
-          class="topbar__assistant"
-          :aria-label="'打开' + ASSISTANT_NAME"
-          @click="emit('assistant')"
-        >
-          <AppIcon name="spark" :size="18" />
-          <span>{{ ASSISTANT_NAME }}</span>
         </button>
         <el-dropdown class="topbar__theme" trigger="click" placement="bottom-end" @command="handleThemeCommand">
           <button
@@ -62,19 +56,12 @@
       </div>
     </div>
     <div class="mobile-topbar" :class="{ 'mobile-topbar--home': isHome }">
-      <button
-        v-if="isHome"
-        type="button"
-        class="mobile-topbar__button mobile-topbar__mark"
-        :aria-label="'打开' + ASSISTANT_NAME"
-        @click="emit('assistant')"
-      >
-        <MobileIcon name="mark" :size="25" />
-      </button>
+      <span v-if="isHome" aria-hidden="true" />
+      <RouterLink v-else :to="mobileBack.path" class="mobile-topbar__button" :aria-label="mobileBack.label">
+        <MobileIcon :name="mobileBack.path === '/dashboard' ? 'down' : 'back'" :size="24" />
+      </RouterLink>
+      <span v-if="isHome" aria-hidden="true" />
       <template v-else>
-        <RouterLink :to="mobileBack.path" class="mobile-topbar__button" :aria-label="mobileBack.label">
-          <MobileIcon :name="mobileBack.path === '/dashboard' ? 'down' : 'back'" :size="24" />
-        </RouterLink>
         <nav v-if="showLearningTabs" class="mobile-topbar__tabs" aria-label="学习与偏好">
           <RouterLink
             to="/analytics"
@@ -90,26 +77,10 @@
           >
         </nav>
         <span v-else class="mobile-topbar__title">{{ mobileTitle }}</span>
-        <button
-          v-if="isMaterialLibrary"
-          type="button"
-          class="mobile-topbar__button"
-          aria-label="搜索资料或页面"
-          @click="emit('search')"
-        >
-          <MobileIcon name="search" :size="23" />
-        </button>
-        <button
-          v-else-if="showMobileAssistant"
-          type="button"
-          class="mobile-topbar__button"
-          :aria-label="'打开' + ASSISTANT_NAME"
-          @click="emit('assistant')"
-        >
-          <MobileIcon name="assistant" :size="23" />
-        </button>
-        <span v-else aria-hidden="true" />
       </template>
+      <button type="button" class="mobile-topbar__button" aria-label="搜索资料或页面" @click="emit('search')">
+        <MobileIcon name="search" :size="23" />
+      </button>
     </div>
   </header>
 </template>
@@ -119,17 +90,17 @@ import { computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { RouterLink, useRoute } from 'vue-router'
 import AppIcon from '@/components/AppIcon.vue'
-import BrandLogo from '@/components/BrandLogo.vue'
 import MobileIcon from '@/components/MobileIcon.vue'
 import WorkspaceAccountMenu from '@/components/layout/WorkspaceAccountMenu.vue'
-import { APP_NAME, ASSISTANT_NAME } from '@/config/brand'
+import { APP_NAME } from '@/config/brand'
 import { activeNavigationKey, findNavigationItem, primaryLinks } from '@/config/navigation'
 import { useSlidingIndicator } from '@/composables/useSlidingIndicator'
 import { useTheme, type ThemeMode } from '@/composables/useTheme'
+import { resourceReturnPath } from '@/utils/resourceNavigation'
 
-/** 顶栏：品牌、主导航（当前项背后有跟随滑动的底色）、搜索、学习助手、主题和账户菜单。 */
+/** 顶栏：品牌、主导航（当前项背后有跟随滑动的底色）、搜索、主题和账户菜单。 */
 defineProps<{ scrolled: boolean }>()
-const emit = defineEmits<{ search: []; assistant: [] }>()
+const emit = defineEmits<{ search: [] }>()
 
 const route = useRoute()
 const isHome = computed(() => route.path === '/dashboard')
@@ -146,9 +117,6 @@ const showLearningTabs = computed(
     (route.path === '/analytics' && !['overview', 'calendar'].includes(String(route.query.view))) ||
     (route.path === '/profile' && route.query.view !== 'account')
 )
-const showMobileAssistant = computed(() =>
-  ['/materials', '/summary', '/quiz', '/practice', '/wrong-questions', '/analytics', '/mastery'].includes(route.path)
-)
 const mobileTitle = computed(() => {
   if (route.path === '/materials') return isMaterialLibrary.value ? '资料库' : '我的内容'
   if (route.path === '/analytics') {
@@ -158,7 +126,19 @@ const mobileTitle = computed(() => {
   return findNavigationItem(route.path)?.label || APP_NAME
 })
 const mobileBack = computed(() => {
-  if (isMaterialLibrary.value || route.path === '/summary') return { path: '/materials', label: '返回我的内容' }
+  if (route.path === '/materials' && route.query.from === 'resources') {
+    return { path: resourceReturnPath(route.query), label: '返回找资料' }
+  }
+  if (route.path === '/resources') {
+    if (route.query.from === 'mastery') return { path: '/mastery', label: '返回知识掌握' }
+    if (route.query.from === 'home') return { path: '/dashboard', label: '返回首页' }
+    return { path: '/materials', label: '返回我的内容' }
+  }
+  if (route.query.from === 'home' && ['/materials', '/practice', '/wrong-questions'].includes(route.path)) {
+    return { path: '/dashboard', label: '返回首页' }
+  }
+  if (isMaterialLibrary.value || ['/summary', '/notes'].includes(route.path))
+    return { path: '/materials', label: '返回我的内容' }
   if (route.path === '/analytics' && !showLearningTabs.value) return { path: '/analytics', label: '返回我的学习' }
   if (route.path === '/mastery') return { path: '/analytics', label: '返回我的学习' }
   if (
@@ -171,6 +151,12 @@ const mobileBack = computed(() => {
   return { path: '/dashboard', label: '返回首页' }
 })
 const navRef = ref<HTMLElement | null>(null)
+const desktopLabels: Record<string, { label: string; icon: string }> = {
+  library: { label: '我的内容', icon: 'archive' },
+  practice: { label: '题集练习', icon: 'study' },
+  insight: { label: '我的学习', icon: 'chart-settings' }
+}
+const desktopLinks = primaryLinks.map((item) => ({ ...item, ...desktopLabels[item.key] }))
 const activeKey = computed(() => activeNavigationKey(route.path))
 const { indicatorStyle } = useSlidingIndicator(navRef, '.topbar__nav-item.is-active', activeKey)
 const { currentTheme, themeOptions, currentThemeOption, setTheme } = useTheme()
@@ -202,22 +188,33 @@ const handleThemeCommand = (command: string) => {
 .topbar__inner {
   display: flex;
   align-items: center;
-  gap: 32px;
+  gap: 40px;
   height: 100%;
-  max-width: 1280px;
+  max-width: 1200px;
   margin: 0 auto;
-  padding: 0 40px;
+  padding: 0 32px;
 }
 .topbar__brand {
   display: flex;
+  align-items: center;
+  gap: 9px;
   flex: 0 0 auto;
   border-radius: var(--radius-xs);
 }
-.topbar__brand :deep(.brand-logo) {
-  width: 104px;
+.topbar__brand-mark {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: var(--brand-soft);
+  color: var(--brand);
 }
 .topbar__brand-text {
-  display: none;
+  color: var(--text);
+  font-size: 21px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
 }
 .topbar__nav {
   position: relative;
@@ -231,11 +228,12 @@ const handleThemeCommand = (command: string) => {
   z-index: 1;
   display: flex;
   align-items: center;
-  height: 36px;
+  gap: 7px;
+  height: 40px;
   padding: 0 14px;
-  border-radius: var(--radius-sm);
+  border-radius: 14px;
   color: var(--text-secondary);
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 500;
   white-space: nowrap;
   transition: color var(--duration-fast) ease;
@@ -244,14 +242,19 @@ const handleThemeCommand = (command: string) => {
   color: var(--text);
 }
 .topbar__nav-item.is-active {
+  color: var(--text);
+  font-weight: 600;
+}
+.topbar__nav-item.is-active :is(.app-icon, .mobile-icon) {
   color: var(--brand);
 }
 .topbar__nav-indicator {
   position: absolute;
   top: 0;
   left: 0;
-  border-radius: var(--radius-sm);
-  background: var(--brand-soft);
+  border-radius: 14px;
+  background: var(--panel);
+  box-shadow: 0 1px 4px rgb(37 38 43 / 4%);
   pointer-events: none;
   transition:
     transform var(--duration-slow) var(--ease-out),
@@ -267,12 +270,12 @@ const handleThemeCommand = (command: string) => {
   display: flex;
   align-items: center;
   gap: 8px;
-  width: 196px;
+  width: 166px;
   height: 38px;
   padding: 0 8px 0 12px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-sm);
-  background: var(--panel);
+  border: 1px solid transparent;
+  border-radius: 13px;
+  background: var(--bg-secondary);
   color: var(--muted);
   font: inherit;
   font-size: 14px;
@@ -298,26 +301,10 @@ const handleThemeCommand = (command: string) => {
   font-size: 11px;
   line-height: 20px;
 }
-.topbar__assistant {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  height: 38px;
-  padding: 0 14px 0 12px;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: var(--brand-light);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--brand) 16%, transparent);
-  color: var(--brand);
-  font: inherit;
-  font-size: 14px;
-  font-weight: 500;
-  white-space: nowrap;
-  cursor: pointer;
-  transition: background-color var(--duration-fast) ease;
-}
-.topbar__assistant:hover {
-  background: var(--brand-soft);
+.topbar__search:focus-visible,
+.mobile-topbar__button:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 3px;
 }
 .topbar__icon-button {
   display: grid;
@@ -326,7 +313,7 @@ const handleThemeCommand = (command: string) => {
   height: 38px;
   padding: 0;
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: 13px;
   background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
@@ -397,14 +384,6 @@ const handleThemeCommand = (command: string) => {
   }
   .topbar__nav-item {
     padding: 0 10px;
-  }
-  .topbar__assistant {
-    width: 38px;
-    padding: 0;
-    justify-content: center;
-  }
-  .topbar__assistant span {
-    display: none;
   }
 }
 @media (max-width: 760px) {
@@ -481,13 +460,6 @@ const handleThemeCommand = (command: string) => {
   }
   .mobile-topbar--home {
     padding: 0 16px;
-  }
-  .mobile-topbar__mark {
-    width: 38px;
-    height: 38px;
-    border-radius: 15px;
-    background: #ffdab5;
-    box-shadow: 0 2px 10px rgb(53 48 40 / 8%);
   }
 }
 </style>

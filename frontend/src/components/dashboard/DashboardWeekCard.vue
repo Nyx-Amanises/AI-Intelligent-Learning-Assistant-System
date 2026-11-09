@@ -44,7 +44,7 @@
           <dd>{{ attempts }} 题</dd>
         </div>
       </dl>
-      <p v-if="!totalCount" class="week-card__hint">这几天还没有交卷记录，做完一套题这里就会有数据。</p>
+      <p v-if="!totalCount" class="week-card__hint">完成练习后，这里会显示学习趋势。</p>
     </template>
     <RouterLink to="/analytics" class="text-link week-card__more"
       >学习统计<AppIcon name="arrow-right" :size="15"
@@ -105,6 +105,7 @@ const chartLabel = computed(
   display: flex;
   flex-direction: column;
   padding: 22px 24px 18px;
+  border-radius: 18px;
 }
 .week-card__head {
   display: flex;
@@ -210,7 +211,10 @@ const chartLabel = computed(
   line-height: 1.7;
 }
 .week-card__more {
+  display: inline-flex;
+  align-items: center;
   align-self: flex-start;
+  min-height: 44px;
   margin-top: auto;
   padding-top: 10px;
   font-size: 13px;
@@ -241,6 +245,11 @@ const chartLabel = computed(
 @keyframes week-bar-grow {
   from {
     transform: scaleY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .week-card__bar {
+    animation: none;
   }
 }
 </style>

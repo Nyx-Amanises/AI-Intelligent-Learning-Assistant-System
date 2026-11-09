@@ -28,6 +28,18 @@ public class MaterialDetailVO {
      */
     private Long id;
 
+    /** 需鉴权的版本化封面地址；null 表示使用前端默认封面。 */
+    private String coverUrl;
+
+    /** 当前用户导入的已发布教材资源；无可用完整原文时为空。 */
+    private Long resourceId;
+
+    /** 已发布教材的完整 PDF 地址。 */
+    private String documentUrl;
+
+    /** 无完整 PDF 时按需读取的完整纯文本，避免把重叠检索分块当作正文。 */
+    private String contentText;
+
     /**
      * 资料标题。
      */

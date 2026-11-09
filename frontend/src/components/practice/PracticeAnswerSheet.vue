@@ -194,39 +194,24 @@ const emit = defineEmits<{ select: [questionId: number] }>()
 }
 @media (max-width: 760px) {
   .practice-paper-sidebar {
-    padding: 10px 16px;
-    border: 0;
-    border-radius: 18px;
-    background: var(--panel);
-  }
-  .practice-paper-sidebar__title {
-    margin-bottom: 4px;
-    font-size: 16px;
-    font-weight: 600;
-    line-height: 1.4;
-  }
-  .practice-paper-sidebar__title span {
-    color: var(--text-secondary);
-    font-size: 14px;
-    font-variant-numeric: tabular-nums;
-  }
-  .practice-paper-sidebar__hint,
-  .practice-paper-sidebar__group-title {
-    position: absolute;
-    width: 1px;
-    height: 1px;
+    min-width: 0;
     padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
     border: 0;
+    border-radius: 0;
+    background: transparent;
+    overflow: visible;
+  }
+  .practice-paper-sidebar__title,
+  .practice-paper-sidebar__hint,
+  .practice-paper-sidebar__group-title,
+  .practice-paper-sidebar__legend {
+    display: none;
   }
   .practice-paper-sidebar__groups {
     display: flex;
     flex-wrap: nowrap;
-    gap: 8px;
-    padding: 2px;
+    gap: 6px;
+    padding: 5px;
     overflow-x: auto;
     overscroll-behavior-inline: contain;
     scrollbar-width: none;
@@ -239,13 +224,13 @@ const emit = defineEmits<{ select: [questionId: number] }>()
     display: contents;
   }
   .practice-paper-sidebar__item {
-    flex: 0 0 48px;
-    min-height: 48px;
+    flex: 0 0 44px;
+    min-height: 44px;
     border: 1px solid transparent;
-    border-radius: 13px;
-    background: var(--bg);
+    border-radius: 11px;
+    background: var(--panel);
     color: var(--text-secondary);
-    font-size: 16px;
+    font-size: 14px;
     font-weight: 500;
     font-variant-numeric: tabular-nums;
   }
@@ -264,16 +249,6 @@ const emit = defineEmits<{ select: [questionId: number] }>()
   .practice-paper-sidebar__item--active {
     border-color: var(--brand);
     box-shadow: 0 0 0 1px var(--brand);
-  }
-  .practice-paper-sidebar__legend {
-    margin-top: 4px;
-    padding-top: 0;
-    border: 0;
-    font-size: 12px;
-  }
-  .practice-paper-sidebar--submitted .practice-paper-sidebar__legend .is-done {
-    border-color: var(--green);
-    background: var(--green-soft);
   }
 }
 </style>

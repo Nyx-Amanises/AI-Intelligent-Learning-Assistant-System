@@ -1,6 +1,6 @@
 <template>
   <MobileLearningCenter
-    v-if="isMobile"
+    v-if="!showDetailedAnalytics"
     :materials="materials"
     :materials-loading="materialsLoading"
     :materials-error="materialsError"
@@ -8,9 +8,11 @@
   />
   <section v-else class="learning-page statistics-page" :aria-busy="loading" aria-labelledby="statistics-title">
     <header class="page-header">
-      <div>
-        <h1 id="statistics-title" class="page-title">学习统计</h1>
-        <p class="page-desc">回顾练习次数、用时和答题表现，找到接下来需要复习的知识点。</p>
+      <div class="statistics-detail-heading">
+        <RouterLink :to="{ path: '/analytics', query: { view: 'overview' } }" aria-label="返回学习概览">
+          <MobileIcon name="back" :size="22" />
+        </RouterLink>
+        <h1 id="statistics-title" class="page-title">详细统计</h1>
       </div>
       <div class="toolbar toolbar--flush">
         <el-button :loading="loading" @click="loadAnalytics">
@@ -344,9 +346,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onUnmounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onUnmounted, reactive, ref, watch } from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import AppIcon from '@/components/AppIcon.vue'
+import MobileIcon from '@/components/MobileIcon.vue'
 import MobileLearningCenter from '@/components/mobile/MobileLearningCenter.vue'
 import StatTiles, { type StatTileItem } from '@/components/StatTiles.vue'
 import TrendLineChart, { type TrendChartPoint } from '@/components/charts/TrendLineChart.vue'
@@ -369,11 +372,12 @@ import {
 import { getMaterialPageApi, type MaterialPageItem } from '@/api/modules/material'
 
 const router = useRouter()
+const route = useRoute()
 const mobileQuery = window.matchMedia('(max-width: 760px)')
 const isMobile = ref(mobileQuery.matches)
+const showDetailedAnalytics = computed(() => !isMobile.value && route.query.view === 'details')
 const updateMobile = (event: MediaQueryListEvent) => {
   isMobile.value = event.matches
-  if (!event.matches && !hasLoaded.value && !loading.value) void loadAnalytics()
 }
 mobileQuery.addEventListener('change', updateMobile)
 const loading = ref(false)
@@ -636,10 +640,30 @@ onUnmounted(() => {
   materialRequestId++
 })
 void loadMaterials()
-if (!isMobile.value) void loadAnalytics()
+watch(
+  showDetailedAnalytics,
+  (visible) => {
+    if (visible && !hasLoaded.value && !loading.value) void loadAnalytics()
+  },
+  { immediate: true }
+)
 </script>
 
 <style scoped>
+.statistics-detail-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.statistics-detail-heading > a {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--panel);
+  color: var(--text-secondary);
+}
 .statistics-page {
   padding-bottom: 24px;
   color: var(--text);

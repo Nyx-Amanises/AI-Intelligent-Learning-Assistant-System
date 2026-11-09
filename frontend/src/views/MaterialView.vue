@@ -1,13 +1,12 @@
 <template>
   <section
     class="learning-page material-library"
-    :aria-labelledby="showMobileHub ? undefined : 'material-library-title'"
-    :aria-label="showMobileHub ? '我的内容' : undefined"
+    :aria-labelledby="showContentHub && isMobileViewport ? undefined : 'material-library-title'"
+    :aria-label="showContentHub && isMobileViewport ? '我的内容' : undefined"
   >
-    <MobileContentHub v-if="showMobileHub" />
-    <header v-show="!showMobileHub" class="page-header">
+    <header v-show="!showContentHub || !isMobileViewport" class="page-header">
       <div>
-        <h1 id="material-library-title" class="page-title">资料库</h1>
+        <h1 id="material-library-title" class="page-title">{{ showContentHub ? '我的内容' : '资料库' }}</h1>
         <p class="page-desc">上传讲义、教材或笔记，解析完成后可以阅读原文、生成总结和练习题。</p>
       </div>
       <div class="toolbar toolbar--flush">
@@ -17,8 +16,9 @@
         >
       </div>
     </header>
+    <MobileContentHub v-if="showContentHub" />
 
-    <div v-show="!showMobileHub" class="workspace-panel material-library__panel">
+    <div v-show="!showContentHub" class="workspace-panel material-library__panel">
       <div class="workspace-toolbar workspace-toolbar--filter">
         <div
           id="material-list-filters"
@@ -96,6 +96,7 @@
         title="还没有资料"
         description="上传讲义或教材，也可以直接粘贴一段文字。解析完成后就能生成总结和练习题。"
       >
+        <el-button @click="router.push('/resources')"><AppIcon name="search" :size="16" />找学习资料</el-button>
         <el-button type="primary" @click="uploadDialogVisible = true"
           ><AppIcon name="upload" :size="16" />上传资料</el-button
         >
@@ -103,7 +104,14 @@
       </EmptyState>
       <ul v-else class="record-list">
         <li v-for="row in materialRows" :key="row.id" class="list-row record-row">
-          <MaterialTypeBadge :type="row.materialType" :size="40" />
+          <button
+            type="button"
+            class="material-row__cover"
+            :aria-label="`打开${row.title}`"
+            @click="viewDetail(row.id)"
+          >
+            <MaterialCover :material-id="row.id" :title="row.title" :cover-url="row.coverUrl" />
+          </button>
           <div class="record-row__main">
             <h2 class="record-row__title">
               <button type="button" :title="row.title" @click="viewDetail(row.id)">{{ row.title }}</button>
@@ -117,7 +125,6 @@
             </p>
             <p class="record-row__meta">
               <span class="visually-hidden">{{ formatMaterialType(row.materialType) }}</span>
-              <span v-if="row.totalCharacters">{{ formatCharacters(row.totalCharacters) }}</span>
               <time :datetime="row.createdAt" :title="formatDateTime(row.createdAt)"
                 >{{ formatRelativeDay(row.createdAt) }}添加</time
               >
@@ -163,6 +170,7 @@
                     >{{ getEmbeddingActionLabel(row) }}</el-dropdown-item
                   >
                   <el-dropdown-item command="edit" divided>编辑信息</el-dropdown-item>
+                  <el-dropdown-item command="cover">更换封面</el-dropdown-item>
                   <el-dropdown-item command="parse">{{
                     row.parseStatus === 'SUCCESS' ? '重新解析' : '解析资料'
                   }}</el-dropdown-item>
@@ -199,6 +207,7 @@
       :close-on-click-modal="!uploading"
       :close-on-press-escape="!uploading"
       :show-close="!uploading"
+      :before-close="closeUploadDialog"
       destroy-on-close
     >
       <div class="material-library-upload">
@@ -211,7 +220,9 @@
           accept=".pdf,.docx,.txt"
         >
           <span class="material-library-upload__icon"><AppIcon name="upload" :size="24" /></span>
-          <strong>{{ uploading ? '正在上传…' : '把文件拖到这里，或点击选择' }}</strong>
+          <strong>{{
+            uploading ? '正在上传…' : isMobileViewport ? '选择学习资料' : '把文件拖到这里，或点击选择'
+          }}</strong>
           <span>支持 PDF、Word（.docx）和 TXT</span>
           <span v-if="uploading" class="material-library__spinner" role="status" aria-label="上传中"></span>
         </el-upload>
@@ -219,8 +230,8 @@
       </div>
       <template #footer
         ><div class="material-library-dialog__footer">
-          <el-button :disabled="uploading" @click="uploadDialogVisible = false">{{
-            uploading ? '正在上传…' : '取消'
+          <el-button :disabled="uploading" @click="closeUploadDialog()">{{
+            uploading ? '正在上传…' : returnToHome ? '返回首页' : '取消'
           }}</el-button>
         </div></template
       >
@@ -344,11 +355,36 @@
     <el-drawer
       v-model="drawerVisible"
       class="material-library-modal"
+      :class="{ 'material-library-modal--book': documentUrl }"
       title="资料详情"
-      size="min(720px, 100vw)"
+      :size="documentUrl ? 'min(1100px, 100vw)' : 'min(720px, 100vw)'"
+      header-class="material-library-detail__header"
+      :show-close="false"
+      :aria-modal="!noteVisible"
+      :before-close="closeMaterialDetail"
+      @focusout.capture="allowNoteFocus"
+      @keydown.tab.capture="allowNoteFocus"
       @closed="clearMaterialDeepLink"
     >
-      <div class="material-library-detail">
+      <template #header="{ titleId }">
+        <div class="material-library-detail__navigation">
+          <button
+            type="button"
+            class="material-library-detail__back"
+            :aria-label="returnToHome ? '返回首页' : returnToResources ? '返回找资料' : '返回资料库'"
+            @click="closeMaterialDetail()"
+          >
+            <MobileIcon name="back" :size="24" />
+          </button>
+          <h2 :id="titleId" class="material-library-detail__title">资料详情</h2>
+          <span aria-hidden="true" />
+        </div>
+      </template>
+      <div
+        ref="materialReader"
+        class="material-library-detail"
+        :class="{ 'material-library-detail--book': documentUrl }"
+      >
         <div v-if="detailLoading" class="material-library-detail__loading" role="status">
           <span class="material-library__spinner"></span>
           <p>正在打开资料…</p>
@@ -363,123 +399,170 @@
           <el-button @click="viewDetail(detailId)">重试</el-button>
         </EmptyState>
         <template v-else-if="detail">
-          <div class="material-library-detail__heading">
-            <MaterialTypeBadge :type="detail.materialType" :size="44" />
-            <div>
-              <span>{{ formatMaterialType(detail.materialType) }}</span>
-              <h2>{{ detail.title }}</h2>
+          <div class="material-library-detail__intro">
+            <div class="material-library-detail__heading">
+              <button
+                type="button"
+                class="material-detail-cover"
+                aria-label="更换封面"
+                @click="openCoverEditor(detail)"
+              >
+                <MaterialCover :material-id="detail.id" :title="detail.title" :cover-url="detail.coverUrl" />
+                <span class="material-detail-cover__edit"><AppIcon name="camera" :size="14" /></span>
+              </button>
+              <div>
+                <h2 :title="detail.title">{{ detail.title }}</h2>
+                <p class="material-library-detail__brief">
+                  {{ documentUrl ? 'PDF' : formatMaterialType(detail.materialType) }}
+                </p>
+              </div>
             </div>
-          </div>
-          <dl class="material-library-detail__meta">
-            <div>
-              <dt>添加时间</dt>
-              <dd>{{ formatDateTime(detail.createdAt) }}</dd>
-            </div>
-            <div>
-              <dt>内容长度</dt>
-              <dd>{{ formatCharacters(detail.totalCharacters) }}</dd>
-            </div>
-            <div>
-              <dt>解析状态</dt>
-              <dd>{{ formatParseStatus(detail.parseStatus) }}</dd>
-            </div>
-            <div>
-              <dt>分块方式</dt>
-              <dd>{{ formatChunking(detail) }}</dd>
-            </div>
-            <div>
-              <dt>学习总结</dt>
-              <dd>
-                {{ formatSummaryStatus(detail.summaryStatus) }}
-                <GenerationModeBadge v-if="detail.summaryStatus === 'SUCCESS'" :mode="detail.summaryGenerationMode" />
-              </dd>
-            </div>
-            <div>
-              <dt>向量索引</dt>
-              <dd>{{ formatEmbeddingStatus(detail.embeddingStatus) }} · {{ formatEmbeddingProgress(detail) }}</dd>
-            </div>
-            <div>
-              <dt>标签</dt>
-              <dd>{{ getTags(detail.tags).join('、') || '没有标签' }}</dd>
-            </div>
-            <div>
-              <dt>难度</dt>
-              <dd>{{ formatDifficulty(detail.difficultyLevel) }}</dd>
-            </div>
-            <div class="material-library-detail__meta-wide">
-              <dt>说明</dt>
-              <dd :class="{ 'is-empty': !detail.description }">
-                {{ detail.description || '还没有说明，可以在“编辑信息”里补充来源或版本。' }}
-              </dd>
-            </div>
-          </dl>
-          <el-alert
-            v-if="detail.parseStatus === 'FAILED'"
-            :title="detail.parseErrorMessage || '没有记录失败原因，重新解析一次可以看到详情。'"
-            type="error"
-            :closable="false"
-            show-icon
-          />
-          <div class="material-library-detail__actions">
-            <el-button
-              v-if="detail.parseStatus !== 'SUCCESS'"
-              type="primary"
-              :loading="actionLoadingId === detail.id"
-              @click="parseMaterial(detail.id)"
-              >解析资料</el-button
-            >
-            <el-button v-else type="primary" @click="goSummary(detail.id)"
-              ><AppIcon name="summary" :size="16" />查看总结</el-button
-            >
-            <el-button @click="goQuiz(detail.id)"><AppIcon name="quiz" :size="16" />出题</el-button>
-            <el-button @click="openEditDialog(detail)">编辑信息</el-button>
-          </div>
-          <section class="material-library-detail__retrieval" aria-labelledby="material-detail-retrieval-title">
-            <div class="material-library-detail__retrieval-heading">
-              <h3 id="material-detail-retrieval-title">向量检索</h3>
-              <RouterLink to="/ai-config#vector-model"
-                >配置向量模型<AppIcon name="arrow-up-right" :size="14"
-              /></RouterLink>
-            </div>
-            <p>
-              {{
-                detail.parseStatus === 'SUCCESS'
-                  ? '生成向量后，可以按问题的意思找到资料里的相关片段。'
-                  : '先解析资料，再生成向量。'
-              }}
-            </p>
-            <div class="material-library-detail__actions">
+            <el-alert
+              v-if="detail.parseStatus === 'FAILED'"
+              :title="detail.parseErrorMessage || '没有记录失败原因，重新解析一次可以看到详情。'"
+              type="error"
+              :closable="false"
+              show-icon
+            />
+            <div class="material-library-detail__actions material-library-detail__study-actions">
+              <button
+                v-if="!documentUrl"
+                type="button"
+                class="material-note-button"
+                aria-label="记笔记"
+                title="记笔记"
+                @mousedown.prevent
+                @click="recordMaterialNote()"
+              >
+                <MobileIcon name="pencil" :size="20" />
+              </button>
               <el-button
-                :disabled="detail.parseStatus !== 'SUCCESS' || detail.embeddingStatus === 'RUNNING'"
-                :loading="actionLoadingId === detail.id"
-                @click="generateEmbedding(detail)"
-                >{{ getEmbeddingActionLabel(detail) }}</el-button
+                v-if="detail.parseStatus !== 'SUCCESS'"
+                type="primary"
+                :loading="actionLoadingId === detail.id || detail.parseStatus === 'PROCESSING'"
+                :disabled="detail.parseStatus === 'PROCESSING'"
+                @click="parseMaterial(detail.id)"
+                >{{ detail.parseStatus === 'PROCESSING' ? '解析中' : '解析资料' }}</el-button
               >
-              <el-button :disabled="detail.parseStatus !== 'SUCCESS'" @click="openRetrievalPreview(detail)"
-                ><AppIcon name="search" :size="16" />检索预览</el-button
+              <el-button v-else type="primary" aria-label="查看总结" title="查看总结" @click="goSummary(detail.id)"
+                ><AppIcon name="summary" :size="20" /><span class="material-library-detail__action-label"
+                  >查看总结</span
+                ></el-button
               >
-              <RouterLink
-                v-if="detail.embeddingStatus === 'RUNNING'"
-                class="material-library-detail__task-link"
-                to="/ai-tasks"
-                >查看进度</RouterLink
+              <el-button
+                :disabled="detail.parseStatus !== 'SUCCESS'"
+                aria-label="出题"
+                title="出题"
+                @click="goQuiz(detail.id)"
+                ><AppIcon name="quiz" :size="20" /><span class="material-library-detail__action-label"
+                  >出题</span
+                ></el-button
               >
             </div>
-          </section>
-          <div v-if="detail.segments?.length" class="material-library-detail__segments">
-            <h3>
-              原文 <span>共 {{ detail.segments.length }} 个片段</span>
-            </h3>
-            <article v-for="segment in detail.segments" :key="segment.id" class="material-library-detail__segment">
-              <div class="material-library-detail__segment-meta">{{ formatSegmentMeta(segment) }}</div>
-              <h4>{{ segment.sectionTitle || '资料片段' }}</h4>
-              <p>{{ segment.contentText }}</p>
-            </article>
           </div>
+          <PdfBookReader
+            v-if="documentUrl && drawerVisible"
+            :key="detail.id"
+            class="material-library-detail__book"
+            :url="documentUrl"
+            :title="detail.title"
+            :resource-id="detail.resourceId || undefined"
+            :initial-page="readerStartPage"
+            prefer-original
+            @progress="readingProgress = $event"
+            @page-change="readerStartPage = $event"
+          />
+          <p v-if="documentUrl" class="material-library-detail__progress">已读 {{ readingProgress }}%</p>
+          <article v-else-if="readableParagraphs.length" class="material-library-detail__body" aria-label="资料正文">
+            <p v-for="(paragraph, index) in readableParagraphs" :key="index">{{ paragraph }}</p>
+          </article>
           <div v-else class="material-library-detail__empty">解析后可以在这里阅读原文。</div>
+          <details v-if="!documentUrl && !isMobileViewport" :key="detail.id" class="material-library-detail__tools">
+            <summary>资料信息与工具<MobileIcon name="down" :size="18" /></summary>
+            <dl class="material-library-detail__meta">
+              <div>
+                <dt>添加时间</dt>
+                <dd>{{ formatDateTime(detail.createdAt) }}</dd>
+              </div>
+              <div>
+                <dt>内容长度</dt>
+                <dd>{{ formatCharacters(detail.totalCharacters) }}</dd>
+              </div>
+              <div>
+                <dt>解析状态</dt>
+                <dd>{{ formatParseStatus(detail.parseStatus) }}</dd>
+              </div>
+              <div>
+                <dt>分块方式</dt>
+                <dd>{{ formatChunking(detail) }}</dd>
+              </div>
+              <div>
+                <dt>学习总结</dt>
+                <dd>
+                  {{ formatSummaryStatus(detail.summaryStatus) }}
+                  <GenerationModeBadge v-if="detail.summaryStatus === 'SUCCESS'" :mode="detail.summaryGenerationMode" />
+                </dd>
+              </div>
+              <div>
+                <dt>向量索引</dt>
+                <dd>{{ formatEmbeddingStatus(detail.embeddingStatus) }} · {{ formatEmbeddingProgress(detail) }}</dd>
+              </div>
+              <div>
+                <dt>标签</dt>
+                <dd>{{ getTags(detail.tags).join('、') || '没有标签' }}</dd>
+              </div>
+              <div>
+                <dt>难度</dt>
+                <dd>{{ formatDifficulty(detail.difficultyLevel) }}</dd>
+              </div>
+              <div class="material-library-detail__meta-wide">
+                <dt>说明</dt>
+                <dd :class="{ 'is-empty': !detail.description }">
+                  {{ detail.description || '还没有说明，可以在“编辑信息”里补充来源或版本。' }}
+                </dd>
+              </div>
+            </dl>
+            <div class="material-library-detail__actions">
+              <el-button @click="openEditDialog(detail)">编辑信息</el-button>
+            </div>
+            <section class="material-library-detail__retrieval" aria-labelledby="material-detail-retrieval-title">
+              <div class="material-library-detail__retrieval-heading">
+                <h3 id="material-detail-retrieval-title">向量检索</h3>
+                <RouterLink to="/ai-config#vector-model"
+                  >配置向量模型<AppIcon name="arrow-up-right" :size="14"
+                /></RouterLink>
+              </div>
+              <p>
+                {{
+                  detail.parseStatus === 'SUCCESS'
+                    ? '生成向量后，可以按问题的意思找到资料里的相关片段。'
+                    : '先解析资料，再生成向量。'
+                }}
+              </p>
+              <div class="material-library-detail__actions">
+                <el-button
+                  :disabled="detail.parseStatus !== 'SUCCESS' || detail.embeddingStatus === 'RUNNING'"
+                  :loading="actionLoadingId === detail.id"
+                  @click="generateEmbedding(detail)"
+                  >{{ getEmbeddingActionLabel(detail) }}</el-button
+                >
+                <el-button :disabled="detail.parseStatus !== 'SUCCESS'" @click="openRetrievalPreview(detail)"
+                  ><AppIcon name="search" :size="16" />检索预览</el-button
+                >
+                <RouterLink
+                  v-if="detail.embeddingStatus === 'RUNNING'"
+                  class="material-library-detail__task-link"
+                  to="/ai-tasks"
+                  >查看进度</RouterLink
+                >
+              </div>
+            </section>
+          </details>
         </template>
       </div>
     </el-drawer>
+
+    <MaterialCoverEditor v-model="coverEditorVisible" :material="coverTarget" @updated="updateCover" />
 
     <el-dialog
       v-model="parseDialogVisible"
@@ -595,15 +678,21 @@ import { ElMessage } from 'element-plus'
 import type { UploadRequestOptions } from 'element-plus'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import AppIcon from '@/components/AppIcon.vue'
+import MobileIcon from '@/components/MobileIcon.vue'
 import MobileFilterToggle from '@/components/MobileFilterToggle.vue'
 import MobileContentHub from '@/components/mobile/MobileContentHub.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import IconMenuButton from '@/components/IconMenuButton.vue'
-import MaterialTypeBadge from '@/components/MaterialTypeBadge.vue'
+import MaterialCover from '@/components/resources/MaterialCover.vue'
+import MaterialCoverEditor from '@/components/resources/MaterialCoverEditor.vue'
+import PdfBookReader from '@/components/resources/PdfBookReader.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import GenerationModeBadge from '@/components/GenerationModeBadge.vue'
+import { resourceReturnPath } from '@/utils/resourceNavigation'
+import { knowledgePointPracticeReason } from '@/utils/knowledgePractice'
 import { useAutoListQuery } from '@/composables/useAutoListQuery'
 import { usePolling } from '@/composables/usePolling'
+import { useNoteWorkspace } from '@/composables/useNoteWorkspace'
 import { confirmDanger } from '@/utils/confirm'
 import { getErrorMessage } from '@/utils/errorMessage'
 import { formatCharacters, formatDateTime, formatRelativeDay, formatSegmentMeta } from '@/utils/format'
@@ -627,27 +716,62 @@ import {
 
 const router = useRouter()
 const route = useRoute()
+const { createNote, visible: noteVisible } = useNoteWorkspace()
+const allowNoteFocus = (event: Event) => {
+  // ElDrawer keeps an internal focus trap even without trap-focus; allow both split panes to receive focus.
+  if (noteVisible.value && window.matchMedia('(min-width: 1100px)').matches) event.stopImmediatePropagation()
+}
+const materialReader = ref<HTMLElement>()
+const recordMaterialNote = () => {
+  if (!detail.value) return
+  const selection = window.getSelection()
+  const selected =
+    selection?.anchorNode &&
+    selection.focusNode &&
+    materialReader.value?.contains(selection.anchorNode) &&
+    materialReader.value.contains(selection.focusNode)
+      ? selection.toString().trim()
+      : ''
+  createNote({
+    sourceType: 'MATERIAL',
+    sourceId: detail.value.id,
+    sourceTitle: detail.value.title,
+    sourceExcerpt: selected.slice(0, 2000)
+  })
+}
+const returnToHome = computed(() => route.query.from === 'home')
+const returnToResources = computed(() => route.query.from === 'resources')
 const mobileViewport = window.matchMedia('(max-width: 760px)')
 const isMobileViewport = ref(mobileViewport.matches)
 const updateMobileViewport = (event: MediaQueryListEvent) => {
   isMobileViewport.value = event.matches
 }
-const showMobileHub = computed(
+const showContentHub = computed(
   () =>
-    isMobileViewport.value &&
-    route.query.view !== 'library' &&
-    !route.query.keyword &&
-    !route.query.materialId &&
-    route.query.action !== 'upload'
+    route.query.view !== 'library' && !route.query.keyword && !route.query.materialId && route.query.action !== 'upload'
 )
 const materials = ref<MaterialPageItem[]>([])
 const total = ref(0)
 const detail = ref<MaterialDetail | null>(null)
+const readerStartPage = ref<number>()
+const readingProgress = ref(0)
+const documentUrl = computed(() => {
+  const url = detail.value?.documentUrl
+  return url && /^\/open-books\/[a-z0-9-]+\/book\.pdf$/.test(url) ? url : undefined
+})
+const readableParagraphs = computed(() => {
+  if (documentUrl.value) return []
+  const original = detail.value?.contentText
+  if (original?.trim()) return [original]
+  return (detail.value?.segments || []).map((segment) => segment.contentText?.trim() || '').filter(Boolean)
+})
 const detailId = ref(0)
 const drawerVisible = ref(false)
 const uploadDialogVisible = ref(false)
 const textDialogVisible = ref(false)
 const editDialogVisible = ref(false)
+const coverEditorVisible = ref(false)
+const coverTarget = ref<MaterialPageItem | null>(null)
 const retrievalDialogVisible = ref(false)
 const parseDialogVisible = ref(false)
 const parsing = ref(false)
@@ -670,6 +794,9 @@ let listRequestVersion = 0
 let detailRequestVersion = 0
 
 interface MaterialDetail extends MaterialPageItem {
+  resourceId?: number | null
+  documentUrl?: string | null
+  contentText?: string | null
   segments?: { id: number; segmentNo?: number; pageNo?: number; sectionTitle?: string; contentText?: string }[]
 }
 
@@ -712,7 +839,7 @@ const searchKeyword = computed({
     filters.keyword = keyword
     if (route.path !== '/materials') return
     const query = { ...route.query }
-    if (isMobileViewport.value) query.view = 'library'
+    query.view = 'library'
     if (keyword) query.keyword = keyword
     else delete query.keyword
     void router.replace({ path: route.path, query, hash: route.hash })
@@ -1019,6 +1146,8 @@ const viewDetail = async (id: number) => {
   const requestVersion = ++detailRequestVersion
   detailId.value = id
   detail.value = null
+  readerStartPage.value = undefined
+  readingProgress.value = 0
   detailError.value = ''
   drawerVisible.value = true
   detailLoading.value = true
@@ -1148,6 +1277,9 @@ const beforeUpload = (file: File) => {
 
 const handleMaterialCommand = (command: string, row: MaterialPageItem) => {
   switch (command) {
+    case 'cover':
+      openCoverEditor(row)
+      break
     case 'edit':
       openEditDialog(row)
       break
@@ -1166,10 +1298,44 @@ const handleMaterialCommand = (command: string, row: MaterialPageItem) => {
   }
 }
 
+function openCoverEditor(material: MaterialPageItem) {
+  coverTarget.value = material
+  coverEditorVisible.value = true
+}
+
+function updateCover({ id, coverUrl }: { id: number; coverUrl: string | null }) {
+  materials.value = materials.value.map((item) => (item.id === id ? { ...item, coverUrl } : item))
+  if (detail.value?.id === id) detail.value.coverUrl = coverUrl
+  if (coverTarget.value?.id === id) coverTarget.value = { ...coverTarget.value, coverUrl }
+  // 新请求使保存前的轮询响应失效，避免旧封面覆盖刚保存的结果。
+  void loadMaterials(!tableLoading.value)
+  if (detailLoading.value && detailId.value === id) void viewDetail(id)
+}
+
+const returnToOriginAfterClose = () => {
+  if (route.path !== '/materials') return
+  if (returnToHome.value) void router.replace('/dashboard')
+  else if (returnToResources.value) void router.replace(resourceReturnPath(route.query))
+}
+
+// 用户退出与上传成功后的自动关闭分开处理，避免上传完成时意外离开资料库。
+const closeUploadDialog = (done?: () => void) => {
+  if (uploading.value) return
+  if (done) done()
+  else uploadDialogVisible.value = false
+  returnToOriginAfterClose()
+}
+
+const closeMaterialDetail = (done?: () => void) => {
+  if (done) done()
+  else drawerVisible.value = false
+  returnToOriginAfterClose()
+}
+
 const clearMaterialDeepLink = () => {
-  if (route.path !== '/materials' || !route.query.materialId) return
+  if (route.path !== '/materials' || returnToHome.value || returnToResources.value || !route.query.materialId) return
   const query = { ...route.query }
-  if (isMobileViewport.value) query.view = 'library'
+  query.view = 'library'
   delete query.materialId
   void router.replace({ path: route.path, query })
 }
@@ -1179,7 +1345,18 @@ const goSummary = (id: number) => {
 }
 
 const goQuiz = (id: number) => {
-  router.push({ path: '/quiz', query: { materialId: String(id) } })
+  const originalMaterialId = Number(route.query.practiceMaterialId)
+  const knowledgePoint = returnToResources.value ? readQueryText(route.query.knowledgePoint).trim() : ''
+  const hasValidKnowledgePoint = !knowledgePointPracticeReason(knowledgePoint)
+  const useOriginal = hasValidKnowledgePoint && Number.isSafeInteger(originalMaterialId) && originalMaterialId > 0
+  router.push({
+    path: '/quiz',
+    query: {
+      materialId: String(useOriginal ? originalMaterialId : id),
+      generate: '1',
+      ...(hasValidKnowledgePoint ? { knowledgePoint } : {})
+    }
+  })
 }
 
 watch(
@@ -1218,7 +1395,7 @@ watch(
     if (route.path !== '/materials' || value !== 'upload') return
     uploadDialogVisible.value = true
     const query = { ...route.query }
-    if (isMobileViewport.value) query.view = 'library'
+    query.view = 'library'
     delete query.action
     void router.replace({ path: route.path, query })
   },
@@ -1239,6 +1416,77 @@ void loadMaterials()
 </script>
 
 <style scoped>
+.material-note-button {
+  display: grid;
+  place-items: center;
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.material-note-button:hover {
+  color: var(--brand);
+  background: var(--brand-light);
+}
+.material-note-button:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+:global(:root .el-drawer__header.material-library-detail__header) {
+  padding: 6px 12px;
+}
+:global(.material-library-modal--book .el-drawer__header) {
+  margin-bottom: 0;
+}
+:global(.material-library-modal--book .el-drawer__body) {
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+}
+@media (min-width: 1100px) {
+  :global(body.note-split-open .el-drawer.material-library-modal) {
+    right: 460px;
+    max-width: calc(100% - 460px);
+  }
+}
+.material-library-detail__navigation {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: center;
+  width: 100%;
+}
+.material-library-detail__title {
+  margin: 0;
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.5;
+  text-align: center;
+}
+.material-library-detail__back {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+.material-library-detail__back:active {
+  background: var(--bg-secondary);
+}
+.material-library-detail__back:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
 .material-row__error {
   margin: 4px 0 0;
   color: var(--red);
@@ -1333,6 +1581,75 @@ void loadMaterials()
 .material-library-detail {
   min-width: 0;
 }
+.material-library-detail--book {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.material-library-detail--book .material-library-detail__intro {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 12px;
+  flex: none;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.material-library-detail--book .material-library-detail__heading {
+  grid-column: 1;
+  grid-row: 1;
+  gap: 10px;
+  min-width: 0;
+}
+.material-library-detail--book .material-detail-cover {
+  --resource-cover-width: 36px;
+  padding: 4px;
+}
+.material-library-detail--book .material-library-detail__heading h2 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  margin-top: 0;
+  font-size: 16px;
+  line-height: 1.5;
+}
+.material-library-detail--book .material-library-detail__study-actions {
+  grid-column: 2;
+  grid-row: 1;
+  flex-wrap: nowrap;
+  gap: 6px;
+  margin: 0;
+}
+.material-library-detail--book .material-library-detail__action-label {
+  display: none;
+}
+.material-library-detail--book .material-library-detail__study-actions .el-button[aria-label] {
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0;
+}
+.material-library-detail--book .material-library-detail__intro :deep(.el-alert) {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+.material-library-detail__book {
+  flex: 1;
+  height: auto;
+  min-height: 0;
+}
+.material-library-detail__progress {
+  flex: none;
+  margin: 0;
+  padding: 3px 12px max(6px, env(safe-area-inset-bottom));
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.5;
+  text-align: center;
+}
 .material-library-detail__loading {
   display: flex;
   flex-direction: column;
@@ -1351,10 +1668,47 @@ void loadMaterials()
   align-items: center;
   gap: 14px;
 }
+.material-library .record-row {
+  --record-lead: 60px;
+}
+.material-row__cover,
+.material-detail-cover {
+  --resource-cover-width: 60px;
+  flex: 0 0 auto;
+  display: block;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  cursor: pointer;
+}
+.material-detail-cover {
+  --resource-cover-width: 72px;
+  position: relative;
+}
+.material-detail-cover__edit {
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 2px solid var(--panel);
+  border-radius: 50%;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+}
+.material-row__cover:focus-visible,
+.material-detail-cover:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 4px;
+}
 .material-library-detail__heading > div {
   min-width: 0;
 }
-.material-library-detail__heading span {
+.material-library-detail__brief {
+  margin: 6px 0 0;
   color: var(--muted);
   font-size: 12px;
 }
@@ -1398,8 +1752,37 @@ void loadMaterials()
 .material-library-detail__meta dd.is-empty {
   color: var(--muted);
 }
+.material-library-detail__tools {
+  margin-top: 24px;
+  border-top: 1px solid var(--line);
+}
+.material-library-detail__tools > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 48px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  list-style: none;
+  cursor: pointer;
+}
+.material-library-detail__tools > summary::-webkit-details-marker {
+  display: none;
+}
+.material-library-detail__tools > summary:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.material-library-detail__tools[open] > summary > svg {
+  transform: rotate(180deg);
+}
+.material-library-detail__study-actions {
+  margin-top: 20px;
+}
 .material-library-detail :deep(.el-alert) {
-  margin-bottom: 16px;
+  margin-block: 16px;
 }
 .material-library-detail__actions {
   display: flex;
@@ -1447,47 +1830,19 @@ void loadMaterials()
   text-decoration: underline;
   text-underline-offset: 3px;
 }
-.material-library-detail__segments {
-  margin-top: 28px;
+.material-library-detail__body {
+  margin-top: 24px;
 }
-.material-library-detail__segments > h3 {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  margin: 0 0 4px;
+.material-library-detail__body p {
+  margin: 0;
   color: var(--text);
   font-size: 16px;
-  font-weight: 600;
-}
-.material-library-detail__segments > h3 span {
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 400;
-}
-.material-library-detail__segment {
-  padding: 16px 0;
-  border-top: 1px solid var(--line);
-}
-.material-library-detail__segments > h3 + .material-library-detail__segment {
-  border-top: 0;
-}
-.material-library-detail__segment-meta {
-  color: var(--muted);
-  font-size: 12px;
-}
-.material-library-detail__segment h4 {
-  margin: 4px 0 8px;
-  color: var(--text);
-  font-size: 15px;
-  font-weight: 600;
-}
-.material-library-detail__segment p {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: 14px;
   line-height: 1.9;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
+}
+.material-library-detail__body p + p {
+  margin-top: 1em;
 }
 .material-library-detail__empty {
   display: flex;
@@ -1521,52 +1876,91 @@ void loadMaterials()
   color: var(--text-secondary);
   font-size: 13px;
 }
-@media (max-width: 760px) {
-  .material-library-detail__meta {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
 @media (max-width: 640px) {
   .material-library-form__grid {
     grid-template-columns: minmax(0, 1fr);
   }
 }
 @media (max-width: 760px) {
+  .material-library .record-row:not(.record-row--loading) {
+    display: grid;
+    grid-template-columns: 60px minmax(0, 1fr);
+    gap: 6px 12px;
+  }
+  .material-library .material-row__cover {
+    grid-row: 1 / span 2;
+  }
+  .material-library .record-row__actions {
+    grid-column: 2;
+    min-width: 0;
+    padding-left: 0;
+    flex-wrap: wrap;
+  }
+  .material-library-upload__note {
+    display: none;
+  }
   .material-library-detail__heading {
     align-items: flex-start;
   }
   .material-library-detail__heading h2 {
-    margin-top: 6px;
-    font-size: 24px;
+    margin-top: 0;
+    font-size: 22px;
     line-height: 1.5;
   }
+  .material-library-detail__study-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 14px;
+  }
+  .material-library-detail .material-library-detail__study-actions .el-button[aria-label] {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+    padding: 0;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--brand) 5%, var(--panel));
+    color: var(--text-secondary);
+  }
+  .material-library-detail .material-library-detail__study-actions .el-button[aria-label]:hover:not(.is-disabled) {
+    background: color-mix(in srgb, var(--brand) 10%, var(--panel));
+  }
+  .material-library-detail .material-library-detail__study-actions .el-button[aria-label].is-disabled {
+    background: var(--bg-secondary);
+    color: var(--muted);
+    opacity: 0.45;
+  }
+  .material-library-detail__study-actions .material-library-detail__action-label {
+    display: none;
+  }
   .material-library-detail__meta {
-    padding: 20px 0;
-    margin-block: 20px 24px;
-    gap: 16px;
-    border-block: 1px solid var(--line);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 8px 0 16px;
+    margin-block: 0 8px;
+    gap: 14px;
+    border: 0;
     border-radius: 0;
     background: transparent;
   }
   .material-library-detail__meta dd {
     margin-top: 4px;
-    font-size: 15px;
-    line-height: 1.8;
+    font-size: 13px;
+    line-height: 1.7;
   }
   .material-library-detail__meta-wide dd {
-    font-size: 16px;
-    line-height: 1.85;
+    font-size: 13px;
+    line-height: 1.7;
   }
   .material-library-detail__retrieval {
-    margin-top: 28px;
-    padding: 24px 0 0;
+    margin-top: 20px;
+    padding: 16px 0 0;
     border: 0;
     border-top: 1px solid var(--line);
     border-radius: 0;
   }
-  .material-library-detail__retrieval h3,
-  .material-library-detail__segments > h3 {
-    font-size: 20px;
+  .material-library-detail__retrieval h3 {
+    font-size: 15px;
     line-height: 1.5;
   }
   .material-library-detail__retrieval p {
@@ -1574,18 +1968,6 @@ void loadMaterials()
     font-size: 14px;
     line-height: 1.85;
   }
-  .material-library-detail__segments {
-    margin-top: 32px;
-  }
-  .material-library-detail__segment {
-    padding-block: 24px;
-  }
-  .material-library-detail__segment h4 {
-    margin-block: 8px 12px;
-    font-size: 20px;
-    line-height: 1.6;
-  }
-  .material-library-detail__segment p,
   .material-library-retrieval__result .summary-block {
     font-size: 16px;
     line-height: 1.85;
@@ -1606,6 +1988,122 @@ void loadMaterials()
   }
   .material-library-retrieval__result .summary-history-card__top {
     flex-wrap: wrap;
+  }
+}
+@media (min-width: 761px) {
+  .material-library-detail .material-library-detail__study-actions .el-button[aria-label] {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    padding: 0;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    box-shadow: none;
+  }
+  .material-library-detail .material-library-detail__study-actions .el-button[aria-label]:hover:not(.is-disabled) {
+    background: var(--brand-light);
+  }
+  .material-library-detail__study-actions .material-library-detail__action-label {
+    display: none;
+  }
+  .material-library {
+    max-width: 1120px;
+  }
+  .material-library > .page-header .page-desc {
+    display: none;
+  }
+  .material-library > .workspace-panel {
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+  .material-library .workspace-toolbar {
+    margin-bottom: 16px;
+    padding: 12px 16px;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: var(--panel);
+  }
+  .material-library .record-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+  }
+  .material-library .record-row {
+    --record-lead: 60px;
+    display: grid;
+    grid-template-columns: var(--record-lead) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+    gap: 14px;
+    min-width: 0;
+    padding: 18px;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    background: var(--panel);
+  }
+  .material-library .record-row:hover {
+    border-color: var(--line-strong);
+  }
+  .material-library .record-row__main {
+    grid-column: 2;
+  }
+  .material-library .record-row__title {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 6px;
+    font-size: 16px;
+  }
+  .material-library .record-row__title > :first-child {
+    display: -webkit-box;
+    flex: 1 1 100%;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .material-library .record-row__meta {
+    margin-top: 8px;
+    row-gap: 6px;
+  }
+  .material-library .record-row__actions {
+    grid-column: 1 / -1;
+    align-self: end;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-width: 0;
+    padding: 12px 0 0;
+    border-top: 1px solid var(--line);
+  }
+  .material-library .record-row__actions > .el-dropdown {
+    margin-left: auto;
+  }
+  .material-library .record-row__actions > .el-button,
+  .material-library .record-row__actions :deep(.icon-menu-button) {
+    min-height: 44px;
+    border-radius: 11px;
+  }
+  .material-library .record-row__sk-actions {
+    grid-column: 1 / -1;
+    width: 160px;
+    margin-top: 12px;
+  }
+  .material-library .workspace-pagination {
+    padding: 18px 0 0;
+    border: 0;
+  }
+  .material-library .workspace-progress {
+    margin-bottom: 16px;
+    border: 0;
+    border-radius: 12px;
+  }
+}
+@media (min-width: 761px) and (max-width: 980px) {
+  .material-library .record-list {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 </style>

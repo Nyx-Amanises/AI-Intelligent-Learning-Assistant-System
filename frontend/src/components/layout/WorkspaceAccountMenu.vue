@@ -85,7 +85,8 @@ watch(avatarSrc, () => {
 })
 
 const handleCommand = (command: string) => {
-  if (command.startsWith('/')) void router.push(command)
+  const item = accountItems.value.find((entry) => entry.path === command)
+  if (item) void router.push({ path: item.path, query: item.query })
   if (command === 'avatar') avatarInputRef.value?.click()
   if (command === 'logout') {
     userStore.logout()

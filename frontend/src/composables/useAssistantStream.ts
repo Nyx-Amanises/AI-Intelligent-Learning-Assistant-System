@@ -13,6 +13,7 @@ import {
 import { getErrorMessage } from '@/utils/errorMessage'
 import { buildLocalDateTime, isUserMessage, toTimeValue } from '@/utils/assistantFormat'
 import { mergeUniqueById } from '@/composables/useAssistantSessions'
+import { ASSISTANT_NAME } from '@/config/brand'
 
 export interface PendingTurnState {
   sessionId: number
@@ -443,7 +444,7 @@ export const useAssistantStream = (options: AssistantStreamOptions) => {
       )
       pendingTurn.value = null
       applyReply(finalReply)
-      liveAnnouncement.value = '学习助手已回复完成'
+      liveAnnouncement.value = `${ASSISTANT_NAME}已回复完成`
       sessionPage.current = 1
       await options.loadSessionPage(false)
       if (sessionDetail.value?.messages.some((message) => message.id < 0)) {

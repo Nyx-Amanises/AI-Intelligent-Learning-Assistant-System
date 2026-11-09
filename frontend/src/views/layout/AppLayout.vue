@@ -9,7 +9,7 @@
     />
     <a class="skip-to-content" href="#workspace-content">跳到主要内容</a>
 
-    <WorkspaceTopbar :scrolled="scrolled" @search="searchVisible = true" @assistant="openAssistant" />
+    <WorkspaceTopbar :scrolled="scrolled" @search="searchVisible = true" />
 
     <main
       id="workspace-content"
@@ -28,23 +28,27 @@
           </Transition>
         </RouterView>
       </div>
-      <footer class="workspace-footer">
-        <span>{{ APP_NAME }}</span
-        ><span>资料 · 总结 · 练习 · 复盘</span>
-      </footer>
     </main>
 
     <WorkspaceBottomNav />
     <WorkspaceSearchDialog v-model="searchVisible" />
-    <AssistantDrawer ref="assistantDrawerRef" v-model="assistantVisible" :show-launcher="false" />
+    <NoteEditorDrawer v-if="noteRequest" />
+    <FloatingAssistant ref="floatingAssistantRef" :open="assistantVisible" @open="openAssistant" />
+    <AssistantDrawer
+      ref="assistantDrawerRef"
+      v-model="assistantVisible"
+      :show-launcher="false"
+      :launcher-element="floatingAssistantRef?.buttonRef"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import { getProfileApi } from '@/api/modules/auth'
 import AssistantDrawer from '@/components/AssistantDrawer.vue'
+import FloatingAssistant from '@/components/FloatingAssistant.vue'
 import WorkspaceBottomNav from '@/components/layout/WorkspaceBottomNav.vue'
 import WorkspaceSearchDialog from '@/components/layout/WorkspaceSearchDialog.vue'
 import WorkspaceSectionNav from '@/components/layout/WorkspaceSectionNav.vue'
@@ -53,6 +57,10 @@ import { APP_NAME } from '@/config/brand'
 import { findNavigationItem, findSection, primaryLinks } from '@/config/navigation'
 import { usePageProgress } from '@/composables/usePageProgress'
 import { useUserStore } from '@/stores/user'
+import { useNoteWorkspace } from '@/composables/useNoteWorkspace'
+
+const NoteEditorDrawer = defineAsyncComponent(() => import('@/components/notes/NoteEditorDrawer.vue'))
+const { request: noteRequest } = useNoteWorkspace()
 
 const userStore = useUserStore()
 const pageProgress = usePageProgress()
@@ -60,10 +68,14 @@ const router = useRouter()
 const route = useRoute()
 const assistantVisible = ref(false)
 const assistantDrawerRef = ref<InstanceType<typeof AssistantDrawer> | null>(null)
+const floatingAssistantRef = ref<InstanceType<typeof FloatingAssistant> | null>(null)
 const searchVisible = ref(false)
 const scrollSentinel = ref<HTMLElement | null>(null)
 const scrolled = ref(false)
-const currentSection = computed(() => findSection(route.path))
+const currentSection = computed(() => {
+  const isHub = ['/materials', '/analytics', '/profile'].includes(route.path) && !route.query.view
+  return isHub ? undefined : findSection(route.path)
+})
 let sentinelObserver: IntersectionObserver | null = null
 
 function openAssistant(request?: { practiceSessionId?: number } | Event) {
@@ -84,13 +96,20 @@ function handleShortcut(event: KeyboardEvent) {
 
 const syncTitle = () => {
   const item = findNavigationItem(route.path)
-  document.title = item ? `${item.label} · ${APP_NAME}` : APP_NAME
+  let label = item?.label
+  if (route.path === '/materials' && !Object.keys(route.query).length) label = '我的内容'
+  if (route.path === '/profile' && route.query.view !== 'account') label = '学习偏好'
+  if (route.path === '/analytics') {
+    const titles: Record<string, string> = { overview: '学习概览', calendar: '学习日历', details: '详细统计' }
+    label = titles[String(route.query.view)] || '我的学习'
+  }
+  document.title = label ? `${label} · ${APP_NAME}` : APP_NAME
 }
-watch(() => route.path, syncTitle)
+watch(() => route.fullPath, syncTitle)
 
 // 手机上左右滑动切换主导航；从可横向滚动的区域或输入控件开始的滑动不处理。
 const SWIPE_PATHS = primaryLinks.map((item) => item.path)
-const SWIPE_IGNORE = 'input, textarea, select, [contenteditable], .el-slider, .el-input-number'
+const SWIPE_IGNORE = 'input, textarea, select, [contenteditable], .el-slider, .el-input-number, .floating-assistant'
 let touchStartX = 0
 let touchStartY = 0
 let touchStartTime = 0
@@ -153,7 +172,7 @@ onUnmounted(() => {
 </script>
 <style scoped>
 .learning-shell {
-  --shell-header-height: 64px;
+  --shell-header-height: 72px;
   min-height: 100dvh;
   background: var(--bg);
 }
@@ -167,10 +186,10 @@ onUnmounted(() => {
 }
 .workspace-content {
   width: 100%;
-  max-width: 1280px;
+  max-width: 1200px;
   min-height: calc(100dvh - var(--shell-header-height));
   margin: 0 auto;
-  padding: 28px 40px 32px;
+  padding: 24px 32px 48px;
   outline: none;
   overflow-x: clip;
 }
@@ -199,18 +218,6 @@ onUnmounted(() => {
   to {
     opacity: 0;
   }
-}
-.workspace-footer {
-  display: flex;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 8px 20px;
-  margin-top: 56px;
-  padding-top: 18px;
-  border-top: 1px solid var(--line);
-  color: var(--muted);
-  font-size: 12px;
-  letter-spacing: 0.04em;
 }
 .workspace-progress-bar {
   position: fixed;
@@ -254,9 +261,6 @@ onUnmounted(() => {
     padding: 0;
   }
   .workspace-content > :deep(.section-nav) {
-    display: none;
-  }
-  .workspace-footer {
     display: none;
   }
 }

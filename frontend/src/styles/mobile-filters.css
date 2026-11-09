@@ -1,6 +1,61 @@
-/* 仅列表筛选折叠使用；保持下拉框为 filter-bar 的直接子元素，桌面沿用原布局。 */
+/* 两端共用轻量筛选入口，搜索保持可见，附加筛选按需展开。 */
 .mobile-filter-toggle {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 14px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.mobile-filter-toggle:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+.mobile-filter-toggle.has-filters,
+.mobile-filter-toggle[aria-expanded='true'] {
+  background: var(--brand-light);
+  color: var(--brand);
+}
+.mobile-filter-toggle[aria-expanded='true'] .app-icon {
+  transform: rotate(180deg);
+}
+.filter-bar.mobile-filter-bar:not(.is-expanded) > .mobile-filter-detail {
   display: none;
+}
+.filter-bar.mobile-filter-bar.is-expanded::before {
+  order: 1;
+  flex-basis: 100%;
+  height: 0;
+  margin-block: -5px;
+  content: '';
+}
+.filter-bar.mobile-filter-bar.is-expanded > .mobile-filter-detail {
+  order: 2;
+}
+@media (min-width: 761px) {
+  .filter-bar.mobile-filter-bar {
+    flex: 1 1 auto;
+    gap: 10px;
+  }
+  .filter-bar.mobile-filter-bar > .el-input {
+    flex: 0 1 360px;
+    min-width: 220px;
+  }
+  .filter-bar.mobile-filter-bar.is-expanded > .el-select {
+    flex: 0 1 180px;
+  }
+  .filter-bar.mobile-filter-bar.is-expanded > .el-button.mobile-filter-detail {
+    order: 3;
+  }
 }
 
 @media (max-width: 760px) {

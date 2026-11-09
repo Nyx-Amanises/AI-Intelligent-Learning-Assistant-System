@@ -34,7 +34,7 @@ export const useAssistantContext = () => {
     else delete nextQuery[ASSISTANT_QUESTION_SET_QUERY_KEY]
     if (nextPracticeId) nextQuery[ASSISTANT_PRACTICE_QUERY_KEY] = String(nextPracticeId)
     else delete nextQuery[ASSISTANT_PRACTICE_QUERY_KEY]
-    await router.replace({ path: route.path, query: nextQuery })
+    await router.replace({ path: route.path, query: nextQuery, hash: route.hash })
   }
 
   return { sync }

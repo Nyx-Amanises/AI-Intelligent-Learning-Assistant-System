@@ -11,7 +11,23 @@
     </header>
 
     <div class="workspace-panel">
-      <div class="workspace-toolbar workspace-toolbar--filter">
+      <div class="wrong-mobile-toolbar">
+        <p>
+          待复习 <strong>{{ loading ? '—' : total }}</strong> 道
+        </p>
+        <MobileFilterToggle
+          v-model="mobileFiltersOpen"
+          :count="mobileFilterCount"
+          controls="wrong-question-list-filters"
+        />
+        <el-button text :loading="loading" aria-label="刷新错题列表" @click="loadWrongQuestions">
+          <AppIcon v-if="!loading" name="refresh" :size="18" />
+        </el-button>
+      </div>
+      <div
+        class="workspace-toolbar workspace-toolbar--filter wrong-list-filters"
+        :class="{ 'is-expanded': mobileFiltersOpen }"
+      >
         <div
           id="wrong-question-list-filters"
           class="filter-bar mobile-filter-bar"
@@ -29,6 +45,7 @@
           ></el-input>
           <MobileFilterToggle
             v-model="mobileFiltersOpen"
+            class="wrong-desktop-filter-toggle"
             :count="mobileFilterCount"
             controls="wrong-question-list-filters"
           />
@@ -130,7 +147,11 @@
             <h2 class="record-row__title wrong-row__title">
               <button type="button" @click="openDetail(item)">{{ item.stemText }}</button>
             </h2>
-            <p class="record-row__desc" :title="item.materialTitle">{{ item.materialTitle || '未关联资料' }}</p>
+            <p class="record-row__desc" :title="item.materialTitle">
+              {{ item.materialTitle || '未关联资料' }}
+              <span v-if="item.knowledgePoint" class="wrong-row__knowledge"> · {{ item.knowledgePoint }}</span>
+              <GenerationModeBadge class="wrong-row__mobile-mode" :mode="item.generationMode" />
+            </p>
             <p class="record-row__meta">
               <span>{{ formatQuestionType(item.questionType) }}</span>
               <span>{{ formatDifficulty(item.difficultyLevel) }}</span>
@@ -154,7 +175,7 @@
               :loading="redoingAnswerId === item.answerId"
               :disabled="redoingAnswerId !== null || removingAnswerId !== null"
               @click="redoQuestion(item)"
-              >重做此题</el-button
+              >再练一次</el-button
             >
             <el-button size="small" text @click="openDetail(item)">查看解析</el-button>
             <el-dropdown trigger="click" @command="handleQuestionAction($event, item)">
@@ -187,17 +208,33 @@
       </div>
     </div>
 
-    <el-drawer v-model="drawerVisible" title="错题解析" size="min(720px, 100vw)" class="wrong-detail-drawer">
+    <el-drawer
+      v-model="drawerVisible"
+      title="错题解析"
+      size="min(720px, 100vw)"
+      class="wrong-detail-drawer"
+      header-class="wrong-detail-drawer__header"
+      :show-close="false"
+    >
+      <template #header="{ titleId }">
+        <div class="wrong-detail-navigation">
+          <button type="button" class="wrong-detail-back" aria-label="返回错题本" @click="drawerVisible = false">
+            <MobileIcon name="back" :size="24" />
+          </button>
+          <h2 :id="titleId" class="wrong-detail-title">错题解析</h2>
+          <span aria-hidden="true" />
+        </div>
+      </template>
       <div v-if="detailLoading" class="state-block">正在加载解析…</div>
       <template v-else-if="detail">
-        <div class="wrong-detail-context">
+        <div class="wrong-detail-context wrong-detail-desktop">
           <span>{{ detail.materialTitle || '未关联资料' }}</span
           ><span>{{ detail.sessionName || '练习回顾' }}</span>
         </div>
         <div class="wrong-detail-question">
           <div class="wrong-detail-question__meta">
             <StatusPill tone="brand" hide-dot :label="formatQuestionType(detail.questionType)" />
-            <GenerationModeBadge :mode="detail.generationMode" /><span class="wrong-score"
+            <GenerationModeBadge :mode="detail.generationMode" /><span class="wrong-score wrong-detail-desktop"
               >{{ detail.obtainedScore ?? 0 }} <small>/ {{ detail.fullScore || 0 }} 分</small></span
             >
           </div>
@@ -222,7 +259,7 @@
           </div>
         </div>
 
-        <div class="wrong-answer-comparison">
+        <div class="wrong-answer-comparison" :class="{ 'wrong-answer-comparison--choices': hasOptions(detail) }">
           <div>
             <span>我的答案</span>
             <p>{{ formatAnswer(detail, detail.userAnswer) }}</p>
@@ -236,17 +273,19 @@
           <h3>答案解析</h3>
           <p>{{ detail.answerAnalysis }}</p>
         </div>
-        <div v-if="detail.reviewComment" class="wrong-analysis">
+        <div v-if="detail.reviewComment" class="wrong-analysis wrong-detail-desktop">
           <h3>
             评分反馈 <span>{{ formatReviewMode(detail.reviewMode) }}</span>
           </h3>
           <p>{{ detail.reviewComment }}</p>
         </div>
         <div v-if="detail.knowledgePoint" class="wrong-knowledge">
-          <span>建议复习的知识点</span>
+          <span>知识点</span>
           <p>{{ detail.knowledgePoint }}</p>
         </div>
-        <p class="wrong-detail-time">作答于 {{ formatDateTime(detail.answerTime || detail.createdAt) }}</p>
+        <p class="wrong-detail-time wrong-detail-desktop">
+          作答于 {{ formatDateTime(detail.answerTime || detail.createdAt) }}
+        </p>
       </template>
       <EmptyState
         v-else
@@ -257,18 +296,34 @@
         <el-button v-if="detailTarget" type="primary" @click="openDetail(detailTarget)">重新加载</el-button>
       </EmptyState>
       <template #footer>
-        <template v-if="detail && !detailLoading"
-          ><el-button :loading="removingAnswerId === detail.answerId" @click="removeWrongQuestion(detail, true)"
+        <div v-if="detail && !detailLoading" class="wrong-detail-actions">
+          <el-button
+            class="wrong-detail-desktop"
+            :loading="removingAnswerId === detail.answerId"
+            @click="removeWrongQuestion(detail, true)"
             >移出错题本</el-button
-          ><el-button @click="goPractice(detail.sessionId)">查看原练习</el-button>
+          ><el-button class="wrong-detail-desktop" @click="goPractice(detail.sessionId)">查看原练习</el-button>
+          <el-dropdown
+            class="wrong-detail-actions__more"
+            trigger="click"
+            @command="handleQuestionAction($event, detail)"
+          >
+            <IconMenuButton label="这道题的更多操作" :loading="removingAnswerId === detail.answerId" />
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="practice">查看原练习</el-dropdown-item>
+                <el-dropdown-item command="remove" divided class="menu-item--danger">移出错题本</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
           <el-button
             type="primary"
             :loading="redoingAnswerId === detail.answerId"
             :disabled="redoingAnswerId !== null || removingAnswerId !== null"
             @click="redoQuestion(detail)"
-            >重做此题</el-button
-          ></template
-        >
+            >再练一次</el-button
+          >
+        </div>
         <el-button v-else @click="drawerVisible = false">关闭</el-button>
       </template>
     </el-drawer>
@@ -282,6 +337,7 @@ import { useRoute, useRouter } from 'vue-router'
 import EmptyState from '@/components/EmptyState.vue'
 import IconMenuButton from '@/components/IconMenuButton.vue'
 import AppIcon from '@/components/AppIcon.vue'
+import MobileIcon from '@/components/MobileIcon.vue'
 import MobileFilterToggle from '@/components/MobileFilterToggle.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import GenerationModeBadge from '@/components/GenerationModeBadge.vue'
@@ -344,7 +400,7 @@ const hasFilters = computed(() =>
 )
 const mobileFiltersOpen = ref(false)
 const mobileFilterCount = computed(
-  () => [filters.materialId, filters.questionType, filters.knowledgePoint].filter(Boolean).length
+  () => [filters.keyword, filters.materialId, filters.questionType, filters.knowledgePoint].filter(Boolean).length
 )
 const selectedKnowledgePointMissing = computed(
   () =>
@@ -509,7 +565,10 @@ const redoQuestion = async (item: WrongQuestionItem) => {
     const sessionId = Number(response.data.data?.sessionId)
     if (!Number.isSafeInteger(sessionId) || sessionId <= 0) throw new Error('新练习未能打开，请稍后重试。')
     ElMessage.success('已开启此题的独立练习，原成绩与错题保留')
-    await router.push({ path: '/practice', query: { sessionId: String(sessionId) } })
+    await router.push({
+      path: '/practice',
+      query: { sessionId: String(sessionId), ...(route.query.from === 'home' ? { from: 'home' } : {}) }
+    })
   } catch (error) {
     if (!viewDisposed) ElMessage.error(getErrorMessage(error, '重做此题失败，请稍后重试。'))
   } finally {
@@ -521,7 +580,10 @@ const goPractice = (sessionId?: number) => {
   if (!sessionId) {
     return
   }
-  router.push({ path: '/practice', query: { sessionId: String(sessionId) } })
+  router.push({
+    path: '/practice',
+    query: { sessionId: String(sessionId), ...(route.query.from === 'home' ? { from: 'home' } : {}) }
+  })
 }
 
 void loadMaterials().then(() => {
@@ -537,6 +599,62 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.wrong-desktop-filter-toggle {
+  display: none;
+}
+.wrong-mobile-toolbar,
+.wrong-view .wrong-row__mobile-mode,
+.wrong-row__knowledge,
+.wrong-detail-actions__more {
+  display: none;
+}
+:global(:root .el-drawer__header.wrong-detail-drawer__header) {
+  padding: 6px 12px;
+}
+.wrong-detail-navigation {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: center;
+  width: 100%;
+}
+.wrong-detail-title {
+  min-width: 0;
+  margin: 0;
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.5;
+  text-align: center;
+}
+.wrong-detail-back {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+.wrong-detail-back:hover {
+  background: var(--panel-hover);
+}
+.wrong-detail-back:focus-visible,
+.wrong-row__title > button:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+.wrong-detail-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.wrong-detail-actions > .el-button {
+  margin: 0;
+}
 .wrong-filter-note {
   margin: 0;
   padding: 10px 20px;
@@ -708,11 +826,106 @@ onUnmounted(() => {
   font-size: 12px;
 }
 @media (max-width: 760px) {
-  .wrong-filter-note {
-    padding-inline: 16px;
+  .wrong-view > .page-header,
+  .wrong-view .wrong-list-filters:not(.is-expanded),
+  .wrong-view .wrong-list-filters > .el-button,
+  .wrong-view .wrong-row__icon,
+  .wrong-view .record-row__meta,
+  .wrong-view .record-row__sk-lead,
+  .wrong-view .workspace-pagination__meta,
+  .wrong-answer-comparison--choices,
+  .wrong-detail-desktop {
+    display: none;
   }
-  .wrong-answer-comparison {
-    grid-template-columns: 1fr;
+  .wrong-mobile-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 10px;
+  }
+  .wrong-mobile-toolbar p {
+    flex: 1;
+    margin: 0;
+    color: var(--muted);
+    font-size: 14px;
+  }
+  .wrong-mobile-toolbar strong {
+    margin-inline: 3px;
+    color: var(--text);
+    font-size: 17px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .wrong-mobile-toolbar :deep(.mobile-filter-toggle) {
+    min-height: 44px;
+  }
+  :root .wrong-view .wrong-mobile-toolbar > .el-button {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+    margin: 0;
+    padding: 0;
+    color: var(--muted);
+  }
+  .wrong-view .wrong-list-filters.is-expanded {
+    margin-bottom: 12px;
+    padding: 14px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--panel);
+  }
+  .wrong-view .record-list {
+    display: grid;
+    gap: 10px;
+    overflow: visible;
+    border-radius: 0;
+    background: transparent;
+  }
+  .wrong-view .record-row {
+    gap: 10px;
+    padding: 16px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--panel);
+  }
+  .wrong-view .record-row__main {
+    flex-basis: 100%;
+  }
+  .wrong-row__title > button:first-child {
+    -webkit-line-clamp: 3;
+    line-height: 1.7;
+  }
+  .wrong-view .record-row__desc {
+    margin-top: 8px;
+    color: var(--muted);
+    overflow-wrap: anywhere;
+  }
+  .wrong-row__knowledge {
+    display: inline;
+  }
+  .wrong-view .wrong-row__mobile-mode {
+    display: inline-flex;
+    margin-left: 6px;
+    vertical-align: baseline;
+  }
+  .wrong-view .record-row__actions {
+    gap: 6px;
+    padding: 0;
+  }
+  .wrong-view .record-row__actions > .el-dropdown {
+    margin-left: auto;
+  }
+  :root .wrong-view .record-row__actions > .el-button,
+  :root .wrong-view .record-row__actions :deep(.icon-menu-button) {
+    min-height: 44px;
+    font-size: 13px;
+  }
+  .wrong-filter-note {
+    margin-bottom: 10px;
+    padding: 10px 14px;
+    border: 0;
+    border-radius: 12px;
   }
   .wrong-detail-options > div {
     flex-wrap: wrap;
@@ -722,28 +935,36 @@ onUnmounted(() => {
     flex-wrap: wrap;
     gap: 8px;
   }
-  .wrong-detail-drawer :deep(.el-drawer__footer) {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
+  .wrong-detail-actions {
+    width: 100%;
+    gap: 10px;
   }
-  .wrong-detail-drawer :deep(.el-drawer__footer .el-button) {
-    flex: 1 1 auto;
+  .wrong-detail-actions__more {
+    display: inline-flex;
+    flex: 0 0 44px;
+  }
+  .wrong-detail-actions__more :deep(.icon-menu-button) {
+    width: 44px;
+    min-height: 44px;
+  }
+  .wrong-detail-actions > .el-button--primary {
+    flex: 1;
+    min-height: 44px;
     margin: 0;
   }
   .wrong-detail-question h2 {
-    margin-block: 24px;
-    font-size: 20px;
+    margin-block: 14px;
+    font-size: 17px;
     line-height: 1.75;
   }
   .wrong-detail-options {
-    gap: 12px;
+    gap: 8px;
   }
   .wrong-detail-options > div {
-    padding: 16px;
+    padding: 12px 14px;
     border-radius: 12px;
-    font-size: 16px;
-    line-height: 1.85;
+    font-size: 15px;
+    line-height: 1.7;
   }
   .wrong-detail-options small {
     font-size: 12px;
@@ -757,12 +978,13 @@ onUnmounted(() => {
     color: var(--green);
   }
   .wrong-answer-comparison {
+    grid-template-columns: 1fr;
     gap: 0;
-    margin-top: 28px;
+    margin-top: 20px;
     border-block: 1px solid var(--line);
   }
   .wrong-answer-comparison > div {
-    padding: 20px 0;
+    padding: 14px 0;
     border: 0;
     border-radius: 0;
     background: transparent;
@@ -773,23 +995,135 @@ onUnmounted(() => {
   .wrong-answer-comparison p,
   .wrong-analysis p,
   .wrong-knowledge p {
-    font-size: 16px;
-    line-height: 1.85;
+    font-size: 15px;
+    line-height: 1.8;
   }
   .wrong-analysis {
-    margin-top: 28px;
-    padding-top: 24px;
+    margin-top: 20px;
+    padding-top: 18px;
   }
   .wrong-analysis h3 {
     flex-wrap: wrap;
-    font-size: 20px;
+    font-size: 15px;
     line-height: 1.6;
   }
   .wrong-knowledge {
-    padding: 20px 0 0;
+    margin-top: 20px;
+    padding: 16px 0 0;
     border-top: 1px solid var(--line);
     border-radius: 0;
     background: transparent;
+  }
+}
+@media (min-width: 761px) {
+  .wrong-view {
+    max-width: 1120px;
+  }
+  .wrong-view > .page-header .page-desc {
+    display: none;
+  }
+  .wrong-view > .workspace-panel {
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+  .wrong-view .workspace-toolbar {
+    margin-bottom: 16px;
+    padding: 12px 16px;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: var(--panel);
+  }
+  .wrong-view .record-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+  }
+  .wrong-view .record-row {
+    --record-lead: 40px;
+    display: grid;
+    grid-template-columns: var(--record-lead) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+    gap: 14px;
+    min-width: 0;
+    padding: 18px;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    background: var(--panel);
+  }
+  .wrong-view .record-row:hover {
+    border-color: var(--line-strong);
+  }
+  .wrong-view .record-row__main {
+    grid-column: 2;
+  }
+  .wrong-view .record-row__title {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 6px;
+    font-size: 16px;
+  }
+  .wrong-view .record-row__title > :first-child {
+    display: -webkit-box;
+    flex: 1 1 100%;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .wrong-view .record-row__meta {
+    margin-top: 8px;
+    row-gap: 6px;
+  }
+  .wrong-view .record-row__actions {
+    grid-column: 1 / -1;
+    align-self: end;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-width: 0;
+    padding: 12px 0 0;
+    border-top: 1px solid var(--line);
+  }
+  .wrong-view .record-row__actions > .el-dropdown {
+    margin-left: auto;
+  }
+  .wrong-view .record-row__actions > .el-button,
+  .wrong-view .record-row__actions :deep(.icon-menu-button) {
+    min-height: 44px;
+    border-radius: 11px;
+  }
+  .wrong-view .record-row__sk-actions {
+    grid-column: 1 / -1;
+    width: 160px;
+    margin-top: 12px;
+  }
+  .wrong-view .workspace-pagination {
+    padding: 18px 0 0;
+    border: 0;
+  }
+  .wrong-view .workspace-progress {
+    margin-bottom: 16px;
+    border: 0;
+    border-radius: 12px;
+  }
+
+  .wrong-view .wrong-desktop-filter-toggle {
+    display: inline-flex;
+  }
+  .wrong-row__title > button:first-child {
+    -webkit-line-clamp: 3;
+    line-height: 1.65;
+  }
+  .wrong-view .record-row__desc {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}
+@media (min-width: 761px) and (max-width: 980px) {
+  .wrong-view .record-list {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 </style>

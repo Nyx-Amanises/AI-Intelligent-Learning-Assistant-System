@@ -6,7 +6,7 @@
         <p class="page-desc">根据资料出题，可以按知识点、题型和难度来出。交卷后自动批改，答错的题会进错题本。</p>
       </div>
       <div class="toolbar toolbar--flush">
-        <el-button type="primary" :disabled="generating" @click="openNewGeneration"
+        <el-button class="quiz-generate-button" type="primary" :disabled="generating" @click="openNewGeneration"
           ><AppIcon name="plus" :size="16" />生成题集</el-button
         >
       </div>
@@ -76,8 +76,13 @@
           <span class="skeleton record-row__sk-actions" />
         </div>
       </div>
-      <EmptyState v-else-if="loadError" variant="error" title="题集列表没有加载出来" :description="loadError">
-        <el-button type="primary" @click="loadQuestionSets()">重新加载</el-button>
+      <EmptyState
+        v-else-if="loadError"
+        class="quiz-list-error"
+        variant="error"
+        aria-label="题集暂时无法加载，可重新加载"
+      >
+        <el-button class="quiz-retry-button" type="primary" plain @click="loadQuestionSets()">重新加载</el-button>
       </EmptyState>
       <EmptyState
         v-else-if="!questionSets.length && hasFilters"
@@ -97,7 +102,12 @@
             : '先在资料库上传一份资料，解析完成后就能出题。'
         "
       >
-        <el-button v-if="materials.length" type="primary" :disabled="generating" @click="openNewGeneration"
+        <el-button
+          v-if="materials.length"
+          class="quiz-generate-button"
+          type="primary"
+          :disabled="generating"
+          @click="openNewGeneration"
           >生成题集</el-button
         >
         <el-button v-else type="primary" @click="router.push('/materials')">去资料库</el-button>
@@ -387,6 +397,7 @@
       <template #footer>
         <el-button :disabled="generating" @click="generateDialogVisible = false">取消</el-button>
         <el-button
+          class="quiz-generate-button"
           type="primary"
           :loading="generating"
           :disabled="
@@ -1147,6 +1158,23 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.quiz-list-error :deep(.empty-state__icon) {
+  color: var(--blue);
+  background: var(--blue-soft);
+  box-shadow: none;
+}
+:root .el-button.quiz-retry-button {
+  --el-button-text-color: var(--blue);
+  --el-button-bg-color: var(--blue-soft);
+  --el-button-border-color: transparent;
+  --el-button-hover-text-color: var(--blue);
+  --el-button-hover-bg-color: color-mix(in srgb, var(--blue) 15%, var(--panel));
+  --el-button-hover-border-color: transparent;
+  --el-button-active-text-color: var(--blue);
+  --el-button-active-bg-color: color-mix(in srgb, var(--blue) 20%, var(--panel));
+  --el-button-active-border-color: transparent;
+  box-shadow: none;
+}
 .quiz-row .record-row__actions {
   flex-wrap: wrap;
 }
@@ -1362,6 +1390,39 @@ p.quiz-references {
   }
 }
 @media (max-width: 760px) {
+  :root .el-button.quiz-generate-button {
+    --el-button-text-color: var(--blue);
+    --el-button-bg-color: var(--blue-soft);
+    --el-button-border-color: transparent;
+    --el-button-hover-text-color: var(--blue);
+    --el-button-hover-bg-color: color-mix(in srgb, var(--blue) 15%, var(--panel));
+    --el-button-hover-border-color: transparent;
+    --el-button-active-text-color: var(--blue);
+    --el-button-active-bg-color: color-mix(in srgb, var(--blue) 20%, var(--panel));
+    --el-button-active-border-color: transparent;
+    --el-button-disabled-text-color: var(--muted);
+    --el-button-disabled-bg-color: var(--bg-secondary);
+    --el-button-disabled-border-color: transparent;
+    background-clip: padding-box;
+    box-shadow: none;
+  }
+  :root .el-button.quiz-generate-button,
+  :root .quiz-view > .page-header .el-button.quiz-generate-button {
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+    padding: 0 8px;
+    border-width: 5px;
+    border-radius: 14px;
+    font-size: 12px;
+  }
+  :root .el-button.quiz-retry-button {
+    height: 44px;
+    min-height: 44px;
+    padding-inline: 16px;
+    border-radius: 10px;
+    font-size: 13px;
+  }
   .quiz-preview-heading {
     padding-bottom: 24px;
   }
@@ -1431,6 +1492,124 @@ p.quiz-references {
   .quiz-references :deep(.source-segment__body) {
     font-size: 16px;
     line-height: 1.85;
+  }
+}
+@media (min-width: 761px) {
+  :root .el-button.quiz-generate-button {
+    --el-button-text-color: var(--blue);
+    --el-button-bg-color: var(--blue-soft);
+    --el-button-border-color: transparent;
+    --el-button-hover-text-color: var(--blue);
+    --el-button-hover-bg-color: color-mix(in srgb, var(--blue) 15%, var(--panel));
+    --el-button-hover-border-color: transparent;
+    --el-button-active-text-color: var(--blue);
+    --el-button-active-bg-color: color-mix(in srgb, var(--blue) 20%, var(--panel));
+    --el-button-active-border-color: transparent;
+    --el-button-disabled-text-color: var(--muted);
+    --el-button-disabled-bg-color: var(--bg-secondary);
+    --el-button-disabled-border-color: transparent;
+    min-height: 44px;
+    padding-inline: 16px;
+    border-radius: 12px;
+    font-size: 13px;
+    box-shadow: none;
+  }
+  .quiz-view {
+    max-width: 1120px;
+  }
+  .quiz-view > .page-header .page-desc {
+    display: none;
+  }
+  .quiz-view > .workspace-panel {
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+  .quiz-view .workspace-toolbar {
+    margin-bottom: 16px;
+    padding: 12px 16px;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: var(--panel);
+  }
+  .quiz-view .record-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+  }
+  .quiz-view .record-row {
+    --record-lead: 40px;
+    display: grid;
+    grid-template-columns: var(--record-lead) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+    gap: 14px;
+    min-width: 0;
+    padding: 18px;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    background: var(--panel);
+  }
+  .quiz-view .record-row:hover {
+    border-color: var(--line-strong);
+  }
+  .quiz-view .record-row__main {
+    grid-column: 2;
+  }
+  .quiz-view .record-row__title {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 6px;
+    font-size: 16px;
+  }
+  .quiz-view .record-row__title > :first-child {
+    display: -webkit-box;
+    flex: 1 1 100%;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .quiz-view .record-row__meta {
+    margin-top: 8px;
+    row-gap: 6px;
+  }
+  .quiz-view .record-row__actions {
+    grid-column: 1 / -1;
+    align-self: end;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-width: 0;
+    padding: 12px 0 0;
+    border-top: 1px solid var(--line);
+  }
+  .quiz-view .record-row__actions > .el-dropdown {
+    margin-left: auto;
+  }
+  .quiz-view .record-row__actions > .el-button,
+  .quiz-view .record-row__actions :deep(.icon-menu-button) {
+    min-height: 44px;
+    border-radius: 11px;
+  }
+  .quiz-view .record-row__sk-actions {
+    grid-column: 1 / -1;
+    width: 160px;
+    margin-top: 12px;
+  }
+  .quiz-view .workspace-pagination {
+    padding: 18px 0 0;
+    border: 0;
+  }
+  .quiz-view .workspace-progress {
+    margin-bottom: 16px;
+    border: 0;
+    border-radius: 12px;
+  }
+}
+@media (min-width: 761px) and (max-width: 980px) {
+  .quiz-view .record-list {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 </style>

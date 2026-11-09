@@ -9,106 +9,123 @@
     @click="openPanel"
   >
     <span class="assistant-fab__icon">
-      <AppIcon name="assistant" :size="24" />
+      <AssistantMark :size="26" />
     </span>
     <span class="assistant-fab__label">{{ ASSISTANT_NAME }}</span>
   </button>
 
   <Teleport to="body">
     <transition name="assistant-overlay">
-      <div v-if="visible" class="assistant-overlay" @click.self="closePanel">
-        <div v-if="mobileSidebarOpen" class="assistant-mobile-scrim" @click="closeMobileSidebar" />
-        <div
-          ref="panelRef"
-          class="assistant-panel"
-          role="dialog"
-          aria-modal="true"
-          :aria-label="ASSISTANT_NAME"
-          tabindex="-1"
-          @keydown="handlePanelKeydown"
+      <div
+        v-if="visible"
+        class="assistant-overlay"
+        :class="{ 'assistant-overlay--short': viewport.height < 540 }"
+        :style="overlayStyle"
+        @click.self="closePanel"
+      >
+        <AssistantFocusTrap
+          :trapped="visible"
+          :loop="true"
+          :focus-trap-el="(isCompactLayout && mobileSidebarOpen ? sidebarRef : panelRef) || undefined"
+          focus-start-el="container"
+          @focus-after-released.prevent
+          @release-requested="handlePanelKeydown"
         >
-          <AssistantSessionSidebar
-            ref="sidebarComponentRef"
-            :sessions="sessionPage.records"
-            :total="sessionPage.total"
-            :active-session-id="activeSessionId"
-            :loading="sessionPageLoading"
-            :creating="creatingBlank"
-            :busy-session-ids="busySessionIds"
-            :binding-label="currentBinding.label"
-            :binding-helper-text="currentBinding.helperText"
-            :mobile-open="mobileSidebarOpen"
-            :sidebar-inert="isCompactLayout && !mobileSidebarOpen"
-            @create="createSession(false)"
-            @refresh="loadSessionPage(true)"
-            @select="selectSession"
-            @command="handleSessionCommand"
-            @close-mobile="closeMobileSidebar"
-          />
-
-          <main class="assistant-main" :inert="isCompactLayout && mobileSidebarOpen">
-            <AssistantTopbar
-              ref="topbarRef"
-              :title="sessionDetail ? sessionDetail.title || '新对话' : '学习问答'"
+          <div
+            id="global-assistant-panel"
+            ref="panelRef"
+            class="assistant-panel"
+            role="dialog"
+            aria-modal="true"
+            :aria-label="ASSISTANT_NAME"
+            tabindex="-1"
+            @keydown="handlePanelKeydown"
+          >
+            <div v-if="mobileSidebarOpen" class="assistant-mobile-scrim" @click="closeMobileSidebar" />
+            <AssistantSessionSidebar
+              ref="sidebarComponentRef"
+              :sessions="sessionPage.records"
+              :total="sessionPage.total"
+              :active-session-id="activeSessionId"
               :loading="sessionPageLoading"
-              :mobile-sidebar-open="mobileSidebarOpen"
-              @open-menu="openMobileSidebar"
-              @refresh="loadSessionPage(true)"
-              @close="closePanel"
-            />
-
-            <div v-if="aiMockMode" class="assistant-mock-notice" role="status">
-              <strong>演示模式</strong>
-              <span>当前使用模拟回复。连接真实模型，可前往「AI 配置」切换使用方式。</span>
-            </div>
-
-            <AssistantHome
-              v-if="!sessionDetail"
-              v-model:draft="draftMessage"
-              :greeting-name="greetingName"
+              :creating="creatingBlank"
+              :busy-session-ids="busySessionIds"
               :binding-label="currentBinding.label"
-              :quick-prompts="quickPrompts"
-              :sending="sendingMessage"
-              @send="sendMessage"
-              @pick-prompt="fillPrompt"
+              :binding-helper-text="currentBinding.helperText"
+              :mobile-open="mobileSidebarOpen"
+              :sidebar-inert="isCompactLayout && !mobileSidebarOpen"
+              @create="createSession(false)"
+              @refresh="loadSessionPage(true)"
+              @select="selectSession"
+              @command="handleSessionCommand"
+              @close-mobile="closeMobileSidebar"
             />
 
-            <AssistantConversation
-              v-else
-              ref="conversationRef"
-              v-model:draft="draftMessage"
-              :session="sessionDetail"
-              :sending="sendingMessage"
-              :streaming-message-id="streamingMessageId"
-              :related-tool-calls="relatedToolCallMap"
-              :memory-map="memoryMap"
-              :quick-prompts="quickPrompts"
-              :live-announcement="liveAnnouncement"
-              :action="pendingAction"
-              :action-loading="actionLoading"
-              :action-error="actionError"
-              :action-busy="actionBusy"
-              @send="sendMessage"
-              @stop="stopStreaming"
-              @delete="removeSession(sessionDetail.id)"
-              @pick-prompt="fillPrompt"
-              @open-practice="closePanel"
-              @decide-action="decideAction"
-              @refresh-action="refreshAction"
-            />
-          </main>
-        </div>
+            <main class="assistant-main" :inert="isCompactLayout && mobileSidebarOpen">
+              <AssistantTopbar
+                ref="topbarRef"
+                :title="sessionDetail ? sessionDetail.title || '新对话' : ASSISTANT_NAME"
+                :loading="sessionPageLoading"
+                :mobile-sidebar-open="mobileSidebarOpen"
+                @open-menu="openMobileSidebar"
+                @refresh="loadSessionPage(true)"
+                @close="closePanel"
+              />
+
+              <div v-if="aiMockMode" class="assistant-mock-notice" role="status">
+                <strong>演示模式</strong>
+                <span>当前使用模拟回复。连接真实模型，可前往「AI 配置」切换使用方式。</span>
+              </div>
+
+              <AssistantHome
+                v-if="!sessionDetail"
+                v-model:draft="draftMessage"
+                :greeting-name="greetingName"
+                :binding-label="currentBinding.label"
+                :quick-prompts="quickPrompts"
+                :sending="sendingMessage"
+                @send="sendMessage"
+                @pick-prompt="fillPrompt"
+              />
+
+              <AssistantConversation
+                v-else
+                ref="conversationRef"
+                v-model:draft="draftMessage"
+                :session="sessionDetail"
+                :sending="sendingMessage"
+                :streaming-message-id="streamingMessageId"
+                :related-tool-calls="relatedToolCallMap"
+                :memory-map="memoryMap"
+                :quick-prompts="quickPrompts"
+                :live-announcement="liveAnnouncement"
+                :action="pendingAction"
+                :action-loading="actionLoading"
+                :action-error="actionError"
+                :action-busy="actionBusy"
+                @send="sendMessage"
+                @stop="stopStreaming"
+                @delete="removeSession(sessionDetail.id)"
+                @pick-prompt="fillPrompt"
+                @open-practice="closePanel"
+                @decide-action="decideAction"
+                @refresh-action="refreshAction"
+              />
+            </main>
+          </div>
+        </AssistantFocusTrap>
       </div>
     </transition>
   </Teleport>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { ElMessage, useZIndex } from 'element-plus'
+import AssistantFocusTrap from 'element-plus/es/components/focus-trap/index.mjs'
 import { getAiConfigApi } from '@/api/modules/ai'
 import { useUserStore } from '@/stores/user'
-import AppIcon from '@/components/AppIcon.vue'
+import AssistantMark from '@/components/assistant/AssistantMark.vue'
 import AssistantSessionSidebar from '@/components/assistant/AssistantSessionSidebar.vue'
 import AssistantTopbar from '@/components/assistant/AssistantTopbar.vue'
 import AssistantHome from '@/components/assistant/AssistantHome.vue'
@@ -124,6 +141,7 @@ const props = withDefaults(
   defineProps<{
     modelValue: boolean
     showLauncher?: boolean
+    launcherElement?: HTMLElement | null
   }>(),
   {
     showLauncher: true
@@ -143,6 +161,7 @@ const visible = computed({
 
 const panelRef = ref<HTMLElement | null>(null)
 const launcherRef = ref<HTMLButtonElement | null>(null)
+const focusLauncherRef = computed(() => props.launcherElement || launcherRef.value)
 const sidebarComponentRef = ref<InstanceType<typeof AssistantSessionSidebar> | null>(null)
 const topbarRef = ref<InstanceType<typeof AssistantTopbar> | null>(null)
 const conversationRef = ref<InstanceType<typeof AssistantConversation> | null>(null)
@@ -151,6 +170,37 @@ const mobileMenuRef = computed(() => topbarRef.value?.menuButtonRef ?? null)
 
 const aiMockMode = ref(false)
 const aiConfigChecking = ref(false)
+const { nextZIndex } = useZIndex()
+const overlayZIndex = ref(0)
+const viewport = reactive({ height: 0, width: 0, top: 0, left: 0 })
+const overlayStyle = computed(() => ({
+  zIndex: overlayZIndex.value,
+  top: `${viewport.top}px`,
+  left: `${viewport.left}px`,
+  width: `${viewport.width}px`,
+  height: `${viewport.height}px`
+}))
+
+const syncViewport = () => {
+  const visual = window.visualViewport
+  viewport.height = visual?.height || window.innerHeight
+  viewport.width = visual?.width || window.innerWidth
+  viewport.top = visual?.offsetTop || 0
+  viewport.left = visual?.offsetLeft || 0
+}
+
+onMounted(() => {
+  syncViewport()
+  window.addEventListener('resize', syncViewport)
+  window.visualViewport?.addEventListener('resize', syncViewport)
+  window.visualViewport?.addEventListener('scroll', syncViewport)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', syncViewport)
+  window.visualViewport?.removeEventListener('resize', syncViewport)
+  window.visualViewport?.removeEventListener('scroll', syncViewport)
+})
 
 const greetingName = computed(() => userStore.profile?.nickname || userStore.profile?.username || '同学')
 
@@ -168,16 +218,16 @@ const {
   visible,
   panelRef,
   sidebarRef,
-  launcherRef,
+  launcherRef: focusLauncherRef,
   mobileMenuRef,
+  externalFocusTrap: true,
   onOpen: () => {
-    // 正在生成回复时重新打开面板，保留当前会话与流式状态。
-    if (sendingMessage.value) return
+    overlayZIndex.value = nextZIndex()
+    syncViewport()
     mobileSidebarOpen.value = false
-    resetSessionState()
-    resetStreamState()
+    // 布局持续挂载，收起后保留会话、未发送草稿以及正在生成的回复。
     void loadAiConfigNotice()
-    void loadSessionPage(false)
+    if (!sessionPageLoading.value) void loadSessionPage(false)
   }
 })
 
@@ -188,7 +238,6 @@ const {
   activeSessionId,
   sessionDetail,
   sessionActionBusy,
-  resetSessionState,
   loadSessionPage,
   loadSessionDetail,
   selectSession,
@@ -212,7 +261,6 @@ const {
   streamingMessageId,
   relatedToolCallMap,
   ingestToolCalls,
-  resetStreamState,
   sendMessage,
   stopStreaming,
   abortStreamingIfNeeded
@@ -342,13 +390,12 @@ defineExpose({ openPracticeAnalysis })
 
 .assistant-overlay {
   position: fixed;
-  inset: 0;
-  z-index: 1800;
-  display: grid;
-  place-items: center;
-  padding: 20px;
-  background: var(--el-overlay-color-lighter);
-  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  box-sizing: border-box;
+  padding: 16px;
+  background: rgb(27 42 32 / 10%);
 }
 
 .assistant-overlay-enter-active,
@@ -376,10 +423,10 @@ defineExpose({ openPracticeAnalysis })
 .assistant-panel {
   position: relative;
   display: grid;
-  grid-template-columns: 250px minmax(0, 1fr);
-  width: min(1280px, 100%);
-  height: min(920px, calc(100dvh - 40px));
-  max-height: calc(100dvh - 40px);
+  grid-template-columns: 224px minmax(0, 1fr);
+  width: min(900px, 100%);
+  height: min(760px, 100%);
+  max-height: 100%;
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   background: var(--panel);
@@ -403,7 +450,7 @@ defineExpose({ openPracticeAnalysis })
   min-width: 0;
   min-height: 0;
   height: 100%;
-  padding: 18px 24px;
+  padding: 14px 20px;
   background: var(--panel);
   overflow: hidden;
 }
@@ -421,6 +468,51 @@ defineExpose({ openPracticeAnalysis })
   background: var(--accent-soft);
   color: var(--text);
   line-height: 1.6;
+  flex-shrink: 0;
+}
+
+/* 问候与推荐可以滚动，输入区始终留在浮窗底部。 */
+.assistant-main :deep(.assistant-home) {
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 16px;
+  padding: 12px 0 0;
+  overflow: hidden;
+}
+.assistant-main :deep(.assistant-home__hero) {
+  flex: 0 0 auto;
+  text-align: left;
+}
+.assistant-main :deep(.assistant-home__hero h2) {
+  margin-top: 6px;
+  font-size: 25px;
+}
+.assistant-main :deep(.assistant-home__hero p) {
+  margin: 8px 0 0;
+  font-size: 14px;
+}
+.assistant-main :deep(.assistant-suggestion-row) {
+  flex: 1 1 0;
+  min-height: 0;
+  align-content: flex-start;
+  justify-content: flex-start;
+  overflow-y: auto;
+}
+.assistant-main :deep(.assistant-home .assistant-composer) {
+  order: 2;
+  flex: 0 0 auto;
+}
+.assistant-main :deep(.assistant-composer--hero) {
+  padding: 12px 14px;
+}
+.assistant-main :deep(.assistant-textarea) {
+  min-height: 64px;
+}
+.assistant-main :deep(.assistant-textarea--compact) {
+  min-height: 44px;
+}
+.assistant-main :deep(.assistant-top-button) {
+  min-width: 44px;
 }
 
 .assistant-mock-notice strong {
@@ -435,17 +527,15 @@ defineExpose({ openPracticeAnalysis })
 
 @media (max-width: 900px) {
   .assistant-overlay {
-    padding: 0;
-    backdrop-filter: none;
+    padding: max(8px, env(safe-area-inset-top)) 8px max(8px, env(safe-area-inset-bottom));
   }
 
   .assistant-panel {
     grid-template-columns: 1fr;
     width: 100%;
-    height: 100dvh;
-    max-height: 100dvh;
-    border: 0;
-    border-radius: 0;
+    height: min(740px, 100%);
+    max-height: 100%;
+    border-radius: 20px;
   }
 
   .assistant-mobile-scrim {
@@ -457,13 +547,22 @@ defineExpose({ openPracticeAnalysis })
   }
 
   .assistant-main {
-    padding: 0 18px calc(12px + env(safe-area-inset-bottom));
+    padding: 4px 16px 12px;
+  }
+  .assistant-main :deep(.assistant-topbar) {
+    min-height: 52px;
+    padding-block: 4px;
+    margin-bottom: 8px;
+  }
+  .assistant-panel :deep(.assistant-sidebar) {
+    width: min(88%, 320px);
+    padding: 18px 16px;
   }
 }
 
 @media (max-width: 760px) {
   .assistant-main {
-    padding: env(safe-area-inset-top) 24px calc(16px + env(safe-area-inset-bottom));
+    padding: 4px 14px 12px;
   }
   .assistant-fab {
     right: 16px;
@@ -484,8 +583,8 @@ defineExpose({ openPracticeAnalysis })
 
   .assistant-mock-notice {
     width: 100%;
-    margin: 0 0 16px;
-    padding: 12px 14px;
+    margin: 0 0 10px;
+    padding: 8px 10px;
     border: 0;
     border-radius: 12px;
     font-size: 13px;
@@ -493,8 +592,33 @@ defineExpose({ openPracticeAnalysis })
 }
 @media (max-width: 360px) {
   .assistant-main {
-    padding-inline: 20px;
+    padding-inline: 12px;
   }
+}
+
+.assistant-overlay--short .assistant-mock-notice,
+.assistant-overlay--short :deep(.assistant-home__hero),
+.assistant-overlay--short :deep(.assistant-conversation__hero) {
+  display: none;
+}
+.assistant-overlay--short :deep(.assistant-home) {
+  gap: 8px;
+  padding-top: 0;
+}
+.assistant-overlay--short :deep(.assistant-composer) {
+  padding: 8px 12px;
+}
+.assistant-overlay--short :deep(.assistant-textarea) {
+  min-height: 44px;
+  max-height: 70px;
+}
+.assistant-overlay--short :deep(.assistant-composer__topline) {
+  display: none;
+}
+.assistant-overlay--short :deep(.assistant-topbar) {
+  min-height: 44px;
+  margin-bottom: 4px;
+  padding-block: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {
